@@ -75,8 +75,15 @@ export function buildCombatModuleDeps(
 ): CombatModuleDeps {
   return {
     getShipPhysics: () => host.getShipPhysics(),
+    // A confirmed execute window runs the fight regardless of the turn flag:
+    // the round timer is the single terminator (Task 1b), so an endTurn that
+    // lands mid-window (HUD «Пауза» abort, the low-hull auto-stop) must not
+    // freeze fire/pruning into an unendable planning/executing cycle
+    // (review 2026-07-15 soft-lock).
     isPaused: () =>
-      host.isPlanning() || host.isCombatPauseActive() || !host.isTurnRunning(),
+      host.isPlanning() ||
+      host.isCombatPauseActive() ||
+      (!host.isTurnRunning() && !host.isExecutingPlan()),
     // Planned per-weapon targeting goes live (14.5b): during a confirmed
     // execute window each gun fires only at its assigned target; an unassigned
     // gun holds fire (Task 6's recorded rule). Outside a window (or in a fight

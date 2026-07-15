@@ -308,3 +308,61 @@ describe("handleFlightKey — Space launch guards", () => {
     expect(ctx.executeRouteTo).toHaveBeenCalledWith(7, 8);
   });
 });
+
+describe("handleFlightKey — combat-planning confirm is modal-guarded (review 2026-07-15)", () => {
+  // Space during PLANNING confirms the combat turn — but never behind an open
+  // panel: the confirm used to run BEFORE the modal guard, so a player reading
+  // the quest journal (opened via `j` mid-plan) could silently start an enemy
+  // volley behind it.
+  function planningCtx(overrides: Partial<Ctx> = {}) {
+    const confirm = vi.fn();
+    const ctx = makeCtx({
+      combatPlanning: { isPlanning: true, confirm },
+      ...overrides,
+    });
+    return { ctx, confirm };
+  }
+
+  it("confirms the planned combat turn with no modal open", () => {
+    const { ctx, confirm } = planningCtx();
+    handleFlightKey(space(), ctx);
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT confirm behind an open quest journal", () => {
+    const { ctx, confirm } = planningCtx();
+    ctx.hud.isQuestJournalOpen.mockReturnValue(true);
+    handleFlightKey(space(), ctx);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("does NOT confirm behind an open contact panel / manager modal", () => {
+    const { ctx, confirm } = planningCtx();
+    ctx.npcManager.isContactPanelOpen = true;
+    handleFlightKey(space(), ctx);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("does NOT confirm behind planet-info, settings, or the system menu", () => {
+    for (const open of [
+      (c: Ctx) => void (c.planetManager.hasInfoPanel = true),
+      (c: Ctx) => void c.hud.isSettingsPanelOpen.mockReturnValue(true),
+      (c: Ctx) => void c.hud.isSystemModalOpen.mockReturnValue(true),
+    ]) {
+      const { ctx, confirm } = planningCtx();
+      open(ctx);
+      handleFlightKey(space(), ctx);
+      expect(confirm).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a modal-blocked Space never falls through to the route-turn launch", () => {
+    const { ctx, confirm } = planningCtx({
+      plannedRoute: { x: 1, y: 2 },
+    });
+    ctx.hud.isQuestJournalOpen.mockReturnValue(true);
+    handleFlightKey(space(), ctx);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(ctx.executeRouteTo).not.toHaveBeenCalled();
+  });
+});

@@ -354,14 +354,20 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
       y: p.shipY - Math.sin(p.shipAngle) * 220,
     });
     scene.combatPlanning.confirm();
+    // Sample the roll AND the squash at their peak across the window: with the
+    // confirm-time pursuit break-off (review 2026-07-15) the ship genuinely
+    // flies the planned arc and levels out once the turn completes, so a
+    // fixed-instant read after the arc would miss the applied squash.
+    const visual = scene.playerShip.container!;
     let maxRoll = 0;
+    let minScaleY = 1;
     for (let i = 0; i < 20; i++) {
       harness.tick(50);
       maxRoll = Math.max(maxRoll, Math.abs(scene.combatExecution.bankingRoll));
+      minScaleY = Math.min(minScaleY, visual.scale.y);
     }
     expect(maxRoll).toBeGreaterThan(0.05); // banks into the turn
-    const visual = scene.playerShip.container!;
-    expect(visual.scale.y).toBeLessThan(1); // the transverse squash applied
+    expect(minScaleY).toBeLessThan(1); // the transverse squash applied
 
     // The fight ends → the roll resets and the sprite levels out.
     (scene.combatModule as unknown as { endCombat(): void }).endCombat();
@@ -378,10 +384,16 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     const hull0 = foe.npc.hullHP;
 
     scene.combatPlanning.confirm();
-    for (let i = 0; i < 26; i++) harness.tick(100); // past the 2500ms cadence
+    // Track the peak across ticks (each fx expires after SHOT_FX_MS, so a
+    // point-in-time read can miss it — the >= 0 it replaced was a tautology).
+    let maxFx = 0;
+    for (let i = 0; i < 26; i++) {
+      harness.tick(100); // past the 2500ms cadence
+      maxFx = Math.max(maxFx, scene.combatExecution.shotFxCount);
+    }
     expect(foe.npc.shields).toBeLessThan(5000); // the pool drained
     expect(foe.npc.hullHP).toBe(hull0); // hull untouched while shields hold
-    expect(scene.combatExecution.shotFxCount).toBeGreaterThanOrEqual(0); // styled shot path ran
+    expect(maxFx).toBeGreaterThan(0); // the styled shot path genuinely ran
     expect(harness.errors()).toEqual([]);
   });
 

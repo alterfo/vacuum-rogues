@@ -1571,6 +1571,14 @@ against the pause-and-plan model; its Task 1 investigation work remains valid.
 
 ## Post-Completion
 
+**Consumable acquisition path (known gap, review 2026-07-15)**: the Task 9 tactical devices
+(«Тактическое устройство» — shield restore / AoE / weapon jam) are fully wired (persistence,
+i18n, planning-UI buttons, execute-window resolution) but **unobtainable in production**:
+`Inventory.addConsumable` has zero production callers — no loot table, shop listing, quest or
+encounter reward grants one, so the planning action row never shows a device in real play. A
+follow-up must add at least one acquisition seam (wreck/loot roll, station shop, or encounter
+reward) before the mechanic counts as player-reachable.
+
 **Live-browser feel verification** (manual, informational — headless tests can't judge game feel):
 play several live fights covering every new mechanic (planned movement around a planet for
 gravity-assist, multi-weapon focus-fire vs. spread-fire, a missile exchange with active evasion,

@@ -33,7 +33,9 @@ settings panel — else cancels a planned route; Space runs the planned turn —
 equivalent of the confirming second click, suppressed while a turn/combat pause is active or a
 contact/quest-journal/planet-info/settings panel is open (mirrors the mouse-click
 `isBlockingModalOpen` guard) — EXCEPT during combat PLANNING, where Space confirms the planned
-combat turn (the `combatPlanning.confirm()` branch, checked before the `isTurnRunning` guard);
+combat turn (the `combatPlanning.confirm()` branch, checked before the `isTurnRunning` guard but
+STILL behind the modal guard — Space must never confirm a combat turn behind an open journal/
+contact/settings panel, review 2026-07-15);
 j/i toggle journal/inventory. `SpaceFlightScene.onKeyDown` is a thin delegate that
 builds `ctx` from live scene members; the extraction keeps the controller under the 1900-line
 guard. Unit-tested standalone in `flightKeyHandler.test.ts`).
@@ -100,15 +102,24 @@ closing to range, "Атаковать" on a contact, encounter ambush) funnels t
 `combatPlanning.beginCombat()` — no scene transition. A fresh game starts armed:
 `GameEngine.starterLoadout()` fits a weapon (`wpn_pulse`) so the player can fight immediately;
 `addCombatant` on a genuinely weaponless ship surfaces a throttled HUD hint ("Нет оружия —
-установите его в ангаре") instead of silently no-opping.
+установите его в ангаре") instead of silently no-opping. `startInFlightCombat` opens planning
+**only when `addCombatant` actually engaged** (`isCombatActive()` gate, `npcManagerDeps.ts`): a
+refused engagement (weaponless / GOD-mode downed ship) must never open the planning freeze —
+no fight ever becomes active to end it, so the freeze would soft-lock the sim
+(review 2026-07-15, `combatPlanningLoopGuards.test.ts`).
 
 **The loop** (`flight/combatPlanning.ts`, `CombatPlanningController` — a pure PixiJS-free state
 machine over opaque target/weapon handles): combat opens → **PLANNING** freezes the whole sim —
 movement, camera-follow ship sync, NPC AI, all fire timers, orbits and the calendar. The freeze
 signal is `combatPlanning.isPlanning`, folded into the scene's `frozen` local, the `updateShip`
-early-return, **and** `CombatModule`'s `isPaused` dep closure (`combatModuleDeps.ts`:
-`isPlanning() || isCombatPauseActive() || !isTurnRunning()` — per the standing rule below: fold
-new freeze conditions into `isPaused`, never into `isFrozen()`). During planning the player fills
+early-return, `CombatModule`'s `isPaused` dep closure (`combatModuleDeps.ts`:
+`isPlanning() || isCombatPauseActive() || (!isTurnRunning() && !isExecutingPlan())` — per the
+standing rule below: fold new freeze conditions into `isPaused`, never into `isFrozen()`; the
+`isExecutingPlan` carve-out makes the round timer the sole owner of a confirmed window — an
+`endTurn()` landing mid-window from any path (HUD abort, low-hull auto-stop) must not freeze
+fire/pruning into an unendable planning/executing cycle, review 2026-07-15), **and**
+`NpcShipManagerDeps.isPaused` (`npcManagerDeps.ts`: `isCombatPauseActive() || isPlanning()`) so
+hostile ships hold still while the player plans. During planning the player fills
 one `PlannedTurn` draft — **all fields optional; an empty draft is legal** ("hold position, hold
 fire") and never blocks confirm:
 - **Movement destination** — an empty-space click routes to `previewCombatCourse`
@@ -129,6 +140,10 @@ fire") and never blocks confirm:
 **Confirm is «Ход»** — Space (`flightKeyHandler`'s `combatPlanning.confirm()` branch, checked
 before the `isTurnRunning` guard) or the HUD «Ход»/«Пауза» button (`onPlayPause` during PLANNING
 confirms — it must never `endTurn()` mid-plan; that desync is the bug its guard exists for).
+During EXECUTING the button is a **no-op** (`PlayPauseHost.isExecutingPlan` guard,
+`flightTurnEnd.ts`): its legacy combat-abort `endTurn()` used to freeze `CombatModule` while
+`tickExecute` kept cycling — a permanent zero-fire planning loop (review 2026-07-15,
+`combatPlanningLoopGuards.test.ts`).
 Confirm → **EXECUTING**: one fixed real-time window of `COMBAT_ROUND_MS` (`balance.ts`), ticked by
 `combatPlanning.tickExecute(dt)` in `SpaceFlightScene.update`. **The round timer is the single
 deterministic terminator** — impacts, arrivals and incoming hits resolve in real time but never
@@ -149,8 +164,12 @@ keeps legacy auto-fire. NPC return fire stays real-time within each NPC's role-s
 `npcWeaponRange(npc)` (`systems/combat/npcWeapon.ts`: TRADER 200 / PIRATE 260 / RANGER 300 /
 PATROL 340, role-derived → no schema/migration).
 
-**During an execute window — movement.** A confirmed destination flies its `setPath` course; with
-none planned, `CombatPursuitController`'s orbit-strafe **survives as the execute-window movement
+**During an execute window — movement.** A confirmed destination flies its `setPath` course —
+the confirm calls `breakOffCombatPursuit()` (the same seam `executeRouteTo` uses, wired through
+`CombatPlanningHost.breakOffPursuit`) so the orbit yields while the planned course flies (without
+it the pursuit re-`setPath`s its carrot every frame and the plan is cosmetic — review 2026-07-15);
+the override self-clears when the course completes. With none planned,
+`CombatPursuitController`'s orbit-strafe **survives as the execute-window movement
 primitive** (`npcManager.updateCombat` → `updateCombatPursuit`/`steerCombatOrbit`, gated
 `!frozen`) — it was deliberately NOT deleted (gitnexus 2026-07-15: CRITICAL, 19 live refs), and
 all the boundary-clamp lore below still applies inside windows. **The in-range hold is a
@@ -206,7 +225,9 @@ all state is transient — no save/schema impact). Each consumes its pure, unit-
   hit through `landExternalShot`), weapon jam (a `WeaponJam` enforced by
   `CombatModuleDeps.isNpcFireSuppressed` in `advanceNpcTimers`). Player-facing name is
   «Тактическое устройство» — deliberately distinct from `ResourceType.ARTIFACTS` (crafting
-  currency); the two never share a type or i18n key.
+  currency); the two never share a type or i18n key. **Known gap:** no production acquisition
+  path exists yet — `Inventory.addConsumable` has zero production callers (no loot/shop/quest
+  grant), so the device buttons never appear in real play; see the plan's Post-Completion.
 - **Comms** (`combatComms.ts`): **bribe** pays `resolveBribe`'s tribute through the bank bus
   (`payTribute`) and every combatant departs + `CombatModule.disengage()`s; **demand-surrender**
   gates on `resolveSurrenderDemand(role, hullFraction)` — a yielder drops loot and flees, a

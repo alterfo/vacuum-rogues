@@ -135,29 +135,30 @@ export function handleFlightKey(
   if (action === "runTurn") {
     event.preventDefault(); // Space would otherwise scroll the page
     if (event.repeat) return;
-    // Tactical planning confirm ("Ход") takes priority — checked before the
-    // ordinary route-turn guard below, since planning freezes the sim
-    // independently of `isTurnRunning` (Task 14.5a).
-    if (ctx.combatPlanning?.isPlanning) {
-      ctx.combatPlanning.confirm();
-      return;
-    }
-    if (ctx.combatPause.paused || ctx.isTurnRunning) return;
-    // Don't launch the turn behind an open modal — the contact panel, the
-    // OVERMIND-core overlay, the quest journal, planet-info, or the settings
-    // panel must be dismissed first, otherwise the ship flies off while the
-    // panel still demands a choice. `hasOpenModal()` covers both
-    // manager-owned overlays (contact panel + OVERMIND core); fall back to
-    // `isContactPanelOpen` when a caller doesn't model it. Mirrors the
+    // Don't act behind an open modal — the contact panel, the OVERMIND-core
+    // overlay, the quest journal, planet-info, or the settings panel must be
+    // dismissed first. This guards BOTH branches below: launching the route
+    // turn (the ship would fly off while the panel demands a choice) and
+    // confirming the planned combat turn (Space would silently start an enemy
+    // volley behind the panel — review 2026-07-15). `hasOpenModal()` covers
+    // both manager-owned overlays (contact panel + OVERMIND core); fall back
+    // to `isContactPanelOpen` when a caller doesn't model it. Mirrors the
     // mouse-click route-plan guard `isBlockingModalOpen`.
-    if (
+    const modalOpen =
       (ctx.npcManager.hasOpenModal?.() ?? ctx.npcManager.isContactPanelOpen) ||
       ctx.hud.isQuestJournalOpen() ||
       ctx.planetManager.hasInfoPanel ||
       ctx.hud.isSettingsPanelOpen?.() ||
-      ctx.hud.isSystemModalOpen?.()
-    )
+      ctx.hud.isSystemModalOpen?.();
+    // Tactical planning confirm ("Ход") takes priority — checked before the
+    // ordinary route-turn guard below, since planning freezes the sim
+    // independently of `isTurnRunning` (Task 14.5a).
+    if (ctx.combatPlanning?.isPlanning) {
+      if (!modalOpen) ctx.combatPlanning.confirm();
       return;
+    }
+    if (ctx.combatPause.paused || ctx.isTurnRunning) return;
+    if (modalOpen) return;
     if (ctx.plannedRoute) {
       ctx.executeRouteTo(ctx.plannedRoute.x, ctx.plannedRoute.y);
       logger.info(

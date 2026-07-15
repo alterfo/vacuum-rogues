@@ -26,6 +26,8 @@ export interface NpcManagerDepsHost {
   isTurnRunning(): boolean;
   setTurnRunning(v: boolean): void;
   isCombatPauseActive(): boolean;
+  /** PLANNING freeze (Task 1b): NPC movement must halt while the player plans. */
+  isPlanning(): boolean;
   updateInteractiveCursors(turnRunning: boolean): void;
   showMessage(text: string, color?: number): void;
   showTooltip(text: string, screenX: number, screenY: number): void;
@@ -68,7 +70,11 @@ export function buildNpcManagerDeps(
     endTurn: () => host.endTurn(),
     startInFlightCombat: (sprite) => {
       host.addCombatant(sprite);
-      host.beginCombatPlanning(); // no-op if already underway (14.5a)
+      // Open planning only for a REAL engagement: addCombatant refuses a
+      // downed (GOD-mode floor) or weaponless ship, and opening the planning
+      // freeze over a refused fight would soft-lock the sim — no combat module
+      // ever becomes active to end it (review 2026-07-15).
+      if (host.isCombatActive()) host.beginCombatPlanning(); // no-op if already underway (14.5a)
     },
     deferDeathLoot: (npc) => host.deferDeathLoot(npc),
     onPlayerEngagesCombat: () => {
@@ -87,7 +93,9 @@ export function buildNpcManagerDeps(
     },
     getCombatTargetId: () => host.getSelectedCombatTargetId(),
     isCombatant: (sprite) => host.isCombatant(sprite),
-    isPaused: () => host.isCombatPauseActive(),
+    // PLANNING freezes NPC movement too (Task 1b's whole-sim freeze) — the
+    // legacy combatPause flag alone can never be true since 14.5a unwired it.
+    isPaused: () => host.isCombatPauseActive() || host.isPlanning(),
     getStarAvoidRadius: () => host.getStarAvoidRadius(),
     sessionState: host.sessionState,
   };

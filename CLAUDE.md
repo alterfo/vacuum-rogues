@@ -175,7 +175,7 @@ Every bug follows this order — no exceptions:
 
 Full details: `.claude/docs/systems/letsplay.md`. `src/tests/playtest/letsplay/` plays the real engine (dev-only). Loop: `observe → decide → apply → tick`. Live autopilot: `` ` `` (Backquote) in `npm run dev`. Default policy: `MemoryHeuristicPolicy`. First human input reclaims control.
 
-**F9 open (live `land()` re-targeting freeze):** still not independently fixed as of `docs/plans/20260711-autopilot-reliability-fixes.md`; leading hypothesis is `gameLoop`'s `requestAnimationFrame` throttling under tab-backgrounding racing the autopilot's `setInterval` poll — needs live-browser confirmation. Repro recipe: that plan's Post-Completion section.
+**F9 (live `land()` re-targeting freeze): RESOLVED 2026-07-13** (`e76260b`) — the rAF-throttling hypothesis was confirmed live 2026-07-12: `gameLoop`'s `requestAnimationFrame` stalls under tab-backgrounding while the autopilot's `setInterval` keeps ticking. Fixed by a `document.hidden`-gated 500 ms background fallback loop in `GameEngine` (`startGameLoop`/`backgroundIntervalId`) plus a `dismissBlockingModal`-before-decide gate in `AutopilotController.tickOnce`. Known limitation: browsers clamp hidden-tab intervals (≥1 s, Chrome intensive throttling up to 1/min) and `ShipPhysics` clamps dt at 100 ms, so a hidden tab advances world time slower than real time — acceptable for the freeze fix, not a full background simulation.
 
 ## Equipment System (key rules only)
 

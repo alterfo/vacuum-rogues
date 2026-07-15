@@ -21,6 +21,7 @@
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
 import { NpcState, QuestType, SceneType } from "@/types";
+import { GAME_BALANCE } from "@/config/balance";
 import type { NpcShip } from "@/domain/NpcShip";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
@@ -820,6 +821,7 @@ export class PlayerAgent {
         roundComplete?: boolean;
         beginCombatRound?(): void;
       } | null;
+      combatPlanning?: { isPlanning?: boolean } | null;
       npcManager?: { onAttackNpc?(npc: NpcShip): void };
     } | null;
     if (
@@ -849,6 +851,20 @@ export class PlayerAgent {
     });
     if (!scene.isTurnRunning) scene.onPlayPause();
     scene.combatModule?.beginCombatRound?.();
+    // Driver-side reaction-window budget (review 2026-07-15): the legacy
+    // `roundComplete` flag below tracked "this round's incoming damage spent
+    // its `combatRoundHullFraction` budget" — but it is GOD-disabled and, with
+    // the fight-freeze wedges fixed, a step no longer stalls out on its tick
+    // budget either, so an attack step could silently drive a whole fight to
+    // termination with the policy never re-deciding. Re-implement the same
+    // budget here (hull actually lost since the step began) so the step ends
+    // at the documented per-round reaction window in every mode.
+    const stepHull0 = engine.player?.ship?.hullHP ?? 0;
+    const stepBudget = Math.max(
+      1,
+      (engine.player?.ship?.maxHull ?? 0) *
+        GAME_BALANCE.combatRoundHullFraction,
+    );
     for (let i = 0; i < 2000; i++) {
       // Un-pause before each tick so weapons fire (same discipline as
       // waitOneDay/completeWarp — a paused ship neither flies nor shoots).
@@ -866,6 +882,10 @@ export class PlayerAgent {
         closeOnTarget: true,
       });
       this.harness.tick(50);
+      // Reaction window (see stepBudget above): enough incoming damage landed
+      // this step — yield to the policy (flee vs fight on) before more does.
+      if (stepHull0 - (engine.player?.ship?.hullHP ?? stepHull0) >= stepBudget)
+        break;
       // Scene changed mid-fight (player death → GAME_OVER): stop driving.
       if (engine.currentSceneType !== SceneType.SPACE_FLIGHT) return;
       // Reaction window: one completed round ends the step (policy re-decides).

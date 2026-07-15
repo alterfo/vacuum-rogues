@@ -324,6 +324,16 @@ export interface CombatPlanningHost {
    * lightweight harnesses keep the movement-only confirm.
    */
   onConfirmPlan?(plan: PlannedTurn<NpcShipSprite, WeaponSpec>): void;
+  /**
+   * Yield the combat auto-pursuit so a confirmed planned destination actually
+   * flies (the same `breakOffCombatPursuit` seam `executeRouteTo` uses) —
+   * without it `updateCombatPursuit` re-`setPath`s the orbit carrot every
+   * unfrozen frame and clobbers the planned course (review 2026-07-15). The
+   * override self-clears when the course completes; with no destination the
+   * orbit-strafe deliberately stays the movement primitive. Optional so
+   * lightweight harnesses need not model the pursuit.
+   */
+  breakOffPursuit?(): void;
 }
 
 /**
@@ -343,7 +353,8 @@ export function createCombatPlanningController(
       host.showMessage(t("combat.planning.enter"), PLANNING_TINT);
     },
     onConfirm: (plan) => {
-      applyPlannedMovement(plan.destination, host.getShipPhysics());
+      if (applyPlannedMovement(plan.destination, host.getShipPhysics()))
+        host.breakOffPursuit?.(); // planned course overrides the orbit-strafe
       host.onConfirmPlan?.(plan);
     },
     onEnterExecuting: () => {

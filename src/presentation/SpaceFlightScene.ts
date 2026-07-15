@@ -83,8 +83,7 @@ export class SpaceFlightScene extends GameScene {
   private npcManager!: NpcShipManager;
   private combatModule!: CombatModule;
   private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
-  // Pause-and-plan loop (Task 2/3, live 14.5a, UI 14.5b): startInFlightCombat
-  // calls beginCombat(); the toasts/UI mount live in flight/combatPlanningUi.ts.
+  // Pause-and-plan loop (Tasks 2/3, 14.5a/b): toasts/UI in combatPlanningUi.ts.
   private combatPlanningUi: CombatPlanningUi | null = null;
   // Execute-window orchestrator (14.5c): mechanics + VFX, ticked while unfrozen.
   private combatExecution: CombatExecutionController | null = null;
@@ -93,6 +92,7 @@ export class SpaceFlightScene extends GameScene {
     getUi: () => this.combatPlanningUi,
     showMessage: (text, color) => this.hud.showMessage(text, color),
     onConfirmPlan: (plan) => this.combatExecution?.beginWindow(plan),
+    breakOffPursuit: () => this.npcManager?.breakOffCombatPursuit(),
     onFightEnd: () => {
       this.combatExecution?.endFight(); // wrecks/flashes keep drifting past the end
       if (this.destroyed) return; // mid-teardown — clearPlannedRoute() handles it
@@ -109,8 +109,7 @@ export class SpaceFlightScene extends GameScene {
 
   // Turn control: the turn "runs" (ship flies, NPCs/planets move, combat) while true.
   private isTurnRunning = false;
-  // F1 (playtest3): Pause lets the ship finish its current day, then halts — a latch defers
-  // stop+endTurn to the next whole-day boundary (cleared by endTurn()/turn start; low-HP + combat abort halt now).
+  // F1 (playtest3): Pause defers stop+endTurn to the next whole-day boundary (latch cleared by endTurn()/turn start; low-HP halts now).
   private pauseAtDayBoundary = false;
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
@@ -324,6 +323,7 @@ export class SpaceFlightScene extends GameScene {
           this.isTurnRunning = v;
         },
         isCombatPauseActive: () => this.combatPause.paused,
+        isPlanning: () => this.combatPlanning.isPlanning,
         updateInteractiveCursors: (v) => this.updateInteractiveCursors(v),
         showMessage: (text, color) => this.hud.showMessage(text, color),
         showTooltip: (text, sx, sy) => this.hud.showTooltip(text, sx, sy),
@@ -674,8 +674,7 @@ export class SpaceFlightScene extends GameScene {
     if (!frozen) this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);
     if (!frozen && !this.destroyed) this.combatExecution?.update(deltaTime);
-    // A lethal hit here fires GAME_OVER synchronously, destroying this scene
-    // mid-frame; bail before driving the now-destroyed modules below.
+    // A lethal hit fires GAME_OVER synchronously mid-frame — bail before driving destroyed modules.
     if (this.destroyed) return;
     this.flightHelp?.maybeShowCombatHint(this.combatModule.isActive); // 1st-fight hint
     // Skip the live capture mid-hyperjump: performWarp already cleared the capture
@@ -1647,6 +1646,7 @@ export class SpaceFlightScene extends GameScene {
     handleFlightPlayPause({
       isCombatPaused: () => this.combatPause.paused,
       isPlanning: () => this.combatPlanning.isPlanning,
+      isExecutingPlan: () => this.combatPlanning.isExecuting,
       confirmPlan: () => void this.combatPlanning.confirm(),
       isTurnRunning: () => this.isTurnRunning,
       combatAbortActive: () =>

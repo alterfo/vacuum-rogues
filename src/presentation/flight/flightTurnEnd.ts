@@ -85,6 +85,15 @@ export function endFlightTurn(
 export interface PlayPauseHost {
   isCombatPaused(): boolean;
   isPlanning(): boolean;
+  /**
+   * True while a confirmed execute window is running. Optional so callers/tests
+   * that don't model the pause-and-plan loop can omit it. While executing, the
+   * button is a no-op — the round timer is the single terminator (Task 1b);
+   * the legacy combat-abort `endTurn()` here froze `CombatModule` (its
+   * `isPaused` includes `!isTurnRunning`) while `tickExecute` kept cycling,
+   * wedging the fight into a permanent zero-fire planning loop.
+   */
+  isExecutingPlan?(): boolean;
   confirmPlan(): void;
   isTurnRunning(): boolean;
   /** A combat auto-follow / active fight — the pause aborts the turn NOW. */
@@ -115,6 +124,7 @@ export function handleFlightPlayPause(host: PlayPauseHost): void {
     host.confirmPlan();
     return;
   }
+  if (host.isExecutingPlan?.()) return; // round timer is the sole terminator (Task 1b)
   if (host.isTurnRunning()) {
     if (host.combatAbortActive()) {
       host.endTurn(); // combat abort halts now (endTurn stops the ship)

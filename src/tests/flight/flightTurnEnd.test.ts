@@ -55,3 +55,75 @@ describe("endFlightTurn", () => {
     expect(engine.liveFlightShipPos).toEqual({ x: 1, y: 2 });
   });
 });
+
+import {
+  handleFlightPlayPause,
+  type PlayPauseHost,
+} from "@/presentation/flight/flightTurnEnd";
+
+/**
+ * Review 2026-07-15: the HUD «Ход»/«Пауза» button pressed DURING a confirmed
+ * execute window used to hit the combat-abort branch → `endTurn()`, freezing
+ * `CombatModule` (its `isPaused` includes `!isTurnRunning`) while the round
+ * clock kept cycling — a permanent zero-fire planning loop. Task 1b: the round
+ * timer is the single terminator, so mid-window the button is a no-op.
+ */
+describe("handleFlightPlayPause — pause-and-plan loop guards", () => {
+  function makeHost(overrides: Partial<PlayPauseHost> = {}) {
+    const host = {
+      isCombatPaused: () => false,
+      isPlanning: () => false,
+      isExecutingPlan: () => false,
+      confirmPlan: vi.fn(),
+      isTurnRunning: () => false,
+      combatAbortActive: () => false,
+      endTurn: vi.fn(),
+      pauseLatched: () => false,
+      setPauseLatch: vi.fn(),
+      plannedRoute: () => null,
+      followActive: () => false,
+      followTarget: () => null,
+      executeRouteTo: vi.fn(),
+      beginWaitTurn: vi.fn(),
+      showMessage: vi.fn(),
+      ...overrides,
+    };
+    return host as PlayPauseHost & typeof host;
+  }
+
+  it("is a no-op during a confirmed execute window (no combat-abort endTurn)", () => {
+    const host = makeHost({
+      isExecutingPlan: () => true,
+      isTurnRunning: () => true,
+      combatAbortActive: () => true, // the fight IS active — abort used to fire
+    });
+    handleFlightPlayPause(host);
+    expect(host.endTurn).not.toHaveBeenCalled();
+    expect(host.confirmPlan).not.toHaveBeenCalled();
+    expect(host.setPauseLatch).not.toHaveBeenCalled();
+    expect(host.beginWaitTurn).not.toHaveBeenCalled();
+  });
+
+  it("still confirms during PLANNING", () => {
+    const host = makeHost({ isPlanning: () => true });
+    handleFlightPlayPause(host);
+    expect(host.confirmPlan).toHaveBeenCalledTimes(1);
+    expect(host.endTurn).not.toHaveBeenCalled();
+  });
+
+  it("still aborts a pre-planning combat auto-follow turn immediately", () => {
+    const host = makeHost({
+      isTurnRunning: () => true,
+      combatAbortActive: () => true, // chase/follow — no execute window running
+    });
+    handleFlightPlayPause(host);
+    expect(host.endTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the day-boundary pause latch for an ordinary running turn", () => {
+    const host = makeHost({ isTurnRunning: () => true });
+    handleFlightPlayPause(host);
+    expect(host.setPauseLatch).toHaveBeenCalledWith(true);
+    expect(host.endTurn).not.toHaveBeenCalled();
+  });
+});
