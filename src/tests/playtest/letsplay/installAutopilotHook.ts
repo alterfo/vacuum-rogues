@@ -45,6 +45,7 @@ import {
 import { bestKnownMargin } from "./memoryFeatures";
 import { deliveryCargoNeed } from "./observeHelpers";
 import type { LiveSceneController } from "./LiveApplier";
+import { confirmPlanningIfOpen } from "./planningDriver";
 import { exportFlags } from "./oddityFlags";
 import {
   currentSystem,
@@ -502,6 +503,10 @@ export function createLiveSceneController(
       ) {
         pauseScene.combatPause.resume();
       }
+      // Same guard for the pause-and-plan freeze (Task 14.5): a warp escape
+      // decided during PLANNING confirms an empty-weapons draft so the ship
+      // can actually run for the edge instead of freezing on the draft.
+      confirmPlanningIfOpen(pauseScene, { assignWeapons: false });
       const sys = currentSystem(engine);
       const prevId = sys?.id ?? null;
       const connections = reachableNeighbors(
@@ -641,6 +646,19 @@ export function createLiveSceneController(
           interaction?: { onAttackNpc?: (npc: { id: string }) => void };
         };
       } | null;
+      // Pause-and-plan loop (Task 14.5): while the tactical PLANNING freeze is
+      // open, an attack decision means "assign every weapon to the target,
+      // steer at it, confirm" — the exact assign-and-«Ход» a human runs. The
+      // next planning phase (after the execute window) re-lands here via the
+      // policy's next attack pick, so the fight resolves round by round.
+      if (
+        confirmPlanningIfOpen(scene, {
+          preferredTargetId: targetId,
+          closeOnTarget: true,
+        })
+      ) {
+        return;
+      }
       // When combat is on the active-pause overlay, pressing «Огонь!» is what
       // fires — `combatPause.confirm()` shoots one aimed shot and resumes time.
       // Without this the overlay sits open forever and the ship freezes
@@ -746,6 +764,11 @@ export function createLiveSceneController(
         );
         scene.executeRouteTo(edge.x, edge.y);
       }
+      // Pause-and-plan loop (Task 14.5): a flee decision during the PLANNING
+      // freeze confirms an empty-weapons draft — deliberate hold-fire-and-run.
+      // The escape route plotted above (or an in-progress one) survives the
+      // confirm (a null destination leaves the current course untouched).
+      confirmPlanningIfOpen(scene, { assignWeapons: false });
     },
     repair() {
       // Guard on a fully-resolved player ship — executeRepair reads

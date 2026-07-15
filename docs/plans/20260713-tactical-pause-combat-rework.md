@@ -1402,26 +1402,72 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 15: Update headless letsplay driving for the new planning-phase loop
 
-> ⚠️ **Blocked on Task 14.5 (above).** The checkboxes below cannot be executed until the planning loop
-> is actually live in production. Concretely: checkbox 1 says "drive the new loop instead of the old
-> handlers **this plan removes**" — the plan has not removed them; checkbox 2's deletes are forbidden
-> by their own "only once nothing still references them" guard (`gitnexus impact CombatPursuitController`
-> = 19 live refs, CRITICAL); checkbox 3 is already green only because nothing was replaced. Do not mark
-> these done and do not delete live combat modules until Task 14.5 lands.
+> ⚠️ ~~**Blocked on Task 14.5 (above).**~~ **Unblocked 2026-07-15** — Task 14.5a/b/c landed the live
+> planning loop; this task executed against it (see the execution record below).
 
-- [ ] Update `PlayerAgent.driveAttack`, `LiveApplier`'s attack/flee heads, and
+- [x] Update `PlayerAgent.driveAttack`, `LiveApplier`'s attack/flee heads, and
       `MemoryHeuristicPolicy`'s combat decision branches to drive the new loop: pick a movement
       destination + assign weapon target(s) + confirm, instead of invoking the old real-time
       auto-pursuit `onAttackNpc`/`e2eEngageCombat` handlers this plan removes.
       **This task is a hard prerequisite for resuming `docs/plans/20260713-campaign-winrate-100pct.md`**
       (that plan's entire measurement mechanism is headless combat outcomes) — do not consider this
       plan done for that purpose until `npm run letsplay:ci` is green against the new combat loop.
-- [ ] Execute Task 1's recorded test-disposition list: delete/rewrite every named file among the
+- [x] Execute Task 1's recorded test-disposition list: delete/rewrite every named file among the
       ~48 affected existing tests. Delete now-fully-superseded dead modules (old
       `CombatPursuitController` orbit-strafe logic, old `combatRounds` disengage-window logic) only
       once nothing still references them (confirm via `gitnexus impact` before deleting).
-- [ ] Run `npm run letsplay:ci`, `npm run test:playtest` — must be green (this is the task where
+      *(Executed per the list's own conditionality — the 4 DELETEs converted to KEEP and no module
+      qualified as dead; see the execution record below for the impact evidence.)*
+- [x] Run `npm run letsplay:ci`, `npm run test:playtest` — must be green (this is the task where
       they're allowed to have been red since Task 2, and must not stay red past this task).
+      *(letsplay:ci 108/108, test:playtest 78 files green, full unit suite 5828 green, tsc + lint clean.)*
+
+#### Task 15 execution record (2026-07-15)
+
+**Driver rewiring.** New shared helper `src/tests/playtest/letsplay/planningDriver.ts`
+(`confirmPlanningIfOpen(scene, {preferredTargetId?, assignWeapons?, closeOnTarget?})`) — the headless
+assign-and-«Ход»: picks a target (explicit id → live selection → nearest combatant), assigns **every**
+fitted weapon, optionally steers at it, confirms the draft; a no-op outside PLANNING. Wired into:
+
+- `PlayerAgent.driveAttack` — confirm before the turn-start (onPlayPause during PLANNING **is** the
+  confirm per 14.5a, so the old `if (!isTurnRunning) onPlayPause()` order would consume an EMPTY
+  hold-fire draft), then per tick with `closeOnTarget` on the chased target.
+- `PlayerAgent.waitOneDay` / `completeWarp` / `flyForward` — per tick, weapons on nearest, destination
+  untouched (a null destination leaves the current course, so a warp-edge/traverse route keeps flying
+  through the execute windows — the same "resuming is the honest game" discipline as the old resume).
+- live autopilot heads (`installAutopilotHook`): `attack()` = assign+steer+confirm; `flee()` and the
+  `warp()` pre-flight guard = confirm an empty-weapons draft (deliberate hold-fire-and-run) after the
+  edge-route plot.
+- `MemoryHeuristicPolicy` needed **no code change**: its action space (attack/flee + targetId) is
+  unchanged; the appliers above translate those decisions into the planning loop. `LiveApplier` stayed
+  the pure dispatcher; the heads live in `installAutopilotHook`'s controller.
+- `onAttackNpc`/`e2eEngageCombat` were **kept as combat-entry seams** (they now open the planning
+  loop via `startInFlightCombat` → `beginCombatPlanning`); what changed is the drive *after* entry.
+
+**Test-disposition outcome.** All 26 REWRITE files were already rewritten incrementally during Tasks
+2–14.5 (whole unit suite green against the new loop). The 4 DELETEs fail their own conditionality
+guard and convert to **KEEP**:
+
+- `combatManeuver.test.ts` — Task 1c's recorded caveat applies: `decideManeuver` is still consumed by
+  NPC-side AI (`NpcShipSprite.maneuverToward`, incl. the BREAK_OFF flee-bounding path) → downgrade.
+- `combatPursuit.test.ts` / `combatOrbit.test.ts` / `combatOrbitAntiSpin.test.ts` — the orbit-strafe
+  auto-pursuit was **not** deleted by 14.5: it survives as the execute-window movement primitive
+  (`SpaceFlightScene:674` → `npcManager.updateCombat` → `updateCombatPursuit`/`steerCombatOrbit`,
+  gated `!frozen`, i.e. it runs during confirmed execute windows when no planned destination
+  overrides). The pins guard live behavior.
+
+**Dead-module verdicts (gitnexus impact, 2026-07-15).** Nothing qualified for deletion:
+
+- `CombatPursuitController` — **CRITICAL, 19 direct refs**, live in 8 `SpaceFlightScene` processes;
+  it is the execute-phase movement/approach primitive, not a dead module.
+- `combatRounds.ts` — `roundIsComplete` (which folds in `roundDamageBudget`) is consumed by
+  `CombatModule`'s live round-budget gate; repurposed per Task 1, not dead.
+- `combatPause.ts`/`CombatPauseController` — reactive triggers are unwired in production
+  (`combatModuleDeps` no longer wires `onPlayerUnderAttack`/`onTargetLost`/`onRoundComplete`), but 3
+  direct refs remain (scene `createCombatPauseUi` wiring, `flightKeyHandler` Esc routing, letsplay
+  driver guards). Removing it is a scene-wiring refactor, not a dead-module sweep — left for the
+  Post-Completion cleanup; Task 16 must record the partial-replacement scope explicitly (real-time
+  auto-pursuit survives inside execute windows by design).
 
 ### Task 16: [Final] Verify acceptance criteria, update documentation, full regression
 

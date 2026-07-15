@@ -53,6 +53,7 @@ import {
   executeArmUp,
 } from "./equipmentQueries";
 import { executeTakeLoan, executeRepayLoan } from "./bankingQueries";
+import { confirmPlanningIfOpen } from "./planningDriver";
 
 /**
  * A compact, egocentric vitals snapshot taken at one step — the player's own
@@ -640,6 +641,11 @@ export class PlayerAgent {
     ) {
       flightScene.combatPause.resume();
     }
+    // The pause-and-plan loop freezes the sim the frame combat engages (Task
+    // 14.5): confirm the round with weapons on the nearest combatant and the
+    // course untouched — the honest game is unchanged, the ship keeps running
+    // for the edge and eats the in-range volleys through each execute window.
+    confirmPlanningIfOpen(flightScene);
     if (
       flightScene?.isTurnRunning &&
       typeof flightScene.endTurn === "function"
@@ -662,6 +668,10 @@ export class PlayerAgent {
       ) {
         flightScene.combatPause.resume();
       }
+      // PLANNING re-opens after every execute window while hostiles remain —
+      // confirm each round (weapons on nearest, course untouched) so the
+      // warp-edge run keeps flying instead of freezing mid-fight.
+      confirmPlanningIfOpen(flightScene);
       this.harness.tick(50);
       await Promise.resolve(); // yield so async performWarp() can settle
       if (engine.player?.currentSystemId !== sys0) break;
@@ -735,6 +745,12 @@ export class PlayerAgent {
       return;
     }
     const day0 = engine.galaxy?.gameDays ?? 0;
+    // A fight staged before the turn starts opens the PLANNING freeze, and
+    // onPlayPause during PLANNING is the confirm (14.5a) — it would consume an
+    // EMPTY draft instead of starting the turn. Confirm the round first (with
+    // weapons on the nearest combatant), THEN start the turn via the
+    // now-unblocked Play branch so the execute window actually resolves.
+    confirmPlanningIfOpen(scene);
     if (!scene.isTurnRunning) scene.onPlayPause(); // start the course-less wait
     // Round-based combat (Task 9 (v)): start a fresh combat round for THIS step so
     // incoming fire is bounded to one round's budget (a fraction of max hull).
@@ -760,6 +776,10 @@ export class PlayerAgent {
       ) {
         scene.combatPause.resume();
       }
+      // Pause-and-plan freeze (Task 14.5): a fight engaged mid-wait opens
+      // PLANNING and stops the calendar — confirm the round with weapons on
+      // the nearest combatant so the fight resolves and the day advances.
+      confirmPlanningIfOpen(scene);
       this.harness.tick(1000);
       // A completed combat round halts fire and opens the reaction window — end
       // the step so the policy re-decides (flee vs fight on) before more damage.
@@ -819,6 +839,14 @@ export class PlayerAgent {
     // (slayerCampaign.test) never finishes its kill that way.
     const alreadyFighting = scene.combatModule?.isActive === true;
     if (!alreadyFighting) scene.npcManager.onAttackNpc(target);
+    // PLANNING may already be open (an e2e-staged or garrison-opened fight):
+    // confirm the first round (weapons on the chased target, steer at it)
+    // BEFORE the turn-start below — onPlayPause during PLANNING is the confirm
+    // itself (14.5a) and would otherwise consume an EMPTY hold-fire draft.
+    confirmPlanningIfOpen(scene, {
+      preferredTargetId: target.id,
+      closeOnTarget: true,
+    });
     if (!scene.isTurnRunning) scene.onPlayPause();
     scene.combatModule?.beginCombatRound?.();
     for (let i = 0; i < 2000; i++) {
@@ -830,6 +858,13 @@ export class PlayerAgent {
       ) {
         scene.combatPause.resume();
       }
+      // Pause-and-plan loop (Task 14.5): each round, assign every weapon to
+      // the chased target, steer at it (close into weapon range) and confirm
+      // — the headless equivalent of the player's assign-and-«Ход».
+      confirmPlanningIfOpen(scene, {
+        preferredTargetId: target.id,
+        closeOnTarget: true,
+      });
       this.harness.tick(50);
       // Scene changed mid-fight (player death → GAME_OVER): stop driving.
       if (engine.currentSceneType !== SceneType.SPACE_FLIGHT) return;
@@ -893,6 +928,10 @@ export class PlayerAgent {
     scene.executeRouteTo(tx, ty);
     // Run the turn: tick until a day passes or the ship reaches the waypoint.
     for (let i = 0; i < 800; i++) {
+      // A fight engaged mid-flight opens the PLANNING freeze (Task 14.5) —
+      // confirm the round (weapons on nearest, course untouched) so the
+      // traverse keeps flying instead of stalling the step.
+      confirmPlanningIfOpen(scene);
       this.harness.tick();
       if ((engine.galaxy?.gameDays ?? 0) > day0) break;
       if (!physics.isMoving) break;
