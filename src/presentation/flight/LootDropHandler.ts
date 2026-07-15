@@ -68,12 +68,16 @@ export class LootDropHandler {
     worldY: number,
     rng: () => number = Math.random,
     day: number = Infinity,
+    forcedCount?: number,
   ): void {
     const isOvermind = npc.faction === Faction.OVERMIND;
     const drop = isOvermind
       ? OVERMIND_ARTIFACT_DROP[npc.sizeTier ?? "small"]
       : undefined;
-    const count = this.rollLootCount(rng) + (drop?.bonusLootRolls ?? 0);
+    // `forcedCount` lets the wreck-drift loot cadence (Task 14/14.5c) pre-roll
+    // the total via rollDropCount and emit it one dot at a time along the drift
+    // — the per-kill distribution is unchanged, just spread over the wreck's life.
+    const count = forcedCount ?? this.rollDropCount(npc, rng);
     const artifactChance = Math.min(
       1,
       ARTIFACT_DROP_CHANCE * (drop?.artifactChanceMult ?? 1),
@@ -196,6 +200,19 @@ export class LootDropHandler {
     }
     this.lootGraphics.clear();
     this.spaceLoot.length = 0;
+  }
+
+  /**
+   * Roll a kill's TOTAL drop count — the same distribution {@link spawn} uses
+   * (uniform-thirds base + the Overmind tier bonus). Public so the wreck-drift
+   * loot cadence can pre-roll the total once and stagger it via `forcedCount`.
+   */
+  rollDropCount(npc: NpcShip, rng: () => number = Math.random): number {
+    const drop =
+      npc.faction === Faction.OVERMIND
+        ? OVERMIND_ARTIFACT_DROP[npc.sizeTier ?? "small"]
+        : undefined;
+    return this.rollLootCount(rng) + (drop?.bonusLootRolls ?? 0);
   }
 
   /** Roll the per-kill loot count: 0, 1 or 2 (uniform thirds). */

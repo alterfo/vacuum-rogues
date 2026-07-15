@@ -16,6 +16,7 @@ import type { WeaponSpec } from "@/systems/equipment/GearCatalog";
 import type { GameMode } from "@/types";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { CombatModuleDeps } from "./CombatModule";
+import type { CombatExecutionController } from "./combatExecution";
 
 /**
  * The scene members `buildCombatModuleDeps` reads. Built as an explicit object
@@ -32,6 +33,8 @@ export interface CombatModuleDepsHost {
   isExecutingPlan(): boolean;
   /** The confirmed draft's assignment for `weapon` (null = unassigned → hold). */
   getPlannedTarget(weapon: WeaponSpec): NpcShipSprite | null;
+  /** The execute-window orchestrator (14.5c) — null until the scene builds it. */
+  getExecution(): CombatExecutionController | null;
   endCombatPlanning(): boolean;
   isCombatPauseActive(): boolean;
   isTurnRunning(): boolean;
@@ -51,7 +54,13 @@ export interface CombatModuleDepsHost {
     galaxy?: { isHostileSystem(id: string): boolean } | null;
     campaignPeakPower?: number | null;
   } | null;
-  npcManager: {
+  /**
+   * LAZY accessor — the scene constructs `NpcShipManager` AFTER `CombatModule`,
+   * so a plain `npcManager:` property would capture `undefined` forever and
+   * every player kill would crash on `handleInFlightDeath` (the 14.5a
+   * extraction bug caught by `combatExecutionLive.test.ts`).
+   */
+  getNpcManager(): {
     handleInFlightDeath(sprite: NpcShipSprite): void;
     handlePlayerDeath(): void;
   };
@@ -74,6 +83,16 @@ export function buildCombatModuleDeps(
     // engaged without beginCombat — e.g. e2e staging) legacy auto-fire remains.
     isPlannedTargetingActive: () => host.isExecutingPlan(),
     getPlannedWeaponTarget: (w) => host.getPlannedTarget(w),
+    // Execute-window mechanic seams (Task 14.5c): missile interception, styled
+    // weapon-type tracers, the weapon-jam fire gate and the shield-hit flash all
+    // resolve in the CombatExecutionController; absent (early init) ⇒ legacy.
+    interceptPlannedShot: (t, w) =>
+      host.getExecution()?.interceptPlannedShot(t, w) ?? false,
+    onPlayerShotVfx: (fx, fy, t, w) =>
+      host.getExecution()?.onPlayerShotVfx(fx, fy, t, w) ?? false,
+    isNpcFireSuppressed: (npc) =>
+      host.getExecution()?.isNpcJammed(npc) ?? false,
+    onNpcShieldHit: (t) => host.getExecution()?.spawnNpcShieldFlash(t),
     getPlayerLoadout: () => host.gameEngine?.playerLoadout ?? null,
     getUiLayer: () => host.renderer.uiLayer,
     getGameLayer: () => host.renderer.gameLayer,
@@ -89,10 +108,14 @@ export function buildCombatModuleDeps(
     getCampaignPeakPower: () => host.gameEngine?.campaignPeakPower ?? 0,
     onNpcDestroyed: (s) => {
       const npcId = s.npc.id; // capture before the death path deletes the NPC, then complete its BOUNTY
-      host.npcManager.handleInFlightDeath(s);
+      // Spawn the drifting wreck BEFORE the sprite is torn down (Task 14/14.5c)
+      // — it inherits the dying ship's live heading/speed and takes over the
+      // loot drop as staggered drift emissions (deferDeathLoot).
+      host.getExecution()?.onNpcKilled(s);
+      host.getNpcManager().handleInFlightDeath(s);
       host.questCompletion.bountyByNpcKill(npcId);
     },
-    onPlayerDestroyed: () => host.npcManager.handlePlayerDeath(),
+    onPlayerDestroyed: () => host.getNpcManager().handlePlayerDeath(),
     // The reactive single-shot active-pause (onPlayerUnderAttack/onTargetLost/
     // onRoundComplete → combatPause) is SUPERSEDED by the pause-and-plan loop
     // (Task 14.5a) — combatPlanning.beginCombat() already freezes the fight the

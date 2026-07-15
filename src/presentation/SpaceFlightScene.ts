@@ -6,6 +6,7 @@ import { installGameCursors, setCanvasCursor } from "./cursor";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import { logger } from "@/utils/logger";
+import { t } from "@/i18n/i18n";
 import {
   clampOutsideRadius,
   computeFlightPath,
@@ -29,8 +30,10 @@ import { CombatModule } from "./flight/CombatModule";
 import { buildCombatModuleDeps } from "./flight/combatModuleDeps";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
 import { CombatPlanningUi, createCombatPlanningController } from "./flight/combatPlanningUi"; // prettier-ignore
-import { previewCombatCourse } from "./flight/combatCoursePreview";
-import { plotPlannedRoute } from "./flight/routePlot";
+import { routePlanningClick } from "./flight/combatCoursePreview";
+import { createCombatExecution, type CombatExecutionController } from "./flight/combatExecution"; // prettier-ignore
+import { buildCombatExecutionDeps } from "./flight/combatExecutionDeps";
+import { plotPlannedRoute, navigateToQuestTarget } from "./flight/routePlot";
 import { updateFlightMiniMap } from "./flight/miniMapUpdate";
 import { orbitBump } from "./flight/combatOrbitClock";
 import { PlanetManager } from "./flight/PlanetManager";
@@ -47,6 +50,7 @@ import { mountFlightSceneHelp, type FlightSceneHelp } from "./flight/flightScene
 import { disposeFiltersDeep } from "./flight/disposeFilters";
 import {
   endFlightTurn,
+  handleFlightPlayPause,
   recordAndMaybeAutosaveFlight,
   type FlightAutosaveState,
 } from "./flight/flightTurnEnd";
@@ -82,11 +86,15 @@ export class SpaceFlightScene extends GameScene {
   // Pause-and-plan loop (Task 2/3, live 14.5a, UI 14.5b): startInFlightCombat
   // calls beginCombat(); the toasts/UI mount live in flight/combatPlanningUi.ts.
   private combatPlanningUi: CombatPlanningUi | null = null;
+  // Execute-window orchestrator (14.5c): mechanics + VFX, ticked while unfrozen.
+  private combatExecution: CombatExecutionController | null = null;
   private combatPlanning = createCombatPlanningController({
     getShipPhysics: () => this.shipPhysics,
     getUi: () => this.combatPlanningUi,
     showMessage: (text, color) => this.hud.showMessage(text, color),
+    onConfirmPlan: (plan) => this.combatExecution?.beginWindow(plan),
     onFightEnd: () => {
+      this.combatExecution?.endFight(); // wrecks/flashes keep drifting past the end
       if (this.destroyed) return; // mid-teardown — clearPlannedRoute() handles it
       if (this.plannedRoute)
         this.plotRoute(); // restore the pre-combat course line
@@ -259,13 +267,14 @@ export class SpaceFlightScene extends GameScene {
         isExecutingPlan: () => this.combatPlanning.isExecuting,
         getPlannedTarget: (w) =>
           this.combatPlanning.plan.weaponTargets.get(w) ?? null,
+        getExecution: () => this.combatExecution,
         endCombatPlanning: () => this.combatPlanning.endCombat(),
         isCombatPauseActive: () => this.combatPause.paused,
         isTurnRunning: () => this.isTurnRunning,
         isDestroyed: () => this.destroyed,
         renderer: this.renderer,
         gameEngine: this.gameEngine,
-        npcManager: this.npcManager,
+        getNpcManager: () => this.npcManager,
         questCompletion: this.questCompletion,
         hud: this.hud,
         endTurn: () => this.endTurn(),
@@ -290,6 +299,11 @@ export class SpaceFlightScene extends GameScene {
       isCombatant: (s) => this.combatModule.combatants.has(s),
       planning: this.combatPlanning,
       showMessage: (text, color) => this.hud.showMessage(text, color),
+      actions: {
+        getOwnedConsumableIds: () =>
+          this.gameEngine?.player?.inventory.ownedConsumableIds ?? [],
+        canAfterburn: () => this.combatExecution?.canAfterburn() ?? true,
+      },
     });
     // NPC module: living-galaxy ships, contact panel, auto-follow combat, OVERMIND prompt.
     this.npcManager = new NpcShipManager(
@@ -328,10 +342,25 @@ export class SpaceFlightScene extends GameScene {
         selectCombatTarget: (s) => this.combatModule.selectTarget(s),
         handlePlanningTargetClick: (s) =>
           this.combatPlanningUi?.handleTargetClick(s) ?? false,
+        deferDeathLoot: (npc) =>
+          this.combatExecution?.consumeLootDeferral(npc) ?? false,
         getSelectedCombatTargetId: () =>
           this.combatModule.selectedTarget?.npc.id ?? null,
         isCombatant: (sprite) => this.combatModule.combatants.has(sprite),
         sessionState: this.gameEngine?.sessionState,
+      }),
+    );
+    this.combatExecution = createCombatExecution(
+      buildCombatExecutionDeps({
+        getShipPhysics: () => this.shipPhysics,
+        getGameLayer: () => this.renderer.gameLayer,
+        getPlanetSprites: () => this.planetManager.planetSprites,
+        getPlayerVisual: () => this.playerShip.container,
+        getEngine: () => this.gameEngine,
+        getCombatModule: () => this.combatModule,
+        getNpcManager: () => this.npcManager,
+        isExecutingPlan: () => this.combatPlanning.isExecuting,
+        showMessage: (text, color) => this.hud.showMessage(text, color),
       }),
     );
     // Auto-complete system-entry quests: EXPLORATION, DEFENSE (OVERMIND liberation), ESCORT.
@@ -644,6 +673,7 @@ export class SpaceFlightScene extends GameScene {
     if (!frozen) this.playerShip.update(deltaTime, this.bgElapsed);
     if (!frozen) this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);
+    if (!frozen && !this.destroyed) this.combatExecution?.update(deltaTime);
     // A lethal hit here fires GAME_OVER synchronously, destroying this scene
     // mid-frame; bail before driving the now-destroyed modules below.
     if (this.destroyed) return;
@@ -750,6 +780,7 @@ export class SpaceFlightScene extends GameScene {
     // Tear down NPC ship sprites, contact panel and the OVERMIND-core overlay.
     this.npcManager?.destroy();
     this.combatModule?.destroy(); // Clear in-flight combat target + active flag.
+    this.combatExecution?.destroy(); // Execute-window entities + overlays (14.5c).
     this.combatPlanningUi?.destroy(); // Planning bar + range rings (14.5b).
     this.combatPlanning.endCombat(); // Reset the pause-and-plan loop too (Task 14.5a).
 
@@ -957,28 +988,17 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // Tactical planning-phase click → this round's destination + arc preview
-    // (Task 3, reachable 14.5b). Checked BEFORE the turn-running guard:
-    // engagement holds the turn open, but PLANNING freezes the sim — a click
-    // here is the planning interaction itself, not a mid-flight mis-click.
-    if (
-      event.button === 0 &&
-      !event.shiftKey &&
-      this.combatPlanning.isPlanning &&
-      this.shipPhysics
-    ) {
-      const pt = this.camera.screenToWorld(event.global.x, event.global.y);
-      const { centerX: sx, centerY: sy, avoidRadius } = this.starRenderer;
-      const world = clampOutsideRadius(pt.x, pt.y, sx, sy, avoidRadius);
-      previewCombatCourse(
-        this.routeRenderer,
-        this.combatPlanning,
-        this.shipPhysics,
-        world.x,
-        world.y,
-      );
-      return;
-    }
+    // Tactical planning-phase click → this round's destination + arc preview.
+    // Checked BEFORE the turn-running guard: engagement holds the turn open,
+    // but PLANNING freezes the sim (routePlanningClick gates on isPlanning).
+    const planningCtx = {
+      planning: this.combatPlanning,
+      ship: this.shipPhysics,
+      camera: this.camera,
+      star: this.starRenderer,
+      routeRenderer: this.routeRenderer,
+    };
+    if (routePlanningClick(event, planningCtx)) return;
 
     // While a turn is running, block route building (panning stays allowed).
     if (this.isTurnRunning && !isPanButton) {
@@ -1621,46 +1641,31 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /**
-   * Play/Pause turn control. Paused: Play executes the planned route. Running:
-   * Pause defers the stop to the next whole-day boundary (F1, playtest3) — except
-   * a combat auto-follow, which aborts immediately. Suppressed while the active-
-   * pause overlay is open — else a stray click desyncs `isTurnRunning` below.
-   */
+  /** Play/Pause turn control — the pure decision tree lives in
+   *  `flight/flightTurnEnd.ts` (`handleFlightPlayPause`, extracted 14.5c). */
   private onPlayPause(): void {
-    if (this.combatPause.paused) return;
-    // Mouse equivalent of Space's confirm during planning (14.5a) — else the
-    // branch below would endTurn() mid-plan, desyncing isTurnRunning from phase.
-    if (this.combatPlanning.isPlanning) {
-      this.combatPlanning.confirm();
-      return;
-    }
-    if (this.isTurnRunning) {
-      // A combat auto-follow / active fight has no advancing day to defer the
-      // pause to (combat freezes the calendar), so the day-boundary latch would
-      // never fire — halt the turn immediately instead.
-      if (this.npcManager.followNpcId || this.combatModule?.isActive) {
-        this.endTurn(); // combat abort halts now (endTurn stops the ship)
-      } else if (!this.pauseAtDayBoundary) {
-        this.pauseAtDayBoundary = true;
-        this.hud.showMessage("⏸ Завершаю день…", 0x88ccff);
-      }
-      return;
-    }
-    // Play: run the planned route (or close on an attack target). With no course
-    // at all, run a "wait" turn — time passes, the ship holds position (US-070 #5).
-    this.pauseAtDayBoundary = false; // fresh turn — clear any stale latch
-    if (this.plannedRoute) {
-      this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
-    } else if (this.npcManager.followNpcId) {
-      const target = this.npcManager.getFollowTarget();
-      if (target) this.executeRouteTo(target.x, target.y);
-    } else {
-      this.waitDayAccum = 0;
-      this.isTurnRunning = true; // course-less wait: time passes, ship stays put
-      this.updateInteractiveCursors(true);
-      this.hud.showMessage("⏳ Ожидание… (мир движется)", 0x88ccff);
-    }
+    handleFlightPlayPause({
+      isCombatPaused: () => this.combatPause.paused,
+      isPlanning: () => this.combatPlanning.isPlanning,
+      confirmPlan: () => void this.combatPlanning.confirm(),
+      isTurnRunning: () => this.isTurnRunning,
+      combatAbortActive: () =>
+        !!this.npcManager.followNpcId || !!this.combatModule?.isActive,
+      endTurn: () => this.endTurn(),
+      pauseLatched: () => this.pauseAtDayBoundary,
+      setPauseLatch: (v) => void (this.pauseAtDayBoundary = v),
+      plannedRoute: () => this.plannedRoute,
+      followActive: () => !!this.npcManager.followNpcId,
+      followTarget: () => this.npcManager.getFollowTarget(),
+      executeRouteTo: (x, y) => this.executeRouteTo(x, y),
+      beginWaitTurn: () => {
+        this.waitDayAccum = 0;
+        this.isTurnRunning = true; // course-less wait: time passes, ship stays put
+        this.updateInteractiveCursors(true);
+        this.hud.showMessage(t("flight.turn.waiting"), 0x88ccff);
+      },
+      showMessage: (text, color) => this.hud.showMessage(text, color),
+    });
   }
 
   /** End the running turn: stop the ship and freeze the world (pause). */
@@ -1753,29 +1758,27 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /**
-   * Navigate ship to quest objective location (planet)
-   */
+  /** Navigate ship to a quest objective (`navigateToQuestTarget`, routePlot.ts). */
   private navigateToQuestObjective(locationId: string): void {
-    // Target in the CURRENT system → plot a normal route to the planet.
-    const here = this.planetManager.planetSprites.find(
-      (s) => s.planet.id === locationId,
+    navigateToQuestTarget(
+      {
+        planets: () => this.planetManager.planetSprites,
+        hasShip: () => this.shipPhysics !== null,
+        planRouteTo: (x, y) => this.planRouteTo(x, y),
+        openPlanetPanel: (p) => this.planetManager.handlePlanetClick(p),
+        openStarMapOn: (systemId) => {
+          if (!this.gameEngine) return;
+          this.saveShipPosition();
+          void this.gameEngine.transitionTo(SceneType.STAR_MAP, {
+            gameEngine: this.gameEngine,
+            pendingSelectedSystemId: systemId,
+          });
+        },
+        systemForLocation: (id) =>
+          this.gameEngine?.galaxy?.systemForLocation(id) ?? null,
+      },
+      locationId,
     );
-    if (here && this.shipPhysics) {
-      this.planRouteTo(here.screenX, here.screenY);
-      this.planetManager.handlePlanetClick(here.planet);
-      return;
-    }
-    // Target in ANOTHER (possibly not-yet-reachable) system → open the star map
-    // pre-selected on that system so the player can plot the warp route there.
-    const target = this.gameEngine?.galaxy?.systemForLocation(locationId);
-    if (target && this.gameEngine) {
-      this.saveShipPosition();
-      void this.gameEngine.transitionTo(SceneType.STAR_MAP, {
-        gameEngine: this.gameEngine,
-        pendingSelectedSystemId: target.id,
-      });
-    }
   }
 
   /** E2E helper: click back to star map */

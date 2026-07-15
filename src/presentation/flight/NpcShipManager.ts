@@ -81,6 +81,13 @@ export interface NpcShipManagerDeps {
    */
   startInFlightCombat?(sprite: NpcShipSprite): void;
   /**
+   * Whether a combat kill's instant loot dump should be DEFERRED (Task 14/14.5c):
+   * the execute-window wreck takes over and emits the same drops staggered along
+   * its drift. One-shot per kill — the host consumes the mark. Absent/false ⇒
+   * the legacy at-death loot dump (crossfire deaths always stay legacy).
+   */
+  deferDeathLoot?(npc: NpcShip): boolean;
+  /**
    * Called when the *player* deliberately initiates combat (vs. NPC aggro). The
    * scene uses this to raise the active-pause immediately so the weapon-choice
    * overlay appears before any orbital maneuvering, not after the first NPC shot.
@@ -1042,9 +1049,21 @@ export class NpcShipManager implements FlightModule {
     worldX: number,
     worldY: number,
     rng: () => number = Math.random,
+    count?: number,
   ): void {
     const day = this.gameEngine?.galaxy?.gameDays ?? Infinity;
-    this.loot.spawn(npc, worldX, worldY, rng, day);
+    this.loot.spawn(npc, worldX, worldY, rng, day, count);
+  }
+
+  /** Roll a kill's total drop count (the loot handler's own distribution) —
+   *  the wreck-drift cadence pre-rolls this once, then emits via `count: 1`. */
+  rollDeathLootCount(npc: NpcShip, rng: () => number = Math.random): number {
+    return this.loot.rollDropCount(npc, rng);
+  }
+
+  /** Read-only view of the live NPC sprites (call-for-help candidates, 14.5c). */
+  getNpcSpritesView(): readonly NpcShipSprite[] {
+    return this.npcSprites;
   }
 
   /**
@@ -1065,7 +1084,12 @@ export class NpcShipManager implements FlightModule {
     // blowing up reads + sounds the same.
     this.deathFx?.spawn(sprite.x, sprite.y);
     void this.gameEngine?.audio?.playSfx("explosion")?.catch(() => {});
-    this.spawnLootForNpc(sprite.npc, sprite.x, sprite.y, rng);
+    // A wreck-drift loot cadence (Task 14/14.5c) may take over this kill's drop
+    // — the same total, emitted staggered along the wreck's drift instead of
+    // all at once at the death point. Crossfire deaths keep the instant dump.
+    if (!this.deps.deferDeathLoot?.(sprite.npc)) {
+      this.spawnLootForNpc(sprite.npc, sprite.x, sprite.y, rng);
+    }
     const galaxy = this.gameEngine?.galaxy;
     if (galaxy) this.npcSimulator.removeNpc(galaxy, sprite.npc.id);
     const idx = this.npcSprites.indexOf(sprite);

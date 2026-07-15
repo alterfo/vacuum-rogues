@@ -18,6 +18,7 @@ import {
 } from "@/systems/campaign/hostileScaling";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { FlightModule } from "./FlightModule";
+import { resolveShieldedDamage } from "./combatShield";
 import { CombatHud } from "./CombatHud";
 import { DamageNumbers } from "./DamageNumbers";
 import { logger } from "@/utils/logger";
@@ -91,6 +92,38 @@ export interface CombatModuleDeps {
    * on whether the shot lands — an out-of-range or dead assigned target holds fire.
    */
   getPlannedWeaponTarget?(weapon: WeaponSpec): NpcShipSprite | null;
+  /**
+   * A planned execute-window shot is about to resolve (Task 14.5c): return true
+   * to consume it — the host launches a tracked projectile (a `WeaponClass.MISSILE`
+   * gun's travel-time missile, Task 7) instead of the instant hit-scan. The
+   * weapon's cadence timer is still spent. Only consulted on the planned-targeting
+   * path; absent ⇒ every shot stays instant (legacy byte-identical).
+   */
+  interceptPlannedShot?(target: NpcShipSprite, weapon: WeaponSpec): boolean;
+  /**
+   * A player hit-scan shot landed (Task 14.5c): return true when the host drew
+   * the weapon-type styled tracer (Task 13 beam/burst/distortion), in which case
+   * the module skips its own flat `flashShot` for this shot. NPC fire always
+   * keeps the legacy tracer. Absent ⇒ legacy tracer (byte-identical).
+   */
+  onPlayerShotVfx?(
+    fromX: number,
+    fromY: number,
+    target: NpcShipSprite,
+    weapon: WeaponSpec,
+  ): boolean;
+  /**
+   * Whether an execute-window effect (the Task 9 weapon-jam consumable) is
+   * currently suppressing this NPC's fire. A suppressed NPC holds primed and
+   * fires the instant the jam expires. Absent ⇒ never suppressed.
+   */
+  isNpcFireSuppressed?(npc: NpcShipSprite): boolean;
+  /**
+   * A player shot was (partly) absorbed by the target's shield pool (Task 12
+   * shield-then-hull ordering) — the host spawns the shield-hit flash sphere.
+   * Absent ⇒ no flash (the damage split still applies when the NPC has shields).
+   */
+  onNpcShieldHit?(target: NpcShipSprite): void;
   /** Live UI layer the HUD overlay is mounted on. */
   getUiLayer?(): Container;
   /** Live world (game) layer the dashed range circle is drawn on. */
@@ -615,6 +648,12 @@ export class CombatModule implements FlightModule {
         d !== null &&
         d <= npcWeaponRange(npc.npc)
       ) {
+        // A weapon-jam (Task 9 consumable) silences this NPC: hold primed so it
+        // fires the instant the jam expires, exactly like an out-of-range hold.
+        if (this.deps.isNpcFireSuppressed?.(npc)) {
+          this.npcFireTimers.set(npc, t);
+          continue;
+        }
         this.npcFireTimers.set(npc, 0);
         this.fireNpcShot(npc);
       } else {
@@ -673,6 +712,9 @@ export class CombatModule implements FlightModule {
         continue;
       }
       this.weaponFireTimers.set(i, 0);
+      // A missile-class gun's planned shot becomes a tracked projectile
+      // (Task 7/14.5c) — the host consumes the shot and the cadence is spent.
+      if (planned && this.deps.interceptPlannedShot?.(target, weapon)) continue;
       this.firePlayerShot(target, weapon);
     }
   }
@@ -782,23 +824,23 @@ export class CombatModule implements FlightModule {
     }
   }
 
-  /** One player shot: reduce the target's hull, spawn a yellow number, handle the kill. */
+  /** One player shot: reduce the target's shields-then-hull, spawn a yellow
+   *  number, draw the tracer (weapon-type styled when the host handles it),
+   *  handle the kill. */
   private firePlayerShot(target: NpcShipSprite, weapon: WeaponSpec): void {
-    const npc = target.npc;
-    // Adaptive garrison scaling (Task 4): a HELD-system enemy's effective HP
-    // scales with the run's ratcheted power — the landed damage divides by
-    // hpMult, so a weak player's shots bite harder (~0.9×) and a maxed player's
-    // are absorbed by the full OVERMIND_COMBAT_HP_MULT. Neutral space leaves
-    // offense at baseline (hpMult 1 — Task 9 (i) gentles survival, not the kill).
-    const damage = scaleHostileDamage(
-      weapon.damage,
-      1 / this.hostileMults().hpMult,
-    );
-    npc.hullHP = Math.max(0, npc.hullHP - damage);
-    this.damageNumbers?.spawn(damage, target.x, target.y, true);
-    // Per-turn fire flash from the player ship to the target (who shoots whom).
     const physics = this.deps.getShipPhysics();
-    if (physics) {
+    const styled =
+      physics !== null &&
+      (this.deps.onPlayerShotVfx?.(
+        physics.shipX,
+        physics.shipY,
+        target,
+        weapon,
+      ) ??
+        false);
+    // Per-turn fire flash from the player ship to the target (who shoots whom),
+    // unless the host drew the weapon-type styled tracer instead (Task 13).
+    if (physics && !styled) {
       this.hud?.flashShot(
         physics.shipX,
         physics.shipY,
@@ -807,11 +849,66 @@ export class CombatModule implements FlightModule {
         true,
       );
     }
+    this.applyPlayerDamage(target, weapon.damage);
+  }
+
+  /**
+   * Land player-side damage on an engaged target through the canonical offense
+   * path — the execute-window mechanics (missile arrival, AoE consumable, a
+   * recruited ally's fire — Task 14.5c) route their hits through here so
+   * scaling, shield ordering, damage numbers and the kill/loot flow stay one
+   * code path. `from` draws the legacy tracer for the hit (null = no tracer).
+   * A no-op outside an active fight (a stale missile can't strike a settled one).
+   */
+  landExternalShot(
+    target: NpcShipSprite,
+    rawDamage: number,
+    from: { x: number; y: number } | null,
+  ): void {
+    if (!this.isActive || target.container?.destroyed) return;
+    if (from) this.hud?.flashShot(from.x, from.y, target.x, target.y, true);
+    this.applyPlayerDamage(target, rawDamage);
+  }
+
+  /** The shared player-offense damage core (scaling → shield split → hull → kill). */
+  private applyPlayerDamage(target: NpcShipSprite, rawDamage: number): void {
+    const npc = target.npc;
+    // Adaptive garrison scaling (Task 4): a HELD-system enemy's effective HP
+    // scales with the run's ratcheted power — the landed damage divides by
+    // hpMult, so a weak player's shots bite harder (~0.9×) and a maxed player's
+    // are absorbed by the full OVERMIND_COMBAT_HP_MULT. Neutral space leaves
+    // offense at baseline (hpMult 1 — Task 9 (i) gentles survival, not the kill).
+    const damage = scaleHostileDamage(
+      rawDamage,
+      1 / this.hostileMults().hpMult,
+    );
+    // Shield-then-hull ordering (Task 12): the target's shield pool absorbs up
+    // to its value before the hull takes the overflow. A shield-less ship
+    // (shields 0/absent — every legacy test stub) is byte-identical to the old
+    // straight-to-hull path.
+    const split = resolveShieldedDamage(npc.shields ?? 0, damage);
+    if (split.shieldHit) {
+      npc.shields = split.shields;
+      this.deps.onNpcShieldHit?.(target);
+    }
+    npc.hullHP = Math.max(0, npc.hullHP - split.hullDamage);
+    this.damageNumbers?.spawn(damage, target.x, target.y, true);
     if (npc.hullHP <= 0) {
       this.deps.showMessage?.(`Цель уничтожена: ${npc.name}`, 0xffdd33);
       this.deps.onNpcDestroyed?.(target);
       this.removeCombatant(target);
     }
+  }
+
+  /**
+   * Drop a combatant from the fight without killing it — the execute-window
+   * comms resolutions (a bribed or surrendering ship breaks off and departs,
+   * Task 10/14.5c) use this instead of waiting for the escape-range prune. The
+   * usual target-lost re-selection applies; an emptied set ends the fight on
+   * the next update. A no-op for a non-combatant.
+   */
+  disengage(npc: NpcShipSprite): void {
+    if (this.combatants.has(npc)) this.removeCombatant(npc);
   }
 
   /** Remove a combatant and re-pick the selected target from the survivors. */

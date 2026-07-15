@@ -280,6 +280,8 @@ export const ru: Dict = {
 
   // --- pirate shakedown tribute («Откупиться») ------------------------------
   "flight.tributeReason": "Откуп пирату «{name}»",
+  "flight.turn.finishingDay": "⏸ Завершаю день…",
+  "flight.turn.waiting": "⏳ Ожидание… (мир движется)",
   "flight.tributePaid": "Откуп {amount} кр. — {name} отступает.",
   "flight.tributePaidRep":
     "Откуп {amount} кр. — {name} отступает. Репутация у пиратов растёт.",
@@ -478,6 +480,20 @@ export const ru: Dict = {
   "combat.planning.assigned": "«{weapon}» → {target}",
   "combat.planning.assignedFar":
     "«{weapon}» → {target} — вне досягаемости, огонь при сближении",
+  "combat.planning.afterburner": "Форсаж",
+
+  // --- execute-window mechanics (Task 14.5c) --------------------------------
+  "combat.execution.afterburnerEngaged":
+    "🔥 Форсаж! Ресурс двигателя: {integrity}%",
+  "combat.execution.afterburnerSpent": "Двигатель изношен — форсаж недоступен",
+  "combat.execution.shieldRestored": "Щиты восстановлены: +{amount}",
+  "combat.execution.aoe": "💥 Импульсная бомба: целей поражено — {count}",
+  "combat.execution.jammed": "Орудия цели заглушены: {name}",
+  "combat.execution.bribed": "Откуп уплачен ({amount} кр.) — противник уходит",
+  "combat.execution.surrendered": "{name} сдаётся: сбрасывает груз и уходит",
+  "combat.execution.surrenderRefused": "{name} отклоняет требование сдаться",
+  "combat.execution.allyJoined": "{name} присоединяется к бою на вашей стороне",
+  "combat.execution.allyNone": "Никто не ответил на призыв о помощи",
 
   // --- combat consumables (tactical devices) -------------------------------
   "combat.consumable.category": "Тактическое устройство",

@@ -28,9 +28,11 @@ import { Container, Graphics } from "pixi.js";
 import { t } from "@/i18n/i18n";
 import { COMBAT_ROUND_MS } from "@/config/balance";
 import type { WeaponSpec } from "@/systems/equipment/GearCatalog";
+import { consumableById } from "./combatConsumable";
+import { COMBAT_COMMS_ACTIONS } from "./combatComms";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import { UiButton } from "../ui/UiButton";
-import { CombatPlanningController } from "./combatPlanning";
+import { CombatPlanningController, type PlannedTurn } from "./combatPlanning";
 import { applyPlannedMovement, type PathFollower } from "./combatTrajectory";
 import {
   WeaponAssignmentController,
@@ -43,6 +45,8 @@ import { drawWeaponRangeCircles } from "./combatWeaponRangeOverlay";
 const BAR_BTN_W = 168;
 const BAR_BTN_H = 30;
 const BAR_GAP = 8;
+/** Action-row (afterburner/consumable/comms) button width — narrower than a gun's. */
+const ACTION_BTN_W = 132;
 /** Bar baseline above the bottom HUD ХОД cluster + toast lane. */
 const BAR_BOTTOM_OFFSET = 150;
 /** Toast tint for planning-phase feedback (matches the 14.5a planning toasts). */
@@ -62,6 +66,17 @@ export interface CombatPlanningUiDeps {
   /** The planned-turn draft the assignments land in (also the phase gate). */
   planning: CombatPlanningController<NpcShipSprite, WeaponSpec>;
   showMessage(text: string, color?: number): void;
+  /**
+   * The execute-window action row (14.5c): afterburner toggle, owned tactical
+   * devices, comms. OPTIONAL — absent (lightweight/legacy harnesses) mounts the
+   * weapon bar exactly as before, so the pre-14.5c layout contracts hold.
+   */
+  actions?: {
+    /** The player's owned consumable ids (`Inventory.ownedConsumableIds`). */
+    getOwnedConsumableIds(): readonly string[];
+    /** Whether the engine can still afterburn this fight (wear gate, Task 8). */
+    canAfterburn(): boolean;
+  };
 }
 
 /**
@@ -77,6 +92,8 @@ export class CombatPlanningUi {
   >;
   private bar: Container | null = null;
   private buttons: { weapon: WeaponSpec; button: UiButton }[] = [];
+  private actionsBar: Container | null = null;
+  private actionButtons: { key: string; button: UiButton }[] = [];
   private rings: Graphics | null = null;
 
   constructor(deps: CombatPlanningUiDeps) {
@@ -87,6 +104,11 @@ export class CombatPlanningUi {
   /** True while the planning surface is mounted. */
   get isOpen(): boolean {
     return this.bar !== null;
+  }
+
+  /** True while the 14.5c action row (afterburner/devices/comms) is mounted. */
+  get actionsOpen(): boolean {
+    return this.actionsBar !== null;
   }
 
   /** The gun armed by the first click, awaiting a target (null = none). */
@@ -129,6 +151,60 @@ export class CombatPlanningUi {
     });
     this.deps.getUiLayer().addChild(bar);
     this.bar = bar;
+    this.buildActionRow(screen, y - (BAR_BTN_H + BAR_GAP));
+    this.refreshLabels();
+  }
+
+  /** Build the 14.5c action row (afterburner / owned devices / comms) above the
+   *  weapon bar — only when the host wired the `actions` deps. */
+  private buildActionRow(
+    screen: { width: number; height: number },
+    y: number,
+  ): void {
+    const actions = this.deps.actions;
+    if (!actions) return;
+    const keys: string[] = [
+      "afterburner",
+      ...new Set(actions.getOwnedConsumableIds()),
+      ...COMBAT_COMMS_ACTIONS.map((a) => a.id),
+    ];
+    const row = new Container();
+    row.label = "combat-planning-actions";
+    const total = keys.length * ACTION_BTN_W + (keys.length - 1) * BAR_GAP;
+    const x0 = Math.max(0, (screen.width - total) / 2);
+    this.actionButtons = keys.map((key, i) => {
+      const button = new UiButton(
+        "▣",
+        key,
+        0x88ccff,
+        () => this.toggleAction(key),
+        ACTION_BTN_W,
+        BAR_BTN_H,
+      );
+      button.container.label = `cpa-${key}`;
+      button.x = x0 + i * (ACTION_BTN_W + BAR_GAP);
+      button.y = y;
+      row.addChild(button.container);
+      return { key, button };
+    });
+    this.deps.getUiLayer().addChild(row);
+    this.actionsBar = row;
+  }
+
+  /**
+   * Toggle a planned execute-window action (public per the SettingsPanel
+   * testability convention): the afterburner flag, a ≤1 tactical device, or a
+   * ≤1 comms action. Re-clicking the active one clears it.
+   */
+  toggleAction(key: string): void {
+    const plan = this.deps.planning.plan;
+    if (key === "afterburner") {
+      this.deps.planning.setAfterburner(!plan.afterburner);
+    } else if (consumableById(key)) {
+      this.deps.planning.setConsumable(plan.consumableId === key ? null : key);
+    } else {
+      this.deps.planning.setComms(plan.commsAction === key ? null : key);
+    }
     this.refreshLabels();
   }
 
@@ -146,6 +222,12 @@ export class CombatPlanningUi {
       this.bar = null;
     }
     this.buttons = [];
+    if (this.actionsBar) {
+      this.actionsBar.parent?.removeChild(this.actionsBar);
+      this.actionsBar.destroy({ children: true });
+      this.actionsBar = null;
+    }
+    this.actionButtons = [];
   }
 
   /**
@@ -206,6 +288,24 @@ export class CombatPlanningUi {
             : "";
       button.setLabel(`${marker}${weapon.name}`);
     }
+    const plan = this.deps.planning.plan;
+    for (const { key, button } of this.actionButtons) {
+      if (key === "afterburner") {
+        const spent = this.deps.actions?.canAfterburn() === false;
+        const marker = plan.afterburner ? "✓ " : spent ? "⛔ " : "";
+        button.setLabel(`${marker}${t("combat.planning.afterburner")}`);
+        continue;
+      }
+      const consumable = consumableById(key);
+      if (consumable) {
+        const marker = plan.consumableId === key ? "✓ " : "";
+        button.setLabel(`${marker}${t(consumable.nameKey)}`);
+        continue;
+      }
+      const comms = COMBAT_COMMS_ACTIONS.find((a) => a.id === key);
+      const marker = plan.commsAction === key ? "✓ " : "";
+      button.setLabel(`${marker}${t(comms?.nameKey ?? key)}`);
+    }
   }
 }
 
@@ -218,6 +318,12 @@ export interface CombatPlanningHost {
   showMessage(text: string, color?: number): void;
   /** Fight over → restore the pre-combat route overlay (or clear the preview). */
   onFightEnd(): void;
+  /**
+   * A turn was confirmed (14.5c): the execute-window orchestrator resolves the
+   * one-shot planned actions (afterburner/consumable/comms). Optional so
+   * lightweight harnesses keep the movement-only confirm.
+   */
+  onConfirmPlan?(plan: PlannedTurn<NpcShipSprite, WeaponSpec>): void;
 }
 
 /**
@@ -236,8 +342,10 @@ export function createCombatPlanningController(
       host.getUi()?.enterPlanning();
       host.showMessage(t("combat.planning.enter"), PLANNING_TINT);
     },
-    onConfirm: (plan) =>
-      applyPlannedMovement(plan.destination, host.getShipPhysics()),
+    onConfirm: (plan) => {
+      applyPlannedMovement(plan.destination, host.getShipPhysics());
+      host.onConfirmPlan?.(plan);
+    },
     onEnterExecuting: () => {
       host.getUi()?.exitPlanning();
       host.showMessage(t("combat.planning.executing"), PLANNING_TINT);

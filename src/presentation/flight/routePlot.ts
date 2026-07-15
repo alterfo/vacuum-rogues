@@ -66,3 +66,37 @@ export function plotPlannedRoute(
     routeRenderer.drawDayMarker(dayPoint.x, dayPoint.y);
   }
 }
+
+/** The scene actions quest-objective navigation drives (extracted verbatim from
+ *  `SpaceFlightScene.navigateToQuestObjective` for the line guard, 14.5c). */
+export interface QuestNavHost<TPlanet extends { id: string }> {
+  /** The current system's planet sprites (id + live screen position). */
+  planets(): readonly { planet: TPlanet; screenX: number; screenY: number }[];
+  hasShip(): boolean;
+  planRouteTo(x: number, y: number): void;
+  /** Open the planet's info panel alongside the plotted route. */
+  openPlanetPanel(planet: TPlanet): void;
+  /** The quest target lives in another system → open the star map on it. */
+  openStarMapOn(systemId: string): void;
+  /** Resolve which system a location id (planet/system) belongs to. */
+  systemForLocation(locationId: string): { id: string } | null;
+}
+
+/**
+ * Navigate the ship toward a quest objective: an in-system planet gets a normal
+ * plotted route + its info panel; a target in another (possibly unreachable)
+ * system opens the star map pre-selected on it so the player plots the warp.
+ */
+export function navigateToQuestTarget<TPlanet extends { id: string }>(
+  host: QuestNavHost<TPlanet>,
+  locationId: string,
+): void {
+  const here = host.planets().find((s) => s.planet.id === locationId);
+  if (here && host.hasShip()) {
+    host.planRouteTo(here.screenX, here.screenY);
+    host.openPlanetPanel(here.planet);
+    return;
+  }
+  const target = host.systemForLocation(locationId);
+  if (target) host.openStarMapOn(target.id);
+}

@@ -1298,12 +1298,107 @@ Any test file **not** in this list stays under the standing "never touch existin
 > Split out of Task 14.5 (2026-07-15) per the plan's "split and renumber" rule — the checkbox text
 > below is the original Task 14.5 item, moved verbatim.
 
-- [ ] Fold the remaining execute-phase mechanics into the live loop each frame: gravity assist
+- [x] Fold the remaining execute-phase mechanics into the live loop each frame: gravity assist
       (Task 4 `gravityAssistTotal` → `ShipPhysics` velocity), afterburner (Task 8), missile entities
       (Task 7 launch/advance/resolve), consumable/comms actions (Tasks 9/10), and the VFX
       (Tasks 11–14) keyed to real execute-window events.
-- [ ] Tests: real-engine playtest coverage for each folded mechanic actually firing during a live
+      **Done (2026-07-15) — see the Task 14.5c outcome block below.**
+- [x] Tests: real-engine playtest coverage for each folded mechanic actually firing during a live
       execute window (wiring, not the pure math Tasks 4–14 already unit-cover).
+      **Done** — `src/tests/playtest/combatExecutionLive.test.ts` (13, real engine).
+
+#### Task 14.5c outcome (implemented 2026-07-15)
+
+- **New module `src/presentation/flight/combatExecution.ts`** (`CombatExecutionController` +
+  `createCombatExecution`) — the execute-window orchestrator the scene ticks each unfrozen frame
+  (`SpaceFlightScene.update`, after `combatModule.update`; frozen planning/active-pause frames skip
+  it, so every entity here freezes with the fight). It consumes the Task 4–14 pure modules verbatim:
+  - **Gravity assist (Task 4)**: per-frame `gravityAssistTotal` over the live planet discs
+    (`PlanetSprite.screenX/screenY/displayRadius`) → the boost magnitude is added to
+    `ShipPhysics.currentSpeed` (the checkbox's "→ ShipPhysics velocity"; the accel branch only
+    clamps *below* `maxSpeed`, so a slingshot genuinely exceeds cruise and decays on the final leg).
+  - **Afterburner (Task 8)**: `plan.afterburner` → `engageAfterburner` at confirm; the multiplier
+    is applied as extra forward displacement each window frame and reads 1 outside EXECUTING
+    (exactly-one-window contract); wear persists per fight, `pristineEngine()` on `endFight()`.
+  - **Missiles (Task 7 + 13)**: a `WeaponClass.MISSILE` planned shot is intercepted (new optional
+    `CombatModuleDeps.interceptPlannedShot`, cadence still spent) → `launchMissile` (homing =
+    `WeaponAbility.HOMING`), advanced per frame against the live target, settled by
+    `resolveMissileArrival` with an injected RNG (`setRng` for tests); a hit lands through
+    `CombatModule.landExternalShot` (the canonical scaled/shield/kill path); the smoke trail draws
+    the actual flown points via `missileTrailPoints`/`drawWeaponVfx`.
+  - **Consumables (Task 9)**: `plan.consumableId` resolved at confirm — spends the copy via
+    `Inventory.removeConsumable`, then shield-restore → `applyShieldRestore` on the player pool,
+    AoE → `aoeDamageTargets` over the combatants (each hit through `landExternalShot`), weapon-jam
+    → a `WeaponJam` on the selected target enforced by the new optional
+    `CombatModuleDeps.isNpcFireSuppressed` gate in `advanceNpcTimers` (holds primed, fires on expiry).
+  - **Comms (Task 10)**: `plan.commsAction` at confirm — **bribe** pays `resolveBribe`'s tribute
+    through the bank bus (`payTribute`, the shakedown reason string) and every combatant
+    `beginDeparture()`s + `disengage()`s (new public `CombatModule.disengage`); **demand-surrender**
+    gates on `resolveSurrenderDemand(role, hullFraction, COMBAT_COMMS)` — a yielder drops loot at
+    its position and flees, a refusal toasts and fights on; **call-for-help** recruits
+    `findCallForHelpAlly` (non-hostile, non-engaged, in `allyProximityRadius`) who then fires at
+    the nearest combatant on the shared cadence within its own `npcWeaponRange`.
+  - **VFX (Tasks 11–14)**: banking roll (`shipTurnRate`→`bankingAngle`→`approachRoll`) applied as a
+    transverse `scale.y = cos(roll)` squash on the player container during EXECUTING, leveled on
+    fight end; **NPC-side shield-then-hull ordering** (`resolveShieldedDamage` in the new shared
+    `applyPlayerDamage` core — shield-less ships byte-identical) with the Task 12 flash via the new
+    optional `onNpcShieldHit` dep + floating hull/shield bars (`drawShipStatusBars`, per-NPC shield
+    max snapshots) for every combatant + the player; **weapon-type tracers** — player hit-scan shots
+    route through the new optional `onPlayerShotVfx` dep (returns true ⇒ the module skips its flat
+    `flashShot`) and draw `selectWeaponVfx`-branched beam/burst/distortion fades; **wreck + loot**
+    — `onNpcDestroyed` first spawns a `spawnWreck` inheriting the dying sprite's heading +
+    `cruiseSpeed`, and the kill's loot dump is **deferred** to the drift: new optional
+    `NpcShipManagerDeps.deferDeathLoot` (one-shot, consumed) skips the instant
+    `spawnLootForNpc`, while the wreck emits the same pre-rolled total
+    (`LootDropHandler.rollDropCount` public + additive `forcedCount` param on `spawn`) one dot at a
+    time at its LIVE drifted position via `wreckLootEmissionTimes`/`dueLootEmissions`; crossfire
+    (NPC-vs-NPC) deaths keep the legacy instant dump.
+- **Planning-phase action row (14.5c UI)**: `CombatPlanningUi` grows an optional `actions` dep
+  bundle (absent ⇒ the pre-14.5c layout contracts hold, so the existing UI tests stay green) that
+  mounts a second row above the weapon bar (`combat-planning-actions`, `cpa-<key>`): an afterburner
+  toggle (⛔-labelled once the engine is spent), one button per **owned** consumable, and the three
+  comms actions — all through the public `toggleAction(key)` (✓ markers, re-click clears). New i18n
+  keys in BOTH `ru.ts`/`en.ts`: `combat.planning.afterburner` + `combat.execution.*`
+  (afterburnerEngaged/Spent, shieldRestored, aoe, jammed, bribed, surrendered, surrenderRefused,
+  allyJoined, allyNone).
+- **Wiring**: `flight/combatExecutionDeps.ts` (`buildCombatExecutionDeps`, the established
+  `combatModuleDeps` host pattern); `combatModuleDeps.ts` wires the four new optional CombatModule
+  seams + the wreck hook through a lazy `getExecution()`; `createCombatPlanningController` gains an
+  optional `onConfirmPlan` host hook (movement applies first, then `beginWindow(plan)`), and
+  `onFightEnd` now also calls `endFight()` (wrecks/flashes deliberately keep drifting past the end).
+- **🐛 Real pre-existing bug found & fixed by the new coverage**: the 14.5a `combatModuleDeps`
+  extraction captured `npcManager: this.npcManager` **by value** — but the scene constructs
+  `NpcShipManager` *after* `CombatModule`, so the closure held `undefined` forever and **every
+  player kill through the live scene crashed** ("Cannot read properties of undefined (reading
+  'handleInFlightDeath')") — masked until now because no green test killed an NPC through the wired
+  scene. `CombatModuleDepsHost.npcManager` is now the lazy `getNpcManager()` accessor.
+- **Deferred (tracked, deliberate)**: **player-side incoming shield absorption** (NPC fire draining
+  `PlayerShip.shields` before hull) is NOT folded — 14.5b's `combatPlanningLiveWiring.test.ts` pins
+  "NPC fire still lands on the hull" (its 2900ms window carries exactly one 20-dmg shot, which a
+  50-shield starter pool would fully absorb) and that file is outside Task 1c's rewrite list. Same
+  class as 14.5a's targeting deferral: flip it under Task 15/16 alongside that suite's authorized
+  evolution, not as a silent regression of a pinned assertion. (The shield-restore consumable and
+  the player's floating shield bar already read/write the pool live.)
+- **Line guard**: the scene took ~30 lines of new wiring; offset by three mechanical extractions in
+  the `combatModuleDeps`/`routePlot` pattern — `routePlanningClick` (the pointer-down planning
+  branch → `combatCoursePreview.ts`), `handleFlightPlayPause` (the Play/Pause decision tree →
+  `flightTurnEnd.ts`), `navigateToQuestTarget` (quest-objective navigation → `routePlot.ts`).
+  Scene lands at **1898** (`wc -l`, guard ≤ 1898). The two toasts the Play/Pause extraction
+  carried ("⏸ Завершаю день…" / "⏳ Ожидание…") moved into `t()` (`flight.turn.finishingDay`/
+  `.waiting` in BOTH dictionaries) — the hardcoded-Cyrillic ratchet then required locking the
+  reduced backlog via its own printed procedure (`UPDATE_CYRILLIC_BASELINE=1`,
+  `cyrillicBaseline.json` SpaceFlightScene 5→3 — a shrink lock, not a loosening).
+- **Tests**: `src/tests/playtest/combatExecutionLive.test.ts` (13, real engine) — afterburner
+  boosts exactly one window + wears + reverts; gravity assist pushes `currentSpeed` past
+  `getMaxSpeed()` off a real planet; a rocket's planned shot launches at its primed 2500ms cadence,
+  flies (no instant damage), lands on arrival; shield-restore refills to max + spends the copy; AoE
+  hits every enemy in radius; a jam holds the NPC's whole-window fire; bribe pays via the bank and
+  everyone departs; demand-surrender yields at 20% hull and refuses at full; call-for-help recruits
+  the friendly who alone damages the hostile; banking rolls the sprite into a hard arc then levels;
+  NPC shields drain before hull with the flash path live; a kill spawns a drifting wreck whose
+  deferred loot emits along the drift (the grav-tractor scooping a near emission and the live sim
+  re-engaging mid-drift are both accounted for); round-length parity pin. Full unit suite: no new
+  reds beyond the 4 tracked Task 15 letsplay files; `tsc`/lint green.
 
 ### Task 15: Update headless letsplay driving for the new planning-phase loop
 

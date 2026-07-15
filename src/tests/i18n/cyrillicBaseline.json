@@ -13,7 +13,7 @@
   "src/presentation/QuestJournalUI.ts": 25,
   "src/presentation/ResearchUpgradePanel.ts": 10,
   "src/presentation/SaveLoadScene.ts": 16,
-  "src/presentation/SpaceFlightScene.ts": 5,
+  "src/presentation/SpaceFlightScene.ts": 3,
   "src/presentation/StarMapScene.ts": 34,
   "src/presentation/StationScene.ts": 61,
   "src/presentation/SystemMiniMap.ts": 1,

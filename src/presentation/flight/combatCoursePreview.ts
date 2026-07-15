@@ -20,6 +20,7 @@ import {
   type ShipMotionProfile,
 } from "./combatTrajectory";
 import { COMBAT_ROUND_MS } from "@/config/balance";
+import { clampOutsideRadius } from "@/utils/flightGeometry";
 
 /** The planned-turn draft the click records its destination on. */
 export interface PlanningDestinationSink {
@@ -60,4 +61,34 @@ export function previewCombatCourse(
   );
   routeRenderer.drawNavigationMarker(dest.x, dest.y);
   return dest;
+}
+
+/**
+ * Route a raw pointer-down through the planning-phase movement branch (extracted
+ * verbatim from `SpaceFlightScene.onPointerDown` for the line guard, 14.5c). A
+ * primary un-shifted click during PLANNING becomes this round's destination —
+ * screen→world, clamped outside the star's avoid radius, then
+ * {@link previewCombatCourse}. Returns whether the click was consumed.
+ */
+export function routePlanningClick(
+  event: {
+    button: number;
+    shiftKey: boolean;
+    global: { x: number; y: number };
+  },
+  ctx: {
+    planning: PlanningDestinationSink & { isPlanning: boolean };
+    ship: ShipKinematics | null;
+    camera: { screenToWorld(x: number, y: number): { x: number; y: number } };
+    star: { centerX: number; centerY: number; avoidRadius: number };
+    routeRenderer: RouteRenderer;
+  },
+): boolean {
+  if (event.button !== 0 || event.shiftKey) return false;
+  if (!ctx.planning.isPlanning || !ctx.ship) return false;
+  const pt = ctx.camera.screenToWorld(event.global.x, event.global.y);
+  const { centerX: sx, centerY: sy, avoidRadius } = ctx.star;
+  const world = clampOutsideRadius(pt.x, pt.y, sx, sy, avoidRadius);
+  previewCombatCourse(ctx.routeRenderer, ctx.planning, ctx.ship, world.x, world.y); // prettier-ignore
+  return true;
 }

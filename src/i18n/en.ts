@@ -278,6 +278,8 @@ export const en: Dict = {
 
   // --- pirate shakedown tribute («Откупиться») ------------------------------
   "flight.tributeReason": "Tribute to pirate «{name}»",
+  "flight.turn.finishingDay": "⏸ Finishing the day…",
+  "flight.turn.waiting": "⏳ Waiting… (the world moves)",
   "flight.tributePaid": "Paid {amount} cr. — {name} backs off.",
   "flight.tributePaidRep":
     "Paid {amount} cr. — {name} backs off. Pirate standing rises.",
@@ -476,6 +478,21 @@ export const en: Dict = {
   "combat.planning.assigned": "“{weapon}” → {target}",
   "combat.planning.assignedFar":
     "“{weapon}” → {target} — out of range, fires on closing",
+  "combat.planning.afterburner": "Afterburner",
+
+  // --- execute-window mechanics (Task 14.5c) --------------------------------
+  "combat.execution.afterburnerEngaged":
+    "🔥 Afterburner! Engine integrity: {integrity}%",
+  "combat.execution.afterburnerSpent":
+    "Engine worn out — afterburner unavailable",
+  "combat.execution.shieldRestored": "Shields restored: +{amount}",
+  "combat.execution.aoe": "💥 Pulse bomb: targets hit — {count}",
+  "combat.execution.jammed": "Target's weapons jammed: {name}",
+  "combat.execution.bribed": "Bribe paid ({amount} cr.) — the enemy breaks off",
+  "combat.execution.surrendered": "{name} surrenders: drops cargo and flees",
+  "combat.execution.surrenderRefused": "{name} refuses to surrender",
+  "combat.execution.allyJoined": "{name} joins the fight on your side",
+  "combat.execution.allyNone": "No one answered the call for help",
 
   // --- combat consumables (tactical devices) -------------------------------
   "combat.consumable.category": "Tactical Device",

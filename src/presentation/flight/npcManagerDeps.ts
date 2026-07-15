@@ -12,6 +12,7 @@
 
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import type { FlightSessionState } from "@/systems/FlightSessionState";
+import type { NpcShip } from "@/domain/NpcShip";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { PlanetSprite } from "../PlanetSprite";
 import type { NpcShipManagerDeps } from "./NpcShipManager";
@@ -39,6 +40,8 @@ export interface NpcManagerDepsHost {
   selectCombatTarget(sprite: NpcShipSprite): void;
   /** Planning-phase weapon-assign click (14.5b): true = click consumed. */
   handlePlanningTargetClick(sprite: NpcShipSprite): boolean;
+  /** Wreck-drift loot takeover for a combat kill (14.5c): true = defer. */
+  deferDeathLoot(npc: NpcShip): boolean;
   getSelectedCombatTargetId(): string | null;
   isCombatant(sprite: NpcShipSprite): boolean;
   sessionState?: FlightSessionState;
@@ -67,6 +70,7 @@ export function buildNpcManagerDeps(
       host.addCombatant(sprite);
       host.beginCombatPlanning(); // no-op if already underway (14.5a)
     },
+    deferDeathLoot: (npc) => host.deferDeathLoot(npc),
     onPlayerEngagesCombat: () => {
       // beginCombat() above already froze the sim — no deferred pause needed.
       if (!host.isTurnRunning()) {
