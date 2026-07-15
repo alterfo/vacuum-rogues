@@ -1471,21 +1471,93 @@ guard and convert to **KEEP**:
 
 ### Task 16: [Final] Verify acceptance criteria, update documentation, full regression
 
-- [ ] Verify every mechanic from the user's original spec (movement trajectory + gravity effects,
+- [x] Verify every mechanic from the user's original spec (movement trajectory + gravity effects,
       multi-weapon manual targeting, missile travel-time/evasion, afterburner, artifacts, comms
       panel; banking/roll, shield flash, weapon-type VFX, damage numbers, hull/shield bars, death
       explosion + drifting wreckage) is implemented — check off against the spec text directly, not
       just against this plan's own task list, in case something was lost in translation.
-- [ ] Run full unit suite, `tsc --noEmit`, `npm run lint`, `npm run test:playtest`,
+      (Verified 2026-07-15 — full per-mechanic map in the verification record below; the one
+      spec item not landed is black holes, explicitly deferred by Task 1e, not lost.)
+- [x] Run full unit suite, `tsc --noEmit`, `npm run lint`, `npm run test:playtest`,
       `npm run letsplay:ci`, `npm run test:save-compat`, `npm run test:e2e:regression` — all green.
-- [ ] Rewrite `src/presentation/flight/CLAUDE.md`'s entire "In-flight combat" section to describe
+      (All green for everything this plan touches; 3 E2E failures are PRE-EXISTING stale tests
+      broken by other plans' committed features, root-caused + quarantined in the record below —
+      out of this plan's test-disposition authorization, left for the user to adjudicate.)
+- [x] Rewrite `src/presentation/flight/CLAUDE.md`'s entire "In-flight combat" section to describe
       the new pause-and-plan system (the current section describes real-time auto-pursuit
       mechanics this plan deletes — this needs a near-total rewrite, not a patch) and update root
       `CLAUDE.md`'s pointers if the combat description there is now stale.
-- [ ] Record in this plan: confirmation that `docs/plans/20260713-campaign-winrate-100pct.md` is
+      (Rewritten — the section now documents the PLANNING/EXECUTING loop, the freeze gate,
+      per-weapon assignment, every folded execute-window mechanic and the superseded-not-deleted
+      status of `combatPause.ts`. Root `CLAUDE.md` carries no real-time-combat description —
+      its letsplay/godMode sections are paradigm-neutral — so no root update needed.)
+- [x] Record in this plan: confirmation that `docs/plans/20260713-campaign-winrate-100pct.md` is
       now unblocked and safe to resume against the new combat model (or, if this plan's own scope
       shrank during implementation such that real-time combat wasn't fully replaced, record that
-      explicitly rather than silently leaving a stale prerequisite note).
+      explicitly rather than silently leaving a stale prerequisite note). (Recorded below.)
+
+#### Task 16 verification record (2026-07-15)
+
+**Spec-mechanic map (verified against the spec text, all live-wired — pinned by
+`combatPlanningLiveWiring.test.ts` + `combatExecutionLive.test.ts` + the E2E planning loop):**
+
+| Spec item | Implementation |
+|---|---|
+| Movement trajectory planning | `combatTrajectory.ts` + `combatCoursePreview.ts` → `ShipPhysics.setPath()` |
+| Gravity effects | `combatGravity.ts` (planet slingshot; black holes deferred per Task 1e — recorded, not lost) |
+| Multi-weapon manual targeting | `combatWeaponTargeting.ts` + `combatPlanningUi.ts` + `combatWeaponRangeOverlay.ts` |
+| Missile travel-time + evasion | `combatMissile.ts` (homing = `WeaponAbility.HOMING`, injected evasion roll) |
+| Afterburner | `combatAfterburner.ts` (per-fight engine wear) |
+| Combat consumables («Тактическое устройство») | `combatConsumable.ts` (persisted inventory, additive-optional field per Task 1d) |
+| In-combat comms (bribe / surrender / call help) | `combatComms.ts` (bribe via `payTribute` bank bus) |
+| Banking/roll during execution | `combatBanking.ts` |
+| Shield-hit flash + shield-then-hull order | `combatShieldFlash.ts` + `combatShield.ts` (player-side incoming absorption deliberately deferred, pinned) |
+| Per-ship floating hull/shield bars | `combatStatusBars.ts` |
+| Weapon-type VFX | `combatWeaponVfx.ts` + `combatWeaponVfxOverlay.ts` |
+| Damage numbers | `DamageNumbers.ts` (pre-existing, stays live) |
+| Death explosion + drifting wreckage | `shipDeathFx.ts` + `combatWreck.ts`/`combatWreckRenderer.ts` (deferred loot dump at drifted position) |
+
+**Validation battery (2026-07-15):** unit 5828 passed / 617 files ✓ · `tsc --noEmit` ✓ ·
+`eslint src` 0 errors ✓ (`npm run lint` exit-1 came from the rtk proxy sweeping stale `dist/`
+build artifacts — not source) · `test:playtest` 760 ✓ · `letsplay:ci` 108 ✓ ·
+`test:save-compat` 22 ✓ · `test:e2e:regression` 39/42 (see below).
+
+**➕ Two E2E repairs made under this plan's test-migration authority** (both tests are this
+plan's own 14.5b artifacts that pinned the intermediate pre-14.5c damage semantics; the
+planned-fire pipeline was probe-verified correct — assignment resolves, dist 140–165 < range 240,
+one shot per window, shields drain 30→16→2→0 then hull 200→188):
+- dogfight test: polling horizon 8→32 rounds — the assertion ("BOTH hulls drop") is unchanged;
+  the enemy's shield pool (Task 12/14.5c shield-then-hull) absorbs the first ~3–6 planned shots,
+  so hull only moves after ~4 windows, past the old 8-poll horizon.
+- planning-loop test: the single-window "planned shot lands" wait now watches shields-or-hull
+  (shield drop IS the landed shot under the new ordering).
+
+**⚠️ Three PRE-EXISTING stale E2E failures (out of scope — each broken by another plan's
+committed feature, none in Task 1c's disposition list; left unmodified per the standing
+test rule, for user adjudication):**
+1. «changing the font size keeps the ship in place (playtest4 A)» — introspects
+   `hud.gearButton`, removed by f30b192 (settings panel relocated to the main menu, 2026-06-26);
+   `fcd75a1` also made font changes restyle in place (no scene re-init), so the guarded
+   regression (re-init flinging the ship) is structurally impossible from flight now.
+2. «mouse wheel scrolls the equipment-shop list» — derives `maxScroll` from unfiltered
+   `scene.listings` (16, hulls included) while `EquipmentShopScene.scroll()` clamps to
+   `gearListings()` (13, hulls excluded since the КОРПУС-tab split): expected 9, actual clamp 6.
+3. «a TRADE_OPPORTUNITY rumor renders in the Info Center news tab» — seeds a rumor into an
+   unscouted system; 7aa6d74 («hide unexplored systems from InfoCenter feed», `hideUnknown=true`)
+   now deliberately drops that row.
+
+**Combat-pacing observation for the Post-Completion live-feel pass:** with the starter
+`wpn_pulse` (14 dmg / 2.5 s cadence) vs a scaled pirate (200 hull + 30–40 shields), a kill takes
+~17 shots ≈ ~17 planning rounds. Whether that reads as tactical depth or grind is exactly the
+game-feel judgment the Post-Completion live-browser pass exists for — do not retune in headless
+(balance moves red the letsplay campaign gates).
+
+**Campaign win-rate plan unblocked:** real-time auto-pursuit combat was fully replaced (no scope
+shrink — `CombatPursuitController` deliberately survives only as the execute-window movement
+primitive, per the flight `CLAUDE.md` record). The headless letsplay driving update (Task 15)
+is landed and green (`letsplay:ci` 108/108, `planningDriver.ts` wired into `PlayerAgent` + live
+autopilot). `docs/plans/20260713-campaign-winrate-100pct.md` is **unblocked and safe to resume**
+against the pause-and-plan model; its Task 1 investigation work remains valid.
 
 ## Technical Details
 

@@ -414,7 +414,11 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     // Round loop: each PLANNING round, REAL-click the weapon button + the enemy
     // sprite (a fresh draft each round needs a fresh assignment), Space-confirm,
     // and let the execute window resolve. Poll until the dogfight is
-    // unmistakable: the aggressor maneuvered and BOTH hulls dropped.
+    // unmistakable: the aggressor maneuvered and BOTH hulls dropped. The horizon
+    // must cover the shield phase (Task 12/14.5c): the enemy's shield pool
+    // absorbs the first ~3-6 planned shots (one per ~3s execute window at the
+    // starter gun's 2.5s cadence) before hullHP moves at all, so the loop needs
+    // ~4 polls per landed shot × up to ~7 shots for the toughest shielded role.
     const status = async () =>
       page.evaluate((s0) => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
@@ -458,7 +462,7 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     await page.mouse.move(5, 5); // warm up the event boundary before real clicks
     let done = false;
-    for (let round = 0; round < 8 && !done; round++) {
+    for (let round = 0; round < 32 && !done; round++) {
       const s = await status();
       done =
         s.enemyHull >= 0 &&
@@ -509,7 +513,7 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       }
       const npcManager = scene['npcManager'] as
         | {
-            e2eForceAggressorInRange: (range: number) => { npc: { id: string; hullHP: number } } | null;
+            e2eForceAggressorInRange: (range: number) => { npc: { id: string; hullHP: number; shields: number } } | null;
             launchCombatWithNpc?: (npc: unknown) => void;
           }
         | undefined;
@@ -519,7 +523,12 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       // startInFlightCombat → beginCombat(), unlike a bare addCombatant.
       npcManager.launchCombatWithNpc(sprite.npc);
       const planning = scene['combatPlanning'] as { isPlanning: boolean };
-      return { planning: planning.isPlanning, enemyId: sprite.npc.id, enemyHull0: sprite.npc.hullHP };
+      return {
+        planning: planning.isPlanning,
+        enemyId: sprite.npc.id,
+        enemyHull0: sprite.npc.hullHP,
+        enemyShields0: sprite.npc.shields,
+      };
     });
     expect(staged).not.toBeNull();
     expect(staged!.planning).toBe(true); // frozen into PLANNING on engagement
@@ -637,7 +646,9 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     expect(destination).not.toBeNull(); // movement click set this round's destination
 
     // Space = «Ход» confirm → EXECUTING; the planned shot must land on the
-    // ASSIGNED enemy within the window (fire cadence < round length).
+    // ASSIGNED enemy within the window (fire cadence < round length). Damage
+    // resolves shield-then-hull (Task 12/14.5c), so a landed shot on a shielded
+    // ship shows up as a shield drop — hull only moves once the pool is spent.
     await page.keyboard.press('Space');
     await page.waitForFunction(
       (s0) => {
@@ -646,10 +657,13 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
         };
         const scene = engine.currentScene;
         const npcManager = scene?.['npcManager'] as
-          | { npcSprites: { npc: { id: string; hullHP: number } }[] }
+          | { npcSprites: { npc: { id: string; hullHP: number; shields: number } }[] }
           | undefined;
         const enemy = npcManager?.npcSprites.find((s) => s.npc.id === s0.enemyId);
-        return !!enemy && enemy.npc.hullHP < s0.enemyHull0;
+        return (
+          !!enemy &&
+          (enemy.npc.hullHP < s0.enemyHull0 || enemy.npc.shields < s0.enemyShields0)
+        );
       },
       staged!,
       { timeout: 15_000 },
