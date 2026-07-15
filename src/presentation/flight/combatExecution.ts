@@ -199,6 +199,13 @@ export interface CombatExecutionHost {
   spawnLoot(npc: NpcShip, x: number, y: number, count?: number): void;
   /** Roll the total drop count for a kill (the existing loot distribution). */
   rollLootCount(npc: NpcShip): number;
+  /**
+   * Re-arm the round-based incoming-damage budget (`CombatModule.beginCombatRound`).
+   * Optional so partial test hosts stay valid; the live scene MUST wire it —
+   * without a per-window re-arm the `roundComplete` latch permanently halts
+   * BOTH sides' fire once ~34% of max hull has landed (review 2026-07-15).
+   */
+  beginRound?(): void;
   showMessage(text: string, color?: number): void;
 }
 
@@ -294,6 +301,8 @@ export class CombatExecutionController {
 
   /** A turn was confirmed: resolve the one-shot planned actions for this window. */
   beginWindow(plan: PlannedTurn<NpcShipSprite, WeaponSpec>): void {
+    // Each confirmed window is one combat round — reset the damage budget.
+    this.host.beginRound?.();
     this.windowMult = 1;
     if (plan.afterburner) this.engageAfterburnerForWindow();
     if (plan.consumableId) this.activateConsumable(plan.consumableId);
@@ -320,11 +329,13 @@ export class CombatExecutionController {
     const def = consumableById(id);
     const inventory = this.host.getPlayerInventory();
     if (!def || !inventory?.hasConsumable(id)) return;
-    inventory.removeConsumable(id);
+    // Spend the device only once its branch's precondition holds — a missing
+    // ship/physics/target must not consume it with no effect.
     switch (def.effect) {
       case "shield-restore": {
         const ship = this.host.getPlayerShip();
         if (!ship) return;
+        inventory.removeConsumable(id);
         const before = ship.shields;
         ship.shields = applyShieldRestore(
           ship.shields,
@@ -350,6 +361,7 @@ export class CombatExecutionController {
       case "aoe-damage": {
         const physics = this.host.getShipPhysics();
         if (!physics) return;
+        inventory.removeConsumable(id);
         const center = { x: physics.shipX, y: physics.shipY };
         const hits = aoeDamageTargets(
           center,
@@ -369,6 +381,7 @@ export class CombatExecutionController {
       case "weapon-jam": {
         const target = this.host.selectedTarget() ?? this.host.combatants()[0];
         if (!target) return;
+        inventory.removeConsumable(id);
         this.jams.push(
           jamTarget(target, this.clockMs, COMBAT_CONSUMABLE.weaponJamMs),
         );
@@ -562,7 +575,10 @@ export class CombatExecutionController {
       WRECK.lifeMs * WRECK_LOOT_SPREAD_FRACTION,
     );
     this.wrecks.push({ state, npc: sprite.npc, emissionTimes });
-    if (count > 0) this.deferredLootNpcIds.add(sprite.npc.id);
+    // Mark even a zero-count roll: the wreck's single pre-roll OWNS this kill's
+    // drop. Skipping the mark on 0 would let the death path re-roll the loot
+    // independently, inflating the effective drop rate.
+    this.deferredLootNpcIds.add(sprite.npc.id);
     this.npcShieldMax.delete(sprite.npc.id);
   }
 

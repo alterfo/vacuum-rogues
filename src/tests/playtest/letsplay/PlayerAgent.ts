@@ -646,18 +646,25 @@ export class PlayerAgent {
     // 14.5): confirm the round with weapons on the nearest combatant and the
     // course untouched — the honest game is unchanged, the ship keeps running
     // for the edge and eats the in-range volleys through each execute window.
-    confirmPlanningIfOpen(flightScene);
-    if (
-      flightScene?.isTurnRunning &&
-      typeof flightScene.endTurn === "function"
-    ) {
-      flightScene.endTurn();
-    }
-    if (
-      !flightScene?.isTurnRunning &&
-      typeof flightScene?.onPlayPause === "function"
-    ) {
-      flightScene.onPlayPause();
+    const confirmedAtEntry = confirmPlanningIfOpen(flightScene);
+    // A fight frozen at entry means the confirm above just opened an execute
+    // window: the stale-turn reset below would defeat the escape valve —
+    // endTurn parks the ship and kills the warp-edge course, and the
+    // onPlayPause kickoff is a no-op during EXECUTING, so the route would
+    // never restart (review 2026-07-15). Reset only outside the planning loop.
+    if (!confirmedAtEntry) {
+      if (
+        flightScene?.isTurnRunning &&
+        typeof flightScene.endTurn === "function"
+      ) {
+        flightScene.endTurn();
+      }
+      if (
+        !flightScene?.isTurnRunning &&
+        typeof flightScene?.onPlayPause === "function"
+      ) {
+        flightScene.onPlayPause();
+      }
     }
 
     for (let i = 0; i < 2000; i++) {
@@ -677,12 +684,16 @@ export class PlayerAgent {
       await Promise.resolve(); // yield so async performWarp() can settle
       if (engine.player?.currentSystemId !== sys0) break;
       // If the turn ended mid-flight (ship stopped without reaching the edge),
-      // restart the route.
+      // restart the route. PLANNING may have re-opened inside this same tick:
+      // onPlayPause during PLANNING is the confirm itself (14.5a) and would
+      // consume the fresh EMPTY draft (hold fire, every window) before the
+      // next iteration's armed confirm ever saw it — confirm armed instead
+      // (review 2026-07-15).
       if (
         !flightScene?.isTurnRunning &&
         typeof flightScene?.onPlayPause === "function"
       ) {
-        flightScene.onPlayPause();
+        if (!confirmPlanningIfOpen(flightScene)) flightScene.onPlayPause();
       }
     }
 

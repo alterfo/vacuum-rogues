@@ -640,6 +640,7 @@ export function createLiveSceneController(
     attack(targetId) {
       const scene = engine.currentScene as {
         combatPause?: { paused?: boolean; confirm?: () => unknown };
+        combatModule?: { isActive?: boolean } | null;
         npcManager?: {
           e2eEngageCombat?: (id?: string) => void;
           npcSprites?: Array<{ npc: { id: string } }>;
@@ -674,6 +675,15 @@ export function createLiveSceneController(
         scene.combatPause.confirm();
         return;
       }
+      // An already-engaged fight is DRIVEN by the planning loop, never
+      // re-targeted (mirror of PlayerAgent.driveAttack's alreadyFighting
+      // guard): during a 3 s execute window the 800 ms tick lands here with
+      // PLANNING closed, and falling through to onAttackNpc would re-plot an
+      // intercept each tick (clobbering the just-confirmed course via
+      // breakOffCombatPursuit) — and via the stale-id `?? npcSprites[0]`
+      // fallback below could escalateHostility on an arbitrary neutral
+      // (review 2026-07-15).
+      if (scene?.combatModule?.isActive) return;
       // Route through the real "Атаковать" handler — the exact one the
       // contact-panel button calls — rather than the `e2eEngageCombat` E2E
       // seam. That seam is built for staging a deterministic test fight

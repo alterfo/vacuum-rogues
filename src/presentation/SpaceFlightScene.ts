@@ -96,9 +96,8 @@ export class SpaceFlightScene extends GameScene {
     onFightEnd: () => {
       this.combatExecution?.endFight(); // wrecks/flashes keep drifting past the end
       if (this.destroyed) return; // mid-teardown — clearPlannedRoute() handles it
-      if (this.plannedRoute)
-        this.plotRoute(); // restore the pre-combat course line
-      else this.routeRenderer.clearRoute(); // drop the last combat course preview
+      if (this.plannedRoute) this.plotRoute();
+      else this.routeRenderer.clearRoute(); // restored the pre-combat course line above, else drop the last combat course preview
     },
   });
   // Latches the low-hull auto-stop so the warning fires once per descent.
@@ -1647,6 +1646,7 @@ export class SpaceFlightScene extends GameScene {
       isCombatPaused: () => this.combatPause.paused,
       isPlanning: () => this.combatPlanning.isPlanning,
       isExecutingPlan: () => this.combatPlanning.isExecuting,
+      hasOpenModal: () => this.isBlockingModalOpen(),
       confirmPlan: () => void this.combatPlanning.confirm(),
       isTurnRunning: () => this.isTurnRunning,
       combatAbortActive: () =>

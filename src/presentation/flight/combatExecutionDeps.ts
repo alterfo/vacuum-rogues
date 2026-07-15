@@ -90,6 +90,9 @@ export function buildCombatExecutionDeps(
     spawnLoot: (npc, x, y, count) =>
       host.getNpcManager().spawnLootForNpc(npc, x, y, undefined, count),
     rollLootCount: (npc) => host.getNpcManager().rollDeathLootCount(npc),
+    // Every confirmed window re-arms the round latch (review 2026-07-15) —
+    // without it `roundComplete` silences ALL fire for the rest of the fight.
+    beginRound: () => host.getCombatModule().beginCombatRound(),
     showMessage: (text, color) => host.showMessage(text, color),
   };
 }

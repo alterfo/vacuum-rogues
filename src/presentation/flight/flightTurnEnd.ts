@@ -94,6 +94,13 @@ export interface PlayPauseHost {
    * wedging the fight into a permanent zero-fire planning loop.
    */
   isExecutingPlan?(): boolean;
+  /**
+   * A blocking panel (contact / journal / planet-info / settings / system menu)
+   * is open. Optional so bare callers/tests can omit it. Guards the PLANNING
+   * confirm exactly like Space's `hasOpenModal` guard in `flightKeyHandler` —
+   * the HUD «Ход» button must never start an enemy volley behind an open panel.
+   */
+  hasOpenModal?(): boolean;
   confirmPlan(): void;
   isTurnRunning(): boolean;
   /** A combat auto-follow / active fight — the pause aborts the turn NOW. */
@@ -121,7 +128,7 @@ export interface PlayPauseHost {
 export function handleFlightPlayPause(host: PlayPauseHost): void {
   if (host.isCombatPaused()) return;
   if (host.isPlanning()) {
-    host.confirmPlan();
+    if (!host.hasOpenModal?.()) host.confirmPlan();
     return;
   }
   if (host.isExecutingPlan?.()) return; // round timer is the sole terminator (Task 1b)
