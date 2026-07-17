@@ -63,6 +63,39 @@ export function warpEdgePoint(
 }
 
 /**
+ * Compose a pending hyperjump's edge point ({@link warpEdgePoint}) with the
+ * star-avoidance route to it ({@link avoidStarPath}) — the one-shot route plan
+ * `SpaceFlightScene` runs whenever a warp is pending on scene entry.
+ */
+export function planWarpEdgeRoute(
+  ship: Point,
+  center: Point,
+  exitVector: Point,
+  boundaryRadius: number,
+  fromMidSystem: boolean,
+  avoidCenter: Point,
+  avoidRadius: number,
+): { edge: Point; routePath: Point[] } {
+  const edge = warpEdgePoint(
+    ship,
+    center,
+    exitVector,
+    boundaryRadius,
+    fromMidSystem,
+  );
+  const routePath = avoidStarPath(
+    ship.x,
+    ship.y,
+    edge.x,
+    edge.y,
+    avoidCenter.x,
+    avoidCenter.y,
+    avoidRadius,
+  );
+  return { edge, routePath };
+}
+
+/**
  * Catmull-Rom spline through `pts` with `samplesPerSegment` interpolated points
  * per segment. Ghost points at both ends ensure the curve passes through the
  * first and last control points.

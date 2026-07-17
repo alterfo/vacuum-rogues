@@ -782,6 +782,7 @@ function makeAggressorHarness(
     goodWithPirates?: boolean;
     isCombatant?: boolean;
     shakedownRoll?: boolean;
+    isInCombat?: boolean;
   } = {},
 ): {
   ctrl: CombatPursuitController;
@@ -807,6 +808,7 @@ function makeAggressorHarness(
     startInFlightCombat: (sprite) =>
       combatStarted.push(sprite as unknown as FakeAggressorSprite),
     isCombatant: () => opts.isCombatant ?? false,
+    isInCombat: () => opts.isInCombat ?? false,
   };
 
   const deps: CombatPursuitDeps = {
@@ -953,5 +955,60 @@ describe("CombatPursuitController.tickAggressor", () => {
 
     expect(sprite.pursuitTargets.length).toBe(1);
     expect(h.combatStarted).toEqual([]);
+  });
+
+  // --- ambush-during-an-existing-route (round-budget hardening) -------------
+  // `beginWindow`'s "continuing course" round-budget exemption
+  // (`combatExecution.ts`) needs `pursuitSuspended` to be true ONLY while the
+  // ship is genuinely still trying to get away. A hostile that ambushes an
+  // ALREADY-in-flight ship engages through this exact path (`startInFlightCombat`
+  // called from here, not `launchCombatWithNpc`) — before this fix,
+  // `pursuitSuspended` was left untouched (still false), so the fresh
+  // engagement's own auto-orbit would silently hijack the pre-existing route
+  // via `updateCombatPursuit`'s unconditional `setPath` calls.
+
+  it("suspends pursuit when a fresh ambush engages a ship already mid-flight on a plotted route", () => {
+    const npc = makeNpc("ambush1", { role: NpcRole.TRADER });
+    const sprite = makeAggressorSprite(npc, WR - 10, 0);
+    const h = makeAggressorHarness(); // isInCombat defaults to false — no fight yet
+    const physics = new ShipPhysics(0, 0, 0.5);
+    physics.setPath([{ x: 100_000, y: 0 }]); // a genuinely plotted, in-flight route
+
+    expect(h.ctrl.pursuitSuspended).toBe(false);
+    const halted = h.ctrl.tickAggressor(
+      sprite as unknown as NpcShipSprite,
+      physics,
+    );
+
+    expect(halted).toBe(false);
+    expect(h.combatStarted).toEqual([sprite]); // the ambush still engages...
+    expect(h.ctrl.pursuitSuspended).toBe(true); // ...but the route survives it
+  });
+
+  it("does NOT suspend pursuit on ambush when the ship isn't actually on a route", () => {
+    const npc = makeNpc("ambush2", { role: NpcRole.TRADER });
+    const sprite = makeAggressorSprite(npc, WR - 10, 0);
+    const h = makeAggressorHarness();
+    const physics = parkedPlayerPhysics(0.5); // stationary, no route
+
+    h.ctrl.tickAggressor(sprite as unknown as NpcShipSprite, physics);
+
+    expect(h.combatStarted).toEqual([sprite]);
+    expect(h.ctrl.pursuitSuspended).toBe(false); // ordinary standing engagement
+  });
+
+  it("does NOT suspend pursuit on ambush when a fight is already active (mid-fight second joiner, not the opening ambush)", () => {
+    const npc = makeNpc("ambush3", { role: NpcRole.TRADER });
+    const sprite = makeAggressorSprite(npc, WR - 10, 0);
+    // Simulate an already-active fight (a different combatant already
+    // engaged) — isInCombat=true means this joiner is NOT the one opening the
+    // engagement, so it must not touch pursuit state.
+    const h = makeAggressorHarness({ isInCombat: true });
+    const physics = new ShipPhysics(0, 0, 0.5);
+    physics.setPath([{ x: 100_000, y: 0 }]);
+
+    h.ctrl.tickAggressor(sprite as unknown as NpcShipSprite, physics);
+
+    expect(h.ctrl.pursuitSuspended).toBe(false);
   });
 });

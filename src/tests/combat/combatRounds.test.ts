@@ -99,7 +99,6 @@ describe("combatRounds — roundAcceptsShot", () => {
 describe("combatRounds — roundIsComplete", () => {
   it("is false while the budget is unspent", () => {
     expect(roundIsComplete(0, 100, 100, HALF)).toBe(false);
-    expect(roundIsComplete(49, 51, 100, HALF)).toBe(false);
   });
 
   it("is true once the budget is spent and the defender still lives", () => {
@@ -109,5 +108,22 @@ describe("combatRounds — roundIsComplete", () => {
 
   it("is false when the defender is dead (a kill ends the fight, not a window)", () => {
     expect(roundIsComplete(100, 0, 100, HALF)).toBe(false);
+  });
+
+  // Combat-mechanics escalation (win-rate-100pct plan): the budget is now
+  // computed off min(hull, maxHull), not maxHull alone. A damaged ship gets a
+  // correspondingly SMALLER round allowance — the old maxHull-only basis let a
+  // half-dead ship absorb the same full-hull-sized volley as a fresh one.
+  it("scales the budget DOWN off current hull, not max hull, for a damaged ship", () => {
+    // hull=51/max=100: old basis (maxHull=100, HALF) gave budget=50, so 49
+    // damage read as still-unspent. New basis (hull=51) gives budget=25.5 —
+    // the same 49 damage now correctly reads as spent (the round must halt
+    // fire well before a half-dead ship's actual remaining hull is at risk).
+    expect(roundIsComplete(49, 51, 100, HALF)).toBe(true);
+  });
+
+  it("a fresh (full-hull) ship's budget is unaffected — still maxHull-based", () => {
+    expect(roundIsComplete(49, 100, 100, HALF)).toBe(false);
+    expect(roundIsComplete(50, 100, 100, HALF)).toBe(true);
   });
 });

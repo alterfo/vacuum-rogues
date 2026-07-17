@@ -949,6 +949,23 @@ export function decideWithMemory(
   if (obs.hostiles.length > 0 && !downed) {
     const tid = obs.hostiles[0]?.id;
     if (hurt || outmatched || outgunned) {
+      // Live-observed deadlock: `flee`'s live executor routes to a boundary-
+      // adjacent point and stops — it never actually leaves the system, so a
+      // hostile that lingers in scanner range without closing distance (e.g.
+      // PATROLLING, not pursuing) makes this branch re-push `flee` forever
+      // with zero progress (confirmed live: `foldsSinceDayAdvance` ran past
+      // 300 with the ship parked at the system edge). `foldsSinceDayAdvance`
+      // is the existing no-progress signal (see `MAX_FOLDS_WITHOUT_DAY_ADVANCE`
+      // above); once a flee-worthy standoff has outlasted it, escalate to an
+      // actual hyperjump — `warp` is legal from SPACE_FLIGHT whenever the
+      // system has a connection, hostiles or not — instead of repeating the
+      // no-op flee route another fold.
+      if (
+        mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE &&
+        legal.has("warp")
+      ) {
+        push("warp", "flee-stagnant-jump");
+      }
       push(
         "flee",
         outmatched
@@ -960,6 +977,28 @@ export function decideWithMemory(
       );
       push("attack", "fight", tid);
     } else {
+      // Strategic disengage (campaign win-rate finding, 2026-07-13): every
+      // trigger above is TACTICAL (about THIS fight) — nothing here ever
+      // asked "am I nowhere near battle-ready and stuck in a no-progress
+      // standoff." `NpcShipManager.checkGarrisonAggro` shields a low-power
+      // ship from a neutral wanderer's aggro but leaves it `hostile===true`,
+      // so it keeps populating `obs.hostiles` without ever closing or firing
+      // — `attack` wins this branch every time and the agent parks on it
+      // forever (the campaign's own stall telemetry: `repeat=N@SPACE_FLIGHT
+      // |attack`, `dayFrozen=N` — confirmed live: a fresh 3-session run today
+      // died 0/3, all before day 310, power never exceeding 0.15). Mirrors
+      // the tactical branch's own `flee-stagnant-jump` escalation above,
+      // gated the same way (`foldsSinceDayAdvance`) so it only fires once a
+      // standoff is PROVEN, never against a fresh/winnable fight — a
+      // battle-ready ship never reaches this push at all (`!battleReady`),
+      // preserving "an ARMED ship is still hunted."
+      if (
+        !battleReady &&
+        mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE &&
+        legal.has("warp")
+      ) {
+        push("warp", "flee-weak-inert-standoff");
+      }
       push("attack", "fight", tid);
       push("flee", "flee", tid);
     }
@@ -1798,13 +1837,31 @@ export function decideWithMemory(
       if (daysStagnant) {
         push("wait", "stagnation-wait");
       }
-      // Land to "earn" — kept as an unconditional fallback so the agent always
-      // has a forward move here even when every warp is gated (fuel/cadence/
-      // danger/galaxy-lost) or `early-explore` is withheld because
+      // Land to "earn" — kept as a fallback so the agent always has a forward
+      // move here even when every warp is gated (fuel/cadence/danger/
+      // galaxy-lost) or `early-explore` is withheld because
       // `warpRejectTripped`. This is ALSO the refuel path (landing tops the
       // tank) and the break-out from a warp that keeps getting rejected on the
       // engine's absolute per-jump fuel cost.
-      if (earnPlanet !== undefined) {
+      // Suppressed once landing here is provably pointless (win-rate-100pct
+      // plan): traced 648/651 landings (99.5%) over 1500 steps producing ZERO
+      // net credit change — `earnPlanetId`'s fallback to `habitable[0]` lands
+      // even with no quest on offer, and once `overmindShare` clears
+      // `QUEST_ACCEPT_OVERMIND_SHARE_CEILING` (the same threshold `take-quest`
+      // above already gates on), new quests are permanently disabled for the
+      // rest of the run — so a landing that ALSO has nothing left to teach
+      // the price book (`alreadyVisited`) has no quest upside and no
+      // price-discovery upside either. Critical-fuel refuelling is unaffected
+      // (handled earlier, unconditionally, by the `refuel-critical` push
+      // above) — this only removes the no-op opportunistic top-off, freeing
+      // the ladder to fall through to `early-explore`/the move-fly fallback
+      // below instead.
+      const questsStructurallyUnavailable =
+        (obs.overmindShare ?? 0) >= QUEST_ACCEPT_OVERMIND_SHARE_CEILING;
+      if (
+        earnPlanet !== undefined &&
+        !(questsStructurallyUnavailable && alreadyVisited)
+      ) {
         push("land", "earn", earnPlanet);
       }
       push("dock", "earn", obs.system?.stations[0]?.id);
@@ -1860,11 +1917,22 @@ export function decideWithMemory(
         if (deliverableElsewhere && !avoidDangerAhead) {
           push("warp", "go-deliver");
         }
-        if (
-          holdingForOtherSystem &&
-          sellRouteSystem !== undefined &&
-          !avoidDangerAhead
-        ) {
+        // No `sellRouteSystem !== undefined` gate here (unlike the other
+        // three re-derivations below): the flight tier's own push (see the
+        // SPACE_FLIGHT case) fires this SAME intent — deliberately blind
+        // (`targetId` undefined) when the sell planet's system was never
+        // seen, per its own comment. Requiring a known target here broke that
+        // parity for the blind case specifically: `avoidDanger` (this
+        // system's own remembered threat) plus a blind held-cargo hold used
+        // to fall straight through to `avoid-danger-back` below, bouncing
+        // back to SPACE_FLIGHT, which immediately re-opens the map with the
+        // identical blind intent — a two-scene ping-pong that froze the
+        // calendar indefinitely (measured: seed CAMPAIGN-1, 2000+ consecutive
+        // `move avoid-danger-back` / `warp find-sell-destination` steps, zero
+        // days advanced). Matching the flight tier's own gate exactly lets
+        // this win over `avoid-danger-back` (its whole purpose, per the
+        // comment above) even blind.
+        if (holdingForOtherSystem && !avoidDangerAhead) {
           push("warp", "find-sell-destination", sellRouteSystem);
         }
         if (stockSystem != null && !avoidDangerAhead) {

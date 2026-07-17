@@ -2,6 +2,26 @@ import type { Renderer } from "../Renderer";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { logger } from "@/utils/logger";
 
+/** Frame duration (ms) the original hand-tuned per-frame lerp constants below were calibrated at (~60fps). */
+const REFERENCE_FRAME_MS = 1000 / 60;
+
+/**
+ * Frame-rate-independent exponential smoothing factor. `perFrameAlpha` is the
+ * fraction of the remaining distance closed in one call at
+ * {@link REFERENCE_FRAME_MS} (how the constants below were originally tuned
+ * by eye); this converts it to the equivalent continuous decay rate and
+ * re-applies it for the *actual* elapsed `deltaTimeMs`. Without this, a fixed
+ * per-call constant (`pan += (target - pan) * 0.08`) compounds differently at
+ * 30fps vs 60fps — under ordinary frame-time variance (GC pause, compositor
+ * hitch) the camera's glide speed visibly fluctuates frame to frame, reading
+ * as jitter even though `ShipPhysics.update` itself is already correctly
+ * deltaTime-scaled (confirmed live-session complaint, 2026-07-13).
+ */
+function frameAlpha(perFrameAlpha: number, deltaTimeMs: number): number {
+  const rate = -Math.log(1 - perFrameAlpha) / REFERENCE_FRAME_MS;
+  return 1 - Math.exp(-rate * deltaTimeMs);
+}
+
 export interface CameraControllerDeps {
   /** Live ship physics (authoritative world position) — null before spawn. */
   getShipPhysics(): ShipPhysics | null;
@@ -224,10 +244,15 @@ export class CameraController {
    * Per-frame camera step: first ease toward the ship if a return is in flight,
    * then take over with the smoothed motion-follow while the ship is moving.
    * Preserves the original SpaceFlightScene order (return-lerp, then follow).
+   * `deltaTime` (ms, from the same rAF clock `ShipPhysics` uses) drives the
+   * frame-rate-independent smoothing in {@link updateReturn}/{@link focusWithLead}
+   * — clamped like `ShipPhysics.update` so a tab-backgrounding stall can't
+   * fire one giant catch-up glide.
    */
-  update(): void {
-    this.updateReturn();
-    this.updateFollow();
+  update(deltaTime: number): void {
+    const dt = Math.min(Math.max(deltaTime, 0), 100);
+    this.updateReturn(dt);
+    this.updateFollow(dt);
   }
 
   /**
@@ -236,7 +261,7 @@ export class CameraController {
    * alone so the player can freely pan/zoom to look around (consistent with the
    * turn-based pause, and preserves manual pan behaviour).
    */
-  private updateFollow(): void {
+  private updateFollow(dt: number): void {
     const ship = this.deps.getShipPhysics();
     if (!ship) return;
     const moving = ship.isMoving && ship.currentSpeed > 0.01;
@@ -259,7 +284,7 @@ export class CameraController {
     // ship (US-070: don't yank the view to the ship between turns).
     if (moving || hasLead) {
       this.cameraReturning = false; // ship motion follow takes over
-      this.focusWithLead();
+      this.focusWithLead(dt);
     }
   }
 
@@ -272,7 +297,7 @@ export class CameraController {
    * circling targets, but the camera stays centered on the ship's position
    * (otherwise the view would swing around as the ship turns).
    */
-  private focusWithLead(): void {
+  private focusWithLead(dt: number): void {
     const ship = this.deps.getShipPhysics();
     if (!ship) return;
     const cx = this.renderer.app.screen.width / 2;
@@ -282,11 +307,12 @@ export class CameraController {
     // the camera. The ship still rotates to track the target, but the view
     // stays centered on the ship's position.
     const inCombat = this.deps.isInCombat?.() ?? false;
+    const leadAlpha = frameAlpha(0.06, dt);
 
     if (inCombat) {
       // Fade out the lead smoothly when combat starts
-      this.camLeadX += (0 - this.camLeadX) * 0.06;
-      this.camLeadY += (0 - this.camLeadY) * 0.06;
+      this.camLeadX += (0 - this.camLeadX) * leadAlpha;
+      this.camLeadY += (0 - this.camLeadY) * leadAlpha;
     } else {
       // Desired lead (world units) in the heading direction, up to ~34% of a
       // half-screen ahead at full speed. Zero when stopped → ship recenters.
@@ -297,8 +323,8 @@ export class CameraController {
       const desiredY = Math.sin(ship.shipAngle) * desired;
 
       // Smooth toward the desired lead (and toward 0 when slowing/stopped).
-      this.camLeadX += (desiredX - this.camLeadX) * 0.06;
-      this.camLeadY += (desiredY - this.camLeadY) * 0.06;
+      this.camLeadX += (desiredX - this.camLeadX) * leadAlpha;
+      this.camLeadY += (desiredY - this.camLeadY) * leadAlpha;
     }
 
     const focusX = ship.shipX + this.camLeadX;
@@ -308,7 +334,7 @@ export class CameraController {
     // when the ship turns or changes speed (US-070: camera not so abrupt).
     const targetPanX = cx - focusX * this.cameraZoom;
     const targetPanY = cy - focusY * this.cameraZoom;
-    const FOLLOW = 0.08; // lower = smoother / more lag
+    const FOLLOW = frameAlpha(0.08, dt); // lower base = smoother / more lag
     this.cameraPanX += (targetPanX - this.cameraPanX) * FOLLOW;
     this.cameraPanY += (targetPanY - this.cameraPanY) * FOLLOW;
     this.applyTransform();
@@ -318,14 +344,14 @@ export class CameraController {
    * Each frame: lerp the camera toward the ship's centred position.
    * Clears `cameraReturning` once the ship is within 1 px of the target.
    */
-  private updateReturn(): void {
+  private updateReturn(dt: number): void {
     const ship = this.deps.getShipPhysics();
     if (!this.cameraReturning || !ship) return;
     const cx = this.renderer.app.screen.width / 2;
     const cy = this.renderer.app.screen.height / 2;
     const targetPanX = cx - ship.shipX * this.cameraZoom;
     const targetPanY = cy - ship.shipY * this.cameraZoom;
-    const LERP = 0.12;
+    const LERP = frameAlpha(0.12, dt);
     this.cameraPanX += (targetPanX - this.cameraPanX) * LERP;
     this.cameraPanY += (targetPanY - this.cameraPanY) * LERP;
     this.applyTransform();

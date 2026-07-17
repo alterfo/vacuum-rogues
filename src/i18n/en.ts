@@ -278,6 +278,8 @@ export const en: Dict = {
 
   // --- pirate shakedown tribute («Откупиться») ------------------------------
   "flight.tributeReason": "Tribute to pirate «{name}»",
+  "flight.turn.finishingDay": "⏸ Finishing the day…",
+  "flight.turn.waiting": "⏳ Waiting… (the world moves)",
   "flight.tributePaid": "Paid {amount} cr. — {name} backs off.",
   "flight.tributePaidRep":
     "Paid {amount} cr. — {name} backs off. Pirate standing rises.",
@@ -468,6 +470,52 @@ export const en: Dict = {
     " pause lets you take an aimed «Fire!» shot at the selected target.",
   "help.combat.control1": "Movement — maneuver in combat",
   "help.combat.control2": "«Fire!» — aimed shot on active pause",
+
+  // --- tactical planning phase (pause-and-plan combat, Task 14.5b) ---------
+  "combat.planning.enter": "⏸ Tactical planning — press Turn to confirm",
+  "combat.planning.executing": "▶ Executing turn…",
+  "combat.planning.armWeapon": "“{name}”: click a target",
+  "combat.planning.assigned": "“{weapon}” → {target}",
+  "combat.planning.assignedFar":
+    "“{weapon}” → {target} — out of range, fires on closing",
+  "combat.planning.afterburner": "Afterburner",
+
+  // --- execute-window mechanics (Task 14.5c) --------------------------------
+  "combat.execution.afterburnerEngaged":
+    "🔥 Afterburner! Engine integrity: {integrity}%",
+  "combat.execution.afterburnerSpent":
+    "Engine worn out — afterburner unavailable",
+  "combat.execution.shieldRestored": "Shields restored: +{amount}",
+  "combat.execution.aoe": "💥 Pulse bomb: targets hit — {count}",
+  "combat.execution.jammed": "Target's weapons jammed: {name}",
+  "combat.execution.bribed": "Bribe paid ({amount} cr.) — the enemy breaks off",
+  "combat.execution.surrendered": "{name} surrenders: drops cargo and flees",
+  "combat.execution.surrenderRefused": "{name} refuses to surrender",
+  "combat.execution.allyJoined": "{name} joins the fight on your side",
+  "combat.execution.allyNone": "No one answered the call for help",
+
+  // --- combat consumables (tactical devices) -------------------------------
+  "combat.consumable.category": "Tactical Device",
+  "combat.consumable.shieldCell.name": "Shield Cell",
+  "combat.consumable.shieldCell.desc": "Instantly restores the ship's shields.",
+  "combat.consumable.pulseBomb.name": "Pulse Bomb",
+  "combat.consumable.pulseBomb.desc":
+    "Damages every enemy within the blast radius.",
+  "combat.consumable.jammer.name": "Jammer",
+  "combat.consumable.jammer.desc":
+    "Disables the target's weapons for several seconds.",
+
+  // --- in-combat comms («Связь») -------------------------------------------
+  "combat.comms.category": "Comms",
+  "combat.comms.bribe.name": "Bribe",
+  "combat.comms.bribe.desc":
+    "Pay a tribute to make the enemy break off this fight.",
+  "combat.comms.surrender.name": "Demand Surrender",
+  "combat.comms.surrender.desc":
+    "A weakened enemy may yield — fleeing and dropping its cargo.",
+  "combat.comms.callHelp.name": "Call for Help",
+  "combat.comms.callHelp.desc":
+    "A nearby friendly ship joins the fight on your side.",
 
   // --- onboarding: refuel ---------------------------------------------------
   "help.refuel.title": "Refueling",

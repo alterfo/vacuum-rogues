@@ -18,6 +18,7 @@ import {
 } from "@/systems/campaign/hostileScaling";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { FlightModule } from "./FlightModule";
+import { resolveShieldedDamage } from "./combatShield";
 import { CombatHud } from "./CombatHud";
 import { DamageNumbers } from "./DamageNumbers";
 import { logger } from "@/utils/logger";
@@ -71,6 +72,58 @@ export interface CombatModuleDeps {
   isTurnRunning?(): boolean;
   /** Player's canonical loadout — source of the equipped weapon. */
   getPlayerLoadout?(): ShipLoadout | null;
+  /**
+   * True when the tactical planning loop's execute window is the active targeting
+   * authority (a confirmed turn is running — Task 6). While true,
+   * {@link CombatModule.advancePlayerWeapons} fires each weapon **only** at its
+   * planned target from {@link getPlannedWeaponTarget} — an unassigned weapon
+   * **holds fire** (the "empty draft = hold fire" rule, plan Task 1b). While
+   * false/absent it keeps the legacy `pickTargetInRange` auto-target, so production
+   * stays on real-time auto-fire until the planning trigger lands (this dep is inert
+   * today — the planning loop never reaches EXECUTING yet). Absent ⇒ always legacy.
+   */
+  isPlannedTargetingActive?(): boolean;
+  /**
+   * The confirmed planned turn's target for `weapon` (Task 5's per-weapon
+   * assignment map), or null when that weapon was left unassigned (holds fire).
+   * Only consulted while {@link isPlannedTargetingActive} returns true. The weapon
+   * still fires at its own `weaponFireIntervalMs` cadence and the execute-phase
+   * range check ({@link CombatModule.advancePlayerWeapons}) stays the sole authority
+   * on whether the shot lands — an out-of-range or dead assigned target holds fire.
+   */
+  getPlannedWeaponTarget?(weapon: WeaponSpec): NpcShipSprite | null;
+  /**
+   * A planned execute-window shot is about to resolve (Task 14.5c): return true
+   * to consume it — the host launches a tracked projectile (a `WeaponClass.MISSILE`
+   * gun's travel-time missile, Task 7) instead of the instant hit-scan. The
+   * weapon's cadence timer is still spent. Only consulted on the planned-targeting
+   * path; absent ⇒ every shot stays instant (legacy byte-identical).
+   */
+  interceptPlannedShot?(target: NpcShipSprite, weapon: WeaponSpec): boolean;
+  /**
+   * A player hit-scan shot landed (Task 14.5c): return true when the host drew
+   * the weapon-type styled tracer (Task 13 beam/burst/distortion), in which case
+   * the module skips its own flat `flashShot` for this shot. NPC fire always
+   * keeps the legacy tracer. Absent ⇒ legacy tracer (byte-identical).
+   */
+  onPlayerShotVfx?(
+    fromX: number,
+    fromY: number,
+    target: NpcShipSprite,
+    weapon: WeaponSpec,
+  ): boolean;
+  /**
+   * Whether an execute-window effect (the Task 9 weapon-jam consumable) is
+   * currently suppressing this NPC's fire. A suppressed NPC holds primed and
+   * fires the instant the jam expires. Absent ⇒ never suppressed.
+   */
+  isNpcFireSuppressed?(npc: NpcShipSprite): boolean;
+  /**
+   * A player shot was (partly) absorbed by the target's shield pool (Task 12
+   * shield-then-hull ordering) — the host spawns the shield-hit flash sphere.
+   * Absent ⇒ no flash (the damage split still applies when the NPC has shields).
+   */
+  onNpcShieldHit?(target: NpcShipSprite): void;
   /** Live UI layer the HUD overlay is mounted on. */
   getUiLayer?(): Container;
   /** Live world (game) layer the dashed range circle is drawn on. */
@@ -147,6 +200,39 @@ export interface CombatModuleDeps {
 }
 
 /**
+ * Dev/campaign-harness telemetry (win-rate-100pct plan, Task 6 escalation):
+ * what killed the player, captured once at the fatal hit. Read via
+ * {@link CombatModule.lastDeathCause} — purely additive internal state with no
+ * production consumer; `campaign.run.ts` reads it right after a "died" outcome
+ * so death causes are exact per-session data instead of re-derived from logs.
+ */
+export interface PlayerDeathCause {
+  /** The NPC whose shot brought hull to 0. */
+  killerNpcId: string;
+  killerRole: string;
+  /**
+   * Player hull / maxHull at the START of the fight that ended in death (set
+   * once when the fight opened, not at the moment of the fatal hit) — `null`
+   * if the player ship was unavailable at engagement start.
+   */
+  engagementStartHullFraction: number | null;
+  /** How many hostiles were engaged (in {@link CombatModule.combatants}) the instant the fatal hit landed. */
+  simultaneousCombatants: number;
+  /**
+   * How many combat rounds had started in the current, continuous engagement
+   * by the time of the fatal hit (Task 6, second escalation round: the
+   * simultaneous-combatant cap measured as a no-op — this checks engagement
+   * DURATION instead of peak concurrency). `1` means death landed within the
+   * fight's opening round; a higher count means the ship survived that many
+   * reaction windows/round-starts before dying. Counts every
+   * {@link CombatModule.beginCombatRound} call since the fight opened — both
+   * the live scene's reaction-window resume and the headless agent's
+   * once-per-step call increment it identically.
+   */
+  roundsSurvived: number;
+}
+
+/**
  * Real-time in-flight combat. Hostile NPCs that close inside weapon range are
  * added as combatants and fire at the player every
  * {@link GAME_BALANCE.combatFireIntervalMs}; the player's weapon auto-fires at
@@ -199,6 +285,31 @@ export class CombatModule implements FlightModule {
    * the same frame. Reset by {@link CombatModule.endCombat}.
    */
   private playerDeathReported = false;
+
+  /**
+   * Player hull fraction captured once when the current fight opened (Task 6
+   * escalation telemetry) — feeds {@link lastDeathCause} if this fight ends in
+   * death. Set in {@link addCombatant}'s fresh-engagement branch, not reset by
+   * {@link endCombat} (a settled death has nothing left to re-engage).
+   */
+  private engagementStartHullFraction: number | null = null;
+
+  /**
+   * Round-starts counted in the current, continuous engagement (Task 6,
+   * second escalation round) — feeds {@link lastDeathCause}'s
+   * `roundsSurvived`. Incremented by every {@link beginCombatRound} call
+   * (both the fresh-engagement one in {@link addCombatant} and every
+   * subsequent reaction-window/per-step call), reset by {@link endCombat}.
+   */
+  private roundsThisEngagement = 0;
+
+  /** See {@link PlayerDeathCause}. `null` until the player has died once. */
+  private _lastDeathCause: PlayerDeathCause | null = null;
+
+  /** Dev/campaign-harness telemetry — see {@link PlayerDeathCause}. */
+  get lastDeathCause(): PlayerDeathCause | null {
+    return this._lastDeathCause;
+  }
 
   /**
    * The NPC the player's weapon auto-fires at. Defaults to the first combatant;
@@ -382,9 +493,29 @@ export class CombatModule implements FlightModule {
       this.warnWeaponless();
       return;
     }
+    // Simultaneous-engagement cap (win-rate-100pct plan, Task 6 escalation —
+    // see `GAME_BALANCE.combatMaxSimultaneousCombatants`'s doc comment for the
+    // telemetry finding this responds to): refuse a NEW joiner once the fight
+    // already holds the cap — same class of refusal as the downed/weaponless
+    // guards above, not a new mechanic. The aggressor stays "aggressive" and
+    // keeps calling this every frame (existing idempotent garrison-aggro
+    // path); it joins the instant a slot frees (a combatant dies, flees, or
+    // the fight ends).
+    if (this.combatants.size >= GAME_BALANCE.combatMaxSimultaneousCombatants) {
+      return;
+    }
 
+    // Stagger this NPC's first shot by its join order among ALREADY-present
+    // combatants (win-rate-100pct plan, combat-mechanics escalation): several
+    // hostiles joining in the same beat (a standing garrison / freshly-folded
+    // capture fleet, all already in range) would otherwise all start at timer
+    // 0 and fire in lock-step within the same execute window. A negative
+    // starting timer only delays the FIRST shot — `advanceNpcTimers` resets
+    // to 0 after every shot, so steady-state cadence is unaffected.
+    const joinStagger =
+      this.combatants.size * GAME_BALANCE.combatJoinFireStaggerMs;
     this.combatants.add(npc);
-    this.npcFireTimers.set(npc, 0);
+    this.npcFireTimers.set(npc, -joinStagger);
     if (!this.selectedTarget) this.selectedTarget = npc;
 
     if (!this.isActive) {
@@ -392,6 +523,10 @@ export class CombatModule implements FlightModule {
       this.primeWeaponFireTimers();
       this.lowHullWarned = false;
       this.beginCombatRound(); // fresh engagement ⇒ fresh round budget
+      this.engagementStartHullFraction =
+        shipNow && shipNow.maxHull > 0
+          ? shipNow.hullHP / shipNow.maxHull
+          : null;
       this.hud?.open(this.selectedTarget);
     }
     logger.info(`In-flight combat: engaged ${npc.npc.id}`);
@@ -479,12 +614,19 @@ export class CombatModule implements FlightModule {
    * Start a fresh combat round (campaign Task 9 (v)): clear the round's taken
    * damage and re-open fire after a completed round. The live scene calls this
    * when the player resumes from the reaction-window pause (via the combat-pause
-   * UI buttons); the headless agent calls it at the start of each combat step.
-   * A no-op-safe reset — cheap to call even when no round is in progress.
+   * UI buttons); the headless agent calls it at the start of each combat step
+   * — including steps with NO active fight (`waitOneDay`'s own doc: "cheap to
+   * call even when no round is in progress"). `roundsThisEngagement` only
+   * counts calls while {@link isActive} is already true (the fresh-engagement
+   * call in {@link addCombatant} sets `isActive` before calling this, so it
+   * still counts as round 1) — else a run of peaceful, fight-free steps
+   * between engagements would inflate the NEXT fight's round count before it
+   * even starts.
    */
   beginCombatRound(): void {
     this.roundDamageTaken = 0;
     this.roundComplete = false;
+    if (this.isActive) this.roundsThisEngagement++;
   }
 
   /** End the current fight: drop every combatant, reset timers, close the HUD. */
@@ -499,6 +641,7 @@ export class CombatModule implements FlightModule {
     this.playerDeathReported = false;
     this.roundDamageTaken = 0;
     this.roundComplete = false;
+    this.roundsThisEngagement = 0;
     this.hud?.close();
     // Re-arm the active-pause debounce so the next engagement pauses fresh on
     // its first incoming shot (idempotent — safe on a no-op end / teardown).
@@ -595,6 +738,12 @@ export class CombatModule implements FlightModule {
         d !== null &&
         d <= npcWeaponRange(npc.npc)
       ) {
+        // A weapon-jam (Task 9 consumable) silences this NPC: hold primed so it
+        // fires the instant the jam expires, exactly like an out-of-range hold.
+        if (this.deps.isNpcFireSuppressed?.(npc)) {
+          this.npcFireTimers.set(npc, t);
+          continue;
+        }
         this.npcFireTimers.set(npc, 0);
         this.fireNpcShot(npc);
       } else {
@@ -604,21 +753,32 @@ export class CombatModule implements FlightModule {
   }
 
   /**
-   * Advance every fitted weapon's fire timer and, as each elapses, fire it at the
-   * nearest combatant **within that weapon's own range** ("в зоне поражения
-   * орудия"), preferring the {@link selectedTarget} when it is in range. A weapon
-   * with no combatant in range holds — its timer stays "ready" (clamped to its
-   * interval) so it fires the instant a target closes, rather than re-waiting a
-   * full interval. Each weapon keeps its own timer (keyed by its index in
-   * {@link fittedWeapons}) **and its own cadence**: the fire interval is derived
-   * per-weapon from `cooldownTurns` via {@link weaponFireIntervalMs}, so a slow,
-   * high-damage weapon fires less often than a quick one (cadence is a real
-   * tradeoff, not a flat rate).
+   * Advance every fitted weapon's fire timer and, as each elapses, fire it at its
+   * target. Two targeting authorities, selected by {@link
+   * CombatModuleDeps.isPlannedTargetingActive}:
+   *
+   * - **Planned (Task 6, tactical pause-and-plan)**: while a confirmed execute
+   *   window runs, each weapon fires **only** at its planned assignment from
+   *   {@link CombatModuleDeps.getPlannedWeaponTarget} — an unassigned weapon
+   *   **holds fire** (the "empty draft = hold fire" rule, plan Task 1b).
+   * - **Legacy auto-fire (default/absent)**: each weapon fires at the nearest
+   *   combatant **within its own range** ("в зоне поражения орудия"), preferring
+   *   the {@link selectedTarget} when in range.
+   *
+   * Either way a weapon with no valid target this frame holds — its timer stays
+   * "ready" (clamped to its interval) so it fires the instant a target becomes
+   * valid, rather than re-waiting a full interval. Each weapon keeps its own timer
+   * (keyed by its index in {@link fittedWeapons}) **and its own cadence**: the fire
+   * interval is derived per-weapon from `cooldownTurns` via {@link
+   * weaponFireIntervalMs}, so a slow, high-damage weapon fires less often than a
+   * quick one (cadence is a real tradeoff, not a flat rate). The execute-phase
+   * range check is the sole authority on whether a planned shot lands (plan Task 5).
    */
   private advancePlayerWeapons(deltaTime: number): void {
     // A downed ship (GOD mode, hull at the floor) can't auto-fire until repaired.
     if (this.isPlayerDowned()) return;
     const weapons = this.fittedWeapons();
+    const planned = this.deps.isPlannedTargetingActive?.() ?? false;
     for (let i = 0; i < weapons.length; i++) {
       // A player shot can kill a target → removeCombatant → onTargetLost →
       // active-pause. The world is frozen the instant that pause is raised, so a
@@ -632,15 +792,37 @@ export class CombatModule implements FlightModule {
         this.weaponFireTimers.set(i, t);
         continue;
       }
-      const target = this.pickTargetInRange(weapon);
+      const target = planned
+        ? this.resolvePlannedTarget(weapon)
+        : this.pickTargetInRange(weapon);
       if (!target) {
-        // No combatant in this weapon's range — hold but stay primed.
+        // No valid target for this weapon — hold but stay primed (an unassigned
+        // or out-of-range weapon fires the instant a target becomes valid).
         this.weaponFireTimers.set(i, interval);
         continue;
       }
       this.weaponFireTimers.set(i, 0);
+      // A missile-class gun's planned shot becomes a tracked projectile
+      // (Task 7/14.5c) — the host consumes the shot and the cadence is spent.
+      if (planned && this.deps.interceptPlannedShot?.(target, weapon)) continue;
       this.firePlayerShot(target, weapon);
     }
+  }
+
+  /**
+   * The target `weapon` fires at under the tactical planning loop (Task 6): its
+   * confirmed planned assignment ({@link CombatModuleDeps.getPlannedWeaponTarget}),
+   * gated to a still-live combatant inside this weapon's own `range` this frame.
+   * Null when the weapon is unassigned (holds fire — the empty-draft rule), or its
+   * assigned target has been killed/fled (no longer a combatant) or drifted out of
+   * this weapon's range — the execute-phase range check is the sole fire authority.
+   */
+  private resolvePlannedTarget(weapon: WeaponSpec): NpcShipSprite | null {
+    const assigned = this.deps.getPlannedWeaponTarget?.(weapon) ?? null;
+    if (!assigned || !this.combatants.has(assigned)) return null;
+    const d = this.distanceToShip(assigned);
+    if (d === null || d > weapon.range) return null;
+    return assigned;
   }
 
   /**
@@ -718,6 +900,13 @@ export class CombatModule implements FlightModule {
     if (ship.hullHP <= 0) {
       if (!this.playerDeathReported) {
         this.playerDeathReported = true;
+        this._lastDeathCause = {
+          killerNpcId: npc.npc.id,
+          killerRole: npc.npc.role,
+          engagementStartHullFraction: this.engagementStartHullFraction,
+          simultaneousCombatants: this.combatants.size,
+          roundsSurvived: this.roundsThisEngagement,
+        };
         this.deps.onPlayerDestroyed?.();
       }
       return;
@@ -732,23 +921,23 @@ export class CombatModule implements FlightModule {
     }
   }
 
-  /** One player shot: reduce the target's hull, spawn a yellow number, handle the kill. */
+  /** One player shot: reduce the target's shields-then-hull, spawn a yellow
+   *  number, draw the tracer (weapon-type styled when the host handles it),
+   *  handle the kill. */
   private firePlayerShot(target: NpcShipSprite, weapon: WeaponSpec): void {
-    const npc = target.npc;
-    // Adaptive garrison scaling (Task 4): a HELD-system enemy's effective HP
-    // scales with the run's ratcheted power — the landed damage divides by
-    // hpMult, so a weak player's shots bite harder (~0.9×) and a maxed player's
-    // are absorbed by the full OVERMIND_COMBAT_HP_MULT. Neutral space leaves
-    // offense at baseline (hpMult 1 — Task 9 (i) gentles survival, not the kill).
-    const damage = scaleHostileDamage(
-      weapon.damage,
-      1 / this.hostileMults().hpMult,
-    );
-    npc.hullHP = Math.max(0, npc.hullHP - damage);
-    this.damageNumbers?.spawn(damage, target.x, target.y, true);
-    // Per-turn fire flash from the player ship to the target (who shoots whom).
     const physics = this.deps.getShipPhysics();
-    if (physics) {
+    const styled =
+      physics !== null &&
+      (this.deps.onPlayerShotVfx?.(
+        physics.shipX,
+        physics.shipY,
+        target,
+        weapon,
+      ) ??
+        false);
+    // Per-turn fire flash from the player ship to the target (who shoots whom),
+    // unless the host drew the weapon-type styled tracer instead (Task 13).
+    if (physics && !styled) {
       this.hud?.flashShot(
         physics.shipX,
         physics.shipY,
@@ -757,11 +946,66 @@ export class CombatModule implements FlightModule {
         true,
       );
     }
+    this.applyPlayerDamage(target, weapon.damage);
+  }
+
+  /**
+   * Land player-side damage on an engaged target through the canonical offense
+   * path — the execute-window mechanics (missile arrival, AoE consumable, a
+   * recruited ally's fire — Task 14.5c) route their hits through here so
+   * scaling, shield ordering, damage numbers and the kill/loot flow stay one
+   * code path. `from` draws the legacy tracer for the hit (null = no tracer).
+   * A no-op outside an active fight (a stale missile can't strike a settled one).
+   */
+  landExternalShot(
+    target: NpcShipSprite,
+    rawDamage: number,
+    from: { x: number; y: number } | null,
+  ): void {
+    if (!this.isActive || target.container?.destroyed) return;
+    if (from) this.hud?.flashShot(from.x, from.y, target.x, target.y, true);
+    this.applyPlayerDamage(target, rawDamage);
+  }
+
+  /** The shared player-offense damage core (scaling → shield split → hull → kill). */
+  private applyPlayerDamage(target: NpcShipSprite, rawDamage: number): void {
+    const npc = target.npc;
+    // Adaptive garrison scaling (Task 4): a HELD-system enemy's effective HP
+    // scales with the run's ratcheted power — the landed damage divides by
+    // hpMult, so a weak player's shots bite harder (~0.9×) and a maxed player's
+    // are absorbed by the full OVERMIND_COMBAT_HP_MULT. Neutral space leaves
+    // offense at baseline (hpMult 1 — Task 9 (i) gentles survival, not the kill).
+    const damage = scaleHostileDamage(
+      rawDamage,
+      1 / this.hostileMults().hpMult,
+    );
+    // Shield-then-hull ordering (Task 12): the target's shield pool absorbs up
+    // to its value before the hull takes the overflow. A shield-less ship
+    // (shields 0/absent — every legacy test stub) is byte-identical to the old
+    // straight-to-hull path.
+    const split = resolveShieldedDamage(npc.shields ?? 0, damage);
+    if (split.shieldHit) {
+      npc.shields = split.shields;
+      this.deps.onNpcShieldHit?.(target);
+    }
+    npc.hullHP = Math.max(0, npc.hullHP - split.hullDamage);
+    this.damageNumbers?.spawn(damage, target.x, target.y, true);
     if (npc.hullHP <= 0) {
       this.deps.showMessage?.(`Цель уничтожена: ${npc.name}`, 0xffdd33);
       this.deps.onNpcDestroyed?.(target);
       this.removeCombatant(target);
     }
+  }
+
+  /**
+   * Drop a combatant from the fight without killing it — the execute-window
+   * comms resolutions (a bribed or surrendering ship breaks off and departs,
+   * Task 10/14.5c) use this instead of waiting for the escape-range prune. The
+   * usual target-lost re-selection applies; an emptied set ends the fight on
+   * the next update. A no-op for a non-combatant.
+   */
+  disengage(npc: NpcShipSprite): void {
+    if (this.combatants.has(npc)) this.removeCombatant(npc);
   }
 
   /** Remove a combatant and re-pick the selected target from the survivors. */

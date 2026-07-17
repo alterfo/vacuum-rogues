@@ -6,8 +6,9 @@
  * Locked here:
  *  - fights inside an Overmind/pirate-held system scale incoming NPC damage by
  *    `hostileScaling(...).damageMult` and the enemy's effective HP by
- *    `hpMult` (the player's landed damage divides by it) — weak player ≈ 0.9×,
- *    maxed player = the full 1.5× levers;
+ *    `hpMult` (the player's landed damage divides by it) — weak player ≈ 0.5×
+ *    (win-rate-100pct plan, Task 5; was ≈0.9×), maxed player = the full 1.5×
+ *    levers;
  *  - fights in neutral systems, and legacy DI sites that don't wire the new
  *    deps, are byte-identical to before (neutral 1.0 scaling);
  *  - incoming damage stays routed through `applyDamageWithMode`: the GOD floor
@@ -94,7 +95,7 @@ function makeModule(
 }
 
 describe("CombatModule — incoming NPC damage scales with ratcheted power (Task 4)", () => {
-  it("weak player (index 0) in a hostile system takes the gentle ~0.9× hit", () => {
+  it("weak player (index 0) in a hostile system takes the gentle ~0.5× hit (win-rate-100pct plan, Task 5)", () => {
     const ship = { hullHP: MAX_HULL, maxHull: MAX_HULL };
     const { module } = makeModule(ship, { hostile: true, peakPower: 0 });
     module.addCombatant(makeSprite("a"));
@@ -103,7 +104,7 @@ describe("CombatModule — incoming NPC damage scales with ratcheted power (Task
       NPC_DAMAGE,
       hostileScaling(0, "NORMAL").damageMult,
     );
-    expect(expected).toBe(18); // 20 × 0.9
+    expect(expected).toBe(10); // 20 × 0.5
     expect(ship.hullHP).toBe(MAX_HULL - expected);
   });
 
@@ -207,7 +208,7 @@ describe("CombatModule — neutral-system gentling (Task 9 (i))", () => {
 });
 
 describe("CombatModule — enemy effective HP scales with ratcheted power (Task 4)", () => {
-  it("weak player's shots land harder (enemy is effectively softer at 0.9×)", () => {
+  it("weak player's shots land harder (enemy is effectively softer at 0.5×)", () => {
     const ship = { hullHP: MAX_HULL, maxHull: MAX_HULL };
     const { module, weaponDamage } = makeModule(ship, {
       hostile: true,

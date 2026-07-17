@@ -141,8 +141,8 @@ Full details: `.claude/docs/systems/overmind.md`. Critical invariants:
 - Win requires **genuine engagement** (`engaged = state.lastSpreadDay >= 0`) — `peakThreat` is a false proxy.
 - Win also requires **player participation**: `(state.playerLiberations ?? 0) > 0` — an NPC-only equilibrium clearing the front must never fire a spurious victory.
 - `freezeOvermind: true` prevents the equilibrium tick from capping/liberating the Overmind front.
-- Spread cadence/combat scaling are **adaptive** (keyed to a ratcheted `campaignPeakPower`, not fixed day phases) — tune levers in `balance.ts` (`ADAPTIVE_*`, `HOSTILE_SCALING_*`, `NEUTRAL_SCALING_*`), never at call sites. Target pacing: a 2–3 in-game-year campaign (`docs/plans/20260706-three-year-campaign.md`); the plan's 99%-win-rate gate is a known, measured, **open** gap (~2–24% across runs, root cause is the arming-up path) — not silently loosened.
-- An **additive garrison layer** in `NpcSimulator` (growth → 1.5× bud-off capture fleets, real-combat liberation assaults, fresh-capture liberation targeting) runs alongside `advanceOvermind()` without touching its pacing — see the subsystem doc's "garrison layer" section.
+- Spread cadence/combat scaling are **adaptive** (keyed to a ratcheted `campaignPeakPower`, not fixed day phases) — tune levers in `balance.ts` (`ADAPTIVE_*`, `HOSTILE_SCALING_*`, `NEUTRAL_SCALING_*`, `OVERMIND_GARRISON_POWER_MAX_BONUS`/`_MAX_DISCOUNT`), never at call sites. Target pacing: a 2–3 in-game-year campaign (`docs/plans/20260706-three-year-campaign.md`); the plan's 99%-win-rate gate is a known, measured, **open** gap (~2–24% across runs, root cause is the arming-up path) — not silently loosened. A 2026-07-13 follow-up added a downward garrison-count discount (`overmindGarrisonPowerDiscount`, Overmind-held systems only, pirate garrisons stay unscaled by design) but it plateaued at 4.0%/50 sessions — still open, see `.claude/docs/systems/overmind.md`'s Known-unmet gate section.
+- An **additive garrison layer** in `NpcGarrisonCombat` (composed by `NpcSimulator`) (growth → 1.5× bud-off capture fleets, real-combat liberation assaults, fresh-capture liberation targeting) runs alongside `advanceOvermind()` without touching its pacing — see the subsystem doc's "garrison layer" section.
 
 ## Money System (key rules only)
 
@@ -175,6 +175,8 @@ Every bug follows this order — no exceptions:
 
 Full details: `.claude/docs/systems/letsplay.md`. `src/tests/playtest/letsplay/` plays the real engine (dev-only). Loop: `observe → decide → apply → tick`. Live autopilot: `` ` `` (Backquote) in `npm run dev`. Default policy: `MemoryHeuristicPolicy`. First human input reclaims control.
 
+**F9 (live `land()` re-targeting freeze): RESOLVED 2026-07-13** (`e76260b`) — the rAF-throttling hypothesis was confirmed live 2026-07-12: `gameLoop`'s `requestAnimationFrame` stalls under tab-backgrounding while the autopilot's `setInterval` keeps ticking. Fixed by a `document.hidden`-gated 500 ms background fallback loop in `GameEngine` (`startGameLoop`/`backgroundIntervalId`) plus a `dismissBlockingModal`-before-decide gate in `AutopilotController.tickOnce`. Known limitation: browsers clamp hidden-tab intervals (≥1 s, Chrome intensive throttling up to 1/min) and `ShipPhysics` clamps dt at 100 ms, so a hidden tab advances world time slower than real time — acceptable for the freeze fix, not a full background simulation.
+
 ## Equipment System (key rules only)
 
 Full details: `.claude/docs/systems/equipment.md`. Key rules:
@@ -204,6 +206,7 @@ Then apply the **Pareto filter**: from the blast radius, identify the 20% of tou
 
 Dev helpers (details in `tools/README.md`):
 - `vacuum` MCP — `find_symbol`/`find_tests_for`/`get_architecture` — instant body lookup, no index needed
+- **MUST try `vacuum find_symbol`/`find_tests_for` before `Read`-ing a file just to locate one function/type/const/method.** Measured 60–99% token savings when the target is a narrow symbol in a larger file. Fall back to `Read` when: the symbol is a class name whose body spans most of the file (near-zero savings, may exceed tool output limits), the lookup is a class *method* (index only covers top-level declarations — misses silently), or you need to verify `get_architecture` output against current CLAUDE.md (its cache can go stale, e.g. it still described the removed `onnxruntime-web` stack after that migration).
 - `gitnexus` MCP — `impact`/`detect_changes`/`context`/`query` — dependency graph, blast radius, semantic search (requires `.gitnexus/` index; re-run `npx gitnexus analyze` after large merges)
 - `scaffold/domain-field.ts` — add a field across lockstep files
 - `scaffold/new-scene.ts` — register a scene across all 5 files

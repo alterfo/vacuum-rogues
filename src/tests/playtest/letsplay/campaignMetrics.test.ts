@@ -21,6 +21,7 @@ import {
   formatCampaignReport,
   NEWS_FEED_CAP,
   type CampaignDaySignal,
+  type CampaignDeathCause,
   type CampaignMemoryStats,
   type CampaignSessionReport,
   type CampaignStepSignal,
@@ -217,6 +218,89 @@ describe("formatCampaignReport — stall footer", () => {
     const noStall = formatCampaignReport([mkReport()]);
     expect(noStall).not.toContain("phantom");
     expect(noStall).not.toContain("stalls:");
+  });
+});
+
+/** A synthetic death cause; override per scenario. */
+function mkDeathCause(
+  over: Partial<CampaignDeathCause> = {},
+): CampaignDeathCause {
+  return {
+    killerNpcId: "npc-1",
+    killerRole: "PIRATE",
+    engagementStartHullFraction: 0.07,
+    simultaneousCombatants: 3,
+    roundsSurvived: 2,
+    ...over,
+  };
+}
+
+describe("formatCampaignReport — death-cause telemetry (win-rate-100pct plan, Task 6 escalation)", () => {
+  it("renders the per-session death line + the aggregate breakdown when present", () => {
+    const report = formatCampaignReport([
+      mkReport({
+        outcome: "died",
+        died: true,
+        deathCause: mkDeathCause({ killerRole: "PIRATE" }),
+      }),
+    ]);
+    expect(report).toContain("killer=PIRATE#npc-1");
+    expect(report).toContain("hull@engage=0.07");
+    expect(report).toContain("vs=3");
+    expect(report).toContain("rounds=2");
+    expect(report).toContain("death causes (1/1)");
+    expect(report).toContain("PIRATE=1");
+  });
+
+  it("omits the per-session death tag and the aggregate footer when no session died", () => {
+    const report = formatCampaignReport([mkReport({ outcome: "win" })]);
+    expect(report).not.toContain("death[");
+    expect(report).not.toContain("death causes");
+  });
+
+  it("aggregates killer-role counts and medians across multiple deaths", () => {
+    const report = formatCampaignReport([
+      mkReport({
+        seed: "SYN-0",
+        outcome: "died",
+        died: true,
+        deathCause: mkDeathCause({
+          killerRole: "PIRATE",
+          engagementStartHullFraction: 0.1,
+          simultaneousCombatants: 2,
+          roundsSurvived: 1,
+        }),
+      }),
+      mkReport({
+        seed: "SYN-1",
+        outcome: "died",
+        died: true,
+        deathCause: mkDeathCause({
+          killerRole: "OVERMIND",
+          engagementStartHullFraction: 0.2,
+          simultaneousCombatants: 4,
+          roundsSurvived: 5,
+        }),
+      }),
+      mkReport({ seed: "SYN-2", outcome: "win" }), // no death cause — excluded
+    ]);
+    expect(report).toContain("death causes (2/3)");
+    expect(report).toContain("PIRATE=1");
+    expect(report).toContain("OVERMIND=1");
+    expect(report).toContain("median hull@engage=0.15");
+    expect(report).toContain("median simultaneous combatants=3");
+    expect(report).toContain("median rounds survived=3");
+  });
+
+  it("renders a null engagementStartHullFraction as '-' without crashing", () => {
+    const report = formatCampaignReport([
+      mkReport({
+        outcome: "died",
+        died: true,
+        deathCause: mkDeathCause({ engagementStartHullFraction: null }),
+      }),
+    ]);
+    expect(report).toContain("hull@engage=-");
   });
 });
 

@@ -280,6 +280,8 @@ export const ru: Dict = {
 
   // --- pirate shakedown tribute («Откупиться») ------------------------------
   "flight.tributeReason": "Откуп пирату «{name}»",
+  "flight.turn.finishingDay": "⏸ Завершаю день…",
+  "flight.turn.waiting": "⏳ Ожидание… (мир движется)",
   "flight.tributePaid": "Откуп {amount} кр. — {name} отступает.",
   "flight.tributePaidRep":
     "Откуп {amount} кр. — {name} отступает. Репутация у пиратов растёт.",
@@ -470,6 +472,50 @@ export const ru: Dict = {
     " пауза позволяет прицельно выстрелить «Огонь!» по выбранной цели.",
   "help.combat.control1": "Движение — маневрировать в бою",
   "help.combat.control2": "«Огонь!» — прицельный выстрел на активной паузе",
+
+  // --- tactical planning phase (pause-and-plan combat, Task 14.5b) ---------
+  "combat.planning.enter": "⏸ Тактическое планирование — Ход для подтверждения",
+  "combat.planning.executing": "▶ Выполнение хода…",
+  "combat.planning.armWeapon": "«{name}»: выберите цель",
+  "combat.planning.assigned": "«{weapon}» → {target}",
+  "combat.planning.assignedFar":
+    "«{weapon}» → {target} — вне досягаемости, огонь при сближении",
+  "combat.planning.afterburner": "Форсаж",
+
+  // --- execute-window mechanics (Task 14.5c) --------------------------------
+  "combat.execution.afterburnerEngaged":
+    "🔥 Форсаж! Ресурс двигателя: {integrity}%",
+  "combat.execution.afterburnerSpent": "Двигатель изношен — форсаж недоступен",
+  "combat.execution.shieldRestored": "Щиты восстановлены: +{amount}",
+  "combat.execution.aoe": "💥 Импульсная бомба: целей поражено — {count}",
+  "combat.execution.jammed": "Орудия цели заглушены: {name}",
+  "combat.execution.bribed": "Откуп уплачен ({amount} кр.) — противник уходит",
+  "combat.execution.surrendered": "{name} сдаётся: сбрасывает груз и уходит",
+  "combat.execution.surrenderRefused": "{name} отклоняет требование сдаться",
+  "combat.execution.allyJoined": "{name} присоединяется к бою на вашей стороне",
+  "combat.execution.allyNone": "Никто не ответил на призыв о помощи",
+
+  // --- combat consumables (tactical devices) -------------------------------
+  "combat.consumable.category": "Тактическое устройство",
+  "combat.consumable.shieldCell.name": "Щитовая ячейка",
+  "combat.consumable.shieldCell.desc":
+    "Мгновенно восстанавливает щиты корабля.",
+  "combat.consumable.pulseBomb.name": "Импульсная бомба",
+  "combat.consumable.pulseBomb.desc":
+    "Наносит урон всем врагам в радиусе взрыва.",
+  "combat.consumable.jammer.name": "Глушитель",
+  "combat.consumable.jammer.desc": "Отключает оружие цели на несколько секунд.",
+
+  // --- in-combat comms («Связь») -------------------------------------------
+  "combat.comms.category": "Связь",
+  "combat.comms.bribe.name": "Откупиться",
+  "combat.comms.bribe.desc": "Заплатить дань, чтобы враг вышел из боя.",
+  "combat.comms.surrender.name": "Требовать сдаться",
+  "combat.comms.surrender.desc":
+    "Ослабленный враг может сдаться — бежать, бросив груз.",
+  "combat.comms.callHelp.name": "Позвать на помощь",
+  "combat.comms.callHelp.desc":
+    "Ближайший союзный корабль вступит в бой на вашей стороне.",
 
   // --- onboarding: refuel ---------------------------------------------------
   "help.refuel.title": "Дозаправка",

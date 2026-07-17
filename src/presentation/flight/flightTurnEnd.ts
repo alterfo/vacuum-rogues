@@ -1,4 +1,5 @@
 import type { ShipPhysics } from "@/systems/ShipPhysics";
+import { t } from "@/i18n/i18n";
 import { logger } from "@/utils/logger";
 
 /**
@@ -77,4 +78,79 @@ export function endFlightTurn(
   engine
     .saveGame?.("auto")
     ?.catch((e) => logger.error("Auto-save on turn end failed:", e));
+}
+
+/** The scene members the Play/Pause turn control reads (extracted verbatim from
+ *  `SpaceFlightScene.onPlayPause` for the line guard, 14.5c — lazy closures). */
+export interface PlayPauseHost {
+  isCombatPaused(): boolean;
+  isPlanning(): boolean;
+  /**
+   * True while a confirmed execute window is running. Optional so callers/tests
+   * that don't model the pause-and-plan loop can omit it. While executing, the
+   * button is a no-op — the round timer is the single terminator (Task 1b);
+   * the legacy combat-abort `endTurn()` here froze `CombatModule` (its
+   * `isPaused` includes `!isTurnRunning`) while `tickExecute` kept cycling,
+   * wedging the fight into a permanent zero-fire planning loop.
+   */
+  isExecutingPlan?(): boolean;
+  /**
+   * A blocking panel (contact / journal / planet-info / settings / system menu)
+   * is open. Optional so bare callers/tests can omit it. Guards the PLANNING
+   * confirm exactly like Space's `hasOpenModal` guard in `flightKeyHandler` —
+   * the HUD «Ход» button must never start an enemy volley behind an open panel.
+   */
+  hasOpenModal?(): boolean;
+  confirmPlan(): void;
+  isTurnRunning(): boolean;
+  /** A combat auto-follow / active fight — the pause aborts the turn NOW. */
+  combatAbortActive(): boolean;
+  endTurn(): void;
+  pauseLatched(): boolean;
+  setPauseLatch(v: boolean): void;
+  plannedRoute(): { x: number; y: number } | null;
+  followActive(): boolean;
+  followTarget(): { x: number; y: number } | null;
+  executeRouteTo(x: number, y: number): void;
+  /** Course-less wait turn: time passes, the ship holds position (US-070 #5). */
+  beginWaitTurn(): void;
+  showMessage(text: string, color?: number): void;
+}
+
+/**
+ * Play/Pause turn control. Paused: Play executes the planned route. Running:
+ * Pause defers the stop to the next whole-day boundary (F1, playtest3) — except
+ * a combat auto-follow, which aborts immediately (combat freezes the calendar,
+ * so the day-boundary latch would never fire). During PLANNING the button is
+ * the mouse equivalent of Space's confirm (14.5a). Suppressed while the active-
+ * pause overlay is open — else a stray click desyncs `isTurnRunning`.
+ */
+export function handleFlightPlayPause(host: PlayPauseHost): void {
+  if (host.isCombatPaused()) return;
+  if (host.isPlanning()) {
+    if (!host.hasOpenModal?.()) host.confirmPlan();
+    return;
+  }
+  if (host.isExecutingPlan?.()) return; // round timer is the sole terminator (Task 1b)
+  if (host.isTurnRunning()) {
+    if (host.combatAbortActive()) {
+      host.endTurn(); // combat abort halts now (endTurn stops the ship)
+    } else if (!host.pauseLatched()) {
+      host.setPauseLatch(true);
+      host.showMessage(t("flight.turn.finishingDay"), 0x88ccff);
+    }
+    return;
+  }
+  // Play: run the planned route (or close on an attack target). With no course
+  // at all, run a "wait" turn — time passes, the ship holds position.
+  host.setPauseLatch(false); // fresh turn — clear any stale latch
+  const route = host.plannedRoute();
+  if (route) {
+    host.executeRouteTo(route.x, route.y);
+  } else if (host.followActive()) {
+    const target = host.followTarget();
+    if (target) host.executeRouteTo(target.x, target.y);
+  } else {
+    host.beginWaitTurn();
+  }
 }

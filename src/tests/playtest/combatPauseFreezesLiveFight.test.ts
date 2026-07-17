@@ -75,11 +75,54 @@ function makeDriftingHostile(id: string, x: number, y: number): NpcShipSprite {
   return sprite as unknown as NpcShipSprite;
 }
 
+/**
+ * Stationary variant of {@link makeDriftingHostile} for tests that tick many
+ * seconds of real time across a PLANNING window (where `NpcShipManager.update`
+ * still drives each sprite's own `update()` unconditionally, drift or not) —
+ * the drifting stub would end up well outside weapon range by the time an
+ * EXECUTING window opens, which is irrelevant noise for a fire-gating test.
+ */
+function makeStaticHostile(id: string, x: number, y: number): NpcShipSprite {
+  const container = { x, y, zIndex: 100 };
+  const sprite = {
+    x,
+    y,
+    container,
+    aggressive: false,
+    mapColor: 0xff0000,
+    npc: {
+      id,
+      name: id,
+      role: NpcRole.PATROL,
+      hullHP: 1_000_000,
+      maxHull: 1_000_000,
+      damage: 20,
+    },
+    update(): void {},
+    isGone: () => false,
+    isAnchored: () => false,
+    updateHitArea: () => {},
+    restoreInteractivity: () => {},
+    setAggressive: (v: boolean) => {
+      sprite.aggressive = v;
+    },
+    setNpcCombatTarget: () => {},
+    clearNpcCombatTarget: () => {},
+    setPursuitTarget: () => {},
+  };
+  return sprite as unknown as NpcShipSprite;
+}
+
 interface FlightPrivates {
   shipPhysics: ShipPhysics;
   npcManager: NpcShipManager;
   combatModule: CombatModule;
   combatPause: CombatPauseController<unknown, unknown>;
+  combatPlanning: {
+    isPlanning: boolean;
+    isExecuting: boolean;
+    confirm(): boolean;
+  };
   isTurnRunning: boolean;
   pauseAtDayBoundary: boolean;
   plannedRoute: { x: number; y: number } | null;
@@ -166,13 +209,17 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     expect(harness.errors()).toEqual([]);
   });
 
-  it("defers pause to day boundary when the player initiates attack while flying", () => {
+  it("opens tactical planning immediately when the player initiates attack, even while flying (Task 14.5a — no more deferred pause)", () => {
+    // Rewritten (`docs/plans/20260713-tactical-pause-combat-rework.md` Task 1c):
+    // the old reactive active-pause deferred freezing a moving ship to the next
+    // day boundary (`pauseAtDayBoundary`) so a route wasn't aborted mid-day. The
+    // new pause-and-plan loop freezes on `beginCombat()` unconditionally — there
+    // is no day-boundary deferral concept left for combat engagement.
     expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
     const scene = harness.currentScene() as unknown as FlightPrivates;
-    const { shipPhysics: physics, npcManager, combatPause } = scene;
+    const { shipPhysics: physics, npcManager, combatPlanning } = scene;
     expect(physics).toBeTruthy();
 
-    // Place the enemy inside weapon range so launchCombatWithNpc fires immediately.
     const enemy = makeDriftingHostile(
       "instant-pause-foe",
       physics.shipX + 100,
@@ -191,17 +238,15 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
       }
     ).launchCombatWithNpc(enemy.npc);
 
-    // Ship is flying — should NOT pause immediately; deferred to day boundary.
-    expect(combatPause.paused).toBe(false);
-    expect(physics.isMoving).toBe(true);
-    expect(scene.pauseAtDayBoundary).toBe(true);
+    expect(combatPlanning.isPlanning).toBe(true); // frozen immediately, ship or not
+    expect(scene.pauseAtDayBoundary).toBe(false); // deferral concept is gone
     expect(harness.errors()).toEqual([]);
   });
 
   it("starts the turn when the player initiates attack with no running turn (кружение не в момент хода)", () => {
     expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
     const scene = harness.currentScene() as unknown as FlightPrivates;
-    const { shipPhysics: physics, npcManager, combatPause } = scene;
+    const { shipPhysics: physics, npcManager, combatPlanning } = scene;
 
     const enemy = makeDriftingHostile(
       "no-turn-foe",
@@ -221,9 +266,9 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
       }
     ).launchCombatWithNpc(enemy.npc);
 
-    // Pause must fire AND the turn must be started so orbit has a valid context
-    // once "Огонь" lifts the pause — without this the ship orbits with no ход.
-    expect(combatPause.paused).toBe(true);
+    // Planning must open AND the turn must be started, so the confirmed plan
+    // has a valid turn context to execute in once the player confirms.
+    expect(combatPlanning.isPlanning).toBe(true);
     expect(scene.isTurnRunning).toBe(true);
     expect(harness.errors()).toEqual([]);
   });
@@ -258,16 +303,21 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     expect(harness.errors()).toEqual([]);
   });
 
-  it("stops orbiting when the player ends the turn mid-combat (Space = pause)", () => {
+  it("cycles EXECUTING back to PLANNING on its own once the round timer elapses (Task 14.5a)", () => {
+    // Rewritten: the old "Space ends the turn mid-combat" scenario doesn't map
+    // 1:1 onto the new loop (there is no mid-window abort — the fixed round
+    // timer is the single deterministic terminator, plan Task 1b). The
+    // analogous new invariant: PLANNING freezes movement (already covered by
+    // the freeze test above); confirming starts a fixed EXECUTING window that
+    // returns to PLANNING **by itself** once `COMBAT_ROUND_MS` elapses — no
+    // Space/HUD action needed to end it early, and none can.
     expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
     const scene = harness.currentScene() as unknown as FlightPrivates;
-    const { shipPhysics: physics, npcManager, combatPause } = scene;
+    const { shipPhysics: physics, npcManager, combatPlanning } = scene;
 
-    // Place enemy at exactly WEAPON_RANGE so the ship orbit keeps it in range.
-    const WEAPON_RANGE = 240;
     const enemy = makeDriftingHostile(
       "orbit-pause-foe",
-      physics.shipX + WEAPON_RANGE,
+      physics.shipX + 240,
       physics.shipY,
     );
     (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
@@ -281,42 +331,32 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
       }
     ).launchCombatWithNpc(enemy.npc);
 
-    expect(combatPause.paused).toBe(true);
+    expect(combatPlanning.isPlanning).toBe(true);
 
-    // Lift the pause — the player pressed "Огонь" and combat is now live.
-    (combatPause as unknown as { resume(): void }).resume();
-    expect(combatPause.paused).toBe(false);
+    combatPlanning.confirm();
+    expect(combatPlanning.isExecuting).toBe(true);
 
-    // Tick a few frames: the orbit should steer the ship toward the carrot.
-    for (let i = 0; i < 3; i++) harness.tick(50);
+    // Tick just short of the round boundary — still executing.
+    for (let i = 0; i < 29; i++) harness.tick(100); // 2900ms < COMBAT_ROUND_MS(3000)
+    expect(combatPlanning.isExecuting).toBe(true);
 
-    // Player presses Space — ends the turn: stop the ship and clear isTurnRunning.
-    // endTurn() does both; we mirror that here so physics doesn't coast.
-    physics.stop();
-    scene.isTurnRunning = false;
-
-    const posAfterPause = { x: physics.shipX, y: physics.shipY };
-
-    // Several more frames: the orbit must NOT restart; ship holds position.
-    for (let i = 0; i < 5; i++) harness.tick(50);
-
-    expect(physics.shipX).toBe(posAfterPause.x);
-    expect(physics.shipY).toBe(posAfterPause.y);
+    // Cross the boundary — planning re-opens on its own, no player action.
+    harness.tick(200); // cumulative 3100ms > 3000
+    expect(combatPlanning.isPlanning).toBe(true);
     expect(harness.errors()).toEqual([]);
   });
 
-  it("freezes all fire when the player ends the turn mid-combat (Space = no shots)", () => {
+  it("only lets fire land during EXECUTING, never during PLANNING (Task 14.5a)", () => {
     expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
     const scene = harness.currentScene() as unknown as FlightPrivates;
     const {
       shipPhysics: physics,
       npcManager,
       combatModule,
-      combatPause,
+      combatPlanning,
     } = scene;
 
-    // Place enemy inside weapon range so fire would normally proceed.
-    const enemy = makeDriftingHostile(
+    const enemy = makeStaticHostile(
       "fire-pause-foe",
       physics.shipX + 100,
       physics.shipY,
@@ -332,37 +372,45 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
       }
     ).launchCombatWithNpc(enemy.npc);
 
-    expect(combatPause.paused).toBe(true);
-
-    // Lift the overlay — combat is now live.
-    (combatPause as unknown as { resume(): void }).resume();
-    expect(combatPause.paused).toBe(false);
-
+    expect(combatPlanning.isPlanning).toBe(true);
     const enemyHull0 = enemy.npc.hullHP;
     const playerHull0 = harness.player()!.ship.hullHP;
 
-    // Player presses Space — ends the turn.
-    physics.stop();
-    scene.isTurnRunning = false;
-
-    // Several fire-interval-long frames: no shots must land on either side.
+    // Several fire-interval-long frames while still PLANNING: nothing fires.
     for (let i = 0; i < 5; i++) harness.tick(FIRE);
+    expect(enemy.npc.hullHP).toBe(enemyHull0);
+    expect(harness.player()!.ship.hullHP).toBe(playerHull0);
+    expect(combatModule.isActive).toBe(true);
 
-    expect(enemy.npc.hullHP).toBe(enemyHull0); // player didn't fire
-    expect(harness.player()!.ship.hullHP).toBe(playerHull0); // NPC didn't fire
-    expect(combatModule.isActive).toBe(true); // combat still engaged
+    // Confirm — EXECUTING begins (a fresh COMBAT_ROUND_MS(3000) window).
+    // Legacy auto-fire (still wired this slice) needs one full FIRE(2500)
+    // interval to land its first shot — fine-grained ticks so that interval
+    // completes comfortably before the round boundary, not straddling it.
+    combatPlanning.confirm();
+    for (let i = 0; i < 27; i++) harness.tick(100); // 2700ms: > FIRE, < ROUND_MS
+    expect(
+      enemy.npc.hullHP < enemyHull0 ||
+        harness.player()!.ship.hullHP < playerHull0,
+    ).toBe(true);
     expect(harness.errors()).toEqual([]);
   });
 
-  it("ignores the HUD «Ход» button while the active-pause overlay is open, so combat starts firing on the very first legitimate resume (no extra clicks needed)", () => {
+  it("the HUD «Ход»/«Пауза» button confirms the plan during PLANNING instead of aborting the turn (Task 14.5a)", () => {
+    // Rewritten: the old reactive overlay guarded this button via
+    // `combatPause.paused`, which never becomes true anymore under the new
+    // loop — without its own guard, `onPlayPause()` would fall through to its
+    // `isTurnRunning` branch and call `endTurn()` mid-plan, desyncing
+    // `isTurnRunning` from `combatPlanning`'s own phase. It must instead treat
+    // a PLANNING-phase click as the mouse equivalent of Space's confirm.
     expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
     const scene = harness.currentScene() as unknown as FlightPrivates;
-    const { shipPhysics: physics, npcManager, combatModule, combatPause } =
-      scene;
+    const {
+      shipPhysics: physics,
+      npcManager,
+      combatModule,
+      combatPlanning,
+    } = scene;
 
-    // Stationary engagement inside weapon range — the "start of combat" case
-    // the bug report describes: the overlay opens immediately (no orbit before
-    // the dialog).
     const enemy = makeDriftingHostile(
       "hud-click-foe",
       physics.shipX + 100,
@@ -378,38 +426,24 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
       }
     ).launchCombatWithNpc(enemy.npc);
 
-    expect(combatPause.paused).toBe(true); // overlay open, awaiting target/weapon
+    expect(combatPlanning.isPlanning).toBe(true); // planning opens immediately
     expect(scene.isTurnRunning).toBe(true); // engagement forces the turn open
 
-    // The player, out of turn-based-Space-Rangers habit, clicks the HUD
-    // «Ход»/«Пауза» toggle button WHILE the overlay is still open — the exact
-    // path a mouse click on that button takes (`FlightHud`'s button handler
-    // calls `onPlayPause` directly with no `combatPause.paused` guard, unlike
-    // the equivalent keyboard Space action in `flightKeyHandler.ts`, which
-    // early-returns on `ctx.combatPause.paused`).
+    // The player clicks the HUD «Ход»/«Пауза» toggle while planning is open.
     scene.hud.onPlayPause?.();
 
-    // The stray click must be a no-op while the overlay is open — it must NOT
-    // desync `isTurnRunning` from `combatPause.paused` (the bug: it currently
-    // hits the `if (isTurnRunning) { ...endTurn() }` branch and zeroes
-    // `isTurnRunning` without resolving the overlay).
-    expect(combatPause.paused).toBe(true);
-    expect(scene.isTurnRunning).toBe(true);
-
-    // Now the player legitimately resolves the overlay (its own «Продолжить»/
-    // «Огонь!» action) — this must be enough, on its own, for the exchange of
-    // fire to actually begin: no extra HUD clicks required.
-    combatPause.resume();
-    expect(combatPause.paused).toBe(false);
-    expect(scene.isTurnRunning).toBe(true);
+    // Must confirm the plan (→ EXECUTING), not abort the turn.
+    expect(combatPlanning.isExecuting).toBe(true);
+    expect(scene.isTurnRunning).toBe(true); // never desynced to false
 
     const enemyHull0 = enemy.npc.hullHP;
     const playerHull0 = harness.player()!.ship.hullHP;
     for (let i = 0; i < 3; i++) harness.tick(FIRE);
 
     expect(
-      enemy.npc.hullHP < enemyHull0 || harness.player()!.ship.hullHP < playerHull0,
-    ).toBe(true); // a shot landed within the very first resume, no extra clicks
+      enemy.npc.hullHP < enemyHull0 ||
+        harness.player()!.ship.hullHP < playerHull0,
+    ).toBe(true); // a shot landed within the very first executing window
     expect(combatModule.isActive).toBe(true);
     expect(harness.errors()).toEqual([]);
   });

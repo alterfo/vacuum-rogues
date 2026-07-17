@@ -11,15 +11,32 @@ import type { GameMode } from "@/types";
 
 /**
  * Round-based combat with a between-rounds disengage window — campaign Task 9 (v),
- * over the real {@link CombatModule} wired to the real {@link CombatPauseController}
- * exactly as `SpaceFlightScene` wires them (only PixiJS is stubbed — the same
- * "over the real engine" discipline as `combatEscape.test.ts`).
+ * over the real {@link CombatModule} wired to a real {@link CombatPauseController}.
  *
- * The seam under test: a garrison firing on a full-hull weak ship can NEVER drop
- * it from full to zero inside one continuous resolution window — once a round's
- * incoming-damage budget is spent, fire halts and the active pause re-raises (the
- * reaction window). A committed fight (resuming round after round) still loses,
- * so fleeing has a cost — the window is an escape opportunity, not invulnerability.
+ * CORRECTION (win-rate-100pct plan, combat-mechanics escalation, 2026-07-15):
+ * this file's wiring — `onPlayerUnderAttack`/`onRoundComplete` calling
+ * `controller.requestPause`/`repause()` — is NOT how `SpaceFlightScene` wires
+ * `CombatModule` in production. `combatModuleDeps.ts` confirms those two
+ * callbacks are unwired: the reactive single-shot active-pause they drove is
+ * SUPERSEDED by the pause-and-plan loop (`combatPlanning.ts`), whose PLANNING/
+ * EXECUTING state machine is production's actual (and different) protection.
+ * This file still validates a real, legitimate `CombatModule` +
+ * `CombatPauseController` wiring CONTRACT (useful in its own right), just not
+ * literal current production wiring — treat its "full-hull ship survives a
+ * round" claim as scoped to THIS wiring, not a guarantee about live play. The
+ * production-accurate version of this scenario (no fake reactive pause, driven
+ * through the real `combatPlanning` state machine) lives in
+ * `combatMultiHostileDamagedShip.test.ts`, which also covers the gap this
+ * file's wiring can't see: a ship that enters a round already damaged (the
+ * campaign-common case) — fixed in `combatRounds.ts`'s `roundIsComplete`,
+ * which now scales the round budget off current hull, not max hull alone.
+ *
+ * The seam under test (in THIS wiring): a garrison firing on a full-hull weak
+ * ship can NEVER drop it from full to zero inside one continuous resolution
+ * window — once a round's incoming-damage budget is spent, fire halts and the
+ * active pause re-raises (the reaction window). A committed fight (resuming
+ * round after round) still loses, so fleeing has a cost — the window is an
+ * escape opportunity, not invulnerability.
  */
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
@@ -203,22 +220,33 @@ describe("Round-based combat reaction window (Task 9 (v), real engine)", () => {
       onCombatEnded: () => controller.reset(),
     });
     module.addCombatant(makeHostile("a", 40, 3));
-    module.addCombatant(makeHostile("b", 50, 10));
+    module.addCombatant(makeHostile("b", 50, 20));
 
     // First contact: only "a" fires this frame (the active pause freezes "b"
-    // before its turn) — hull survives (10 → 7).
+    // before its turn) — hull survives (10 → 8, weak-player scaling per
+    // win-rate-100pct plan's Task 5).
     module.update(FIRE);
     expect(controller.paused).toBe(true);
-    expect(ship.hullHP).toBe(7);
+    expect(ship.hullHP).toBe(8);
     expect(deaths).toBe(0);
 
-    // Resume into a fresh round: "a" fires again (7 → 4, roundDamageTaken=3,
+    // Resume into a fresh round: "a" fires again (8 → 6, roundDamageTaken=2,
     // still under budget), then "b" fires behind it in the SAME frame,
-    // killing the ship (4 → 0) and pushing roundDamageTaken to 7 — past the
+    // killing the ship (6 → 0) and pushing roundDamageTaken to 8 — past the
     // ~3.4 budget for a maxHull-10 ship.
+    //
+    // "b" joined second, so it carries a `combatJoinFireStaggerMs` (300ms)
+    // fire-timer stagger (win-rate-100pct plan, combat-mechanics escalation —
+    // prevents a batch of simultaneously-joining hostiles from all firing in
+    // lock-step). Round 1's single `FIRE`-length tick never even reached "b"
+    // (this test's fake reactive pause froze the loop right after "a" fired),
+    // so "b" enters round 2 with its stagger still fully unspent — the tick
+    // width here is widened by that same stagger so "b" still gets its shot
+    // in, preserving this regression's original intent (two hits crossing the
+    // budget in one frame) rather than accidentally testing the stagger fix.
     module.beginCombatRound();
     controller.resume();
-    module.update(FIRE);
+    module.update(FIRE + GAME_BALANCE.combatJoinFireStaggerMs);
     expect(deaths).toBe(1);
 
     // The NEXT frame (GAME_OVER transition still pending — it's fired via an

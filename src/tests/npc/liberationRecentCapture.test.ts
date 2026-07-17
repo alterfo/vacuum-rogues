@@ -18,7 +18,7 @@ interface SimInternals {
 }
 
 function internals(sim: NpcSimulator): SimInternals {
-  return sim as unknown as SimInternals;
+  return (sim as unknown as { garrison: SimInternals }).garrison;
 }
 
 function makeSystem(id: string, name: string, q: number): StarSystem {

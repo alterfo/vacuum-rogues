@@ -404,6 +404,42 @@ export const GAME_BALANCE = {
   /** Real-time in-flight combat cadence: a ship fires once per this many ms while in range. */
   combatFireIntervalMs: 2500,
   /**
+   * Fire-timer stagger applied per already-joined combatant at `addCombatant`
+   * time, in ms (win-rate-100pct plan, combat-mechanics escalation). Root
+   * cause: every joining NPC's fire timer resets to 0
+   * ({@link CombatModule.addCombatant}), so N hostiles already present on
+   * arrival (a standing garrison, a freshly-folded capture fleet) are
+   * perfectly lock-stepped — since `combatFireIntervalMs` (2500) is less than
+   * `COMBAT_ROUND_MS` (3000), they ALL cross the fire interval within the
+   * SAME execute window, landing a synchronized alpha-strike regardless of
+   * per-hit damage scaling or garrison-count discounts. Staggering by 300ms
+   * per join order lets at most 2 already-present hostiles fire within the
+   * first window (2500ms, 2800ms — both `< 3000`); a 3rd+ joiner's first shot
+   * (3100ms+) lands in a LATER window, after `PLANNING` has reopened and the
+   * player got a real decision point. Only delays each NPC's FIRST shot —
+   * its steady-state cadence after firing once is unaffected (mirrors the
+   * player-side `combatEngagePrechargeFraction` pattern, opposite direction).
+   */
+  combatJoinFireStaggerMs: 300,
+  /**
+   * Max hostiles {@link CombatModule.addCombatant} will admit into one fight at
+   * once (win-rate-100pct plan, Task 6 escalation — the death-cause telemetry's
+   * own recommended next lever). A garrison/capture fleet with several ships
+   * already in weapon range on arrival used to add ALL of them the same frame
+   * (`combatants.size` had no ceiling); a 20-session telemetry sample measured
+   * median 3.5 simultaneously-engaged combatants at the fatal hit (75% of
+   * deaths ≥ 3, 50% starting the fight at FULL hull) — the round-budget/
+   * fire-stagger fixes only bound damage PER round and PER shot, never how
+   * many attackers contribute to one round at all. An aggressor beyond this
+   * cap stays "aggressive" and keeps calling `addCombatant` every frame
+   * (existing idempotent no-op path) but does not fire until a slot frees (a
+   * combatant dies, flees, or the fight ends) — same class of refusal as the
+   * existing downed/weaponless guards, not a new mechanic. `2` matches the
+   * fire-stagger doc's own "at most 2 already-present hostiles fire within the
+   * first execute window" precedent.
+   */
+  combatMaxSimultaneousCombatants: 2,
+  /**
    * Fraction of a weapon's fire interval pre-charged into its cold-start timer
    * when combat begins ({@link CombatModule.addCombatant}), applied only to
    * weapons whose `cooldownTurns > 1`. A `cooldownTurns:1` weapon's interval
@@ -609,6 +645,239 @@ export const GAME_BALANCE = {
   rumorNpcMarginScale: 0.02,
   /** Hard cap on a trader's per-departure rumor-reaction probability. */
   rumorNpcMaxChance: 0.6,
+} as const;
+
+/**
+ * Tactical pause-and-plan combat (`docs/plans/20260713-tactical-pause-combat-rework.md`):
+ * the fixed real-time duration of a single **execute window** in ms. Combat runs as
+ * alternating PLANNING (sim frozen, the player fills a planned turn) and EXECUTING
+ * (real-time) phases; confirming a turn ("Ход") runs the plan for exactly this long,
+ * then re-opens PLANNING while ≥1 hostile remains. This is the *single deterministic*
+ * execute-phase terminator (Task 1 decision) — impacts/arrivals/incoming hits during
+ * the window are resolved in real time but do NOT end it early; only player death or
+ * the last hostile destroyed end a fight before the timer. The pure
+ * `CombatPlanningController` (`src/presentation/flight/combatPlanning.ts`) mirrors this
+ * as its `DEFAULT_ROUND_MS` fallback for standalone tests; the scene passes this value.
+ */
+export const COMBAT_ROUND_MS = 3000;
+
+/**
+ * Planet gravity-assist tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`,
+ * Task 4) — the single source of truth for the pure `combatGravity.ts` slingshot math.
+ * A planned course whose execute-window flight carries the ship within a planet's assist
+ * radius gets a small velocity boost *along its current heading* (a slingshot accelerates
+ * along the pass trajectory), a pure function of pass distance and a mass-proxy (the
+ * planet's rendered `displayRadius`). No new domain fields, no galaxy-gen or save impact —
+ * it reuses live planet position/size data. Black holes are **deferred to Post-Completion**
+ * per Task 1's recorded scope decision (v1 = planet-assist only).
+ *
+ * - radiusMultiplier: assist reaches out to `displayRadius × this` from the planet centre.
+ * - referenceRadius: the mass-proxy denominator — a planet of exactly this `displayRadius`
+ *   contributes unit mass, larger planets pull proportionally harder.
+ * - strengthPerMs: boost added per ms at closest approach for a unit-mass planet, before
+ *   the linear distance falloff (0 at the assist edge → full at the surface).
+ * - maxBoostPerMs: hard cap on the per-ms speed added, so a huge/close pass can't fling the
+ *   ship arbitrarily fast.
+ */
+export const GRAVITY_ASSIST = {
+  radiusMultiplier: 3.5,
+  referenceRadius: 120,
+  strengthPerMs: 0.00012,
+  maxBoostPerMs: 0.00008,
+} as const;
+
+/**
+ * Missile projectile tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 7) —
+ * the single source of truth for the pure `combatMissile.ts` travel-time + evasion math. A
+ * `WeaponClass.MISSILE` weapon fires a tracked projectile that flies at `speedPerMs` toward its
+ * target and only resolves hit/miss on arrival, instead of the instant hit-scan every other
+ * weapon class uses. It **consumes** the previously flavor-only `WeaponClass.MISSILE` and
+ * `WeaponAbility.HOMING` fields. The module mirrors this as `DEFAULT_MISSILE_CONFIG`, kept in
+ * lockstep by `combatMissile.test.ts`; the scene passes this value.
+ *
+ * Evasion (Task 7 decision): the hit chance is resolved at arrival and drops from
+ * `baseHitChance` by `evasionPerPx` per px the target *maneuvered during the flight* (its
+ * accumulated path length), floored at `minHitChance`. A homing missile re-aims each frame and
+ * suffers only `homingEvasionFactor` of that penalty — it trades a straight flight for accuracy.
+ *
+ * - speedPerMs: missile travel speed (px/ms); with the launch distance this fixes travel time.
+ * - baseHitChance/minHitChance: hit chance against a stationary target → floor for a weaving one.
+ * - evasionPerPx: hit chance lost per px of target displacement during the flight.
+ * - homingEvasionFactor: fraction of the evasion penalty a homing missile still suffers.
+ * - maxRangeMultiplier: the missile expires if it flies past `launchDistance × this` (target outran it).
+ */
+export const MISSILE_COMBAT = {
+  speedPerMs: 0.32,
+  baseHitChance: 0.95,
+  minHitChance: 0.15,
+  evasionPerPx: 0.0016,
+  homingEvasionFactor: 0.35,
+  maxRangeMultiplier: 2.5,
+} as const;
+
+/**
+ * Afterburner tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 8) —
+ * the single source of truth for the pure `combatAfterburner.ts` speed-boost + engine-wear
+ * math. An afterburner engaged during PLANNING multiplies the ship's speed for the following
+ * execute window but **gradually wears the engine** ("постепенно разрушает мотор"): each burn
+ * permanently reduces the engine's integrity, weakening the boost it can still deliver, until a
+ * fully-worn engine can no longer afterburn at all. Wear is **session-scoped** (the smallest
+ * model satisfying the spec — Task 8 decision): it accumulates across the burns of a single fight
+ * and resets to pristine at the next engagement, so there is **no save/schema impact** (matching
+ * every sibling task in this rework staying persistence-neutral; a persistent cross-fight
+ * engine-health field is a recorded Post-Completion stretch, not v1). The module mirrors this as
+ * `DEFAULT_AFTERBURNER`, kept in lockstep by `combatAfterburner.test.ts`; the scene passes this
+ * value.
+ *
+ * - speedMultiplier: peak speed multiplier at pristine integrity (the boost tapers with wear).
+ * - wearPerBurn: integrity (0..1) permanently lost per afterburner engagement this fight.
+ * - minIntegrityToEngage: below this remaining integrity the afterburner can no longer engage
+ *   (no boost) — the "fully-degraded engine can no longer afterburn" rule. With `wearPerBurn`
+ *   this also fixes the natural cap on burns per fight (`floor((1 − this) / wearPerBurn) + 1`).
+ */
+export const AFTERBURNER = {
+  speedMultiplier: 2.2,
+  wearPerBurn: 0.12,
+  minIntegrityToEngage: 0.05,
+} as const;
+
+/**
+ * Combat-consumable ("tactical device") tuning
+ * (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 9) — the single source of truth for
+ * the three planning-phase activatable effects resolved by the pure `combatConsumable.ts`. A
+ * `CombatConsumable` is a persisted, activatable item (`Inventory.ownedConsumableIds`), selected
+ * into a turn via `PlannedTurn.consumableId` and resolved by the execute loop once wired. It is a
+ * **different concept** from `ResourceType.ARTIFACTS` (the Overmind-loot crafting currency) — Task 1
+ * decision 1d. The module mirrors this as `DEFAULT_COMBAT_CONSUMABLE`, kept in lockstep by
+ * `combatConsumable.test.ts`; the scene passes this value.
+ *
+ * - shieldRestoreAmount: shield points a shield-restorer returns (clamped to the ship's shield max).
+ * - aoeDamage/aoeRadius: damage dealt to *every* enemy within the blast radius (world px).
+ * - weaponJamMs: how long a weapon-jam device silences the target's fire.
+ */
+export const COMBAT_CONSUMABLE = {
+  shieldRestoreAmount: 120,
+  aoeDamage: 60,
+  aoeRadius: 220,
+  weaponJamMs: 4000,
+} as const;
+
+/**
+ * In-combat comms tuning — the single live source of truth for the planning-phase «Связь»
+ * action resolved by the pure `combatComms.ts`
+ * (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 10). The three branches
+ * (bribe / demand-surrender / call-for-help) read this; the module mirrors it as
+ * `DEFAULT_COMBAT_COMMS`, kept in lockstep by `combatComms.test.ts`; the scene passes this value.
+ *
+ * - surrenderHullThreshold: per-role hull-fraction ceiling at/below which a hailed NPC yields
+ *   (higher = more cowardly; the hive `OVERMIND` never surrenders). A role absent from the map
+ *   uses `defaultSurrenderThreshold`. A threshold ≤ 0 means "never surrenders".
+ * - allyProximityRadius: how close (world px) a friendly NPC must be to answer a call for help.
+ * - allyRoles: the roles eligible to answer a call for help (trader + military per the spec).
+ */
+export const COMBAT_COMMS = {
+  surrenderHullThreshold: {
+    TRADER: 0.6,
+    PATROL: 0.35,
+    RANGER: 0.3,
+    PIRATE: 0.2,
+    OVERMIND: 0,
+  } as Readonly<Record<string, number>>,
+  defaultSurrenderThreshold: 0.25,
+  allyProximityRadius: 700,
+  allyRoles: ["TRADER", "PATROL", "RANGER"] as readonly string[],
+} as const;
+
+/**
+ * Ship banking/roll tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 11) —
+ * the single source of truth for the pure `combatBanking.ts` visual-tilt math. During the
+ * execute window a ship banks *into* its turn: a **presentation-only** roll tilt correlated with
+ * the ship's current (signed) turn rate. `ShipPhysics`' `shipAngle`/turn math is **untouched** —
+ * this only reads the turn rate to drive a visual roll, no physics/save/schema impact. The module
+ * mirrors this as `DEFAULT_BANKING`, kept in lockstep by `combatBanking.test.ts`; the scene
+ * passes this value.
+ *
+ * - rollPerTurnRate: roll radians produced per unit signed turn rate (radians/ms). Tuned so a
+ *   full-rate turn at `ShipPhysics.rotationSpeed` (≈ π/2 / 300 ≈ 0.00524 rad/ms) lands right at
+ *   `maxRollAngle` (0.00524 × 100 ≈ π/6).
+ * - maxRollAngle: the sane clamp — the ship never tilts past this (radians), so a lag-spike /
+ *   time-scaled frame with an outsized turn rate can't flip the sprite.
+ * - rollSmoothingPerMs: max roll change per ms when easing the current tilt toward the target,
+ *   so the bank eases in/out instead of snapping (full range ≈ 130 ms).
+ */
+export const BANKING = {
+  rollPerTurnRate: 100,
+  maxRollAngle: Math.PI / 6,
+  rollSmoothingPerMs: 0.004,
+} as const;
+
+/**
+ * Shield-vs-hull combat tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 12) —
+ * the single source of truth for the pure `combatShield.ts` damage-ordering + VFX geometry. This
+ * is the first real combat consumer of the previously-unused ship shield pool
+ * (`PlayerShip.shields`/`maxShields`, `NpcShip.shields`): shields absorb incoming damage up to the
+ * current shield value before the hull takes the overflow (which still routes through
+ * `applyDamageWithMode` for the GOD-mode floor). A hit shields absorb triggers the translucent
+ * shield-hit flash sphere (distinct from the hull-hit impact bloom); a small floating hull/shield
+ * bar reads over each ship. The module mirrors this as `DEFAULT_SHIELD_COMBAT`, kept in lockstep by
+ * `combatShield.test.ts`; the scene passes this value. No save/schema impact (shields already
+ * persist; the flash/bar are transient render-only).
+ *
+ * - shieldFlashMs: how long the translucent shield-absorb sphere fades over (ms).
+ * - shieldFlashPeakAlpha: the sphere's opacity at the instant of the hit (fades to 0).
+ * - shieldFlashRadiusScale: sphere radius as a multiple of the struck ship's radius.
+ * - barWidth/barHeight: the floating hull/shield bar dimensions (world px).
+ * - barGap: vertical gap between the stacked hull and shield bars (world px).
+ * - barYOffset: how far above the ship centre the bar stack floats (world px).
+ */
+export const SHIELD_COMBAT = {
+  shieldFlashMs: 260,
+  shieldFlashPeakAlpha: 0.45,
+  shieldFlashRadiusScale: 1.35,
+  barWidth: 44,
+  barHeight: 4,
+  barGap: 2,
+  barYOffset: 26,
+} as const;
+
+/**
+ * Weapon-type VFX tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 13) — the
+ * single source of truth for the pure `combatWeaponVfx.ts` variant dispatch. A fired shot draws in
+ * a style branched by `GearCatalog.WeaponClass` (beam for ENERGY, plasma burst for FRAGMENT, a
+ * curved smoke-trail arc tracking the projectile for MISSILE), and the **heaviest weapon tier** adds
+ * a space-distortion ripple over its base kind. This consumes the `WeaponClass` field for *visuals*
+ * (Task 6/7 consumed it for behaviour). The module mirrors this as `DEFAULT_WEAPON_VFX`, kept in
+ * lockstep by `combatWeaponVfx.test.ts`; the scene passes this value. Presentation-only — no
+ * save/schema impact.
+ *
+ * - distortionMinTech: a non-rare weapon at/above this `techLevel` (1..8) gets the distortion
+ *   ripple; a `rare` weapon qualifies regardless of tech (Task 13 heaviest-tier threshold).
+ */
+export const WEAPON_VFX = {
+  distortionMinTech: 7,
+} as const;
+
+/**
+ * Ship-wreck drift + loot cadence tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`,
+ * Task 14) — the single source of truth for the pure `combatWreck.ts` death-aftermath physics. On a
+ * kill the destroyed ship leaves an actual wreck that inherits its last velocity/heading and coasts
+ * on with that inertia (a slow drag decay + a lazy tumble) before fading out, and its cargo dots
+ * peel off the *drifting* wreck over its lifetime rather than all at once at the death point. The
+ * module mirrors this as `DEFAULT_WRECK`, kept in lockstep by `combatWreck.test.ts`; the scene
+ * passes this value. Presentation-only — the wreck/drift/loot-cadence are transient render-window
+ * state, no save/schema impact.
+ *
+ * - driftRetentionPerMs: fraction of velocity kept per ms of drift (drag), in (0,1]; nearer 1 = the
+ *   wreck coasts farther before slowing (0.9994^1000 ≈ 0.55 retained over a second).
+ * - lifeMs: total wreck lifetime from death to despawn.
+ * - fadeMs: fade-out window at the end of life (holds full alpha, then eases to 0).
+ * - spinRatePerSpeed: tumble spin (radians/ms) added per unit inherited speed (px/ms).
+ */
+export const WRECK = {
+  driftRetentionPerMs: 0.9994,
+  lifeMs: 5000,
+  fadeMs: 1200,
+  spinRatePerSpeed: 4,
 } as const;
 
 /**
@@ -917,10 +1186,37 @@ export const POWER_INDEX_BATTLE_READY_THRESHOLD = 0.13;
  * power input is the RATCHETED `campaignPeakPower`, so selling gear never
  * softens a garrison. Overmind garrison COUNT also grows with the ratchet.
  */
-/** Hostile-system HP/damage multiplier faced by a powerless player (index 0). */
-export const HOSTILE_SCALING_WEAK_MULT = 0.9;
+/**
+ * Hostile-system HP/damage multiplier faced by a powerless player (index 0).
+ * Lowered from `0.9` (win-rate-100pct plan, Task 5) — the garrison-count
+ * discount lever (Task 2/3) plateaued at 2% win-rate despite maxing out its
+ * structural ceiling; the death taxonomy showed 75% of deaths happen AFTER
+ * the player already landed ≥1 liberation, at a median peak power (0.07) far
+ * below the battle-ready floor, where this lerp's effective multiplier was
+ * still close to the old `0.9` — garrison count wasn't the binding
+ * constraint, per-fight lethality was. `0.5`, not `NEUTRAL_SCALING_WEAK_MULT`'s
+ * exact `0.4`: a held-system garrison is a deliberately-engaged fight and must
+ * stay strictly harder than incidental neutral-space wandering-pack combat
+ * (`combatScaling`'s own pinned "held is harder than neutral" invariant) — a
+ * literal-match value would have collapsed that gradient at zero power.
+ */
+export const HOSTILE_SCALING_WEAK_MULT = 0.5;
 /** Extra Overmind garrison ships (added to [min,max]) at full power (index 1). */
 export const OVERMIND_GARRISON_POWER_MAX_BONUS = 2;
+/**
+ * Mirror of `OVERMIND_GARRISON_POWER_MAX_BONUS`: Overmind garrison ships
+ * SUBTRACTED from [min,max] at zero power (a powerless player faces a
+ * smaller standing garrison), phasing out to 0 as power reaches 1. Raised to
+ * the structural ceiling (`GARRISON_MIN 5 − GARRISON_DISCOUNT_FLOOR 1 = 4`,
+ * campaign win-rate-100pct plan, Task 2) now that `fillGarrison` exempts GOD
+ * mode from the discount — the prior `1` was shrunk only to dodge a GOD-mode
+ * combat-loot regression, which the exemption removes outright, so
+ * NORMAL/HARD get the full graded ramp (`4→3→2→1→0` across the power range)
+ * instead of a knife-edge that only fired at literal power 0. See
+ * `.claude/docs/systems/overmind.md`'s Known-unmet gate section for the
+ * measured history.
+ */
+export const OVERMIND_GARRISON_POWER_MAX_DISCOUNT = 4;
 /**
  * ─── Campaign Task 9 (i): neutral-system combat gentling ─────────────────────
  * The Overview's "gentle while weak, relentless once armed" design applied

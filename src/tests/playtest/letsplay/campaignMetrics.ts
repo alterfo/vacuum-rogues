@@ -34,6 +34,31 @@ export type CampaignOutcome =
   | "died" // the player died (GAME_OVER) before the arc resolved
   | "timeout"; // neither happened within the day/step budget
 
+/**
+ * Structured death-cause telemetry (win-rate-100pct plan, Task 6 escalation):
+ * what killed the player, read off `CombatModule.lastDeathCause` right after a
+ * "died" outcome. Kept as a structural mirror of `CombatModule`'s
+ * `PlayerDeathCause` (not imported) — this module stays presentation-free per
+ * its own file header. Populated only for `outcome === "died"`; `null`
+ * otherwise (a loss/timeout/win has no fatal hit to attribute).
+ */
+export interface CampaignDeathCause {
+  /** The NPC whose shot brought hull to 0. */
+  killerNpcId: string;
+  killerRole: string;
+  /** Player hull / maxHull at the START of the fight that ended in death. */
+  engagementStartHullFraction: number | null;
+  /** Hostiles simultaneously engaged the instant the fatal hit landed. */
+  simultaneousCombatants: number;
+  /**
+   * Combat rounds started in the fight before the fatal hit (Task 6, second
+   * escalation round — the simultaneous-combatant cap measured as a no-op, so
+   * this checks engagement DURATION instead of peak concurrency). `1` = died
+   * in the opening round.
+   */
+  roundsSurvived: number;
+}
+
 /** One cheap per-day signal the runner samples at each day boundary. */
 export interface CampaignDaySignal {
   /** Galaxy business day of this sample. */
@@ -394,6 +419,13 @@ export interface CampaignSessionReport {
    * literals (unit-test fixtures) still type-check; the runner always sets it.
    */
   stall?: CampaignStallStats;
+  /**
+   * Structured death-cause telemetry (Task 6 escalation) — see
+   * {@link CampaignDeathCause}. Optional so legacy report literals still
+   * type-check; the runner sets it (possibly `null`) whenever `outcome ===
+   * "died"`, absent for every other outcome.
+   */
+  deathCause?: CampaignDeathCause | null;
 }
 
 /** Cross-session aggregate for a campaign run. */
@@ -511,6 +543,11 @@ export function formatCampaignReport(
           : "") +
         ` dayFrozen=${s.stall.maxDayFrozenStreakUndocked}]`
       : "";
+    const dc = s.deathCause
+      ? ` death[killer=${s.deathCause.killerRole}#${s.deathCause.killerNpcId} ` +
+        `hull@engage=${s.deathCause.engagementStartHullFraction == null ? "-" : s.deathCause.engagementStartHullFraction.toFixed(2)} ` +
+        `vs=${s.deathCause.simultaneousCombatants} rounds=${s.deathCause.roundsSurvived}]`
+      : "";
     lines.push(
       `  [${s.seed}] ${s.outcome.toUpperCase().padEnd(7)} ` +
         `resolved=${day(s.resolutionDay)} end=${day(s.finalDay)} steps=${s.steps}${stall} ` +
@@ -518,7 +555,7 @@ export function formatCampaignReport(
         `firstLib=${day(s.milestones.firstLiberationDay)} quests=${s.questsCompleted} credits=${s.finalCredits} ` +
         `peakCredits=${s.peakCredits ?? s.finalCredits} loan=${s.loanBalance} ` +
         `share=${s.finalOvermindShare.toFixed(2)} errors=${s.errors} violations=${s.violations} ` +
-        `wall=${(s.wallMs / 1000).toFixed(1)}s heapΔ=${s.heapDeltaMB.toFixed(0)}MB${st}`,
+        `wall=${(s.wallMs / 1000).toFixed(1)}s heapΔ=${s.heapDeltaMB.toFixed(0)}MB${st}${dc}`,
     );
   }
   lines.push(
@@ -546,6 +583,34 @@ export function formatCampaignReport(
       `  stalls: phantom-stance sessions=${phantomSessions}/${withStall.length}, ` +
         `worst repeat-run=${worstRepeat}${worstRepeat > 1 ? `@${worstRepeatKey}` : ""}, ` +
         `worst undocked day-frozen streak=${worstDayFrozen}`,
+    );
+  }
+  const deathCauses = sessions
+    .map((s) => s.deathCause)
+    .filter((d): d is CampaignDeathCause => !!d);
+  if (deathCauses.length > 0) {
+    const roleCounts = new Map<string, number>();
+    for (const d of deathCauses) {
+      roleCounts.set(d.killerRole, (roleCounts.get(d.killerRole) ?? 0) + 1);
+    }
+    const roleBreakdown = [...roleCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([role, n]) => `${role}=${n}`)
+      .join(" ");
+    const medianHullAtEngage = medianOrNull(
+      deathCauses
+        .map((d) => d.engagementStartHullFraction)
+        .filter((h): h is number => h != null),
+    );
+    const medianSimultaneous = medianOrNull(
+      deathCauses.map((d) => d.simultaneousCombatants),
+    );
+    const medianRounds = medianOrNull(deathCauses.map((d) => d.roundsSurvived));
+    lines.push(
+      `  death causes (${deathCauses.length}/${sessions.length}): killer roles [${roleBreakdown}], ` +
+        `median hull@engage=${medianHullAtEngage == null ? "-" : medianHullAtEngage.toFixed(2)}, ` +
+        `median simultaneous combatants=${medianSimultaneous ?? "-"}, ` +
+        `median rounds survived=${medianRounds ?? "-"}`,
     );
   }
   return lines.join("\n");

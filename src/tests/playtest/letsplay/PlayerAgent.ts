@@ -21,6 +21,7 @@
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
 import { NpcState, QuestType, SceneType } from "@/types";
+import { GAME_BALANCE } from "@/config/balance";
 import type { NpcShip } from "@/domain/NpcShip";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
@@ -53,6 +54,7 @@ import {
   executeArmUp,
 } from "./equipmentQueries";
 import { executeTakeLoan, executeRepayLoan } from "./bankingQueries";
+import { confirmPlanningIfOpen } from "./planningDriver";
 
 /**
  * A compact, egocentric vitals snapshot taken at one step — the player's own
@@ -640,17 +642,29 @@ export class PlayerAgent {
     ) {
       flightScene.combatPause.resume();
     }
-    if (
-      flightScene?.isTurnRunning &&
-      typeof flightScene.endTurn === "function"
-    ) {
-      flightScene.endTurn();
-    }
-    if (
-      !flightScene?.isTurnRunning &&
-      typeof flightScene?.onPlayPause === "function"
-    ) {
-      flightScene.onPlayPause();
+    // The pause-and-plan loop freezes the sim the frame combat engages (Task
+    // 14.5): confirm the round with weapons on the nearest combatant and the
+    // course untouched — the honest game is unchanged, the ship keeps running
+    // for the edge and eats the in-range volleys through each execute window.
+    const confirmedAtEntry = confirmPlanningIfOpen(flightScene);
+    // A fight frozen at entry means the confirm above just opened an execute
+    // window: the stale-turn reset below would defeat the escape valve —
+    // endTurn parks the ship and kills the warp-edge course, and the
+    // onPlayPause kickoff is a no-op during EXECUTING, so the route would
+    // never restart (review 2026-07-15). Reset only outside the planning loop.
+    if (!confirmedAtEntry) {
+      if (
+        flightScene?.isTurnRunning &&
+        typeof flightScene.endTurn === "function"
+      ) {
+        flightScene.endTurn();
+      }
+      if (
+        !flightScene?.isTurnRunning &&
+        typeof flightScene?.onPlayPause === "function"
+      ) {
+        flightScene.onPlayPause();
+      }
     }
 
     for (let i = 0; i < 2000; i++) {
@@ -662,16 +676,24 @@ export class PlayerAgent {
       ) {
         flightScene.combatPause.resume();
       }
+      // PLANNING re-opens after every execute window while hostiles remain —
+      // confirm each round (weapons on nearest, course untouched) so the
+      // warp-edge run keeps flying instead of freezing mid-fight.
+      confirmPlanningIfOpen(flightScene);
       this.harness.tick(50);
       await Promise.resolve(); // yield so async performWarp() can settle
       if (engine.player?.currentSystemId !== sys0) break;
       // If the turn ended mid-flight (ship stopped without reaching the edge),
-      // restart the route.
+      // restart the route. PLANNING may have re-opened inside this same tick:
+      // onPlayPause during PLANNING is the confirm itself (14.5a) and would
+      // consume the fresh EMPTY draft (hold fire, every window) before the
+      // next iteration's armed confirm ever saw it — confirm armed instead
+      // (review 2026-07-15).
       if (
         !flightScene?.isTurnRunning &&
         typeof flightScene?.onPlayPause === "function"
       ) {
-        flightScene.onPlayPause();
+        if (!confirmPlanningIfOpen(flightScene)) flightScene.onPlayPause();
       }
     }
 
@@ -735,6 +757,12 @@ export class PlayerAgent {
       return;
     }
     const day0 = engine.galaxy?.gameDays ?? 0;
+    // A fight staged before the turn starts opens the PLANNING freeze, and
+    // onPlayPause during PLANNING is the confirm (14.5a) — it would consume an
+    // EMPTY draft instead of starting the turn. Confirm the round first (with
+    // weapons on the nearest combatant), THEN start the turn via the
+    // now-unblocked Play branch so the execute window actually resolves.
+    confirmPlanningIfOpen(scene);
     if (!scene.isTurnRunning) scene.onPlayPause(); // start the course-less wait
     // Round-based combat (Task 9 (v)): start a fresh combat round for THIS step so
     // incoming fire is bounded to one round's budget (a fraction of max hull).
@@ -760,6 +788,10 @@ export class PlayerAgent {
       ) {
         scene.combatPause.resume();
       }
+      // Pause-and-plan freeze (Task 14.5): a fight engaged mid-wait opens
+      // PLANNING and stops the calendar — confirm the round with weapons on
+      // the nearest combatant so the fight resolves and the day advances.
+      confirmPlanningIfOpen(scene);
       this.harness.tick(1000);
       // A completed combat round halts fire and opens the reaction window — end
       // the step so the policy re-decides (flee vs fight on) before more damage.
@@ -800,6 +832,7 @@ export class PlayerAgent {
         roundComplete?: boolean;
         beginCombatRound?(): void;
       } | null;
+      combatPlanning?: { isPlanning?: boolean } | null;
       npcManager?: { onAttackNpc?(npc: NpcShip): void };
     } | null;
     if (
@@ -819,8 +852,30 @@ export class PlayerAgent {
     // (slayerCampaign.test) never finishes its kill that way.
     const alreadyFighting = scene.combatModule?.isActive === true;
     if (!alreadyFighting) scene.npcManager.onAttackNpc(target);
+    // PLANNING may already be open (an e2e-staged or garrison-opened fight):
+    // confirm the first round (weapons on the chased target, steer at it)
+    // BEFORE the turn-start below — onPlayPause during PLANNING is the confirm
+    // itself (14.5a) and would otherwise consume an EMPTY hold-fire draft.
+    confirmPlanningIfOpen(scene, {
+      preferredTargetId: target.id,
+      closeOnTarget: true,
+    });
     if (!scene.isTurnRunning) scene.onPlayPause();
     scene.combatModule?.beginCombatRound?.();
+    // Driver-side reaction-window budget (review 2026-07-15): the legacy
+    // `roundComplete` flag below tracked "this round's incoming damage spent
+    // its `combatRoundHullFraction` budget" — but it is GOD-disabled and, with
+    // the fight-freeze wedges fixed, a step no longer stalls out on its tick
+    // budget either, so an attack step could silently drive a whole fight to
+    // termination with the policy never re-deciding. Re-implement the same
+    // budget here (hull actually lost since the step began) so the step ends
+    // at the documented per-round reaction window in every mode.
+    const stepHull0 = engine.player?.ship?.hullHP ?? 0;
+    const stepBudget = Math.max(
+      1,
+      (engine.player?.ship?.maxHull ?? 0) *
+        GAME_BALANCE.combatRoundHullFraction,
+    );
     for (let i = 0; i < 2000; i++) {
       // Un-pause before each tick so weapons fire (same discipline as
       // waitOneDay/completeWarp — a paused ship neither flies nor shoots).
@@ -830,7 +885,18 @@ export class PlayerAgent {
       ) {
         scene.combatPause.resume();
       }
+      // Pause-and-plan loop (Task 14.5): each round, assign every weapon to
+      // the chased target, steer at it (close into weapon range) and confirm
+      // — the headless equivalent of the player's assign-and-«Ход».
+      confirmPlanningIfOpen(scene, {
+        preferredTargetId: target.id,
+        closeOnTarget: true,
+      });
       this.harness.tick(50);
+      // Reaction window (see stepBudget above): enough incoming damage landed
+      // this step — yield to the policy (flee vs fight on) before more does.
+      if (stepHull0 - (engine.player?.ship?.hullHP ?? stepHull0) >= stepBudget)
+        break;
       // Scene changed mid-fight (player death → GAME_OVER): stop driving.
       if (engine.currentSceneType !== SceneType.SPACE_FLIGHT) return;
       // Reaction window: one completed round ends the step (policy re-decides).
@@ -893,6 +959,10 @@ export class PlayerAgent {
     scene.executeRouteTo(tx, ty);
     // Run the turn: tick until a day passes or the ship reaches the waypoint.
     for (let i = 0; i < 800; i++) {
+      // A fight engaged mid-flight opens the PLANNING freeze (Task 14.5) —
+      // confirm the round (weapons on nearest, course untouched) so the
+      // traverse keeps flying instead of stalling the step.
+      confirmPlanningIfOpen(scene);
       this.harness.tick();
       if ((engine.galaxy?.gameDays ?? 0) > day0) break;
       if (!physics.isMoving) break;

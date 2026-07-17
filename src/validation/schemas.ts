@@ -119,6 +119,12 @@ export const InventorySchema = z.object({
   // [] so pre-existing saves (which lack the field) validate and load with an
   // empty hold rather than failing.
   ownedGearIds: z.array(z.string()).default([]),
+  // Persisted combat-consumable (tactical device) inventory — catalog consumable
+  // ids the player carries between fights (`combatConsumable.ts`). Additive-optional
+  // (mirrors `ownedGearIds`): absent old saves default to [] and load with an empty
+  // consumable inventory, so no migration / CURRENT_VERSION bump is required
+  // (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 9).
+  ownedConsumableIds: z.array(z.string()).default([]),
 });
 
 export const QuestObjectiveSchema = z.object({
@@ -624,6 +630,11 @@ export const SaveStateSchema = z.object({
   // presets. Saves made before presets existed lack it; the hangar treats
   // absent as "no presets saved yet" (all three tabs empty).
   loadoutPresets: z.array(LoadoutPresetSchema).max(3).optional(),
+  // Optional additive (autosave-autopilot-resume): whether the DEV-only live
+  // autopilot was engaged at save time. Saves made before this existed lack it;
+  // absent ⇒ no auto-resume. Production/tests use a no-op provider so this is
+  // false/absent there. No migration, no version bump. See GameEngine.saveGame.
+  autopilotEngaged: z.boolean().optional(),
 });
 
 export function validateSaveState(

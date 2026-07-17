@@ -321,11 +321,22 @@ export class AutopilotController {
    * policy or applier is routed to `onError` and swallowed so the live game keeps
    * running and the next tick simply retries. A no-op when disengaged or while a
    * previous async apply is still in flight (the re-entrancy guard).
+   *
+   * Gated on {@link LiveSceneController.dismissBlockingModal} FIRST, before the
+   * policy ever decides — `observe()` has no notion of a blocking modal (a
+   * pirate's shakedown hail, an exploration-encounter prompt, ...), so a
+   * hostile-present observation can legally pick `attack`/`flee` while one is
+   * open; those verbs dispatch straight to their own executors, never through
+   * `tick()`, so the modal was never being closed (live-session finding,
+   * 2026-07-12 — a distant pirate's hail hung the autopilot indefinitely).
+   * When something was dismissed this cycle, skip deciding entirely and let
+   * the next tick observe the now-clean state.
    */
   async tickOnce(): Promise<void> {
     if (!this.engaged || this.busy) return;
     this.busy = true;
     try {
+      if (await this.controller.dismissBlockingModal?.()) return;
       const obs = this.observeFn();
       this.memory = updateMemory(this.memory, obs);
       const action = this.policy.decide(obs, this.memory);

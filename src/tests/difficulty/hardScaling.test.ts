@@ -4,6 +4,7 @@ import {
   scaledHostileSystemCount,
   scaledGarrisonRange,
   additionalHostileSeeds,
+  OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
 } from "@/config/balance";
 import { Galaxy } from "@/domain/Galaxy";
 import { StarSystem } from "@/domain/StarSystem";
@@ -131,7 +132,12 @@ function makeHostileGalaxy(): Galaxy {
 }
 
 describe("Hard-mode hostile scaling — garrison size", () => {
-  it("NORMAL garrison stays within today's [5,10] baseline", () => {
+  it("NORMAL garrison at zero ratcheted power is discounted below today's [5,10] baseline (win-rate-100pct plan, Task 3)", () => {
+    // Superseded assertion: this test's `NpcSimulator` never attaches a
+    // campaign-peak-power source, so `fillGarrison` reads peakPower=0 — the
+    // pirate-garrison discount reversal (Task 3) now applies the full
+    // OVERMIND_GARRISON_POWER_MAX_DISCOUNT there, same as the Overmind side.
+    // See garrisonPowerScaling.test.ts for the dedicated discount coverage.
     const galaxy = makeHostileGalaxy();
     galaxy.addPirateSystem("sys_b");
 
@@ -141,8 +147,9 @@ describe("Hard-mode hostile scaling — garrison size", () => {
     const hostile = npcsPresentInSystem(galaxy, "sys_b").filter(
       (n) => n.role === NpcRole.PIRATE,
     );
-    expect(hostile.length).toBeGreaterThanOrEqual(5);
-    expect(hostile.length).toBeLessThanOrEqual(10);
+    const discount = OVERMIND_GARRISON_POWER_MAX_DISCOUNT;
+    expect(hostile.length).toBeGreaterThanOrEqual(Math.max(1, 5 - discount));
+    expect(hostile.length).toBeLessThanOrEqual(10 - discount);
   });
 
   it("HARD garrison is larger than NORMAL for the same galaxy + seed", () => {

@@ -262,14 +262,16 @@ describe("NpcSimulator garrison off-screen combat", () => {
     galaxy.npcShips.push(victim);
 
     const simAny = sim as unknown as {
-      resolveOffscreenCombat(
-        g: Galaxy,
-        rng: SeededRNG,
-        playerSystemId?: string,
-      ): void;
+      garrison: {
+        resolveOffscreenCombat(
+          g: Galaxy,
+          rng: SeededRNG,
+          playerSystemId?: string,
+        ): void;
+      };
     };
     for (let i = 0; i < 20 && victim.state !== NpcState.DEAD; i++) {
-      simAny.resolveOffscreenCombat(
+      simAny.garrison.resolveOffscreenCombat(
         galaxy,
         new SeededRNG(`gc_${i}`),
         "elsewhere",
@@ -297,14 +299,16 @@ describe("NpcSimulator garrison off-screen combat", () => {
     galaxy.npcShips.push(safe);
 
     const simAny = sim as unknown as {
-      resolveOffscreenCombat(
-        g: Galaxy,
-        rng: SeededRNG,
-        playerSystemId?: string,
-      ): void;
+      garrison: {
+        resolveOffscreenCombat(
+          g: Galaxy,
+          rng: SeededRNG,
+          playerSystemId?: string,
+        ): void;
+      };
     };
     for (let i = 0; i < 20; i++) {
-      simAny.resolveOffscreenCombat(
+      simAny.garrison.resolveOffscreenCombat(
         galaxy,
         new SeededRNG(`safe_${i}`),
         "elsewhere",

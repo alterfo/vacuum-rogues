@@ -12,10 +12,15 @@ LootDropHandler (owns floating space loot: spawn, TTL despawn, pulse animation, 
 pickup into gear inventory or resource hold — extracted from NpcShipManager),
 NpcInteractionController (contact-panel action cluster: hail/trade/attack/approach/shakedown —
 extracted from NpcShipManager), CombatPursuitController (chase-steering/orbit/breakoff state —
-extracted from NpcShipManager), EncounterController (exploration-encounter rolls + overlay —
+extracted from NpcShipManager; survives as the execute-window movement primitive of the
+pause-and-plan loop), EncounterController (exploration-encounter rolls + overlay —
 extracted from NpcShipManager), OvermindBossController (OVERMIND-core prompt + combatant spawn —
 extracted from NpcShipManager),
-combatPause (pure active-pause state machine — PixiJS-free, unit-tested standalone),
+combatPlanning (pure pause-and-plan state machine — PixiJS-free, unit-tested standalone; see the
+"In-flight combat" section), combatPlanningUi (planning-phase weapon bar + range rings +
+assignment/action routing), combatExecution (execute-window mechanics/VFX orchestrator),
+combatPause (the SUPERSEDED reactive single-shot active-pause — reactive triggers unwired, only
+its freeze/Esc primitives still mounted; see "In-flight combat"),
 cometDustTail (pure dust-tail particle emitter for flyby comets — PixiJS-free, owns a fixed-size
 mote pool with a hard live-count bound; `AsteroidBelt` mirrors each pool slot 1:1 onto a pooled
 PixiJS `Particle`. Same pure-logic-tested-standalone pattern as `combatPause`),
@@ -27,7 +32,11 @@ top open surface in priority order — combat pause → contact panel → quest 
 settings panel — else cancels a planned route; Space runs the planned turn — the keyboard
 equivalent of the confirming second click, suppressed while a turn/combat pause is active or a
 contact/quest-journal/planet-info/settings panel is open (mirrors the mouse-click
-`isBlockingModalOpen` guard); j/i toggle journal/inventory. `SpaceFlightScene.onKeyDown` is a thin delegate that
+`isBlockingModalOpen` guard) — EXCEPT during combat PLANNING, where Space confirms the planned
+combat turn (the `combatPlanning.confirm()` branch, checked before the `isTurnRunning` guard but
+STILL behind the modal guard — Space must never confirm a combat turn behind an open journal/
+contact/settings panel, review 2026-07-15);
+j/i toggle journal/inventory. `SpaceFlightScene.onKeyDown` is a thin delegate that
 builds `ctx` from live scene members; the extraction keeps the controller under the 1900-line
 guard. Unit-tested standalone in `flightKeyHandler.test.ts`).
 
@@ -83,16 +92,87 @@ rates/payoffs in `balance.ts` (`ENCOUNTER_CONFIG` / `ENCOUNTER_OUTCOME_CONFIG`)*
 of truth `NpcShipManager` passes in; each mirrors the module's standalone `DEFAULT_*` default, kept
 in lockstep by `encounterBalanceParity.test.ts`. Don't re-derive rates at the call site.
 
-In-flight combat is **real-time only** — there is no hex combat scene. The legacy `CombatScene`
-(and `SceneType.COMBAT`) was deleted; **every** fight resolves in-flight, including the
-OVERMIND-core boss and former scripted text-quest encounters. An aggressive NPC closing inside
-`WEAPON_RANGE`, or the player clicking "Атаковать" on a contact, calls `CombatModule.addCombatant()`
-— no scene transition. A fresh game starts armed: `GameEngine.starterLoadout()` fits a weapon
-(`wpn_pulse`) so the player can fight immediately; `addCombatant` on a genuinely weaponless ship
-surfaces a throttled HUD hint ("Нет оружия — установите его в ангаре") instead of silently
-no-opping. Once engaged, both sides **auto-pursue** to hold `WEAPON_RANGE`: the player ship
-auto-tracks the selected target and each aggressive NPC closes on the player (`CombatPursuitController`
-pursuit, gated on `isInCombat()`, frozen by the active pause). **The in-range hold is a
+In-flight combat is a **tactical pause-and-plan loop**
+(`docs/plans/20260713-tactical-pause-combat-rework.md` — a full supersession of the old real-time
+auto-pursuit interaction model). There is still no hex combat scene: the legacy `CombatScene` (and
+`SceneType.COMBAT`) stays deleted and **every** fight resolves in-flight, including the
+OVERMIND-core boss and former scripted text-quest encounters. Every engagement path (aggressive NPC
+closing to range, "Атаковать" on a contact, encounter ambush) funnels through the scene's
+`startInFlightCombat`, which calls `CombatModule.addCombatant()` **and**
+`combatPlanning.beginCombat()` — no scene transition. A fresh game starts armed:
+`GameEngine.starterLoadout()` fits a weapon (`wpn_pulse`) so the player can fight immediately;
+`addCombatant` on a genuinely weaponless ship surfaces a throttled HUD hint ("Нет оружия —
+установите его в ангаре") instead of silently no-opping. `startInFlightCombat` opens planning
+**only when `addCombatant` actually engaged** (`isCombatActive()` gate, `npcManagerDeps.ts`): a
+refused engagement (weaponless / GOD-mode downed ship) must never open the planning freeze —
+no fight ever becomes active to end it, so the freeze would soft-lock the sim
+(review 2026-07-15, `combatPlanningLoopGuards.test.ts`).
+
+**The loop** (`flight/combatPlanning.ts`, `CombatPlanningController` — a pure PixiJS-free state
+machine over opaque target/weapon handles): combat opens → **PLANNING** freezes the whole sim —
+movement, camera-follow ship sync, NPC AI, all fire timers, orbits and the calendar. The freeze
+signal is `combatPlanning.isPlanning`, folded into the scene's `frozen` local, the `updateShip`
+early-return, `CombatModule`'s `isPaused` dep closure (`combatModuleDeps.ts`:
+`isPlanning() || isCombatPauseActive() || (!isTurnRunning() && !isExecutingPlan())` — per the
+standing rule below: fold new freeze conditions into `isPaused`, never into `isFrozen()`; the
+`isExecutingPlan` carve-out makes the round timer the sole owner of a confirmed window — an
+`endTurn()` landing mid-window from any path (HUD abort, low-hull auto-stop) must not freeze
+fire/pruning into an unendable planning/executing cycle, review 2026-07-15), **and**
+`NpcShipManagerDeps.isPaused` (`npcManagerDeps.ts`: `isCombatPauseActive() || isPlanning()`) so
+hostile ships hold still while the player plans. During planning the player fills
+one `PlannedTurn` draft — **all fields optional; an empty draft is legal** ("hold position, hold
+fire") and never blocks confirm:
+- **Movement destination** — an empty-space click routes to `previewCombatCourse`
+  (`combatCoursePreview.ts`), drawing the engine-scaled reachable course (`combatTrajectory.ts`);
+  applied on confirm via `applyPlannedMovement` → `ShipPhysics.setPath()`. The planning click
+  branch runs **before** the turn-running guard in `onPointerDown` (`routePlanningClick`) — the
+  guard sits later and would otherwise swallow every planning click (real 14.5b bug).
+- **Per-weapon target assignment** — `CombatPlanningUi` (`combatPlanningUi.ts`) mounts a
+  bottom-centre weapon bar (one `UiButton` per fitted gun, accent-matched to its world-space range
+  ring, `combatWeaponRangeOverlay.ts`) on `onEnterPlanning`, torn down on confirm and rebuilt from
+  the live loadout each round. Two-step assignment (`WeaponAssignmentController`,
+  `combatWeaponTargeting.ts`): arm a gun (`armWeapon`) → click an enemy sprite
+  (`handleTargetClick` via the `selectCombatTarget` seam; combatants only; out-of-range is
+  **flagged, not rejected**). A weapon left unassigned **holds fire** for the whole window.
+- **Afterburner toggle, ≤1 consumable, ≤1 comms action** — the action row above the weapon bar
+  (`toggleAction(key)`; afterburner ⛔-labelled once the engine is spent).
+
+**Confirm is «Ход»** — Space (`flightKeyHandler`'s `combatPlanning.confirm()` branch, checked
+before the `isTurnRunning` guard) or the HUD «Ход»/«Пауза» button (`onPlayPause` during PLANNING
+confirms — it must never `endTurn()` mid-plan; that desync is the bug its guard exists for).
+During EXECUTING the button is a **no-op** (`PlayPauseHost.isExecutingPlan` guard,
+`flightTurnEnd.ts`): its legacy combat-abort `endTurn()` used to freeze `CombatModule` while
+`tickExecute` kept cycling — a permanent zero-fire planning loop (review 2026-07-15,
+`combatPlanningLoopGuards.test.ts`).
+Confirm → **EXECUTING**: one fixed real-time window of `COMBAT_ROUND_MS` (`balance.ts`), ticked by
+`combatPlanning.tickExecute(dt)` in `SpaceFlightScene.update`. **The round timer is the single
+deterministic terminator** — impacts, arrivals and incoming hits resolve in real time but never
+end a window early. The only early exits are terminal: player death or last hostile destroyed →
+`endCombat()`; `onCombatEnded` still calls `SpaceFlightScene.endTurn()` so a resolved fight never
+leaves `isTurnRunning` stuck true. When the timer elapses, PLANNING re-opens with a fresh empty
+draft while ≥1 hostile remains.
+
+**During an execute window — fire.** Planned per-weapon targeting is wired through
+`combatModuleDeps.ts`: `isPlannedTargetingActive → combatPlanning.isExecuting` and
+`getPlannedWeaponTarget → plan.weaponTargets.get(w)` (identity-keyed on the stable `GearCatalog`
+`WeaponSpec` objects `fittedWeapons()` returns). Each gun keeps its own
+`weaponFireIntervalMs(weapon)` = `max(1, cooldownTurns) × GAME_BALANCE.combatFireIntervalMs`
+cadence (DPS = `damage ÷ interval`; fresh engagements still pre-charge `cooldownTurns > 1` timers
+via `primeWeaponFireTimers`, `weaponCadence.test.ts`), but fires **only at its assignment** —
+unassigned holds fire. A fight staged *without* `beginCombat` (bare `addCombatant`, e2e helpers)
+keeps legacy auto-fire. NPC return fire stays real-time within each NPC's role-scaled reach
+`npcWeaponRange(npc)` (`systems/combat/npcWeapon.ts`: TRADER 200 / PIRATE 260 / RANGER 300 /
+PATROL 340, role-derived → no schema/migration).
+
+**During an execute window — movement.** A confirmed destination flies its `setPath` course —
+the confirm calls `breakOffCombatPursuit()` (the same seam `executeRouteTo` uses, wired through
+`CombatPlanningHost.breakOffPursuit`) so the orbit yields while the planned course flies (without
+it the pursuit re-`setPath`s its carrot every frame and the plan is cosmetic — review 2026-07-15);
+the override self-clears when the course completes. With none planned,
+`CombatPursuitController`'s orbit-strafe **survives as the execute-window movement
+primitive** (`npcManager.updateCombat` → `updateCombatPursuit`/`steerCombatOrbit`, gated
+`!frozen`) — it was deliberately NOT deleted (gitnexus 2026-07-15: CRITICAL, 19 live refs), and
+all the boundary-clamp lore below still applies inside windows. **The in-range hold is a
 controlled orbit/strafe, not a stop** — `steerCombatOrbit` circle-strafes the target at
 `COMBAT_ORBIT_RANGE` (0.6 × weapon range), arc-movement-compatible, so the target stays inside
 `WEAPON_RANGE` continuously and auto-fire always has a hit (a dead-heading "no steer" hold let
@@ -118,61 +198,79 @@ in review and reds `combatOrbit.test.ts`'s range-hold on a moving edge target. A
 manual route (to a planet or to flee) **overrides** the auto-pursuit via
 `breakOffCombatPursuit()` — `updateCombatPursuit` yields navigation while the route flies and
 re-engages only once it completes with a hostile still in range. Detail in `playtest-traps.md`.
-**Fire is per-weapon, not a flat
-cadence:** the player fires **every** fitted weapon (`advancePlayerWeapons`), each on its own
-`weaponFireIntervalMs(weapon)` = `max(1, cooldownTurns) × GAME_BALANCE.combatFireIntervalMs` timer
-— so a slow `cooldownTurns:3` beam fires ~⅓ as often as a `cooldownTurns:1` pulse, making cadence a
-real tradeoff against damage (DPS = `damage ÷ interval`). On a **fresh** engagement `addCombatant`
-pre-charges every `cooldownTurns > 1` weapon's timer to
-`GAME_BALANCE.combatEngagePrechargeFraction` (0.5) of its interval (`primeWeaponFireTimers`) so a
-slow weapon's first shot lands at half its cold-start wait; a `cooldownTurns:1` weapon keeps the
-flat cold start (its exemption is locked by `weaponCadence.test.ts`), `npcFireTimers` are
-untouched, and a combatant joining an already-active fight never re-primes (the `!isActive`
-guard). Each engaged NPC fires from within **its
-own role-scaled reach** `npcWeaponRange(npc)` (`systems/combat/npcWeapon.ts`: TRADER 200 / PIRATE
-260 / RANGER 300 / PATROL 340, role-derived → **no schema/migration**), not the legacy flat
-`GAME_BALANCE.weaponRange` 240 — so a long-range player weapon (railgun 360) can no longer trivially
-out-range *every* foe (a PATROL's 340 keeps the edge bounded). `CombatModule.update` drives all
-these timers. A lethal shot calls
-`NpcShipManager`'s in-flight death path (loot drop + domain removal, not extracted) via the `onNpcDestroyed`
-callback; the scene also completes any bound BOUNTY. Killing the OVERMIND core in flight wins the
-game (`handleInFlightDeath` → `showGameOutcomeScreen(true)`).
+A lethal shot calls `NpcShipManager`'s in-flight death path (domain removal via the
+`onNpcDestroyed` callback); the scene also completes any bound BOUNTY. A **player** kill first
+spawns a drifting wreck and defers the loot dump to the drift (see the execute-window mechanics
+below); crossfire NPC-vs-NPC deaths keep the instant loot dump. Killing the OVERMIND core in
+flight wins the game (`handleInFlightDeath` → `showGameOutcomeScreen(true)`).
 
-**Fire is gated on both the active pause AND the running turn.** `CombatModule.update` ticks its
-fire timers whenever it is **not frozen** (`isFrozen()` = `isPaused()` = `combatPause.paused ||
-!isTurnRunning`). Both player weapons and NPC return fire halt when the overlay is up **or** when
-the player ends the turn via Space — pressing Space is a true combat pause: no shots land on either
-side until the player starts the next turn. Ship movement and the calendar are also turn-gated (the
-full Space-Rangers model). When the module's
-`endCombat` fires (last combatant gone), `onCombatEnded` calls `SpaceFlightScene.endTurn()` so a
-resolved fight never leaves `isTurnRunning` stuck true.
+**During an execute window — folded mechanics** (`flight/combatExecution.ts`,
+`CombatExecutionController`, built via `combatExecutionDeps.ts` in the `combatModuleDeps` host
+pattern; the scene ticks it only on unfrozen frames, so every entity here freezes with the fight;
+all state is transient — no save/schema impact). Each consumes its pure, unit-tested module:
+- **Gravity assist** (`combatGravity.ts`): per-frame `gravityAssistTotal` over the live planet
+  discs adds to `ShipPhysics.currentSpeed` — a slingshot genuinely exceeds cruise `maxSpeed` and
+  decays on the final leg. Planet-only by design; black holes were deferred (plan Task 1e).
+- **Afterburner** (`combatAfterburner.ts`): `plan.afterburner` → `engageAfterburner` at confirm;
+  extra forward displacement for exactly one window; engine wear persists per fight and resets on
+  the next engagement (`pristineEngine()` on `endFight()`).
+- **Missiles** (`combatMissile.ts`): a `WeaponClass.MISSILE` planned shot is intercepted
+  (`CombatModuleDeps.interceptPlannedShot`, cadence still spent) → a tracked travel-time
+  `MissileState` (homing = `WeaponAbility.HOMING`), advanced per frame, settled by
+  `resolveMissileArrival` with an injected evasion roll; a hit lands through
+  `CombatModule.landExternalShot` (the canonical scaled/shield/kill path). The smoke trail draws
+  the actual flown points (`missileTrailPoints`).
+- **Consumables** (`combatConsumable.ts`, persisted inventory `Inventory.removeConsumable`):
+  shield restore (`applyShieldRestore` on the player pool), AoE blast (`aoeDamageTargets`, each
+  hit through `landExternalShot`), weapon jam (a `WeaponJam` enforced by
+  `CombatModuleDeps.isNpcFireSuppressed` in `advanceNpcTimers`). Player-facing name is
+  «Тактическое устройство» — deliberately distinct from `ResourceType.ARTIFACTS` (crafting
+  currency); the two never share a type or i18n key. **Known gap:** no production acquisition
+  path exists yet — `Inventory.addConsumable` has zero production callers (no loot/shop/quest
+  grant), so the device buttons never appear in real play; see the plan's Post-Completion.
+- **Comms** (`combatComms.ts`): **bribe** pays `resolveBribe`'s tribute through the bank bus
+  (`payTribute`) and every combatant departs + `CombatModule.disengage()`s; **demand-surrender**
+  gates on `resolveSurrenderDemand(role, hullFraction)` — a yielder drops loot and flees, a
+  refusal fights on; **call-for-help** recruits `findCallForHelpAlly` (non-hostile, non-engaged,
+  within `allyProximityRadius`) who fires at the hostiles on the shared cadence.
+- **VFX** (Tasks 11–14): banking roll (`combatBanking.ts` — transverse `scale.y = cos(roll)`
+  squash during EXECUTING, leveled on fight end); NPC-side **shield-then-hull** damage ordering
+  (`resolveShieldedDamage`, shield-less ships byte-identical) with the shield-hit flash
+  (`combatShieldFlash.ts`) and per-ship floating hull/shield bars (`combatStatusBars.ts`, player
+  included); weapon-type tracers (`combatWeaponVfx.ts` beam/burst/distortion via
+  `onPlayerShotVfx`, replacing the flat `flashShot` for player fire); drifting wreck + staggered
+  loot emissions at the wreck's live drifted position (`combatWreck.ts`,
+  `NpcShipManagerDeps.deferDeathLoot`). Floating damage numbers (`DamageNumbers.ts`) predate the
+  rework and stay live.
 
-**Active pause (Space-Rangers/FTL style):** the fight is real-time *until* a shot lands on the
-player. `CombatModule.fireNpcShot` raises `onPlayerUnderAttack`; the `CombatPauseController`
-debounces it to the first hit per engagement and *freezes the turn* — `SpaceFlightScene.updateShip`
-early-returns and `isTurnRunning` is gated on `!combatPause.paused`, so movement, the calendar,
-NPC AI and fire timers all halt. **The freeze gate (`CombatModule.isFrozen()` =
-`isPaused()` = `combatPause.paused || !isTurnRunning`) halts the *whole* fight, not just new NPC shots:** the
-**player multi-weapon loop** (`advancePlayerWeapons`) and the **NPC loop** (`advanceNpcTimers`)
-both sit behind `update`'s `if (this.isFrozen()) return;` early-return **and** re-check
-`if (this.isFrozen()) break;` per iteration (so a shot that raises the pause mid-frame can't let a
-later weapon/NPC volley through on the pausing frame), and **in-flight projectiles/tracers freeze**
-too — `update` advances the HUD tracers (`this.hud?.update(dt)`) only when `!this.isFrozen()`, so a
-shot launched the instant before the pause stops mid-flight (no travel, no impact) and resumes only
-on unpause. Do **not** add a second pause concept — every fire + projectile path honours this one
-gate (regression: `combatPauseFreeze.test.ts`). **To add a new freeze condition, fold it into
-the `isPaused` dep closure in `SpaceFlightScene` (line ~205), never into `isFrozen()` itself** —
-`isFrozen()` short-circuits: when `isPaused` is wired it is the ONLY thing checked; `isTurnRunning`
-dep is ignored. The `combatModule.isActive` guard is redundant in `isPaused` because `update()`
-early-returns on `!isActive` before any fire code runs anyway. The `CombatPauseOverlay` lets the player pick a target + weapon;
-**Огонь!** fires one shot (`CombatModule.confirmAttack`) and resumes, **Продолжить** (or `Escape`)
-resumes without firing. The controller also **re-pauses when the selected auto-fire target is
-lost** — killed or out of range *while a survivor remains*: `CombatModule.removeCombatant` raises
-`onTargetLost`, wired to `CombatPauseController.loseTarget` (which adopts the lost ship as the
-current selection, then re-pauses via `notifyTargetLost`). Losing the *last* combatant ends
-the fight (`endCombat` → `onCombatEnded` → `controller.reset` re-arms the debounce) instead of
-pausing onto an empty overlay. While paused, `onKeyDown` suppresses flight shortcuts so the player
-can't escape the deliberate choice.
+**Known deliberate deferral**: player-side **incoming** shield absorption is NOT folded — NPC fire
+still lands on the player's hull directly (pinned by `combatPlanningLiveWiring.test.ts`); the
+shield-restore consumable and the player's floating shield bar do read/write the pool live. NPC
+shields, by contrast, drain before hull. Flip only alongside that suite's authorized evolution.
+
+**The freeze gate halts the *whole* fight, not just new shots:** the player weapon loop
+(`advancePlayerWeapons`) and the NPC loop (`advanceNpcTimers`) both sit behind `update`'s
+`if (this.isFrozen()) return;` early-return **and** re-check `if (this.isFrozen()) break;` per
+iteration, and in-flight projectiles/tracers freeze too (`this.hud?.update(dt)` only when
+`!this.isFrozen()`). Do **not** add a second pause concept — every fire + projectile path honours
+this one gate (regression: `combatPauseFreeze.test.ts`, rewired to the planning freeze). **To add
+a new freeze condition, fold it into the `isPaused` dep closure (`combatModuleDeps.ts`), never
+into `isFrozen()` itself** — `isFrozen()` short-circuits: when `isPaused` is wired it is the ONLY
+thing checked; the `isTurnRunning` dep is ignored.
+
+**The old reactive single-shot active-pause is superseded, not yet deleted.** `combatPause.ts`'s
+reactive triggers (`onPlayerUnderAttack`/`onTargetLost`/`onRoundComplete`) are **no longer wired**
+from `combatModuleDeps.ts`; its freeze-gate/overlay/Esc-routing wiring (`createCombatPauseUi`,
+`flightKeyHandler`) is still mounted with 3 live refs. Removing it fully is a Post-Completion
+scene-wiring cleanup — do **not** re-wire the reactive freeze-on-first-hit → one-shot flow.
+
+**Headless letsplay drives the same loop** — `src/tests/playtest/letsplay/planningDriver.ts`
+(`confirmPlanningIfOpen`: pick target → assign every fitted gun → optional steer → confirm; no-op
+outside PLANNING), wired into `PlayerAgent` heads and the live autopilot. `onAttackNpc`/
+`e2eEngageCombat` remain combat-*entry* seams. Key wiring tests:
+`combatPlanningLiveWiring.test.ts` (planned fire flip, click order),
+`combatExecutionLive.test.ts` (each folded mechanic live), `combatPauseFreezesLiveFight.test.ts`
+(freeze + round cycling), plus the E2E planning click loop in `playtest-regression.spec.ts`.
 
 **Single sub-day clock:** the fractional `SpaceFlightScene.currentDay` getter
 (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum`) is the **one** source for
@@ -197,8 +295,9 @@ cruising) instead crosses the move-distance day boundary: while `combatModule.is
 routes each day into `waitDayAccum` too — **never** `advanceGalaxyDay` — so the real calendar / NPC
 sim stays frozen during the whole fight (else it would tick ~1 day/s and `refresh()` could despawn
 the live target) while planets keep orbiting. The combatOrbitClock path is gated to `!isMoving`, so
-the stationary and moving combat day-sources never double-count. The **active pause**
-(`combatPause.paused`) holds it at 0, freezing
+the stationary and moving combat day-sources never double-count. A combat freeze — PLANNING
+(`combatPlanning.isPlanning`, via the `updateShip` early-return) or the legacy
+`combatPause.paused` — holds it at 0, freezing
 the orbits along with movement, NPC AI and fire. Position stays a pure function of `orbitalDay` (no
 per-planet motion state); only the day source gains a combat path — no data/schema/save impact.
 

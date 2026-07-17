@@ -167,6 +167,50 @@ describe("CombatModule engagement (Task 1)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// CombatModule — simultaneous-engagement cap (win-rate-100pct plan, Task 6)
+// ---------------------------------------------------------------------------
+describe("CombatModule simultaneous-combatant cap (win-rate-100pct plan, Task 6 escalation)", () => {
+  it("refuses a new joiner once the cap is reached, keeping the fight at exactly the cap", () => {
+    const { module } = makeModule();
+    const cap = GAME_BALANCE.combatMaxSimultaneousCombatants;
+    for (let i = 0; i < cap; i++) {
+      module.addCombatant(makeSprite(`ok-${i}`, 40 + i * 20, 0));
+    }
+    expect(module.combatants.size).toBe(cap);
+
+    const overflow = makeSprite("overflow", 999, 0);
+    module.addCombatant(overflow);
+    expect(module.combatants.has(overflow)).toBe(false);
+    expect(module.combatants.size).toBe(cap); // unchanged — refused, not silently dropped from a resize
+  });
+
+  it("admits a refused aggressor the instant a slot frees (the every-frame garrison-aggro re-call)", () => {
+    const { module } = makeModule();
+    const cap = GAME_BALANCE.combatMaxSimultaneousCombatants;
+    const weak = makeSprite("weak", 40, 0, { hullHP: 10 }); // dies to one 14-dmg shot, and is the auto-selected (first-added) target
+    module.addCombatant(weak);
+    for (let i = 1; i < cap; i++) {
+      module.addCombatant(
+        makeSprite(`tank-${i}`, 40 + i * 20, 0, { hullHP: 100000 }),
+      );
+    }
+    expect(module.combatants.size).toBe(cap);
+
+    const overflow = makeSprite("overflow", 999, 0, { hullHP: 100000 });
+    module.addCombatant(overflow); // refused — the fight is at the cap
+    expect(module.combatants.has(overflow)).toBe(false);
+
+    module.update(FIRE); // kills `weak`, freeing a slot
+    expect(module.combatants.has(weak)).toBe(false);
+    expect(module.combatants.size).toBe(cap - 1);
+
+    module.addCombatant(overflow); // the aggro path's next-frame retry now succeeds
+    expect(module.combatants.has(overflow)).toBe(true);
+    expect(module.combatants.size).toBe(cap);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // CombatModule — timer-driven firing
 // ---------------------------------------------------------------------------
 describe("CombatModule fire timers (Task 1)", () => {
@@ -191,7 +235,11 @@ describe("CombatModule fire timers (Task 1)", () => {
     const { module, ship } = makeModule();
     module.addCombatant(makeSprite("a", 40, 0, { damage: 20 }));
     module.addCombatant(makeSprite("b", 60, 0, { damage: 15 }));
-    module.update(FIRE);
+    // "b" joined second, so it carries a `combatJoinFireStaggerMs` fire-timer
+    // stagger (win-rate-100pct plan, combat-mechanics escalation — prevents a
+    // batch of simultaneously-joining hostiles from firing in lock-step); the
+    // tick here is widened by that stagger so both still land within it.
+    module.update(FIRE + GAME_BALANCE.combatJoinFireStaggerMs);
     expect(ship.hullHP).toBe(65); // 100 - (20 + 15)
   });
 
@@ -397,23 +445,36 @@ describe("CombatModule auto-mode feedback (Task 4)", () => {
 // asserting the four behaviours the integration pass guards.
 // ---------------------------------------------------------------------------
 describe("CombatModule multi-NPC integration (Task 5)", () => {
-  it("two engaged NPCs both advance their timers and fire together when the interval elapses", () => {
+  it("two engaged NPCs advance their OWN timers and fire in staggered turn, not lock-step", () => {
+    // "b" joined second, so it carries a `combatJoinFireStaggerMs` fire-timer
+    // stagger (win-rate-100pct plan, combat-mechanics escalation): several
+    // hostiles joining in the same beat no longer fire in perfect lock-step —
+    // each NPC's OWN interval still governs its own cadence, just offset by
+    // join order. This regression demonstrates the stagger directly (was:
+    // "both fire together when the interval elapses" — the exact lock-step
+    // this escalation fixes).
     const { module, ship } = makeModule();
     const a = makeSprite("a", 40, 0, { hullHP: 100, damage: 20 });
     const b = makeSprite("b", 60, 0, { hullHP: 100, damage: 15 });
     module.addCombatant(a);
     module.addCombatant(b);
 
-    // Timers advance but stay short of the interval: no one has fired yet.
+    // Timers advance but stay short of "a"'s interval: no one has fired yet.
     module.update(FIRE - 1);
     expect(ship.hullHP).toBe(100);
     expect(a.npc.hullHP).toBe(100);
 
-    // One more ms crosses the interval — both NPC timers fire, summing damage;
-    // the player's auto-fire lands on the selected target (a) only.
+    // One more ms crosses "a"'s interval — "a" alone fires; "b" is still
+    // `combatJoinFireStaggerMs` short of its own (staggered) threshold.
     module.update(1);
-    expect(ship.hullHP).toBe(65); // 100 - (20 + 15)
+    expect(ship.hullHP).toBe(80); // 100 - 20 ("a" only)
     expect(a.npc.hullHP).toBe(86); // selected target, 100 - 14 pulse
+    expect(b.npc.hullHP).toBe(100);
+
+    // Crossing "b"'s staggered interval: "b" now fires too, summing onto the
+    // player's hull; the player's auto-fire still targets "a" only.
+    module.update(GAME_BALANCE.combatJoinFireStaggerMs);
+    expect(ship.hullHP).toBe(65); // 80 - 15 ("b" joins in)
     expect(b.npc.hullHP).toBe(100); // not the selected target — untouched by player fire
   });
 

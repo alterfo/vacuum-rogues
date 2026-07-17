@@ -74,6 +74,16 @@ export function roundAcceptsShot(
  * Whether the round is complete — its budget spent — while the defender is still
  * alive (a dead defender ends the fight, not a reaction window). The reaction
  * window opens on this transition.
+ *
+ * The budget is computed off `min(hull, maxHull)`, NOT `maxHull` alone
+ * (win-rate-100pct plan, combat-mechanics escalation): a ship that enters a
+ * round already damaged — the campaign-common case, most deaths happen after
+ * ≥1 prior engagement with no full heal in between — must get a
+ * correspondingly SMALLER round allowance. The old maxHull-only basis handed a
+ * half-dead ship the same full-hull-sized budget as a fresh one, so a
+ * synchronized volley sized to be safely survivable from full hull could still
+ * exceed a damaged ship's actual remaining hull outright — the "never full →
+ * zero in one round" invariant only ever held for a literal full-hull ship.
  */
 export function roundIsComplete(
   damageTakenThisRound: number,
@@ -81,7 +91,10 @@ export function roundIsComplete(
   maxHull: number,
   config: CombatRoundConfig,
 ): boolean {
-  return hull > 0 && damageTakenThisRound >= roundDamageBudget(maxHull, config);
+  return (
+    hull > 0 &&
+    damageTakenThisRound >= roundDamageBudget(Math.min(hull, maxHull), config)
+  );
 }
 
 /** Clamp a configured fraction into the open interval `(0, 1)`. */

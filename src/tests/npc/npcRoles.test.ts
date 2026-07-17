@@ -164,6 +164,17 @@ describe("NPC roles — PATROL convoy assembly", () => {
       galaxy.npcShips.push(npc);
     }
 
+    // This test exercises convoy assembly, not garrison-discount economics —
+    // pin the ratcheted power at max (win-rate-100pct plan's Task 2/3 raised
+    // the discount ceiling) so sys_b's pirate garrison stays at today's
+    // undiscounted [5,10] baseline instead of the new, much smaller
+    // zero-power range. Without this, sys_b's thinner garrison sometimes gets
+    // fully wiped by ordinary wandering-NPC skirmishes before day 30, which
+    // permanently empties `assembleConvoys`' only possible contested border
+    // in this 2-system galaxy (no more hostile neighbour ⇒ no convoy ever) —
+    // collateral from the discount retune, not a convoy-logic regression.
+    sim.attachCampaignPeakPower(() => 1);
+
     // Advance to day 30 (triggers convoy assembly)
     const rng = new SeededRNG("convoy_seed");
     for (let d = 0; d < 30; d++) {

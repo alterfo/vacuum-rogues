@@ -7,6 +7,7 @@ import { NpcSimulator, npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { SeededRNG } from "@/utils/seededRNG";
 import { StarType, NpcRole, NpcState } from "@/types";
 import { Faction } from "@/types/faction";
+import { OVERMIND_GARRISON_POWER_MAX_DISCOUNT } from "@/config/balance";
 
 /** Two-system galaxy: sys_a (will be captured) ←→ sys_b (friendly escape route). */
 function makeGalaxy(): Galaxy {
@@ -50,7 +51,12 @@ describe("garrison persistence across save/load", () => {
     const originalIds = npcsPresentInSystem(galaxy, "sys_a")
       .filter((n) => n.id.startsWith("garrison_"))
       .map((n) => n.id);
-    expect(originalIds.length).toBeGreaterThanOrEqual(5);
+    // No campaign-power source is attached here, so the win-rate architecture
+    // plan's downward discount applies at its full (power-0) magnitude —
+    // today's fixed floor of 5 is no longer guaranteed, only the discounted one.
+    expect(originalIds.length).toBeGreaterThanOrEqual(
+      5 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
 
     // --- Save→load: the ships persist on the galaxy, but the simulator's
     // transient hold sets (garrisonIds, dwell countdowns) are gone. A FRESH
@@ -77,7 +83,9 @@ describe("garrison persistence across save/load", () => {
     const hostile = npcsPresentInSystem(galaxy, "sys_a").filter(
       (n) => n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE,
     );
-    expect(hostile.length).toBeGreaterThanOrEqual(5);
+    expect(hostile.length).toBeGreaterThanOrEqual(
+      5 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
 
     // No standing-garrison ship leaked into the friendly neighbour (regular
     // wandering NPCs from normal population replenishment may be there — that is

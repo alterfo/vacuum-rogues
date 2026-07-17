@@ -26,6 +26,7 @@ import {
   NEUTRAL_SCALING_WEAK_MULT,
   NEUTRAL_SCALING_STRONG_MULT,
   OVERMIND_GARRISON_POWER_MAX_BONUS,
+  OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
   DIFFICULTY_HOSTILE_SCALING,
 } from "@/config/balance";
 import type { GameMode } from "@/types";
@@ -167,4 +168,28 @@ export function overmindGarrisonPowerBonus(
   maxBonus: number = OVERMIND_GARRISON_POWER_MAX_BONUS,
 ): number {
   return Math.floor(clamp01(powerIndex) * maxBonus);
+}
+
+/**
+ * Mirror of {@link overmindGarrisonPowerBonus}: garrison ships SUBTRACTED
+ * from both [min, max] spawn bounds at the given ratcheted power. Monotone
+ * non-increasing — `maxDiscount` at power 0 (a powerless player faces a
+ * smaller garrison), 0 once power leaves 0 (a maxed player faces today's
+ * undiscounted range, only the upward bonus applies).
+ *
+ * `Math.floor` only has room for interior steps when `maxDiscount >= 2`
+ * (mirrors the bonus's own `0.5` step at `maxBonus=2`). At the currently
+ * shipped `OVERMIND_GARRISON_POWER_MAX_DISCOUNT=1` this is a knife-edge, not
+ * a graded ramp: `floor((1 - p) * 1)` is `1` only at the exact literal
+ * `p === 0` and `0` for every `p` in `(0, 1]`. Since `campaignPeakPower` is a
+ * monotone ratchet that leaves 0 within the first in-game day of normal play
+ * and never returns, the discount is realistically active only at the very
+ * start of a fresh run — see `.claude/docs/systems/overmind.md`'s Known-unmet
+ * gate section (2026-07-13 addendum) for the campaign-win-rate implication.
+ */
+export function overmindGarrisonPowerDiscount(
+  powerIndex: number,
+  maxDiscount: number = OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+): number {
+  return Math.floor((1 - clamp01(powerIndex)) * maxDiscount);
 }

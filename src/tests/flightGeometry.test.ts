@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   radarToWorld,
   avoidStarPath,
+  planWarpEdgeRoute,
   questMarkerRadius,
   shouldReaim,
   warpEdgePoint,
@@ -112,5 +113,45 @@ describe("warpEdgePoint (Task 9 iv: committed flee-jump fires from the near edge
     expect(Number.isFinite(p.x)).toBe(true);
     expect(Number.isFinite(p.y)).toBe(true);
     expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeCloseTo(R);
+  });
+});
+
+describe("planWarpEdgeRoute (composes warpEdgePoint + avoidStarPath for a pending warp)", () => {
+  const center = { x: 1000, y: 1000 };
+  const R = 2800;
+  const exitVector = { x: 1, y: 0 };
+
+  it("matches warpEdgePoint's edge and a straight route when clear of the star", () => {
+    const ship = { x: 400, y: 1000 };
+    // Star well off the ship→edge line (y=1000), so nothing to bow around.
+    const { edge, routePath } = planWarpEdgeRoute(
+      ship,
+      center,
+      exitVector,
+      R,
+      false,
+      { x: center.x, y: center.y + 1000 },
+      300,
+    );
+    const expectedEdge = warpEdgePoint(ship, center, exitVector, R, false);
+    expect(edge).toEqual(expectedEdge);
+    expect(routePath).toEqual([{ x: expectedEdge.x, y: expectedEdge.y }]);
+  });
+
+  it("routes a mid-system flee to the near edge, bowing around the star if needed", () => {
+    const ship = { x: 1000, y: 400 }; // straight above the star
+    const { edge, routePath } = planWarpEdgeRoute(
+      ship,
+      center,
+      exitVector,
+      R,
+      true,
+      center,
+      2000, // large avoidance radius forces a bypass around the straight line
+    );
+    // Near-edge escape: NOT the far exit-direction edge.
+    expect(edge.x).toBeCloseTo(center.x);
+    expect(edge.y).toBeCloseTo(center.y - R);
+    expect(routePath.length).toBeGreaterThan(1); // bowed, not a straight shot
   });
 });

@@ -10,3 +10,4 @@ export type {
   QuestTemplate,
 } from "./IQuestService";
 export type { IOverlayPresenter } from "./IOverlayPresenter";
+export type { IAutopilotStateProvider } from "./IAutopilotStateProvider";

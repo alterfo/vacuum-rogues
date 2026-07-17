@@ -4,7 +4,11 @@
  * OVERMIND_COMBAT_HP_MULT / OVERMIND_COMBAT_DAMAGE_MULT levers.
  *
  * Contract locked here:
- *  - weak player (ratcheted index 0) faces a gentle ~0.9× garrison;
+ *  - weak player (ratcheted index 0) faces a gentle ~0.5× garrison (lowered
+ *    from ~0.9× by the win-rate-100pct plan's Task 5 — see that plan for the
+ *    measured death-taxonomy rationale; kept strictly above
+ *    NEUTRAL_SCALING_WEAK_MULT so a held garrison stays harder than neutral
+ *    wandering-pack combat);
  *  - maxed player (index 1) faces the full OVERMIND_COMBAT_*_MULT (1.5×);
  *  - monotone in power; input clamped to [0,1];
  *  - HARD composes an extra multiplier from DIFFICULTY_HOSTILE_SCALING —
@@ -19,6 +23,7 @@ import {
   combatScaling,
   scaleHostileDamage,
   overmindGarrisonPowerBonus,
+  overmindGarrisonPowerDiscount,
   NEUTRAL_HOSTILE_SCALING,
 } from "@/systems/campaign/hostileScaling";
 import {
@@ -27,6 +32,7 @@ import {
   NEUTRAL_SCALING_WEAK_MULT,
   NEUTRAL_SCALING_STRONG_MULT,
   OVERMIND_GARRISON_POWER_MAX_BONUS,
+  OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
   DIFFICULTY_HOSTILE_SCALING,
 } from "@/config/balance";
 
@@ -37,9 +43,14 @@ describe("hostileScaling — endpoints", () => {
     expect(s.damageMult).toBeCloseTo(HOSTILE_SCALING_WEAK_MULT, 10);
   });
 
-  it("the weak multiplier is gentle: below 1, at ~0.9", () => {
+  it("the weak multiplier is gentle: below 1, at ~0.5 (win-rate-100pct plan, Task 5)", () => {
     expect(HOSTILE_SCALING_WEAK_MULT).toBeLessThan(1);
-    expect(HOSTILE_SCALING_WEAK_MULT).toBeCloseTo(0.9, 5);
+    expect(HOSTILE_SCALING_WEAK_MULT).toBeCloseTo(0.5, 5);
+    // Held-system garrison must stay strictly harder than neutral wandering
+    // combat — see combatScaling's own "held is harder than neutral" test.
+    expect(HOSTILE_SCALING_WEAK_MULT).toBeGreaterThan(
+      NEUTRAL_SCALING_WEAK_MULT,
+    );
   });
 
   it("maxed player (index 1) faces the full OVERMIND_COMBAT_*_MULT levers", () => {
@@ -235,5 +246,63 @@ describe("overmindGarrisonPowerBonus", () => {
       expect(b).toBeGreaterThanOrEqual(prev);
       prev = b;
     }
+  });
+});
+
+describe("overmindGarrisonPowerDiscount", () => {
+  it("subtracts the full configured discount while the player is powerless", () => {
+    expect(overmindGarrisonPowerDiscount(0)).toBe(
+      OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
+    expect(OVERMIND_GARRISON_POWER_MAX_DISCOUNT).toBeGreaterThan(0);
+  });
+
+  it("phases out to 0 at max power", () => {
+    expect(overmindGarrisonPowerDiscount(1)).toBe(0);
+  });
+
+  it("clamps out-of-range input", () => {
+    expect(overmindGarrisonPowerDiscount(-1)).toBe(
+      OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
+    expect(overmindGarrisonPowerDiscount(99)).toBe(0);
+  });
+
+  it("is monotone non-increasing in power (mirrors the bonus's non-decreasing shape)", () => {
+    let prev = overmindGarrisonPowerDiscount(0);
+    for (const p of [0.1, 0.3, 0.5, 0.7, 0.9, 1]) {
+      const d = overmindGarrisonPowerDiscount(p);
+      expect(d).toBeLessThanOrEqual(prev);
+      prev = d;
+    }
+  });
+
+  it("at the shipped max discount (4), the early-death power band (0.02-0.15) gets a graded, near-maximal discount — not a knife-edge", () => {
+    // win-rate-100pct plan, Task 2: raised from the old maxDiscount=1, where
+    // Math.floor((1 - p) * 1) was 1 only at the literal p === 0 and 0 for
+    // every p in (0, 1] — a knife-edge that made the whole vulnerable early
+    // band read as undiscounted. At maxDiscount=4, floor((1-p)*4) stays at 3
+    // across this entire band, a real interior step rather than an edge case.
+    expect(overmindGarrisonPowerDiscount(0.02)).toBe(
+      OVERMIND_GARRISON_POWER_MAX_DISCOUNT - 1,
+    );
+    expect(overmindGarrisonPowerDiscount(0.15)).toBe(
+      OVERMIND_GARRISON_POWER_MAX_DISCOUNT - 1,
+    );
+    expect(overmindGarrisonPowerDiscount(0.001)).toBe(
+      OVERMIND_GARRISON_POWER_MAX_DISCOUNT - 1,
+    );
+    expect(overmindGarrisonPowerDiscount(0.01)).toBe(
+      OVERMIND_GARRISON_POWER_MAX_DISCOUNT - 1,
+    );
+  });
+
+  it("does have a real interior step once maxDiscount gives floor() room (e.g. 2)", () => {
+    // Proves the formula itself is a genuine ramp, mirroring the bonus's own
+    // 0.5 step at maxBonus=2 — the knife-edge above is a consequence of the
+    // currently shipped maxDiscount=1, not a defect in this function.
+    expect(overmindGarrisonPowerDiscount(0.49, 2)).toBe(1);
+    expect(overmindGarrisonPowerDiscount(0.5, 2)).toBe(1);
+    expect(overmindGarrisonPowerDiscount(0.51, 2)).toBe(0);
   });
 });

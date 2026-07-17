@@ -175,3 +175,138 @@ describe("GameEngine with DI", () => {
   // exercised (ship.modules) was removed; gear now installs into the canonical
   // ShipLoadout (covered by purchaseCraftToLoadout / lootToLoadout tests).
 });
+
+/**
+ * F9, confirmed live 2026-07-12: a hidden/backgrounded tab throttles
+ * `requestAnimationFrame` to near-zero in real browsers, so `gameLoop` (which
+ * only self-schedules via rAF) stops advancing the scene — while the dev
+ * autopilot's `setInterval` tick kept deciding/acting regardless, making it
+ * look like the autopilot was "stuck" when actually the whole world was
+ * frozen. `startGameLoop` now also arms a `setInterval` fallback while
+ * `document.visibilityState === "hidden"`.
+ */
+describe("GameEngine background-tab fallback (F9)", () => {
+  function makeEngine(): GameEngine {
+    return new GameEngine({
+      saveService: new MockSaveService(),
+      galaxyService: new MockGalaxyService(),
+      playerService: new MockPlayerService(),
+      exceptionHandler: new MockExceptionHandler(),
+      qualityProfile: new AdaptiveQualityProfile(),
+      questService: new MockQuestService(),
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Isolate the assertions to the setInterval fallback — a real
+    // requestAnimationFrame would also route through the fake timer queue
+    // and double-count `update` calls when advancing time.
+    vi.stubGlobal("requestAnimationFrame", vi.fn().mockReturnValue(0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("arms the fallback immediately when the tab is already hidden at startup (no transition event)", () => {
+    // visibilitychange only fires on a transition — a session opened/reloaded
+    // directly in a background tab never gets one, so the fallback must also
+    // check the current state once when the loop starts.
+    const engine = makeEngine();
+    const update = vi.fn();
+    engine.currentScene = {
+      update,
+    } as unknown as import("@/presentation/GameScene").GameScene;
+
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    (engine as unknown as { startGameLoop(): void }).startGameLoop();
+    update.mockClear();
+
+    vi.advanceTimersByTime(1500); // 3 ticks at the 500ms fallback cadence
+
+    expect(update).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps ticking the current scene while the tab is hidden", () => {
+    const engine = makeEngine();
+    const update = vi.fn();
+    engine.currentScene = {
+      update,
+    } as unknown as import("@/presentation/GameScene").GameScene;
+
+    (engine as unknown as { startGameLoop(): void }).startGameLoop();
+    update.mockClear(); // drop startGameLoop's own synchronous first-frame call
+
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    vi.advanceTimersByTime(1500); // 3 ticks at the 500ms fallback cadence
+
+    expect(update).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not arm the fallback while the tab stays visible", () => {
+    const engine = makeEngine();
+    const update = vi.fn();
+    engine.currentScene = {
+      update,
+    } as unknown as import("@/presentation/GameScene").GameScene;
+
+    (engine as unknown as { startGameLoop(): void }).startGameLoop();
+    update.mockClear();
+
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    vi.advanceTimersByTime(2000);
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("stops the fallback interval once the tab becomes visible again", () => {
+    const engine = makeEngine();
+    const update = vi.fn();
+    engine.currentScene = {
+      update,
+    } as unknown as import("@/presentation/GameScene").GameScene;
+
+    (engine as unknown as { startGameLoop(): void }).startGameLoop();
+    update.mockClear();
+
+    const visibilityStateSpy = vi.spyOn(document, "visibilityState", "get");
+    visibilityStateSpy.mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(500);
+    expect(update).toHaveBeenCalledTimes(1);
+
+    visibilityStateSpy.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    update.mockClear();
+    vi.advanceTimersByTime(2000);
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("stop() clears the fallback interval and detaches the listener", () => {
+    const engine = makeEngine();
+    const update = vi.fn();
+    engine.currentScene = {
+      update,
+      destroy: vi.fn(),
+    } as unknown as import("@/presentation/GameScene").GameScene;
+
+    (engine as unknown as { startGameLoop(): void }).startGameLoop();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(500);
+    update.mockClear();
+
+    engine.stop();
+    vi.advanceTimersByTime(2000);
+
+    expect(update).not.toHaveBeenCalled();
+  });
+});

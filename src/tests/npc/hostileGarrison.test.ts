@@ -7,6 +7,7 @@ import { NpcSimulator, npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { SeededRNG } from "@/utils/seededRNG";
 import { StarType, NpcRole, NpcState } from "@/types";
 import { Faction } from "@/types/faction";
+import { OVERMIND_GARRISON_POWER_MAX_DISCOUNT } from "@/config/balance";
 
 function makeGalaxy(): Galaxy {
   const sysA = new StarSystem(
@@ -44,7 +45,12 @@ describe("NpcSimulator.ensureGarrison", () => {
     const hostile = present.filter(
       (n) => n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE,
     );
-    expect(hostile.length).toBeGreaterThanOrEqual(5);
+    // No campaign-power source is attached here, so the win-rate architecture
+    // plan's downward discount applies at its full (power-0) magnitude —
+    // today's fixed floor of 5 is no longer guaranteed, only the discounted one.
+    expect(hostile.length).toBeGreaterThanOrEqual(
+      5 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
     expect(hostile.length).toBeLessThanOrEqual(10);
   });
 
@@ -111,11 +117,16 @@ describe("NpcSimulator.ensureGarrison", () => {
     const sim = new NpcSimulator();
     sim.tick(galaxy, new SeededRNG("tick_seed"));
 
-    // The captured system holds a full hostile garrison (OVERMIND-role ships,
-    // plus any wandering pirate that happens to be co-located counts as hostile).
+    // The captured system holds a hostile garrison (OVERMIND-role ships, plus
+    // any wandering pirate that happens to be co-located counts as hostile).
+    // No campaign-power source is attached here, so the win-rate architecture
+    // plan's downward discount applies at its full (power-0) magnitude —
+    // today's fixed floor of 5 is no longer guaranteed, only the discounted one.
     const hostile = npcsPresentInSystem(galaxy, "sys_a").filter(
       (n) => n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE,
     );
-    expect(hostile.length).toBeGreaterThanOrEqual(5);
+    expect(hostile.length).toBeGreaterThanOrEqual(
+      5 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
   });
 });

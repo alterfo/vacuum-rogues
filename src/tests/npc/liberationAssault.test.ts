@@ -277,8 +277,9 @@ describe("NpcSimulator liberation assaults (real combat, no coin flip)", () => {
     const sim = new NpcSimulator();
     galaxy.simulateDay();
     sim.tick(galaxy, new SeededRNG("camp_enroll"), "sys_b");
-    const ids = (sim as unknown as { liberationAssaultIds: Set<string> })
-      .liberationAssaultIds;
+    const ids = (
+      sim as unknown as { garrison: { liberationAssaultIds: Set<string> } }
+    ).garrison.liberationAssaultIds;
     expect(ids.size).toBe(2);
 
     // The player clears the garrison and liberates the system personally...

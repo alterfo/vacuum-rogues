@@ -7,6 +7,7 @@ import { NpcSimulator, npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { SeededRNG } from "@/utils/seededRNG";
 import { StarType, NpcState } from "@/types";
 import { Faction } from "@/types/faction";
+import { OVERMIND_GARRISON_POWER_MAX_DISCOUNT } from "@/config/balance";
 
 /** Two-system galaxy: sys_a (will be captured) ←→ sys_b (friendly). */
 function makeGalaxy(): Galaxy {
@@ -46,6 +47,17 @@ function garrisonShips(galaxy: Galaxy, systemId: string) {
   );
 }
 
+/** Private NpcGarrisonCombat internals driven directly by these tests. */
+interface GarrisonInternals {
+  growGarrisons(g: Galaxy, r: SeededRNG): void;
+  garrisonBaseline: Map<string, number>;
+  captureFleetIds: Set<string>;
+}
+
+function garrisonOf(sim: NpcSimulator): GarrisonInternals {
+  return (sim as unknown as { garrison: GarrisonInternals }).garrison;
+}
+
 /**
  * Growth ticks fire on gameDays multiples of GARRISON_GROWTH_INTERVAL_DAYS (10)
  * — these values avoid the unrelated 30-day convoy, 50-day liberation and
@@ -66,9 +78,7 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
 
     const established = garrisonShips(galaxy, "sys_a").length;
     expect(established).toBeGreaterThanOrEqual(5);
-    const baseline = (
-      sim as unknown as { garrisonBaseline: Map<string, number> }
-    ).garrisonBaseline.get("sys_a");
+    const baseline = garrisonOf(sim).garrisonBaseline.get("sys_a");
     expect(baseline).toBe(established);
   });
 
@@ -114,9 +124,8 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
     sim.ensureGarrison(galaxy, new SeededRNG("cap_seed"));
     const baseline = garrisonShips(galaxy, "sys_a").length;
     const cap = Math.round(baseline * 1.5);
-    const grow = (
-      sim as unknown as { growGarrisons(g: Galaxy, r: SeededRNG): void }
-    ).growGarrisons.bind(sim);
+    const garrisonInternals = garrisonOf(sim);
+    const grow = garrisonInternals.growGarrisons.bind(garrisonInternals);
 
     // Each pass below the cap adds exactly 1 and growth never pushes the
     // count past the cap. What happens ON reaching the cap — the excess buds
@@ -139,9 +148,8 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
     sim.ensureGarrison(galaxy, new SeededRNG("weak_seed"));
     const established = garrisonShips(galaxy, "sys_a").length;
 
-    const grow = (
-      sim as unknown as { growGarrisons(g: Galaxy, r: SeededRNG): void }
-    ).growGarrisons.bind(sim);
+    const garrisonInternals = garrisonOf(sim);
+    const grow = garrisonInternals.growGarrisons.bind(garrisonInternals);
     grow(galaxy, new SeededRNG("weak_grow_1"));
     grow(galaxy, new SeededRNG("weak_grow_2"));
     expect(garrisonShips(galaxy, "sys_a")).toHaveLength(established);
@@ -212,13 +220,14 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
 
     // A fresh simulator = a fresh GameEngine after load. Re-recording the raw
     // grown count as the baseline would ratchet the growth band ~1.5× per
-    // reload without bound; it must clamp to the scaled GARRISON_MAX (10).
+    // reload without bound; it must clamp to the scaled GARRISON_MAX. No
+    // campaign-power source is attached, so the win-rate architecture plan's
+    // downward discount applies at its full (power-0) magnitude, shifting
+    // today's fixed 10 down by that discount.
     const sim = new NpcSimulator();
     sim.ensureGarrison(galaxy, new SeededRNG("ratchet_est"));
-    const baseline = (
-      sim as unknown as { garrisonBaseline: Map<string, number> }
-    ).garrisonBaseline.get("sys_a");
-    expect(baseline).toBe(10);
+    const baseline = garrisonOf(sim).garrisonBaseline.get("sys_a");
+    expect(baseline).toBe(10 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT);
   });
 
   it("ignores wandering visitors when checking the growth cap (members only)", () => {
@@ -241,16 +250,13 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
       galaxy.npcShips.push(visitor);
     }
 
-    const sim2 = sim as unknown as {
-      growGarrisons(g: Galaxy, r: SeededRNG): void;
-      captureFleetIds: Set<string>;
-    };
+    const garrisonInternals = garrisonOf(sim);
     galaxy.gameDays = 1;
-    sim2.growGarrisons(galaxy, new SeededRNG("visitor_grow"));
+    garrisonInternals.growGarrisons(galaxy, new SeededRNG("visitor_grow"));
 
     // Members (= baseline) are below the cap: growth adds 1; the visitors must
     // NOT fake a threshold crossing whose bud-off strips real defenders.
-    expect(sim2.captureFleetIds.size).toBe(0);
+    expect(garrisonInternals.captureFleetIds.size).toBe(0);
     expect(garrisonShips(galaxy, "sys_a")).toHaveLength(baseline + 1);
   });
 
@@ -273,11 +279,7 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
 
     // A growth pass must leave the cleared system empty (the
     // liberation-detection countdown owns it now), exactly like fillGarrison.
-    (
-      sim as unknown as {
-        growGarrisons(g: Galaxy, r: SeededRNG): void;
-      }
-    ).growGarrisons(galaxy, new SeededRNG("cleared_growth"));
+    garrisonOf(sim).growGarrisons(galaxy, new SeededRNG("cleared_growth"));
     expect(garrisonShips(galaxy, "sys_a")).toHaveLength(0);
   });
 });

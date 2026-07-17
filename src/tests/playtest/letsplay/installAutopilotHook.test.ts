@@ -281,6 +281,36 @@ describe("createLiveSceneController — verb → live engine call", () => {
     );
   });
 
+  it("dock() saves the station marker position as lastFlightShipPos before teleporting (undock edge-spawn fix)", async () => {
+    // Live-session finding (2026-07-12): dock() always teleports — the ship
+    // never actually travels there, so nothing else records "near the
+    // station" as its position. SPACE_FLIGHT's entry logic only ever reads
+    // `lastFlightShipPos`; without saving it here, undocking fell back to the
+    // plain system-edge spawn (confirmed live: dock right after a warp-in,
+    // then undock — the ship was back at the boundary, not by the station).
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        planetManager: {
+          stationMarkers: [{ station: { id: "s1" }, x: 111, y: -222 }],
+        },
+      },
+    });
+    await createLiveSceneController(engine).dock();
+    expect(engine.lastFlightShipPos).toEqual({ x: 111, y: -222 });
+  });
+
+  it("dock() does not touch lastFlightShipPos when no station marker is found", async () => {
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        planetManager: { stationMarkers: [] },
+      },
+    });
+    await createLiveSceneController(engine).dock();
+    expect(engine.lastFlightShipPos).toBeUndefined();
+  });
+
   it("openStarMap() transitions to STAR_MAP", async () => {
     const engine = mockEngine();
     await createLiveSceneController(engine).openStarMap();
@@ -424,6 +454,67 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(e2eEngageCombat).toHaveBeenCalledWith("npc1");
   });
 
+  it("attack(targetId) routes through the real onAttackNpc handler when the interaction seam is modeled, not the unconditional E2E seam", async () => {
+    // Live-session finding (2026-07-12): `e2eEngageCombat` registers a
+    // combatant with NO range check, so the policy attacking a system-wide
+    // hostile thousands of pixels away latched `combatModule.isActive` on an
+    // unreachable target and the ship never moved — "under attack" with
+    // nothing nearby, forever. `onAttackNpc` (the real "Атаковать" handler)
+    // does its own range check: pursue if far, engage only in weapon range.
+    const e2eEngageCombat = vi.fn();
+    const onAttackNpc = vi.fn();
+    const targetNpc = { id: "npc-far" };
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        combatPause: { paused: false, confirm: vi.fn() },
+        npcManager: {
+          e2eEngageCombat,
+          npcSprites: [{ npc: { id: "npc-other" } }, { npc: targetNpc }],
+          interaction: { onAttackNpc },
+        },
+      },
+    });
+    await createLiveSceneController(engine).attack("npc-far");
+    expect(onAttackNpc).toHaveBeenCalledWith(targetNpc);
+    expect(e2eEngageCombat).not.toHaveBeenCalled();
+  });
+
+  it("attack() without targetId routes the first sprite through onAttackNpc when modeled", async () => {
+    const onAttackNpc = vi.fn();
+    const firstNpc = { id: "npc-first" };
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          e2eEngageCombat: vi.fn(),
+          npcSprites: [{ npc: firstNpc }, { npc: { id: "npc-second" } }],
+          interaction: { onAttackNpc },
+        },
+      },
+    });
+    await createLiveSceneController(engine).attack();
+    expect(onAttackNpc).toHaveBeenCalledWith(firstNpc);
+  });
+
+  it("attack(targetId) falls back to e2eEngageCombat when the target id isn't among the live sprites", async () => {
+    const e2eEngageCombat = vi.fn();
+    const onAttackNpc = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          e2eEngageCombat,
+          npcSprites: [],
+          interaction: { onAttackNpc },
+        },
+      },
+    });
+    await createLiveSceneController(engine).attack("npc-unknown");
+    expect(onAttackNpc).not.toHaveBeenCalled();
+    expect(e2eEngageCombat).toHaveBeenCalledWith("npc-unknown");
+  });
+
   it("flee() resumes the active-pause overlay then breaks off pursuit", async () => {
     const resume = vi.fn();
     const breakOffCombatPursuit = vi.fn();
@@ -437,6 +528,38 @@ describe("createLiveSceneController — verb → live engine call", () => {
     await createLiveSceneController(engine).flee();
     expect(resume).toHaveBeenCalledTimes(1);
     expect(breakOffCombatPursuit).toHaveBeenCalledTimes(1);
+  });
+
+  it("warp() resumes the active-pause overlay before jumping (flee-stagnant-jump combat-pause deadlock)", async () => {
+    // Live-observed (2026-07-12): the SPACE_FLIGHT survive tier's
+    // `flee-stagnant-jump` escalation can pick `warp` while the ship is
+    // sitting on the «Огонь!» active-pause overlay (an outmatched standoff
+    // that never advanced a day). Without resuming the overlay first,
+    // `performWarpJumpTo` races the frozen pause and the ship parks on the
+    // combat frame instead of the system boundary — the same class of freeze
+    // `attack()`/`flee()` already guard against.
+    const resume = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        combatPause: { paused: true, resume },
+      },
+    });
+    await createLiveSceneController(engine).warp();
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(engine.currentScene.performWarpJumpTo).toHaveBeenCalledWith("sys2");
+  });
+
+  it("warp() does not touch the pause overlay when it isn't open", async () => {
+    const resume = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        combatPause: { paused: false, resume },
+      },
+    });
+    await createLiveSceneController(engine).warp();
+    expect(resume).not.toHaveBeenCalled();
   });
 
   it("flee() drives an actual escape route away from the system centre (F8 — breaking off pursuit alone froze the ship)", async () => {
@@ -559,6 +682,293 @@ describe("createLiveSceneController — verb → live engine call", () => {
     });
     createLiveSceneController(engine).tick();
     expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() closes an open modal AND re-arms a turn a shakedown hail froze", () => {
+    // Mirrors `NpcInteractionController.openShakedownHail`: `endTurn()` froze
+    // the turn, then a contact-panel modal opened. `hasOpenModal()` covers
+    // that panel; the autopilot has no follow-up click to re-arm the turn the
+    // way a human's pay/attack/flee response eventually does, so this must do
+    // it itself once the modal is gone.
+    const closeModals = vi.fn();
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => true, closeModals },
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: false },
+        e2eStartTurn,
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(closeModals).toHaveBeenCalledTimes(1);
+    expect(e2eStartTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismissBlockingModal() does not re-arm the turn while real combat is already active", () => {
+    const closeModals = vi.fn();
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => true, closeModals },
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: true },
+        e2eStartTurn,
+      },
+    });
+    createLiveSceneController(engine).dismissBlockingModal!();
+    expect(e2eStartTurn).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() does not touch the turn when the turn is already running", () => {
+    const closeModals = vi.fn();
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => true, closeModals },
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: true,
+        combatModule: { isActive: false },
+        e2eStartTurn,
+      },
+    });
+    createLiveSceneController(engine).dismissBlockingModal!();
+    expect(e2eStartTurn).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() returns false and touches nothing when no modal is open", () => {
+    const closeModals = vi.fn();
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => false, closeModals },
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: false },
+        e2eStartTurn,
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(false);
+    expect(closeModals).not.toHaveBeenCalled();
+    expect(e2eStartTurn).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() does not re-arm the turn when a route is already planned", () => {
+    const closeModals = vi.fn();
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => true, closeModals },
+        pendingWarp: null,
+        plannedRoute: { x: 10, y: 20 },
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: false },
+        e2eStartTurn,
+      },
+    });
+    createLiveSceneController(engine).dismissBlockingModal!();
+    expect(e2eStartTurn).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() resumes a stuck active-pause («Огонь!») overlay", () => {
+    // Live-session finding (2026-07-12): a multi-ship garrison re-pauses combat
+    // faster than a single per-verb resume can make progress — from
+    // SPACE_FLIGHT, a `warp` decision dispatches to `openStarMap()` first
+    // (LiveApplier's two-step warp), which had no pause awareness at all, so
+    // the flee-stagnant-jump escape valve never actually fired. Confirmed
+    // live: `combatPause.paused` stayed true across a full 10s window with
+    // zero net ship displacement.
+    const closeModals = vi.fn();
+    const resume = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => false, closeModals },
+        combatPause: { paused: true, resume },
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() does not touch a combatPause that isn't open", () => {
+    const resume = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => false, closeModals: vi.fn() },
+        combatPause: { paused: false, resume },
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(false);
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() prefers closing an open manager modal over resuming combatPause in the same call", () => {
+    const closeModals = vi.fn();
+    const resume = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => true, closeModals },
+        combatPause: { paused: true, resume },
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: false },
+      },
+    });
+    createLiveSceneController(engine).dismissBlockingModal!();
+    expect(closeModals).toHaveBeenCalledTimes(1);
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("tick() calls hud.closeModals() when the quest journal is open", () => {
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isQuestJournalOpen: () => true,
+          isSettingsPanelOpen: () => false,
+          closeModals,
+        },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeModals).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() calls hud.closeModals() when the accessibility panel is open", () => {
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isQuestJournalOpen: () => false,
+          isSettingsPanelOpen: () => true,
+          closeModals,
+        },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeModals).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() does not force-close the settings panel with zero grace when the quest journal is already idle-due to close", () => {
+    // Regression for the co-occurrence race: journal opens first and earns
+    // its grace tick; before the journal's idle-close fires, the settings
+    // panel ALSO opens (the two are independently openable — neither toggle
+    // closes the other). The shared closeModals() call must not destroy the
+    // freshly-opened settings panel as collateral damage of the journal's
+    // own overdue close.
+    let journalOpen = false;
+    let settingsOpen = false;
+    const closeModals = vi.fn(() => {
+      journalOpen = false;
+      settingsOpen = false;
+    });
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isQuestJournalOpen: () => journalOpen,
+          isSettingsPanelOpen: () => settingsOpen,
+          closeModals,
+        },
+      },
+    });
+    const controller = createLiveSceneController(engine);
+
+    controller.tick(); // tick 1: nothing open yet, flushes the "first tick" state
+    expect(closeModals).not.toHaveBeenCalled();
+
+    journalOpen = true;
+    controller.tick(); // tick 2: journal opens mid-session — grace tick, no close
+    expect(closeModals).not.toHaveBeenCalled();
+    expect(journalOpen).toBe(true);
+
+    settingsOpen = true;
+    controller.tick(); // tick 3: journal's grace is spent, but settings just opened —
+    // must defer the close entirely rather than nuke settings via closeModals().
+    expect(closeModals).not.toHaveBeenCalled();
+    expect(journalOpen).toBe(true);
+    expect(settingsOpen).toBe(true);
+
+    controller.tick(); // tick 4: both panels have had their grace tick — now close.
+    expect(closeModals).toHaveBeenCalledTimes(1);
+    expect(journalOpen).toBe(false);
+    expect(settingsOpen).toBe(false);
+  });
+
+  it("tick() does not call hud.closeModals() when neither panel is open", () => {
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isQuestJournalOpen: () => false,
+          isSettingsPanelOpen: () => false,
+          closeModals,
+        },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("tick() calls planetManager.closeInfoPanel() when the planet info panel is open", () => {
+    const closeInfoPanel = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        planetManager: { hasInfoPanel: true, closeInfoPanel },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeInfoPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() does not call planetManager.closeInfoPanel() when no info panel is open", () => {
+    const closeInfoPanel = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        planetManager: { hasInfoPanel: false, closeInfoPanel },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeInfoPanel).not.toHaveBeenCalled();
   });
 
   it("tick() starts a turn (e2eStartTurn) when the ship is genuinely idle in flight (F7)", () => {

@@ -254,6 +254,25 @@ export class CombatPursuitController {
         physics.currentSpeed,
       );
       if (distSq <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
+        // Ambush during an already-in-flight deliberate route (win-rate-100pct
+        // plan — round-budget hardening): no fight is active yet (this
+        // aggressor is the one about to open it), so if the player ship is
+        // already mid-transit on a genuinely plotted course — the ordinary
+        // click-route / warp-edge run, NOT the combat auto-orbit (which never
+        // runs before a fight exists) — preserve that course instead of
+        // letting the fresh engagement's auto-pursuit silently hijack it via
+        // `updateCombatPursuit`'s unconditional `setPath` calls. Mirrors
+        // `breakOffCombatPursuit`'s existing semantics for a route plotted
+        // WHILE combat is already active; this covers the case where the
+        // route predates the fight (`executeRouteTo`'s own break-off is gated
+        // on `combatModule.isActive`, so it never fires for this case).
+        if (
+          !(this.deps.flight.isInCombat?.() ?? false) &&
+          physics.isMoving &&
+          physics.isFollowingRoute()
+        ) {
+          this.pursuitSuspended = true;
+        }
         this.deps.flight.startInFlightCombat?.(sprite);
       }
     }
