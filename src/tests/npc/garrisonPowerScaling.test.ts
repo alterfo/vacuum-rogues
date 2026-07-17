@@ -10,12 +10,11 @@
  * generation-independent: existing saves pick it up as garrisons top up.
  *
  * SCOPE REVERSAL (campaign win-rate-100pct plan, Task 1, authorized by the
- * user's 2026-07-13 directive): pirate-held-system garrisons are now IN SCOPE
- * for the same downward discount — the prior "pressure ramp is the Overmind's"
- * invariant is retired because the death census flags pirate garrisons as the
- * most likely dominant remaining early-death source. The pirate assertion at
- * the bottom of this file still pins the OLD undiscounted behavior; it is
- * flipped in that plan's Task 3 when the pirate discount is actually wired.
+ * user's 2026-07-13 directive; wired in Task 3): pirate-held-system garrisons
+ * are now IN SCOPE for the same downward discount — the prior "pressure ramp
+ * is the Overmind's" invariant is retired because the death census flags
+ * pirate garrisons as the most likely dominant remaining early-death source.
+ * The upward bonus stays Overmind-only (pirates get discount only, no bonus).
  */
 import { describe, it, expect } from "vitest";
 import { Galaxy } from "@/domain/Galaxy";
@@ -120,9 +119,67 @@ describe("NpcSimulator — Overmind garrison scales with ratcheted power (Task 4
     }
   });
 
-  it("pirate garrisons are not power-scaled (bonus, or the new discount)", () => {
-    expect(pirateGarrisonCount(1, "gp_pirate")).toBe(
-      pirateGarrisonCount(0, "gp_pirate"),
-    );
+  it("pirate garrisons shift by the discount alone (no upward bonus — pressure ramp stays Overmind-only)", () => {
+    // Pirates get no `powerBonus` (always 0), only the shared discount, so
+    // the weak→strong shift for the same seed is exactly `discount`, not
+    // `bonus + discount` like the Overmind-side test above.
+    const discount = OVERMIND_GARRISON_POWER_MAX_DISCOUNT;
+    const weak = pirateGarrisonCount(0, "gp_pirate_shape");
+    const strong = pirateGarrisonCount(1, "gp_pirate_shape");
+    expect(strong).toBe(weak + discount);
+  });
+
+  it("pirate garrison size is monotone non-decreasing as power grows from 0 to 1", () => {
+    let prev = pirateGarrisonCount(0, "gp_pirate_mono");
+    for (const p of [0.1, 0.3, 0.4, 0.5, 0.7, 0.9, 1]) {
+      const count = pirateGarrisonCount(p, "gp_pirate_mono");
+      expect(count).toBeGreaterThanOrEqual(prev);
+      prev = count;
+    }
+  });
+
+  it("pirate garrisons ARE now power-scaled by the downward discount (Task 3 reversal): weak player faces a smaller pirate garrison", () => {
+    const discount = OVERMIND_GARRISON_POWER_MAX_DISCOUNT;
+    const weak = pirateGarrisonCount(0, "gp_pirate_discount");
+    expect(weak).toBeGreaterThanOrEqual(Math.max(1, 5 - discount));
+    expect(weak).toBeLessThanOrEqual(10 - discount);
+  });
+
+  it("maxed player: pirate garrison is at today's undiscounted [5,10] range (discount is 0 at full power)", () => {
+    const strong = pirateGarrisonCount(1, "gp_pirate_maxed");
+    expect(strong).toBeGreaterThanOrEqual(5);
+    expect(strong).toBeLessThanOrEqual(10);
+  });
+
+  it("GOD mode exempts pirate garrisons from the discount too (same GOD-hull-floor rationale)", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addPirateSystem("sys_b");
+    const sim = new NpcSimulator();
+    sim.setGameMode("GOD");
+    sim.attachCampaignPeakPower(() => 0);
+    sim.ensureGarrison(galaxy, new SeededRNG("gp_god_pirate_weak"));
+    const count = npcsPresentInSystem(galaxy, "sys_b").filter(
+      (n) => n.role === NpcRole.PIRATE,
+    ).length;
+    expect(count).toBeGreaterThanOrEqual(5);
+    expect(count).toBeLessThanOrEqual(10);
+  });
+
+  it("GOD mode is exempt from the discount — a powerless GOD player faces today's undiscounted [5,10] Overmind garrison", () => {
+    // win-rate-100pct plan, Task 2: GOD already floors hull above 0, so the
+    // discount has no survivability upside there, only the downside of
+    // starving combat-loot income (the prior plan's Task 2 regression this
+    // exemption targets — see sessionCompetence.test.ts's GOD milestone probe).
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+    const sim = new NpcSimulator();
+    sim.setGameMode("GOD");
+    sim.attachCampaignPeakPower(() => 0);
+    sim.ensureGarrison(galaxy, new SeededRNG("gp_god_weak"));
+    const count = npcsPresentInSystem(galaxy, "sys_a").filter(
+      (n) => n.faction === Faction.OVERMIND,
+    ).length;
+    expect(count).toBeGreaterThanOrEqual(5);
+    expect(count).toBeLessThanOrEqual(10);
   });
 });

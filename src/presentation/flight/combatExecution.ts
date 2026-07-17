@@ -206,6 +206,14 @@ export interface CombatExecutionHost {
    * BOTH sides' fire once ~34% of max hull has landed (review 2026-07-15).
    */
   beginRound?(): void;
+  /**
+   * True only while the ship is genuinely still trying to get away — the
+   * combat auto-pursuit is yielding to a player/agent-plotted route, not
+   * driving the ship itself (round-budget hardening, win-rate-100pct plan).
+   * Optional so partial test hosts default to `false` (the safe choice: a
+   * missing dep re-arms every window, same as before this hardening pass).
+   */
+  isPursuitSuspended?(): boolean;
   showMessage(text: string, color?: number): void;
 }
 
@@ -299,10 +307,47 @@ export class CombatExecutionController {
   // Confirm-time resolution (planning-phase actions)
   // ---------------------------------------------------------------------------
 
-  /** A turn was confirmed: resolve the one-shot planned actions for this window. */
+  /**
+   * A turn was confirmed: resolve the one-shot planned actions for this window.
+   *
+   * Each confirmed window is one combat round — reset the damage budget.
+   * EXCEPT a re-confirm that leaves an ALREADY-in-flight course untouched
+   * (win-rate-100pct plan, Task 6 — the round-count telemetry's own
+   * root-cause finding): `planningDriver.ts`'s own convention is "destination
+   * untouched (a null destination leaves the current course, so a warp-edge
+   * or fly-forward route keeps flying through the execute window)" — a
+   * committed flee re-confirms with `plan.destination === null` every window
+   * while the ship is still physically moving toward the system boundary
+   * from an EARLIER route, not planning a fresh one. That is a continuation,
+   * not a new tactical decision, so it does not re-arm a fresh
+   * 34%-of-current-hull allowance — restoring `PlayerAgent.completeWarp`'s
+   * own documented (but silently defeated) intent that "a committed
+   * flee/warp crossing is ONE round," for live play too (this class has one
+   * production wiring site, shared by both). A genuinely fresh decision —
+   * an explicit new destination this window, OR no destination while the
+   * ship is stationary (standing to fight) — still arms a fresh round
+   * exactly as before; only an in-flight, unredirected continuation is
+   * exempt.
+   *
+   * **Hardening (round-budget hardening pass):** `isMoving` alone is NOT
+   * enough to detect "in-flight continuation" — ordinary standing combat's
+   * own auto-orbit (`CombatPursuitController.steerCombatOrbit`) also keeps
+   * `isMoving` true throughout a fight (it re-`setPath`s every unfrozen frame
+   * to hold weapon range, by design — see `flight/CLAUDE.md`), which would
+   * otherwise exempt EVERY multi-window fight from re-arming, not just
+   * genuine flees (verified live: an ordinary stand-and-fight with no
+   * destination ever plotted still reads `isMoving === true` by the end of
+   * its first window). `isPursuitSuspended()` is the real signal: it is only
+   * true while the auto-pursuit is actually yielding to a player/agent route
+   * (`CombatPursuitController.pursuitSuspended`) — false for the auto-orbit
+   * case. Both conditions must hold for the exemption.
+   */
   beginWindow(plan: PlannedTurn<NpcShipSprite, WeaponSpec>): void {
-    // Each confirmed window is one combat round — reset the damage budget.
-    this.host.beginRound?.();
+    const continuingCourse =
+      plan.destination === null &&
+      this.host.getShipPhysics()?.isMoving === true &&
+      (this.host.isPursuitSuspended?.() ?? false);
+    if (!continuingCourse) this.host.beginRound?.();
     this.windowMult = 1;
     if (plan.afterburner) this.engageAfterburnerForWindow();
     if (plan.consumableId) this.activateConsumable(plan.consumableId);

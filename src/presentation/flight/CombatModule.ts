@@ -200,6 +200,39 @@ export interface CombatModuleDeps {
 }
 
 /**
+ * Dev/campaign-harness telemetry (win-rate-100pct plan, Task 6 escalation):
+ * what killed the player, captured once at the fatal hit. Read via
+ * {@link CombatModule.lastDeathCause} — purely additive internal state with no
+ * production consumer; `campaign.run.ts` reads it right after a "died" outcome
+ * so death causes are exact per-session data instead of re-derived from logs.
+ */
+export interface PlayerDeathCause {
+  /** The NPC whose shot brought hull to 0. */
+  killerNpcId: string;
+  killerRole: string;
+  /**
+   * Player hull / maxHull at the START of the fight that ended in death (set
+   * once when the fight opened, not at the moment of the fatal hit) — `null`
+   * if the player ship was unavailable at engagement start.
+   */
+  engagementStartHullFraction: number | null;
+  /** How many hostiles were engaged (in {@link CombatModule.combatants}) the instant the fatal hit landed. */
+  simultaneousCombatants: number;
+  /**
+   * How many combat rounds had started in the current, continuous engagement
+   * by the time of the fatal hit (Task 6, second escalation round: the
+   * simultaneous-combatant cap measured as a no-op — this checks engagement
+   * DURATION instead of peak concurrency). `1` means death landed within the
+   * fight's opening round; a higher count means the ship survived that many
+   * reaction windows/round-starts before dying. Counts every
+   * {@link CombatModule.beginCombatRound} call since the fight opened — both
+   * the live scene's reaction-window resume and the headless agent's
+   * once-per-step call increment it identically.
+   */
+  roundsSurvived: number;
+}
+
+/**
  * Real-time in-flight combat. Hostile NPCs that close inside weapon range are
  * added as combatants and fire at the player every
  * {@link GAME_BALANCE.combatFireIntervalMs}; the player's weapon auto-fires at
@@ -252,6 +285,31 @@ export class CombatModule implements FlightModule {
    * the same frame. Reset by {@link CombatModule.endCombat}.
    */
   private playerDeathReported = false;
+
+  /**
+   * Player hull fraction captured once when the current fight opened (Task 6
+   * escalation telemetry) — feeds {@link lastDeathCause} if this fight ends in
+   * death. Set in {@link addCombatant}'s fresh-engagement branch, not reset by
+   * {@link endCombat} (a settled death has nothing left to re-engage).
+   */
+  private engagementStartHullFraction: number | null = null;
+
+  /**
+   * Round-starts counted in the current, continuous engagement (Task 6,
+   * second escalation round) — feeds {@link lastDeathCause}'s
+   * `roundsSurvived`. Incremented by every {@link beginCombatRound} call
+   * (both the fresh-engagement one in {@link addCombatant} and every
+   * subsequent reaction-window/per-step call), reset by {@link endCombat}.
+   */
+  private roundsThisEngagement = 0;
+
+  /** See {@link PlayerDeathCause}. `null` until the player has died once. */
+  private _lastDeathCause: PlayerDeathCause | null = null;
+
+  /** Dev/campaign-harness telemetry — see {@link PlayerDeathCause}. */
+  get lastDeathCause(): PlayerDeathCause | null {
+    return this._lastDeathCause;
+  }
 
   /**
    * The NPC the player's weapon auto-fires at. Defaults to the first combatant;
@@ -435,9 +493,29 @@ export class CombatModule implements FlightModule {
       this.warnWeaponless();
       return;
     }
+    // Simultaneous-engagement cap (win-rate-100pct plan, Task 6 escalation —
+    // see `GAME_BALANCE.combatMaxSimultaneousCombatants`'s doc comment for the
+    // telemetry finding this responds to): refuse a NEW joiner once the fight
+    // already holds the cap — same class of refusal as the downed/weaponless
+    // guards above, not a new mechanic. The aggressor stays "aggressive" and
+    // keeps calling this every frame (existing idempotent garrison-aggro
+    // path); it joins the instant a slot frees (a combatant dies, flees, or
+    // the fight ends).
+    if (this.combatants.size >= GAME_BALANCE.combatMaxSimultaneousCombatants) {
+      return;
+    }
 
+    // Stagger this NPC's first shot by its join order among ALREADY-present
+    // combatants (win-rate-100pct plan, combat-mechanics escalation): several
+    // hostiles joining in the same beat (a standing garrison / freshly-folded
+    // capture fleet, all already in range) would otherwise all start at timer
+    // 0 and fire in lock-step within the same execute window. A negative
+    // starting timer only delays the FIRST shot — `advanceNpcTimers` resets
+    // to 0 after every shot, so steady-state cadence is unaffected.
+    const joinStagger =
+      this.combatants.size * GAME_BALANCE.combatJoinFireStaggerMs;
     this.combatants.add(npc);
-    this.npcFireTimers.set(npc, 0);
+    this.npcFireTimers.set(npc, -joinStagger);
     if (!this.selectedTarget) this.selectedTarget = npc;
 
     if (!this.isActive) {
@@ -445,6 +523,10 @@ export class CombatModule implements FlightModule {
       this.primeWeaponFireTimers();
       this.lowHullWarned = false;
       this.beginCombatRound(); // fresh engagement ⇒ fresh round budget
+      this.engagementStartHullFraction =
+        shipNow && shipNow.maxHull > 0
+          ? shipNow.hullHP / shipNow.maxHull
+          : null;
       this.hud?.open(this.selectedTarget);
     }
     logger.info(`In-flight combat: engaged ${npc.npc.id}`);
@@ -532,12 +614,19 @@ export class CombatModule implements FlightModule {
    * Start a fresh combat round (campaign Task 9 (v)): clear the round's taken
    * damage and re-open fire after a completed round. The live scene calls this
    * when the player resumes from the reaction-window pause (via the combat-pause
-   * UI buttons); the headless agent calls it at the start of each combat step.
-   * A no-op-safe reset — cheap to call even when no round is in progress.
+   * UI buttons); the headless agent calls it at the start of each combat step
+   * — including steps with NO active fight (`waitOneDay`'s own doc: "cheap to
+   * call even when no round is in progress"). `roundsThisEngagement` only
+   * counts calls while {@link isActive} is already true (the fresh-engagement
+   * call in {@link addCombatant} sets `isActive` before calling this, so it
+   * still counts as round 1) — else a run of peaceful, fight-free steps
+   * between engagements would inflate the NEXT fight's round count before it
+   * even starts.
    */
   beginCombatRound(): void {
     this.roundDamageTaken = 0;
     this.roundComplete = false;
+    if (this.isActive) this.roundsThisEngagement++;
   }
 
   /** End the current fight: drop every combatant, reset timers, close the HUD. */
@@ -552,6 +641,7 @@ export class CombatModule implements FlightModule {
     this.playerDeathReported = false;
     this.roundDamageTaken = 0;
     this.roundComplete = false;
+    this.roundsThisEngagement = 0;
     this.hud?.close();
     // Re-arm the active-pause debounce so the next engagement pauses fresh on
     // its first incoming shot (idempotent — safe on a no-op end / teardown).
@@ -810,6 +900,13 @@ export class CombatModule implements FlightModule {
     if (ship.hullHP <= 0) {
       if (!this.playerDeathReported) {
         this.playerDeathReported = true;
+        this._lastDeathCause = {
+          killerNpcId: npc.npc.id,
+          killerRole: npc.npc.role,
+          engagementStartHullFraction: this.engagementStartHullFraction,
+          simultaneousCombatants: this.combatants.size,
+          roundsSurvived: this.roundsThisEngagement,
+        };
         this.deps.onPlayerDestroyed?.();
       }
       return;

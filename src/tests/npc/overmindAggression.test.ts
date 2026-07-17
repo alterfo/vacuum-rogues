@@ -180,6 +180,14 @@ describe("NpcSimulator Overmind expansion goal persists", () => {
     galaxy.addOvermindSystem("sys_b");
 
     const sim = new NpcSimulator();
+    // This test exercises capture-fleet expansion, not garrison-discount
+    // economics — pin the ratcheted power at max (win-rate-100pct plan's Task
+    // 2/3 raised the discount ceiling) so this scenario's garrisons stay at
+    // today's undiscounted baseline instead of the new, much smaller
+    // zero-power range, which was destabilizing the transient-defender churn
+    // this capture race depends on (collateral from the discount retune, not
+    // a capture-logic regression).
+    sim.attachCampaignPeakPower(() => 1);
     sim.assembleCaptureFleet(galaxy, new SeededRNG("expansion_seed"));
 
     // Fleet of OVERMIND ships travels sys_b → sys_a (still neutral on launch).

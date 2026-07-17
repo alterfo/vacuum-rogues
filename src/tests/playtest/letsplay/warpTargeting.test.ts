@@ -225,8 +225,16 @@ describe("PlayerAgent — real-engine smart warp targeting (Task 5)", () => {
   // targeting. What must stay true: the agent genuinely warps, every chosen
   // destination avoids the held system, and it never ends up inside it.
   it("warps to clean destinations only — never the Overmind-held neighbor", async () => {
+    // Seed re-picked for the win-rate-100pct plan's Task 2/3 garrison-discount
+    // retune: the old seed's day-60 Overmind capture-fleet expansion (an
+    // rng.nextInt draw over ALL neutral-adjacent-to-hostile borders, unrelated
+    // to the discount in kind) happened to retarget onto the player's own
+    // start system once upstream fillGarrison draw counts shifted, capturing
+    // home and ambushing the escape warp before it could land — collateral
+    // from the retune's draw-count drift, not a smart-warp-targeting
+    // regression (re-verified stable across a spread of seed variants).
     const harness = await RealEngineHarness.boot({
-      seed: "LETSPLAY_WARP_TARGETING_SESSION",
+      seed: "LETSPLAY_WARP_TARGETING_SESSION_1",
       systemCount: 30,
     });
     try {

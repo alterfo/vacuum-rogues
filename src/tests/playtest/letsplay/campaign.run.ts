@@ -43,6 +43,7 @@ import {
   foldCampaignDay,
   foldCampaignStep,
   formatCampaignReport,
+  type CampaignDeathCause,
   type CampaignMemoryStats,
   type CampaignSessionReport,
   type CampaignStallStats,
@@ -147,6 +148,7 @@ export async function runCampaignSession(
     let calendarWedged = false;
     let stepsSinceDayAdvance = 0;
     let lastDaySeen = -1;
+    let deathCause: CampaignDeathCause | null = null;
 
     /**
      * Day-boundary checkpoint: one observe drives both the invariant sweep and
@@ -207,6 +209,20 @@ export async function runCampaignSession(
 
       if (arcResolved(status) || sceneTerminal(scene)) {
         resolutionDay = day;
+        // "died" per `classifyCampaignOutcome`'s own ordering: arc status wins
+        // over scene (a galaxy "lost" also shows GAME_OVER), so a real player
+        // death is exactly the non-arc-resolved GAME_OVER case. Read off the
+        // HARNESS (Task 6 escalation telemetry, `realEngineHarness.ts`'s
+        // `lastDeathCause()`), not the live scene: the GAME_OVER transition
+        // fires without being awaited, so by the time this branch runs the
+        // scene may already have swapped away from the flight scene that had
+        // the fatal hit (or even from a flight scene the fatal hit's own step
+        // freshly constructed after a warp) — the harness captured it
+        // synchronously, in the same call stack as the hit, before any of
+        // that could happen.
+        if (!arcResolved(status) && scene === SceneType.GAME_OVER) {
+          deathCause = harness.lastDeathCause();
+        }
         break;
       }
       if (day !== lastCheckpointDay) {
@@ -279,6 +295,7 @@ export async function runCampaignSession(
       heapDeltaMB: (process.memoryUsage().heapUsed - heapBefore) / MB,
       memory,
       stall,
+      deathCause,
     };
   } finally {
     harness.dispose();

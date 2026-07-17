@@ -498,16 +498,26 @@ export class NpcGarrisonCombat {
     // Adaptive campaign pressure (Task 4): Overmind garrisons grow with the
     // run's ratcheted peak power — gentle early (0 extra while weak), hard
     // late. Spawn-time only, so it is generation-independent (existing saves
-    // pick it up as garrisons top up). Pirate garrisons are not power-scaled.
+    // pick it up as garrisons top up). The upward bonus stays Overmind-only
+    // (the pressure-ramp bonus is not part of the win-rate-100pct reversal).
     const peakPower = this.campaignPeakPowerSource?.() ?? 0;
     const powerBonus = overmind ? overmindGarrisonPowerBonus(peakPower) : 0;
-    // Win-rate architecture plan (Task 2): the mirrored downward half — a
+    // Win-rate-100pct plan (Task 2 + Task 3): the mirrored downward half — a
     // powerless player faces a SMALLER standing garrison, phasing out to 0
-    // discount by full power. Pirate garrisons stay undiscounted, matching
-    // the upward bonus's own Overmind-only scope.
-    const powerDiscount = overmind
-      ? overmindGarrisonPowerDiscount(peakPower)
-      : 0;
+    // discount by full power. Task 3 reverses the prior "pirate garrisons are
+    // not power-scaled" invariant (`garrisonPowerScaling.test.ts`, authorized
+    // by the user's 2026-07-13 directive): both Overmind AND pirate branches
+    // now share this same graded-ramp discount — pirate systems already fill
+    // to the identical unscaled [GARRISON_MIN, GARRISON_MAX] baseline, so no
+    // pirate-specific constant is warranted (Task 1's recorded decision).
+    // GOD-mode exemption (Task 2): GOD already floors hull above 0
+    // (godMode.ts), so the discount has zero survivability upside there —
+    // only the downside of starving combat-loot income by shrinking the
+    // garrison. Exempting GOD lets NORMAL/HARD keep the full maxDiscount
+    // ceiling instead of shrinking it for everyone, and applies to pirates
+    // too (same GOD-hull-floor rationale).
+    const powerDiscount =
+      this.gameMode !== "GOD" ? overmindGarrisonPowerDiscount(peakPower) : 0;
     const netDelta = powerBonus - powerDiscount;
     // Floored so the discount can never make a held system read as empty.
     const scaledMin = Math.max(

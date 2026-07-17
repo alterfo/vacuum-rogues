@@ -28,6 +28,8 @@ export interface ExecutionNpcManager {
     count?: number,
   ): void;
   rollDeathLootCount(npc: NpcShip): number;
+  /** True only while the ship is genuinely still trying to get away (round-budget hardening). */
+  isPursuitSuspended(): boolean;
 }
 
 /** The scene members `buildCombatExecutionDeps` reads (lazy closures, see
@@ -93,6 +95,7 @@ export function buildCombatExecutionDeps(
     // Every confirmed window re-arms the round latch (review 2026-07-15) —
     // without it `roundComplete` silences ALL fire for the rest of the fight.
     beginRound: () => host.getCombatModule().beginCombatRound(),
+    isPursuitSuspended: () => host.getNpcManager().isPursuitSuspended(),
     showMessage: (text, color) => host.showMessage(text, color),
   };
 }

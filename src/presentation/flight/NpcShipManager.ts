@@ -1320,6 +1320,16 @@ export class NpcShipManager implements FlightModule {
     this.pursuit.breakOffCombatPursuit();
   }
 
+  /**
+   * Whether the combat auto-pursuit is currently yielding to a player/agent-
+   * plotted route (win-rate-100pct plan — round-budget hardening): true only
+   * while the ship is genuinely still trying to get away, false while the
+   * auto-orbit/chase is the one driving movement (ordinary standing combat).
+   */
+  isPursuitSuspended(): boolean {
+    return this.pursuit.pursuitSuspended;
+  }
+
   // ---------------------------------------------------------------------------
   // Exploration encounters (derelict / anomaly / distress) — Task 3 wiring
   // ---------------------------------------------------------------------------

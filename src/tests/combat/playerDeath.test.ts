@@ -19,7 +19,7 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";
-import { FactionType, SceneType } from "@/types";
+import { FactionType, NpcRole, SceneType } from "@/types";
 import type { Renderer } from "@/presentation/Renderer";
 import {
   MockSaveService,
@@ -46,7 +46,7 @@ function makeSprite(
   id: string,
   x: number,
   y: number,
-  opts: { hullHP?: number; damage?: number } = {},
+  opts: { hullHP?: number; damage?: number; role?: NpcRole } = {},
 ): NpcShipSprite {
   return {
     x,
@@ -56,6 +56,7 @@ function makeSprite(
       name: id,
       hullHP: opts.hullHP ?? 1000, // tanky by default so the fight persists
       damage: opts.damage ?? 20,
+      role: opts.role ?? NpcRole.PIRATE,
     },
   } as unknown as NpcShipSprite;
 }
@@ -137,6 +138,107 @@ describe("CombatModule player-death detection (Task 2)", () => {
     module.addCombatant(makeSprite("b", 50, 0, { hullHP: 100000, damage: 20 }));
     module.update(FIRE);
     expect(deaths).toBe(2);
+  });
+});
+
+describe("CombatModule.lastDeathCause (win-rate-100pct plan, Task 6 escalation telemetry)", () => {
+  it("is null before any death", () => {
+    const { module } = setup({ hullHP: 100, maxHull: 100 });
+    expect(module.lastDeathCause).toBeNull();
+  });
+
+  it("records the killer's id/role, engagement-start hull fraction, and combatant count", () => {
+    const { module, ship } = setup({ hullHP: 20, maxHull: 100 }); // 0.2 fraction at engage
+    module.addCombatant(
+      makeSprite("a", 50, 0, { damage: 20, role: NpcRole.RANGER }),
+    );
+    module.update(FIRE); // 20 - 20 → clamped to 0
+    expect(ship.hullHP).toBe(0);
+    expect(module.lastDeathCause).toEqual({
+      killerNpcId: "a",
+      killerRole: NpcRole.RANGER,
+      engagementStartHullFraction: 0.2,
+      simultaneousCombatants: 1,
+      roundsSurvived: 1,
+    });
+  });
+
+  it("counts every simultaneously-engaged combatant, not just the killer", () => {
+    const { module } = setup({ hullHP: 15, maxHull: 100 });
+    module.addCombatant(makeSprite("a", 40, 0, { hullHP: 100000, damage: 20 }));
+    module.addCombatant(makeSprite("b", 60, 0, { hullHP: 100000, damage: 20 }));
+    module.update(FIRE); // both fire in the same advanceNpcTimers loop
+    expect(module.lastDeathCause?.simultaneousCombatants).toBe(2);
+  });
+
+  it("engagementStartHullFraction is captured at the fight's OPENING hit, not the fatal one", () => {
+    const { module, ship } = setup({ hullHP: 100, maxHull: 100 }); // fraction 1.0 at engage
+    const hostile = makeSprite("a", 50, 0, { damage: 10 });
+    module.addCombatant(hostile); // fresh engagement: isActive false → true
+    module.update(FIRE); // 100 - 10 = 90, non-lethal
+    expect(ship.hullHP).toBe(90);
+    // The SAME ongoing fight escalates (isActive stays true — engagementStartHullFraction
+    // must NOT re-capture here, only at the original open above).
+    (hostile.npc as { damage: number }).damage = 200;
+    module.update(FIRE); // now lethal
+    expect(ship.hullHP).toBe(0);
+    expect(module.lastDeathCause?.engagementStartHullFraction).toBe(1);
+  });
+
+  it("a fresh fight after endCombat re-captures engagement-start hull for its own death", () => {
+    const ship = { hullHP: 50, maxHull: 100 };
+    const loadout = new ShipLoadout("hull_warden");
+    loadout.install("wpn_pulse");
+    const module = new CombatModule({
+      getShipPhysics: () => makePhysics(),
+      getPlayerLoadout: () => loadout,
+      getPlayerShip: () => ship,
+    });
+
+    module.addCombatant(
+      makeSprite("a", 50, 0, { hullHP: 100000, damage: 200 }),
+    );
+    module.update(FIRE);
+    expect(module.lastDeathCause?.engagementStartHullFraction).toBe(0.5);
+
+    module.endCombat();
+    ship.hullHP = 30; // repaired to a different hull level, takes off again
+    module.addCombatant(
+      makeSprite("b", 50, 0, { hullHP: 100000, damage: 200 }),
+    );
+    module.update(FIRE);
+    expect(module.lastDeathCause?.engagementStartHullFraction).toBe(0.3);
+    expect(module.lastDeathCause?.killerNpcId).toBe("b");
+  });
+
+  it("roundsSurvived counts every beginCombatRound call in the fight, not just the opening one", () => {
+    const { module, ship } = setup({ hullHP: 100, maxHull: 100 });
+    const hostile = makeSprite("a", 50, 0, { hullHP: 100000, damage: 1 });
+    module.addCombatant(hostile);
+    expect(module.lastDeathCause).toBeNull(); // not dead yet
+    // Mirrors PlayerAgent.waitOneDay's own per-step call — a real fight
+    // survives several of these before the fatal one.
+    module.beginCombatRound();
+    module.beginCombatRound();
+    expect(ship.hullHP).toBe(100); // sanity: still alive, no update() ticked yet
+    (hostile.npc as { damage: number }).damage = 200;
+    module.update(FIRE); // now lethal
+    expect(ship.hullHP).toBe(0);
+    // 1 (fresh-engagement open) + 2 explicit calls above = 3.
+    expect(module.lastDeathCause?.roundsSurvived).toBe(3);
+  });
+
+  it("a beginCombatRound call outside any fight does not inflate the NEXT fight's round count", () => {
+    const { module, ship } = setup({ hullHP: 100, maxHull: 100 });
+    // Peaceful steps before any engagement (e.g. PlayerAgent.waitOneDay's
+    // unconditional per-step call while just flying around).
+    module.beginCombatRound();
+    module.beginCombatRound();
+    module.beginCombatRound();
+    module.addCombatant(makeSprite("a", 50, 0, { damage: 200 }));
+    module.update(FIRE);
+    expect(ship.hullHP).toBe(0);
+    expect(module.lastDeathCause?.roundsSurvived).toBe(1); // only the fresh-engagement round counts
   });
 });
 

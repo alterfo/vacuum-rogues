@@ -40,6 +40,19 @@ export interface RecordedError {
   detail?: unknown;
 }
 
+/**
+ * Structural mirror of `CombatModule.PlayerDeathCause` (win-rate-100pct plan,
+ * Task 6 escalation telemetry) — not imported, same "mirror, don't couple"
+ * convention `campaignMetrics.ts`'s `CampaignDeathCause` already uses.
+ */
+export interface RecordedPlayerDeathCause {
+  killerNpcId: string;
+  killerRole: string;
+  engagementStartHullFraction: number | null;
+  simultaneousCombatants: number;
+  roundsSurvived: number;
+}
+
 export interface HarnessOptions {
   /** Galaxy seed — fixed by default so runs are deterministic. */
   seed?: string;
@@ -70,6 +83,19 @@ export class RealEngineHarness {
   private restoreCanvas: (() => void) | null = null;
   private onWindowError: ((ev: ErrorEvent) => void) | null = null;
   private onRejection: ((ev: PromiseRejectionEvent) => void) | null = null;
+
+  /**
+   * Most recent `CombatModule.lastDeathCause` observed across any {@link tick}
+   * this session (win-rate-100pct plan, Task 6 escalation telemetry).
+   * Captured synchronously right after `currentScene.update()` — in the SAME
+   * call stack as a fatal hit, before the (fire-and-forgotten, unawaited)
+   * GAME_OVER scene transition has any chance to swap `currentScene` out from
+   * under a caller polling from further up the stack (a caller-side "read
+   * after the fact" raced and lost this reference — see the campaign runner's
+   * own history note). Surviving scene/`CombatModule` teardown+recreation is
+   * exactly why this lives on the long-lived harness, not the ephemeral scene.
+   */
+  private _lastDeathCause: RecordedPlayerDeathCause | null = null;
 
   private constructor(opts: HarnessOptions) {
     this.seed = opts.seed ?? "PLAYTEST_SEED";
@@ -163,8 +189,28 @@ export class RealEngineHarness {
 
   /** Advance one deterministic frame (mirrors the engine's game-loop body). */
   tick(deltaMs = 16): void {
+    // Captured BEFORE `.update()` (Task 6 escalation telemetry): a fatal hit
+    // inside this very `.update()` call chain reaches
+    // `GameEngine.transitionTo` SYNCHRONOUSLY (`triggerPlayerDeath` →
+    // `transitionToGameOver` → `transitionTo`, called with no `await` before
+    // it — see `EndgameController.triggerPlayerDeath`), which itself
+    // synchronously destroys and nulls `engine.currentScene` (`transitionTo`:
+    // `this.currentScene.destroy(); this.currentScene = null;`, BEFORE its
+    // first `await`) — all nested inside THIS `.update()` call, not after it
+    // returns. Re-reading `this.engine.currentScene` after `.update()` would
+    // already see `null`/the next scene, losing the dying flight scene's
+    // `combatModule` entirely. This local reference stays valid regardless —
+    // only the engine's OWN pointer was reassigned, not this variable — and
+    // `CombatModule.destroy()` never clears `lastDeathCause`.
+    const sceneBeforeUpdate = this.engine.currentScene;
     try {
-      this.engine.currentScene?.update(deltaMs);
+      sceneBeforeUpdate?.update(deltaMs);
+      const cause = (
+        sceneBeforeUpdate as {
+          combatModule?: { lastDeathCause?: RecordedPlayerDeathCause | null };
+        } | null
+      )?.combatModule?.lastDeathCause;
+      if (cause) this._lastDeathCause = cause;
     } catch (error) {
       this.recorded.push({
         source: "unhandled",
@@ -172,6 +218,11 @@ export class RealEngineHarness {
         detail: error,
       });
     }
+  }
+
+  /** See {@link _lastDeathCause}. `null` until the player has died once. */
+  lastDeathCause(): RecordedPlayerDeathCause | null {
+    return this._lastDeathCause;
   }
 
   currentScene(): GameScene | null {

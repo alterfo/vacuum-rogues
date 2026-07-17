@@ -404,6 +404,42 @@ export const GAME_BALANCE = {
   /** Real-time in-flight combat cadence: a ship fires once per this many ms while in range. */
   combatFireIntervalMs: 2500,
   /**
+   * Fire-timer stagger applied per already-joined combatant at `addCombatant`
+   * time, in ms (win-rate-100pct plan, combat-mechanics escalation). Root
+   * cause: every joining NPC's fire timer resets to 0
+   * ({@link CombatModule.addCombatant}), so N hostiles already present on
+   * arrival (a standing garrison, a freshly-folded capture fleet) are
+   * perfectly lock-stepped — since `combatFireIntervalMs` (2500) is less than
+   * `COMBAT_ROUND_MS` (3000), they ALL cross the fire interval within the
+   * SAME execute window, landing a synchronized alpha-strike regardless of
+   * per-hit damage scaling or garrison-count discounts. Staggering by 300ms
+   * per join order lets at most 2 already-present hostiles fire within the
+   * first window (2500ms, 2800ms — both `< 3000`); a 3rd+ joiner's first shot
+   * (3100ms+) lands in a LATER window, after `PLANNING` has reopened and the
+   * player got a real decision point. Only delays each NPC's FIRST shot —
+   * its steady-state cadence after firing once is unaffected (mirrors the
+   * player-side `combatEngagePrechargeFraction` pattern, opposite direction).
+   */
+  combatJoinFireStaggerMs: 300,
+  /**
+   * Max hostiles {@link CombatModule.addCombatant} will admit into one fight at
+   * once (win-rate-100pct plan, Task 6 escalation — the death-cause telemetry's
+   * own recommended next lever). A garrison/capture fleet with several ships
+   * already in weapon range on arrival used to add ALL of them the same frame
+   * (`combatants.size` had no ceiling); a 20-session telemetry sample measured
+   * median 3.5 simultaneously-engaged combatants at the fatal hit (75% of
+   * deaths ≥ 3, 50% starting the fight at FULL hull) — the round-budget/
+   * fire-stagger fixes only bound damage PER round and PER shot, never how
+   * many attackers contribute to one round at all. An aggressor beyond this
+   * cap stays "aggressive" and keeps calling `addCombatant` every frame
+   * (existing idempotent no-op path) but does not fire until a slot frees (a
+   * combatant dies, flees, or the fight ends) — same class of refusal as the
+   * existing downed/weaponless guards, not a new mechanic. `2` matches the
+   * fire-stagger doc's own "at most 2 already-present hostiles fire within the
+   * first execute window" precedent.
+   */
+  combatMaxSimultaneousCombatants: 2,
+  /**
    * Fraction of a weapon's fire interval pre-charged into its cold-start timer
    * when combat begins ({@link CombatModule.addCombatant}), applied only to
    * weapons whose `cooldownTurns > 1`. A `cooldownTurns:1` weapon's interval
@@ -1150,22 +1186,37 @@ export const POWER_INDEX_BATTLE_READY_THRESHOLD = 0.13;
  * power input is the RATCHETED `campaignPeakPower`, so selling gear never
  * softens a garrison. Overmind garrison COUNT also grows with the ratchet.
  */
-/** Hostile-system HP/damage multiplier faced by a powerless player (index 0). */
-export const HOSTILE_SCALING_WEAK_MULT = 0.9;
+/**
+ * Hostile-system HP/damage multiplier faced by a powerless player (index 0).
+ * Lowered from `0.9` (win-rate-100pct plan, Task 5) — the garrison-count
+ * discount lever (Task 2/3) plateaued at 2% win-rate despite maxing out its
+ * structural ceiling; the death taxonomy showed 75% of deaths happen AFTER
+ * the player already landed ≥1 liberation, at a median peak power (0.07) far
+ * below the battle-ready floor, where this lerp's effective multiplier was
+ * still close to the old `0.9` — garrison count wasn't the binding
+ * constraint, per-fight lethality was. `0.5`, not `NEUTRAL_SCALING_WEAK_MULT`'s
+ * exact `0.4`: a held-system garrison is a deliberately-engaged fight and must
+ * stay strictly harder than incidental neutral-space wandering-pack combat
+ * (`combatScaling`'s own pinned "held is harder than neutral" invariant) — a
+ * literal-match value would have collapsed that gradient at zero power.
+ */
+export const HOSTILE_SCALING_WEAK_MULT = 0.5;
 /** Extra Overmind garrison ships (added to [min,max]) at full power (index 1). */
 export const OVERMIND_GARRISON_POWER_MAX_BONUS = 2;
 /**
  * Mirror of `OVERMIND_GARRISON_POWER_MAX_BONUS`: Overmind garrison ships
  * SUBTRACTED from [min,max] at zero power (a powerless player faces a
- * smaller standing garrison), phasing out to 0 as power reaches 1 (campaign
- * win-rate architecture plan, Task 2). Deliberately smaller than the bonus's
- * own magnitude (2) — `2` regressed a pinned GOD-mode economy test (fewer
- * garrison ships starved combat-loot income); `1` is the largest value that
- * clears it. Measured (Task 4, 50 sessions) not to move the campaign
- * win-rate plateau — see `.claude/docs/systems/overmind.md`'s Known-unmet
- * gate section for the follow-up diagnosis.
+ * smaller standing garrison), phasing out to 0 as power reaches 1. Raised to
+ * the structural ceiling (`GARRISON_MIN 5 − GARRISON_DISCOUNT_FLOOR 1 = 4`,
+ * campaign win-rate-100pct plan, Task 2) now that `fillGarrison` exempts GOD
+ * mode from the discount — the prior `1` was shrunk only to dodge a GOD-mode
+ * combat-loot regression, which the exemption removes outright, so
+ * NORMAL/HARD get the full graded ramp (`4→3→2→1→0` across the power range)
+ * instead of a knife-edge that only fired at literal power 0. See
+ * `.claude/docs/systems/overmind.md`'s Known-unmet gate section for the
+ * measured history.
  */
-export const OVERMIND_GARRISON_POWER_MAX_DISCOUNT = 1;
+export const OVERMIND_GARRISON_POWER_MAX_DISCOUNT = 4;
 /**
  * ─── Campaign Task 9 (i): neutral-system combat gentling ─────────────────────
  * The Overview's "gentle while weak, relentless once armed" design applied

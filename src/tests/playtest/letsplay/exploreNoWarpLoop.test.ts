@@ -211,10 +211,28 @@ describe("PlayerAgent — real-engine no warp-forever loop (Task 2)", () => {
       // two-step warp then re-decides "warp" again from STAR_MAP to execute
       // the jump it just requested) — filtering to that scene counts hops,
       // not the doubled raw action count.
+      //
+      // A flee-motivated hop (kind "flee", or a "warp" whose reason is a
+      // `mem:flee-*` escape jump) also resets the streak, same as landing:
+      // this cap targets the *blind economic* warp-forever loop (Task 2's own
+      // bug — no in-system planet ever visited between hops), not legitimate
+      // back-to-back danger-avoidance. The round-budget hardening pass
+      // (win-rate-100pct plan) made an ambushed ship correctly continue
+      // fleeing instead of getting hijacked into the combat auto-orbit
+      // (`CombatPursuitController.tickAggressor`'s ambush-preservation fix) —
+      // fleeing successfully from one hostile system straight into fleeing
+      // the Overmind front again (verified live: seed LETSPLAY_EXPLORE,
+      // steps 109/111 — `mem:flee-outmatched` then `mem:flee-overmind-front`)
+      // is the intended, safer outcome, not the bug this cadence cap exists
+      // to catch.
       let streak = 0;
       let longestStreak = 0;
       for (const step of res.steps) {
-        if (step.action.kind === "land") {
+        if (
+          step.action.kind === "land" ||
+          step.action.kind === "flee" ||
+          step.action.reason?.startsWith("mem:flee")
+        ) {
           streak = 0;
         } else if (
           step.action.kind === "warp" &&
