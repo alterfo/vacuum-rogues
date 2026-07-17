@@ -299,6 +299,42 @@ describe("decideWithMemory (pure)", () => {
     });
   });
 
+  describe("earn-land suppressed once quests are structurally unavailable (win-rate-100pct plan)", () => {
+    const singlePlanet = (): Observation =>
+      obs({ planets: [{ id: "A", name: "A", availableQuests: 0 }] });
+
+    it("overmindShare below the take-quest ceiling ⇒ still lands to earn even with prices already known", () => {
+      const mem = createMemory();
+      mem.priceBook.set("A", new Map([[M, rec(100, 100)]]));
+      const action = decideWithMemory(
+        { ...singlePlanet(), overmindShare: 0.3 },
+        mem,
+      );
+      expect(action.kind).toBe("land");
+      expect(action.reason).toBe("mem:earn");
+    });
+
+    it("prices not yet known here ⇒ still lands to earn even with overmindShare above the ceiling", () => {
+      const action = decideWithMemory(
+        { ...singlePlanet(), overmindShare: 0.8 },
+        createMemory(),
+      );
+      expect(action.kind).toBe("land");
+      expect(action.reason).toBe("mem:earn");
+    });
+
+    it("overmindShare above the ceiling AND prices already known here ⇒ does not land to earn", () => {
+      const mem = createMemory();
+      mem.priceBook.set("A", new Map([[M, rec(100, 100)]]));
+      const action = decideWithMemory(
+        { ...singlePlanet(), overmindShare: 0.8 },
+        mem,
+      );
+      expect(action.kind).not.toBe("land");
+      expect(action.reason).not.toBe("mem:earn");
+    });
+  });
+
   describe("survival still takes precedence", () => {
     it("a hostile with a healthy hull ⇒ attack it", () => {
       const action = decideWithMemory(

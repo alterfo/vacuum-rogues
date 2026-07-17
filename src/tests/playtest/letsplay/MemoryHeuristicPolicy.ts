@@ -1837,13 +1837,31 @@ export function decideWithMemory(
       if (daysStagnant) {
         push("wait", "stagnation-wait");
       }
-      // Land to "earn" — kept as an unconditional fallback so the agent always
-      // has a forward move here even when every warp is gated (fuel/cadence/
-      // danger/galaxy-lost) or `early-explore` is withheld because
+      // Land to "earn" — kept as a fallback so the agent always has a forward
+      // move here even when every warp is gated (fuel/cadence/danger/
+      // galaxy-lost) or `early-explore` is withheld because
       // `warpRejectTripped`. This is ALSO the refuel path (landing tops the
       // tank) and the break-out from a warp that keeps getting rejected on the
       // engine's absolute per-jump fuel cost.
-      if (earnPlanet !== undefined) {
+      // Suppressed once landing here is provably pointless (win-rate-100pct
+      // plan): traced 648/651 landings (99.5%) over 1500 steps producing ZERO
+      // net credit change — `earnPlanetId`'s fallback to `habitable[0]` lands
+      // even with no quest on offer, and once `overmindShare` clears
+      // `QUEST_ACCEPT_OVERMIND_SHARE_CEILING` (the same threshold `take-quest`
+      // above already gates on), new quests are permanently disabled for the
+      // rest of the run — so a landing that ALSO has nothing left to teach
+      // the price book (`alreadyVisited`) has no quest upside and no
+      // price-discovery upside either. Critical-fuel refuelling is unaffected
+      // (handled earlier, unconditionally, by the `refuel-critical` push
+      // above) — this only removes the no-op opportunistic top-off, freeing
+      // the ladder to fall through to `early-explore`/the move-fly fallback
+      // below instead.
+      const questsStructurallyUnavailable =
+        (obs.overmindShare ?? 0) >= QUEST_ACCEPT_OVERMIND_SHARE_CEILING;
+      if (
+        earnPlanet !== undefined &&
+        !(questsStructurallyUnavailable && alreadyVisited)
+      ) {
         push("land", "earn", earnPlanet);
       }
       push("dock", "earn", obs.system?.stations[0]?.id);
@@ -1899,11 +1917,22 @@ export function decideWithMemory(
         if (deliverableElsewhere && !avoidDangerAhead) {
           push("warp", "go-deliver");
         }
-        if (
-          holdingForOtherSystem &&
-          sellRouteSystem !== undefined &&
-          !avoidDangerAhead
-        ) {
+        // No `sellRouteSystem !== undefined` gate here (unlike the other
+        // three re-derivations below): the flight tier's own push (see the
+        // SPACE_FLIGHT case) fires this SAME intent — deliberately blind
+        // (`targetId` undefined) when the sell planet's system was never
+        // seen, per its own comment. Requiring a known target here broke that
+        // parity for the blind case specifically: `avoidDanger` (this
+        // system's own remembered threat) plus a blind held-cargo hold used
+        // to fall straight through to `avoid-danger-back` below, bouncing
+        // back to SPACE_FLIGHT, which immediately re-opens the map with the
+        // identical blind intent — a two-scene ping-pong that froze the
+        // calendar indefinitely (measured: seed CAMPAIGN-1, 2000+ consecutive
+        // `move avoid-danger-back` / `warp find-sell-destination` steps, zero
+        // days advanced). Matching the flight tier's own gate exactly lets
+        // this win over `avoid-danger-back` (its whole purpose, per the
+        // comment above) even blind.
+        if (holdingForOtherSystem && !avoidDangerAhead) {
           push("warp", "find-sell-destination", sellRouteSystem);
         }
         if (stockSystem != null && !avoidDangerAhead) {
