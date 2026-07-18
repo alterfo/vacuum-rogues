@@ -1168,6 +1168,40 @@ slow economy has more runway before the front outruns it, or (b) continue the de
 thread (today's fix was one narrow slice of it — the bigger lever, per the "Diagnostic resolved" trace,
 is the second-hull-tier affordability wall, not the no-op-landing waste this fix removed).
 
+#### Re-measured after an unrelated fuel-stagnation wedge fix (2026-07-19) — wedge rate down 5×, win-rate unmoved
+
+A separate live-session bug hunt that day fixed a different wedge class entirely: `MemoryHeuristicPolicy`'s
+anti-stagnation escalation used to jump to `warp` to break a proven fight standoff even when the fuel tank
+was already critical, and the live engine silently rejects a fuel-blocked jump every time — producing an
+unbreakable `STAR_MAP↔SPACE_FLIGHT` ping-pong that pins the calendar (commit `0bb3989`, see
+`docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md` for the fuller writeup). This is
+continuing that plan's Task 1: re-measure this plan's own Gate A baseline now that the fix is in place,
+before touching any pacing lever, since `CAMPAIGN-7`'s `repeat=2@SPACE_FLIGHT|attack` wedge (flagged above
+on 2026-07-16 as "unrelated to either fix here") looked like the same fuel-stagnation class.
+
+**Measured (50 sessions, `--pool=forks`): 2 win / 38 loss / 8 died / 2 timeout (1 wedged), win-rate 4.0%** —
+median win day 205, battle-ready rate 8% (4/50, avg d214), liberation rate 100% (avg d102), avg peak power
+0.11.
+
+| Metric | This measurement | 2026-07-17 baseline |
+|---|---|---|
+| Win rate | 4.0% (2/50) | 4.0% (2/50) |
+| Died | 16% (8/50) | 12% (6/50) |
+| Loss (Overmind wins arc) | 76% (38/50) | 74% (37/50) |
+| Timeout/wedged | 4% (2/50, **1 wedged**) | 10% (5/50, **5 wedged**) |
+| Battle-ready rate | 8% (4/50) | 8% (4/50) |
+
+**Confirmed: `CAMPAIGN-7` no longer wedges** — it now runs the full 1080-day budget to a clean `TIMEOUT`
+with `share=0.00` (Overmind fully cleared, arc just never resolves `"won"` per the engaged/participation
+gate). **Wedge rate dropped 5× (10%→2%)**, but this is an orthogonal fix — it does not touch economy or
+Overmind-spread pacing at all, so win-rate is, as expected, statistically unchanged (2/50 both times). One
+residual wedge remains (`CAMPAIGN-36`, day 53, `dayFrozen=298` — a much earlier, lower-power session than
+the fixed class; not chased further here, tracked separately).
+
+**This confirms Gate A is still not met and the blocker is exactly the pacing bottleneck already diagnosed
+above** — proceeding with option (a) (widen the adaptive-pacing runway) next, per
+`docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md` Task 2.
+
 ### Task 6: Iterate toward Gate B if Task 5 met Gate A
 
 - [ ] Based on Task 5's re-measured death taxonomy, iterate remaining unpinned levers (record every

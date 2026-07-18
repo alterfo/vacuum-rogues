@@ -213,6 +213,7 @@ export function createLiveSceneController(
         closeModals?: () => void;
         isEncounterPromptOpen?: boolean;
         activeEncounter?: Encounter | null;
+        closeEncounterPrompt?: () => void;
         applyEncounterChoice?: (
           encounter: Encounter,
           choice: EncounterChoice,
@@ -234,14 +235,22 @@ export function createLiveSceneController(
     // OVERMIND overlays it also covers, silently forfeiting every encounter
     // the autopilot ever rolled. Checked BEFORE the generic branch so contact
     // -panel/OVERMIND dismissal below is completely unchanged.
+    //
+    // CRITICAL: close the prompt FIRST, exactly like the real UI button
+    // (`EncounterController`'s engage-button handler calls
+    // `closeEncounterPrompt()` before `applyEncounterChoice()`) — a 2026-07-19
+    // live regression in this fix's first version called only
+    // `applyEncounterChoice` and never closed the prompt, so `activeEncounter`
+    // stayed set and the NEXT tick's `dismissBlockingModal()` saw the same
+    // still-open prompt and applied "engage" again, forever (infinite credits
+    // from the same anomaly/derelict, confirmed live: "+300 кр" repeating).
     if (
       scene?.npcManager?.isEncounterPromptOpen &&
       scene.npcManager.activeEncounter
     ) {
-      scene.npcManager.applyEncounterChoice?.(
-        scene.npcManager.activeEncounter,
-        "engage",
-      );
+      const encounter = scene.npcManager.activeEncounter;
+      scene.npcManager.closeEncounterPrompt?.();
+      scene.npcManager.applyEncounterChoice?.(encounter, "engage");
       return true;
     }
     // Auto-dismiss any open contact-panel/OVERMIND overlay so the autopilot

@@ -913,6 +913,7 @@ describe("createLiveSceneController — verb → live engine call", () => {
   it("dismissBlockingModal() engages an open encounter prompt instead of blind-closing it (2026-07-19)", () => {
     const closeModals = vi.fn();
     const applyEncounterChoice = vi.fn();
+    const closeEncounterPrompt = vi.fn();
     const fakeEncounter = { id: "enc1" };
     const engine = mockEngine({
       currentSceneType: SceneType.SPACE_FLIGHT,
@@ -923,6 +924,7 @@ describe("createLiveSceneController — verb → live engine call", () => {
           closeModals,
           isEncounterPromptOpen: true,
           activeEncounter: fakeEncounter,
+          closeEncounterPrompt,
           applyEncounterChoice,
         },
       },
@@ -930,7 +932,44 @@ describe("createLiveSceneController — verb → live engine call", () => {
     const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
     expect(dismissed).toBe(true);
     expect(applyEncounterChoice).toHaveBeenCalledWith(fakeEncounter, "engage");
+    expect(closeEncounterPrompt).toHaveBeenCalledTimes(1);
     expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() closes the prompt BEFORE applying the choice — never re-applies on the next tick (2026-07-19 regression: infinite credits from re-scanning the same encounter)", () => {
+    // A real `EncounterController`: `closeEncounterPrompt()` actually clears
+    // `isEncounterPromptOpen`/`activeEncounter`, exactly like the production
+    // class. The first version of this fix called `applyEncounterChoice`
+    // without ever closing the prompt, so a second tick saw the identical
+    // still-open prompt and applied "engage" again — live-confirmed as an
+    // infinite "+300 кр" loop from a single anomaly.
+    const applyEncounterChoice = vi.fn();
+    const fakeEncounter = { id: "enc1" };
+    const npcManager = {
+      hasOpenModal: () => npcManager.isEncounterPromptOpen,
+      closeModals: vi.fn(),
+      isEncounterPromptOpen: true,
+      activeEncounter: fakeEncounter as typeof fakeEncounter | null,
+      closeEncounterPrompt: vi.fn(() => {
+        npcManager.isEncounterPromptOpen = false;
+        npcManager.activeEncounter = null;
+      }),
+      applyEncounterChoice,
+    };
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager,
+      },
+    });
+    const controller = createLiveSceneController(engine);
+
+    controller.dismissBlockingModal!();
+    controller.dismissBlockingModal!(); // a second tick — must be inert now
+
+    expect(applyEncounterChoice).toHaveBeenCalledTimes(1);
+    expect(npcManager.isEncounterPromptOpen).toBe(false);
   });
 
   it("dismissBlockingModal() still closes a non-encounter modal (contact panel/OVERMIND) as before", () => {
