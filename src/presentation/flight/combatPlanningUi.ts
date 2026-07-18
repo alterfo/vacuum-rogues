@@ -26,6 +26,7 @@
 
 import { Container, Graphics } from "pixi.js";
 import { t } from "@/i18n/i18n";
+import { currentFontScale } from "@/utils/fontScale";
 import { COMBAT_ROUND_MS } from "@/config/balance";
 import type { WeaponSpec } from "@/systems/equipment/GearCatalog";
 import { consumableById } from "./combatConsumable";
@@ -41,12 +42,28 @@ import {
 } from "./combatWeaponTargeting";
 import { drawWeaponRangeCircles } from "./combatWeaponRangeOverlay";
 
-/** Weapon-bar button geometry (screen px). */
+/** Weapon-bar button geometry (screen px, at the "M" font scale). */
 const BAR_BTN_W = 168;
 const BAR_BTN_H = 30;
 const BAR_GAP = 8;
 /** Action-row (afterburner/consumable/comms) button width — narrower than a gun's. */
 const ACTION_BTN_W = 132;
+
+/**
+ * Button geometry scales with the "S"/"M"/"L" font setting (`fontScale.ts`) —
+ * `UiButton`'s label text already tracks `scaledFont`, but a fixed pixel
+ * `btnW`/`btnH` doesn't, so long labels ("Позвать на помощь", weapon names) ran
+ * past the button box at "L" (real-play report 2026-07-18). Computed at mount
+ * time (`enterPlanning`), same as every other fixed-pixel-vs-scaledFont fix in
+ * this codebase (see presentation/CLAUDE.md).
+ */
+function barButtonSize(): { w: number; h: number } {
+  const scale = currentFontScale();
+  return { w: Math.round(BAR_BTN_W * scale), h: Math.round(BAR_BTN_H * scale) };
+}
+function actionButtonWidth(): number {
+  return Math.round(ACTION_BTN_W * currentFontScale());
+}
 /** Bar baseline above the bottom HUD ХОД cluster + toast lane. */
 const BAR_BOTTOM_OFFSET = 150;
 /** Toast tint for planning-phase feedback (matches the 14.5a planning toasts). */
@@ -131,7 +148,8 @@ export class CombatPlanningUi {
     const bar = new Container();
     bar.label = "combat-planning-bar";
     const screen = this.deps.getScreenSize();
-    const total = weapons.length * BAR_BTN_W + (weapons.length - 1) * BAR_GAP;
+    const { w: btnW, h: btnH } = barButtonSize();
+    const total = weapons.length * btnW + (weapons.length - 1) * BAR_GAP;
     const x0 = Math.max(0, (screen.width - total) / 2);
     const y = screen.height - BAR_BOTTOM_OFFSET;
     this.buttons = weapons.map((weapon, i) => {
@@ -140,18 +158,18 @@ export class CombatPlanningUi {
         weapon.name,
         weaponRangeColor(i),
         () => this.armWeapon(weapon),
-        BAR_BTN_W,
-        BAR_BTN_H,
+        btnW,
+        btnH,
       );
       button.container.label = `cpw-${i}`;
-      button.x = x0 + i * (BAR_BTN_W + BAR_GAP);
+      button.x = x0 + i * (btnW + BAR_GAP);
       button.y = y;
       bar.addChild(button.container);
       return { weapon, button };
     });
     this.deps.getUiLayer().addChild(bar);
     this.bar = bar;
-    this.buildActionRow(screen, y - (BAR_BTN_H + BAR_GAP));
+    this.buildActionRow(screen, y - (btnH + BAR_GAP), btnH);
     this.refreshLabels();
   }
 
@@ -160,6 +178,7 @@ export class CombatPlanningUi {
   private buildActionRow(
     screen: { width: number; height: number },
     y: number,
+    btnH: number,
   ): void {
     const actions = this.deps.actions;
     if (!actions) return;
@@ -170,7 +189,8 @@ export class CombatPlanningUi {
     ];
     const row = new Container();
     row.label = "combat-planning-actions";
-    const total = keys.length * ACTION_BTN_W + (keys.length - 1) * BAR_GAP;
+    const btnW = actionButtonWidth();
+    const total = keys.length * btnW + (keys.length - 1) * BAR_GAP;
     const x0 = Math.max(0, (screen.width - total) / 2);
     this.actionButtons = keys.map((key, i) => {
       const button = new UiButton(
@@ -178,11 +198,11 @@ export class CombatPlanningUi {
         key,
         0x88ccff,
         () => this.toggleAction(key),
-        ACTION_BTN_W,
-        BAR_BTN_H,
+        btnW,
+        btnH,
       );
       button.container.label = `cpa-${key}`;
-      button.x = x0 + i * (ACTION_BTN_W + BAR_GAP);
+      button.x = x0 + i * (btnW + BAR_GAP);
       button.y = y;
       row.addChild(button.container);
       return { key, button };

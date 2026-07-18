@@ -81,6 +81,7 @@ interface FlightPrivates {
   isTurnRunning: boolean;
   onPlayPause(): void;
   endTurn(): void;
+  hud: { setTurnRunning(running: boolean): void };
 }
 
 function engage(scene: FlightPrivates, foe: NpcShipSprite): void {
@@ -165,6 +166,23 @@ describe("Pause-and-plan loop guards live in the wired scene (review 2026-07-15)
     scene.combatPlanning.confirm();
     for (let i = 0; i < 5; i++) harness.tick(100);
     expect(foe.updates).toBeGreaterThan(0); // real-time again inside the window
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("the HUD button reads «Ход» during PLANNING, not a stale «Пауза» (2026-07-18)", () => {
+    const scene = flightScene();
+    scene.isTurnRunning = true; // a turn was already running when combat interrupted it
+    const spy = vi.spyOn(scene.hud, "setTurnRunning");
+    const foe = makeStaticHostile(
+      "label-foe",
+      scene.shipPhysics.shipX + 100,
+      scene.shipPhysics.shipY,
+    );
+    engage(scene, foe);
+    expect(scene.combatPlanning.isPlanning).toBe(true);
+
+    harness.tick(100);
+    expect(spy).toHaveBeenLastCalledWith(false); // «Ход», ready to confirm — never «Пауза»
     expect(harness.errors()).toEqual([]);
   });
 

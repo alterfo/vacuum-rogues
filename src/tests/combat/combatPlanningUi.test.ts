@@ -10,7 +10,7 @@
  * Built against a REAL PixiJS scene graph in jsdom (mirrors
  * `flightHudCornerLayout.test.ts`); no text measurement is read.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { Container, type Graphics } from "pixi.js";
 import {
   CombatPlanningUi,
@@ -20,6 +20,9 @@ import { CombatPlanningController } from "@/presentation/flight/combatPlanning";
 import type { WeaponSpec } from "@/systems/equipment/GearCatalog";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
 import { t } from "@/i18n/i18n";
+import { setFontScale } from "@/utils/fontScale";
+
+afterEach(() => setFontScale("M")); // never leak a scale into other tests
 
 /** Minimal catalog-shaped weapon (only the surfaces the UI reads). */
 function weapon(id: string, name: string, range: number): WeaponSpec {
@@ -67,6 +70,28 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
     expect(mounted!.getChildByLabel("cpw-0")).not.toBeNull();
     expect(mounted!.getChildByLabel("cpw-1")).not.toBeNull();
     expect(h.gameLayer.children.length).toBe(1); // the rings Graphics
+  });
+
+  it('weapon-bar button spacing grows with the font scale (real-play report 2026-07-18: text overran a fixed-width box at "L")', () => {
+    const guns = [weapon("wpn_a", "Пульсар", 240), weapon("wpn_b", "Луч", 360)];
+
+    setFontScale("M");
+    const hM = makeHarness(guns);
+    hM.ui.enterPlanning();
+    const barM = bar(hM.uiLayer)!;
+    const spacingM =
+      (barM.children[1] as Container).x - (barM.children[0] as Container).x;
+
+    setFontScale("L");
+    const hL = makeHarness(guns);
+    hL.ui.enterPlanning();
+    const barL = bar(hL.uiLayer)!;
+    const spacingL =
+      (barL.children[1] as Container).x - (barL.children[0] as Container).x;
+
+    expect(spacingL).toBeGreaterThan(spacingM); // button box widened, not just the label text
+    // Only the button width scales (168 → 210 at 1.25×); the inter-button gap (8px) doesn't.
+    expect(spacingL - spacingM).toBeCloseTo(42, 0);
   });
 
   it("mounts no bar for a weaponless ship (nothing to assign)", () => {
