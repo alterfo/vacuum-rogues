@@ -26,7 +26,8 @@
 
 import { Container, Graphics } from "pixi.js";
 import { t } from "@/i18n/i18n";
-import { currentFontScale } from "@/utils/fontScale";
+import { currentFontScale, scaledFont } from "@/utils/fontScale";
+import { MONO_CHAR_WIDTH_RATIO } from "@/presentation/ui/questCardLayout";
 import { COMBAT_ROUND_MS } from "@/config/balance";
 import type { WeaponSpec } from "@/systems/equipment/GearCatalog";
 import { consumableById } from "./combatConsumable";
@@ -63,6 +64,40 @@ function barButtonSize(): { w: number; h: number } {
 }
 function actionButtonWidth(): number {
   return Math.round(ACTION_BTN_W * currentFontScale());
+}
+
+/**
+ * A proportionally-scaled box still clips the *longest* labels ("Требовать
+ * сдаться" vs "Форсаж") — scaling alone assumes every label had equal
+ * headroom at "M", which they didn't (real-play report 2026-07-18, follow-up:
+ * the scaled box still clipped the widest comms label). Widen a button past
+ * its scaled base width to fit its actual text, mirroring `questCardLayout`'s
+ * `MONO_CHAR_WIDTH_RATIO` pixel-budget pattern (see presentation/CLAUDE.md).
+ * `LABEL_X_OFFSET_PX` mirrors `UiButton`'s icon+label layout (label at x=32);
+ * `MARKER_BUDGET_CHARS` reserves room for the "▶ "/"✓ "/"⛔ " prefix
+ * `refreshLabels` adds post-mount, so a later marker never re-overflows a
+ * button already sized to its bare label.
+ */
+const LABEL_X_OFFSET_PX = 32;
+const LABEL_RIGHT_PAD_PX = 14;
+const MARKER_BUDGET_CHARS = 2;
+function fitButtonWidth(baseWidth: number, label: string): number {
+  const charPx = scaledFont(14) * MONO_CHAR_WIDTH_RATIO;
+  const textPx = (label.length + MARKER_BUDGET_CHARS) * charPx;
+  return Math.max(
+    baseWidth,
+    Math.round(LABEL_X_OFFSET_PX + textPx + LABEL_RIGHT_PAD_PX),
+  );
+}
+
+/** The action-row button's base (unmarked) label text — shared by sizing
+ *  (`buildActionRow`) and live refresh (`refreshLabels`) so they never drift. */
+function actionLabelText(key: string): string {
+  if (key === "afterburner") return t("combat.planning.afterburner");
+  const consumable = consumableById(key);
+  if (consumable) return t(consumable.nameKey);
+  const comms = COMBAT_COMMS_ACTIONS.find((a) => a.id === key);
+  return t(comms?.nameKey ?? key);
 }
 /** Bar baseline above the bottom HUD ХОД cluster + toast lane. */
 const BAR_BOTTOM_OFFSET = 150;
@@ -148,22 +183,27 @@ export class CombatPlanningUi {
     const bar = new Container();
     bar.label = "combat-planning-bar";
     const screen = this.deps.getScreenSize();
-    const { w: btnW, h: btnH } = barButtonSize();
-    const total = weapons.length * btnW + (weapons.length - 1) * BAR_GAP;
+    const { w: baseW, h: btnH } = barButtonSize();
+    const widths = weapons.map((w) => fitButtonWidth(baseW, w.name));
+    const total =
+      widths.reduce((sum, w) => sum + w, 0) + (weapons.length - 1) * BAR_GAP;
     const x0 = Math.max(0, (screen.width - total) / 2);
     const y = screen.height - BAR_BOTTOM_OFFSET;
+    let x = x0;
     this.buttons = weapons.map((weapon, i) => {
+      const w = widths[i];
       const button = new UiButton(
         "⌖",
         weapon.name,
         weaponRangeColor(i),
         () => this.armWeapon(weapon),
-        btnW,
+        w,
         btnH,
       );
       button.container.label = `cpw-${i}`;
-      button.x = x0 + i * (btnW + BAR_GAP);
+      button.x = x;
       button.y = y;
+      x += w + BAR_GAP;
       bar.addChild(button.container);
       return { weapon, button };
     });
@@ -189,21 +229,28 @@ export class CombatPlanningUi {
     ];
     const row = new Container();
     row.label = "combat-planning-actions";
-    const btnW = actionButtonWidth();
-    const total = keys.length * btnW + (keys.length - 1) * BAR_GAP;
+    const baseW = actionButtonWidth();
+    const widths = keys.map((key) =>
+      fitButtonWidth(baseW, actionLabelText(key)),
+    );
+    const total =
+      widths.reduce((sum, w) => sum + w, 0) + (keys.length - 1) * BAR_GAP;
     const x0 = Math.max(0, (screen.width - total) / 2);
+    let x = x0;
     this.actionButtons = keys.map((key, i) => {
+      const w = widths[i];
       const button = new UiButton(
         "▣",
-        key,
+        actionLabelText(key),
         0x88ccff,
         () => this.toggleAction(key),
-        btnW,
+        w,
         btnH,
       );
       button.container.label = `cpa-${key}`;
-      button.x = x0 + i * (btnW + BAR_GAP);
+      button.x = x;
       button.y = y;
+      x += w + BAR_GAP;
       row.addChild(button.container);
       return { key, button };
     });
@@ -313,18 +360,12 @@ export class CombatPlanningUi {
       if (key === "afterburner") {
         const spent = this.deps.actions?.canAfterburn() === false;
         const marker = plan.afterburner ? "✓ " : spent ? "⛔ " : "";
-        button.setLabel(`${marker}${t("combat.planning.afterburner")}`);
+        button.setLabel(`${marker}${actionLabelText(key)}`);
         continue;
       }
-      const consumable = consumableById(key);
-      if (consumable) {
-        const marker = plan.consumableId === key ? "✓ " : "";
-        button.setLabel(`${marker}${t(consumable.nameKey)}`);
-        continue;
-      }
-      const comms = COMBAT_COMMS_ACTIONS.find((a) => a.id === key);
-      const marker = plan.commsAction === key ? "✓ " : "";
-      button.setLabel(`${marker}${t(comms?.nameKey ?? key)}`);
+      const marker =
+        plan.consumableId === key || plan.commsAction === key ? "✓ " : "";
+      button.setLabel(`${marker}${actionLabelText(key)}`);
     }
   }
 }

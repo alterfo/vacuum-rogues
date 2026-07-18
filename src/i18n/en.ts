@@ -461,15 +461,15 @@ export const en: Dict = {
   "help.quest-journal.control1": "LMB on a quest — details",
 
   // --- onboarding: combat --------------------------------------------------
-  "help.combat.title": "Real-Time Combat",
+  "help.combat.title": "Tactical Combat Planning",
   "help.combat.body1":
-    "Combat happens right in flight: your weapons fire automatically at the" +
-    " nearest enemy within range, and enemies return fire.",
+    "Combat pauses the game: arm a weapon (its bar button), click an enemy" +
+    " to assign it, and optionally set a course, afterburner, or other action.",
   "help.combat.body2":
-    "Maneuver to keep your distance and stay out of the line of fire. Active" +
-    " pause lets you take an aimed «Fire!» shot at the selected target.",
-  "help.combat.control1": "Movement — maneuver in combat",
-  "help.combat.control2": "«Fire!» — aimed shot on active pause",
+    "The Turn button confirms the plan — assigned weapons open fire, enemies" +
+    " return fire, then planning reopens for the next turn.",
+  "help.combat.control1": "Weapon → target — assign a shot",
+  "help.combat.control2": "Turn — confirm the plan and run the round",
 
   // --- tactical planning phase (pause-and-plan combat, Task 14.5b) ---------
   "combat.planning.enter": "⏸ Tactical planning — press Turn to confirm",

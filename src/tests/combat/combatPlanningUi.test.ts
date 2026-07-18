@@ -34,7 +34,7 @@ function enemy(id: string, x: number, y: number): NpcShipSprite {
   return { x, y, npc: { id, name: id } } as unknown as NpcShipSprite;
 }
 
-function makeHarness(weapons: WeaponSpec[]) {
+function makeHarness(weapons: WeaponSpec[], withActions = false) {
   const uiLayer = new Container();
   const gameLayer = new Container();
   const combatants = new Set<NpcShipSprite>();
@@ -49,6 +49,9 @@ function makeHarness(weapons: WeaponSpec[]) {
     isCombatant: (s) => combatants.has(s),
     planning,
     showMessage: (text) => messages.push(text),
+    actions: withActions
+      ? { getOwnedConsumableIds: () => [], canAfterburn: () => true }
+      : undefined,
   });
   planning.beginCombat(); // draft mutations require PLANNING
   return { ui, uiLayer, gameLayer, combatants, messages, planning };
@@ -92,6 +95,29 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
     expect(spacingL).toBeGreaterThan(spacingM); // button box widened, not just the label text
     // Only the button width scales (168 → 210 at 1.25×); the inter-button gap (8px) doesn't.
     expect(spacingL - spacingM).toBeCloseTo(42, 0);
+  });
+
+  it('action-row buttons widen past the scaled base box to fit their own label — a uniform scaled width still clipped "Требовать сдаться" (2026-07-18 follow-up)', () => {
+    setFontScale("L");
+    const h = makeHarness([weapon("wpn_a", "Пульсар", 240)], true);
+    h.ui.enterPlanning();
+    const row = h.uiLayer.getChildByLabel(
+      "combat-planning-actions",
+    ) as Container;
+    expect(row).not.toBeNull();
+
+    // "Форсаж" is short enough to fit the uniformly-scaled base box.
+    const afterburner = row.getChildByLabel("cpa-afterburner") as Container;
+    const bribe = row.getChildByLabel("cpa-bribe") as Container;
+    const shortLabelSpacing = bribe.x - afterburner.x;
+
+    // "Требовать сдаться" is far longer — its box must grow past that base
+    // width to avoid rendering under its neighbour (real-play report).
+    const demand = row.getChildByLabel("cpa-demand-surrender") as Container;
+    const callHelp = row.getChildByLabel("cpa-call-for-help") as Container;
+    const longLabelSpacing = callHelp.x - demand.x;
+
+    expect(longLabelSpacing).toBeGreaterThan(shortLabelSpacing);
   });
 
   it("mounts no bar for a weaponless ship (nothing to assign)", () => {

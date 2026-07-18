@@ -51,6 +51,27 @@ describe("onboarding help content localization", () => {
     );
   });
 
+  it("the combat tutorial describes the current tactical-pause-and-plan loop, not the superseded auto-fire model (real-play report 2026-07-18)", () => {
+    // `help.combat.*` went stale when the 2026-07-13 tactical-pause-combat-rework
+    // replaced real-time auto-fire with arm-weapon → click-target → confirm
+    // «Ход»; the onboarding copy kept describing the old model (an "automatic
+    // fire at the nearest enemy" behavior and a «Огонь!» button that no longer
+    // exists), which taught players to expect autofire and never do the
+    // required two-step targeting — read by the player as "my ship won't fire."
+    for (const dict of [ru, en]) {
+      const text = [
+        dict["help.combat.title"],
+        dict["help.combat.body1"],
+        dict["help.combat.body2"],
+        dict["help.combat.control1"],
+        dict["help.combat.control2"],
+      ].join(" ");
+      expect(text).not.toMatch(/автоматически|automatically/i);
+      expect(text).not.toMatch(/«Огонь!»|«Fire!»/);
+      expect(text).toMatch(/Ход|Turn/);
+    }
+  });
+
   it("the panel-chrome keys exist in both catalogs", () => {
     for (const k of ["help.controlsHeader", "help.gotIt"]) {
       expect(k in ru, `ru missing ${k}`).toBe(true);

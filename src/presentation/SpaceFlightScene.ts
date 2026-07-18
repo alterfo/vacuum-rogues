@@ -690,12 +690,8 @@ export class SpaceFlightScene extends GameScene {
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
     this.updateSystemMiniMap();
-    // Effective turn state: gate on combat-pause AND planning (2026-07-18: stale «Пауза»).
-    this.hud.setTurnRunning(
-      this.isTurnRunning &&
-        !this.combatPause.paused &&
-        !this.combatPlanning.isPlanning,
-    );
+    const paused = this.combatPause.paused || this.combatPlanning.isPlanning; // 2026-07-18
+    this.hud.setTurnRunning(this.isTurnRunning && !paused);
     this.hud.update(deltaTime, this.bgElapsed);
   }
 
