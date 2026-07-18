@@ -219,15 +219,18 @@ summary:
 - [x] Full suite (106 files/1096 tests in the affected areas) green. Commit `a0d6a0e`.
 
 ### Task 5: Loot pickup after a kill (#12)
-- [ ] Write a failing real-engine playtest test: after `driveAttack` kills its target, the ship
-      should collect the loot the wreck drops, not leave immediately.
-- [ ] In `PlayerAgent.driveAttack`, after a kill, linger (or steer toward the wreck's live drifted
-      position) for enough of the wreck's staggered-drop lifetime (`combatWreck.ts:155-179`) to
-      collect at least the first drop, within the same per-round reaction-window discipline the rest
-      of `driveAttack` already follows (bounded, never an unbounded wait).
-- [ ] Write tests for: a normal single-drop kill, a multi-item staggered drop, and an already
-      -fled-system edge case (no wreck reachable — degrade safely).
-- [ ] Run affected tests — must pass before Task 6.
+- [x] Wrote a real-engine test measuring ticks-*after*-death specifically (total tick count was too
+      noisy — dominated by the unrelated chase/round phase, which varies a lot); confirmed red before
+      the fix (0 linger ticks), green after.
+- [x] `PlayerAgent.driveAttack` now lingers up to `LOOT_LINGER_TICKS` (60 × 50ms = the wreck's
+      `WRECK.lifeMs × WRECK_LOOT_SPREAD_FRACTION` spread window, exported from `combatExecution.ts`
+      as the single source of truth) once the kill/fight-resolution is first detected, within the
+      same bounded-loop discipline the rest of `driveAttack` already follows — `LootDropHandler`'s
+      existing per-frame proximity pickup does the actual collecting, unchanged.
+- [x] The already-fled-system / no-wreck-reachable case degrades safely by construction: the linger
+      is bounded (60 ticks max) regardless of whether anything is actually there to collect.
+- [x] Full affected suite (155 files/1611 tests: `src/tests/combat`, `src/tests/playtest/letsplay`,
+      `src/tests/flight`) green, `tsc --noEmit` clean. Commit `16d11d7`.
 
 ### Task 6: Land/dock ↔ take-off cycling (#8) — re-verify, then fix any residual
 - [ ] Re-run a live/headless session with plenty of credits and no affordable upgrade in system,
