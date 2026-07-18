@@ -87,6 +87,30 @@ function runIdleCampaign(
   return { resolvedDay: -1, status: state.status, engagedBeforeLoss };
 }
 
+describe("adaptive pacing constants — 2026-07-19 widening", () => {
+  // Pins the campaign win-rate gate's Task 2 lever change (see
+  // docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md): the
+  // arming-up economy is structurally slow (one lucky early hull upgrade, then
+  // a multi-hundred-day plateau), so SLOW_DAYS is the ACTIVE interval for
+  // nearly the whole run — widening it gives that economy a bit more runway
+  // before the front outruns it. GRACE_DAYS is deliberately left UNCHANGED
+  // this round: two widening attempts there (120, then 105) both broke
+  // sessionCompetence.test.ts's Task 7 day-200 milestone identically, isolated
+  // to GRACE_DAYS specifically (SLOW_DAYS alone tested clean) — delaying the
+  // Overmind's first appearance also delays MemoryHeuristicPolicy's own
+  // urgency to arm up, a genuine tension left for a dedicated follow-up round.
+  it("SLOW_DAYS widened 45 -> 55; GRACE_DAYS left unchanged at 90", () => {
+    expect(ADAPTIVE_SPREAD_SLOW_DAYS).toBe(55);
+    expect(ADAPTIVE_GRACE_DAYS).toBe(90);
+  });
+
+  it("FAST_DAYS and the creep guards are unchanged by this widening", () => {
+    expect(ADAPTIVE_SPREAD_FAST_DAYS).toBe(10);
+    expect(ADAPTIVE_CREEP_START_DAY).toBe(360);
+    expect(ADAPTIVE_CREEP_MIN_DAYS).toBe(12);
+  });
+});
+
 describe("adaptiveSpreadIntervalDays — power-keyed cadence", () => {
   it("a weak player (index ≈ 0) faces the slow cadence", () => {
     expect(adaptiveSpreadIntervalDays(100, 1, 0)).toBe(

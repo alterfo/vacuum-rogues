@@ -1152,9 +1152,29 @@ export const POWER_INDEX_RANK_MAX = 7;
  *    reaches the 0.85 loss share long before day 1080 (idle 24-system galaxy:
  *    ~7 captures in year 1–2, the rest on the creep floor ⇒ lost ≈ day 500).
  * Sized for a competent win in year 2–3; the Task 9 balance pass tunes these.
+ *
+ * **2026-07-19 widening** (`docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md`
+ * Task 2, continuing `docs/plans/20260713-campaign-winrate-100pct.md`'s Task 5): a decisive trace
+ * found the campaign win-rate gate (4.0%/50, Gate A target ≥40%) is bottlenecked on pacing, not
+ * combat/death (already solved) — `campaignPeakPower` almost never rises far above its floor (a
+ * structurally slow arming-up economy: one lucky early hull upgrade around day 250–300, then a
+ * multi-hundred-day credits plateau that can't afford the next tier), so `SLOW_DAYS` is effectively
+ * the ACTIVE interval for nearly the whole run, not a rarely-hit edge case. `SLOW_DAYS` 45→55 gives
+ * that structurally-slow economy a bit more runway before the front outruns it, without touching
+ * `FAST_DAYS`/`GRACE_DAYS`/the creep guards.
+ *
+ * **`GRACE_DAYS` deliberately left untouched**: two earlier attempts (widening it to 120, then to
+ * 105 alongside `SLOW_DAYS`) both broke `sessionCompetence.test.ts`'s Task 7 day-200 milestone
+ * identically (peak power 0.16→0.076, under the 0.13 battle-ready floor) — isolated by testing
+ * `SLOW_DAYS` alone (confirmed clean) vs. `GRACE_DAYS` alone (confirmed it, specifically, breaks the
+ * test). Delaying the Overmind's very first appearance also delays `MemoryHeuristicPolicy`'s OWN
+ * urgency to arm up (its "Threat/Overmind" tier is keyed off Overmind proximity/share), and within
+ * this test's fixed 200-day window that trades away more early-milestone progress than it buys the
+ * player — a genuine design tension, not a test-threshold artifact, left for a dedicated follow-up
+ * round rather than guessed at further here.
  */
 /** Spread interval (days) faced by a powerless player (index 0). */
-export const ADAPTIVE_SPREAD_SLOW_DAYS = 45;
+export const ADAPTIVE_SPREAD_SLOW_DAYS = 55;
 /** Spread interval (days) faced by a maxed player (index 1). */
 export const ADAPTIVE_SPREAD_FAST_DAYS = 10;
 /** No arc spread for this many days past the arc's day-zero. */

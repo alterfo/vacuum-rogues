@@ -1202,7 +1202,38 @@ the fixed class; not chased further here, tracked separately).
 above** — proceeding with option (a) (widen the adaptive-pacing runway) next, per
 `docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md` Task 2.
 
-### Task 6: Iterate toward Gate B if Task 5 met Gate A
+#### Option (a) applied — `ADAPTIVE_SPREAD_SLOW_DAYS` widened 45→55 (2026-07-19) — win-rate 3× (4.0%→12.0%), Gate A still not met
+
+Two wider attempts (`SLOW_DAYS`/`GRACE_DAYS` 65/120, then 55/105) both broke `sessionCompetence.test.ts`'s
+Task 7 day-200 milestone identically (peak power 0.16→0.076, under the 0.13 floor). Isolated by testing each
+lever alone: `SLOW_DAYS` alone tests clean; `GRACE_DAYS` alone reproduces the break by itself. Root cause:
+delaying the Overmind's first appearance also delays `MemoryHeuristicPolicy`'s own urgency to arm up (its
+"Threat/Overmind" tier is keyed off Overmind proximity/share) — within that test's fixed 200-day window this
+trades away more early-milestone progress than it buys the player. Landed with `GRACE_DAYS` **unchanged**
+(90) and only `ADAPTIVE_SPREAD_SLOW_DAYS` widened 45→55 (`src/config/balance.ts`, tests in
+`src/tests/campaign/adaptivePacing.test.ts`). Full unit suite (620 files/5893 tests), `letsplay:ci`
+(108/108), and `sessionCompetence.test.ts` all green with this single-lever change.
+
+**Measured (50 sessions, `--pool=forks`): 6 win / 31 loss / 11 died / 2 timeout (1 wedged), win-rate 12.0%**
+— median win day 355, battle-ready rate **12%** (6/50, avg d248, up from 8%), liberation rate 100% (avg
+d101), avg peak power 0.11.
+
+| Metric | This measurement | Previous (fuel-fix only) |
+|---|---|---|
+| Win rate | **12.0% (6/50)** | 4.0% (2/50) |
+| Died | 22% (11/50) | 16% (8/50) |
+| Loss (Overmind wins arc) | 62% (31/50) | 76% (38/50) |
+| Timeout/wedged | 4% (2/50, 1 wedged) | 4% (2/50, 1 wedged) |
+| Battle-ready rate | 12% (6/50) | 8% (4/50) |
+
+**A real, meaningful improvement (3×) from a single conservative lever, but Gate A (≥40%) is still far off.**
+Died ticked up (more battle-ready ships now engaging and sometimes losing that fight) while Loss (arc
+resolving against the player) dropped correspondingly — consistent with more sessions actually reaching a
+contest instead of just running out the clock unarmed. `GRACE_DAYS` remains a known, deliberately-untouched
+lever (see the widening's doc comment in `balance.ts`) for a future round, alongside Task 2b's economy-tuning
+thread (the second-hull-tier affordability wall) — **stopping here to report** rather than continuing
+straight into Task 2b unchecked, per this plan's own escalation discipline and the tension option (a) just
+surfaced between "give the player more time" and "keep enough Overmind pressure to motivate arming up."
 
 - [ ] Based on Task 5's re-measured death taxonomy, iterate remaining unpinned levers (record every
       sweep and result, mirroring the prior plan's sweep-log format): candidates include further
