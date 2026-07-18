@@ -368,6 +368,54 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(engine.lastFlightShipPos).toBeUndefined();
   });
 
+  it("dock() physically routes to the station instead of teleporting, when a real route is available (2026-07-19: fixes the live report of teleporting to the dock)", async () => {
+    const executeRouteTo = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        planetManager: {
+          stationMarkers: [{ station: { id: "s1" }, x: 111, y: -222 }],
+          routeTargetStationId: null,
+        },
+        executeRouteTo,
+        shipPhysics: { isMoving: false },
+      },
+    });
+
+    await createLiveSceneController(engine).dock();
+
+    expect(executeRouteTo).toHaveBeenCalledWith(111, -222);
+    expect(
+      (
+        engine.currentScene as unknown as {
+          planetManager: { routeTargetStationId: string | null };
+        }
+      ).planetManager.routeTargetStationId,
+    ).toBe("s1");
+    // The scene's own proactive docking (DOCKING_RANGE) completes this later —
+    // no scene transition/refuel yet, unlike the teleport fallback.
+    expect(engine.transitionTo).not.toHaveBeenCalled();
+  });
+
+  it("dock() does not re-plot a route while already en route to the same station", async () => {
+    const executeRouteTo = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        planetManager: {
+          stationMarkers: [{ station: { id: "s1" }, x: 111, y: -222 }],
+          routeTargetStationId: "s1",
+        },
+        executeRouteTo,
+        shipPhysics: { isMoving: true },
+      },
+    });
+
+    await createLiveSceneController(engine).dock();
+
+    expect(executeRouteTo).not.toHaveBeenCalled();
+  });
+
   it("openStarMap() transitions to STAR_MAP", async () => {
     const engine = mockEngine();
     await createLiveSceneController(engine).openStarMap();

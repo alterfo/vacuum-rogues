@@ -470,38 +470,64 @@ export function createLiveSceneController(
       const sys = currentSystem(engine);
       const station =
         sys?.stations.find((s) => s.id === stationId) ?? sys?.stations[0];
-      if (station) {
-        // dock() always teleports (no physical-docking-range simulation like
-        // land()'s real-route branch) — the ship never actually travels here,
-        // so nothing else records "near the station" as its position. Save it
-        // the same way openStarMap() saves the pre-warp position below: the
-        // SPACE_FLIGHT entry logic only ever reads `lastFlightShipPos`, so
-        // without this, undocking falls back to the plain system-edge spawn.
-        // Confirmed live (2026-07-12): dock right after a fresh warp-in, then
-        // undock — the ship was back at the system boundary instead of by the
-        // station it supposedly just left.
-        const flightScene = engine.currentScene as {
-          planetManager?: {
-            stationMarkers?: Array<{
-              station: { id: string };
-              x: number;
-              y: number;
-            }>;
-          };
-        } | null;
-        const marker = flightScene?.planetManager?.stationMarkers?.find(
-          (m) => m.station.id === station.id,
-        );
-        if (marker) {
-          engine.lastFlightShipPos = { x: marker.x, y: marker.y };
+      if (!station) return;
+
+      // Physically route the ship to the station so it actually flies there —
+      // the live report (2026-07-19) the old always-teleport behavior caused:
+      // "sometimes the autopilot teleports to the shipyard/dock instead of
+      // flying to it." Mirrors `land()`'s real-route branch: set the station as
+      // the live scene's own route target and drive `executeRouteTo`, exactly
+      // like a human clicking the station marker (`PlanetManager.onStationClick`
+      // → `SpaceFlightScene.handleStationDock`) — the scene's own proactive
+      // docking (`updateShip`, `DOCKING_RANGE`) fires `onDockAtStation` once the
+      // ship is close enough, which already refuels/transitions for real, so no
+      // manual refuel/scene-transition is needed on this path.
+      const flightScene = engine.currentScene as {
+        planetManager?: {
+          stationMarkers?: Array<{
+            station: { id: string };
+            x: number;
+            y: number;
+          }>;
+          routeTargetStationId?: string | null;
+        };
+        executeRouteTo?: (x: number, y: number) => void;
+        shipPhysics?: { isMoving?: boolean } | null;
+      } | null;
+      const pm = flightScene?.planetManager;
+      const marker = pm?.stationMarkers?.find(
+        (m) => m.station.id === station.id,
+      );
+
+      if (
+        marker &&
+        pm &&
+        typeof flightScene?.executeRouteTo === "function" &&
+        flightScene.shipPhysics
+      ) {
+        const alreadyEnRoute =
+          pm.routeTargetStationId === marker.station.id &&
+          flightScene.shipPhysics.isMoving;
+        if (!alreadyEnRoute) {
+          pm.routeTargetStationId = marker.station.id;
+          flightScene.executeRouteTo(marker.x, marker.y);
         }
-        await goTo(SceneType.STATION, { station });
-        // dock() always teleports (no physical-docking-range simulation like
-        // land()'s real-route branch), so it must refuel itself — mirrors
-        // SpaceFlightScene.onDockAtStation (Task 7).
-        const ship = engine.player?.ship;
-        if (ship) ship.energy = ship.maxEnergy;
+        return; // ship is flying (or just started); proactive dock fires via SpaceFlightScene.update()
       }
+
+      // Headless/no-route-available fallback: teleport, unchanged from before.
+      // Save the position the same way openStarMap() saves the pre-warp
+      // position below: the SPACE_FLIGHT entry logic only ever reads
+      // `lastFlightShipPos`, so without this, undocking falls back to the
+      // plain system-edge spawn (confirmed live, 2026-07-12: dock right after a
+      // fresh warp-in, then undock — the ship was back at the system boundary
+      // instead of by the station it supposedly just left).
+      if (marker) {
+        engine.lastFlightShipPos = { x: marker.x, y: marker.y };
+      }
+      await goTo(SceneType.STATION, { station });
+      const ship = engine.player?.ship;
+      if (ship) ship.energy = ship.maxEnergy;
     },
     async openStarMap() {
       // Save ship position before leaving — identical to returnToStarMap() in
