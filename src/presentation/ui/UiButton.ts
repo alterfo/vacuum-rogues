@@ -103,6 +103,26 @@ export class UiButton {
 
     this.container.on("pointerdown", (event: FederatedPointerEvent) => {
       event.stopPropagation();
+      // `stopPropagation()` above only stops Pixi's own internal scene-graph
+      // dispatch (parent Containers) — it does NOT touch the underlying
+      // native DOM PointerEvent, which still bubbles past the canvas all the
+      // way to `window` regardless. The live dev autopilot's reclaim-on-input
+      // listener (`AutopilotController.ts`'s `makeDefaultInputSource`) listens
+      // for exactly that native `pointerdown` on `window` with no target
+      // filtering, so — despite this docstring's stated intent — clicking ANY
+      // button (confirmed live: the flight HUD's speed-x4 control) silently
+      // disengaged the autopilot. Stopping the native event here is the same
+      // fix already applied to the wheel-zoom gesture
+      // (`SpaceFlightScene.onWheel`'s `stopImmediatePropagation()`).
+      // `nativeEvent` is typed as `MouseEvent | PointerEvent | PixiTouch`;
+      // `PixiTouch` extends the plain DOM `Touch` point data, which carries no
+      // `stopPropagation` — guard rather than assume every union member has it.
+      const native = event.nativeEvent as
+        | { stopPropagation?: () => void }
+        | undefined;
+      if (typeof native?.stopPropagation === "function") {
+        native.stopPropagation();
+      }
       this._drawActive();
       onClick(event);
     });

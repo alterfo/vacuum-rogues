@@ -35,4 +35,33 @@ describe("UiButton hit geometry", () => {
       expect(child.eventMode).toBe("none");
     }
   });
+
+  /**
+   * Live report (2026-07-18): clicking the flight HUD's speed-x4 control
+   * silently disengaged the dev-only live autopilot. Root cause: this class's
+   * `pointerdown` handler only called `event.stopPropagation()` — which stops
+   * Pixi's own internal scene-graph dispatch, NOT the underlying native DOM
+   * PointerEvent, which still bubbled past the canvas all the way to `window`,
+   * where `AutopilotController`'s reclaim-on-input listener picks up ANY
+   * native pointerdown with no target filtering. Every UiButton in the game
+   * (speed, gear, planet-menu, Ход/пауза...) shared this same gap. The fix
+   * additionally calls `event.nativeEvent?.stopPropagation()` — this pins that
+   * a click always attempts to stop the native event too, so a future
+   * regression here can't silently reopen the same class of bug.
+   */
+  it("also stops the underlying native DOM event, not just Pixi's internal propagation", () => {
+    const btn = new UiButton("", "Speed", "neutral", () => {});
+    const nativeStop = () => {
+      nativeStopCalled = true;
+    };
+    let nativeStopCalled = false;
+    const event = {
+      stopPropagation: () => {},
+      nativeEvent: { stopPropagation: nativeStop },
+    };
+
+    btn.container.emit("pointerdown", event as never);
+
+    expect(nativeStopCalled).toBe(true);
+  });
 });
