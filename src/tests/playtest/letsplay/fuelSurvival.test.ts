@@ -13,6 +13,7 @@ import {
   decideWithMemory,
   MemoryHeuristicPolicy,
   MAX_STAR_MAP_WARP_STALLS,
+  MAX_FOLDS_WITHOUT_DAY_ADVANCE,
   REFUEL_THRESHOLD,
 } from "./MemoryHeuristicPolicy";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
@@ -220,6 +221,63 @@ describe("decideWithMemory — fuel survival tier (pure)", () => {
     const action = decideWithMemory(here, createMemory());
 
     expect(action.kind).toBe("attack");
+  });
+
+  it("campaign wedge (2026-07-18): a stagnant fuel-starved standoff lands to refuel instead of an unbreakable fuel-blocked warp", () => {
+    // Reproduces the CAMPAIGN-7/CAMPAIGN-11 campaign wedges: an outgunned
+    // standoff that has outlasted the anti-stagnation fold threshold (so the
+    // ladder is about to escalate past `flee`) with the tank already at 0 and
+    // a habitable planet sitting right there. Pre-fix this escalated to
+    // `warp` — which the live engine silently rejects for insufficient fuel
+    // every single time — producing an unbreakable STAR_MAP<->SPACE_FLIGHT
+    // ping-pong that pins the calendar forever. `land` needs no fuel and
+    // actually resolves the standoff (refuels to full), so it must win here.
+    const hostile: NpcSnapshot = {
+      id: "raider-1",
+      name: "raider-1",
+      faction: FactionType.SYNDICATE,
+      hostile: true,
+      hullHP: 300,
+      damage: 90,
+    };
+    const mem = createMemory();
+    mem.foldsSinceDayAdvance = MAX_FOLDS_WITHOUT_DAY_ADVANCE;
+    const here = obs({
+      player: { fuelFraction: 0, hullFraction: 0.43, weaponDamage: 14 },
+      planets: [{ id: "P", name: "P", availableQuests: 0 }],
+      connections: 1,
+      hostiles: [hostile],
+    });
+
+    const action = decideWithMemory(here, mem);
+
+    expect(action.kind).toBe("land");
+    expect(action.reason).toContain("refuel");
+    expect(action.targetId).toBe("P");
+  });
+
+  it("stagnant standoff with NO habitable planet in system still falls back to the fuel-blocked warp escalation (unchanged)", () => {
+    const hostile: NpcSnapshot = {
+      id: "raider-1",
+      name: "raider-1",
+      faction: FactionType.SYNDICATE,
+      hostile: true,
+      hullHP: 300,
+      damage: 90,
+    };
+    const mem = createMemory();
+    mem.foldsSinceDayAdvance = MAX_FOLDS_WITHOUT_DAY_ADVANCE;
+    const here = obs({
+      player: { fuelFraction: 0, hullFraction: 0.43, weaponDamage: 14 },
+      planets: [],
+      connections: 1,
+      hostiles: [hostile],
+    });
+
+    const action = decideWithMemory(here, mem);
+
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("flee-stagnant-jump");
   });
 });
 

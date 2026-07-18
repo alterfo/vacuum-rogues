@@ -945,6 +945,17 @@ export function decideWithMemory(
   // NORMAL/HARD (`downed` is GOD-only by construction).
   const downed = obs.player?.downed === true;
 
+  // Fuel survival lookup, hoisted ahead of the hostile-reaction tier below
+  // (the `push("land", "refuel-critical", ...)` priority push itself stays
+  // where it was — see "Fuel survival" further down — this only makes the
+  // raw fuel state available to the stagnation escalations above it too; see
+  // their comments for why).
+  const fuelFraction = obs.player?.fuelFraction ?? 1;
+  const fuelCritical = fuelFraction < REFUEL_THRESHOLD;
+  const refuelPlanet = (obs.system?.planets ?? []).find(
+    (p) => p.isHabitable !== false,
+  )?.id;
+
   // 1) Survive — react to a present threat first, then patch a low hull.
   if (obs.hostiles.length > 0 && !downed) {
     const tid = obs.hostiles[0]?.id;
@@ -960,11 +971,23 @@ export function decideWithMemory(
       // actual hyperjump — `warp` is legal from SPACE_FLIGHT whenever the
       // system has a connection, hostiles or not — instead of repeating the
       // no-op flee route another fold.
-      if (
-        mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE &&
-        legal.has("warp")
-      ) {
-        push("warp", "flee-stagnant-jump");
+      //
+      // Fuel-starved standoff (campaign wedge, 2026-07-18): `warp` only ever
+      // BURNS fuel — escalating to it while the tank is already critical is a
+      // dead push the live engine silently rejects every time (confirmed:
+      // `CAMPAIGN-7`/`CAMPAIGN-11` ping-ponged STAR_MAP↔SPACE_FLIGHT for the
+      // full 300-fold wedge window, fuel pinned at 0 the whole time, a
+      // habitable planet sitting unused in the very same system). `land`
+      // needs no fuel and is the one move that actually breaks the standoff
+      // (refuels to full), so prefer it over the fuel-blocked jump whenever a
+      // habitable planet is available; only fall back to the jump escalation
+      // when there is none to land on.
+      if (mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE) {
+        if (fuelCritical && refuelPlanet) {
+          push("land", "flee-stagnant-refuel", refuelPlanet);
+        } else if (legal.has("warp")) {
+          push("warp", "flee-stagnant-jump");
+        }
       }
       push(
         "flee",
@@ -991,13 +1014,18 @@ export function decideWithMemory(
       // gated the same way (`foldsSinceDayAdvance`) so it only fires once a
       // standoff is PROVEN, never against a fresh/winnable fight — a
       // battle-ready ship never reaches this push at all (`!battleReady`),
-      // preserving "an ARMED ship is still hunted."
+      // preserving "an ARMED ship is still hunted." Same fuel-starved-standoff
+      // fix as the tactical branch above: prefer the fuel-free `land` over a
+      // `warp` the engine will just reject.
       if (
         !battleReady &&
-        mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE &&
-        legal.has("warp")
+        mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE
       ) {
-        push("warp", "flee-weak-inert-standoff");
+        if (fuelCritical && refuelPlanet) {
+          push("land", "flee-weak-inert-refuel", refuelPlanet);
+        } else if (legal.has("warp")) {
+          push("warp", "flee-weak-inert-standoff");
+        }
       }
       push("attack", "fight", tid);
       push("flee", "flee", tid);
@@ -1043,13 +1071,11 @@ export function decideWithMemory(
   // `fuelGate` additionally suppresses every `warp` candidate this call could
   // otherwise emit — a warp only ever burns fuel, and burning more while
   // already critical is exactly the stranding this tier exists to prevent.
-  const fuelFraction = obs.player?.fuelFraction ?? 1;
-  const fuelCritical = fuelFraction < REFUEL_THRESHOLD;
+  // (`fuelFraction`/`fuelCritical`/`refuelPlanet` themselves are hoisted above
+  // the hostile-reaction tier — see that block's comment — so this just
+  // reuses them and keeps `fuelGate`'s declaration site unchanged.)
   const fuelGate = fuelCritical;
   if (fuelCritical) {
-    const refuelPlanet = (obs.system?.planets ?? []).find(
-      (p) => p.isHabitable !== false,
-    )?.id;
     if (refuelPlanet) push("land", "refuel-critical", refuelPlanet);
   }
 
