@@ -510,6 +510,36 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(engine.acceptBoardQuest).toHaveBeenCalledTimes(1);
   });
 
+  it("takeQuest() drives the real job-board panel (open -> accept -> close) when the scene supports it (2026-07-19: makes quest-taking watchable)", () => {
+    const board = [
+      { template: { id: "q1", type: "DELIVERY" } },
+      { template: { id: "q2", type: "TEXT_ADVENTURE" } },
+    ];
+    const e2eOpenJobBoard = vi.fn();
+    const e2eAcceptBoardQuest = vi.fn();
+    const e2eCloseJobBoard = vi.fn();
+    const engine = mockEngine({
+      player: { currentSystemId: "sys1", landedPlanetId: "p1" },
+      getQuestBoard: vi.fn().mockReturnValue(board),
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        e2eOpenJobBoard,
+        e2eAcceptBoardQuest,
+        e2eCloseJobBoard,
+      },
+    });
+
+    createLiveSceneController(engine).takeQuest();
+
+    expect(e2eOpenJobBoard).toHaveBeenCalledTimes(1);
+    expect(e2eAcceptBoardQuest).toHaveBeenCalledWith(board[0]);
+    expect(e2eAcceptBoardQuest).toHaveBeenCalledTimes(1);
+    expect(e2eCloseJobBoard).toHaveBeenCalledTimes(1);
+    // The visual path drives the accept itself — no double-accept via the
+    // direct domain call too.
+    expect(engine.acceptBoardQuest).not.toHaveBeenCalled();
+  });
+
   it("no-op verbs (tick/executeTrade/attack/flee/repair/liberate) never drive a transition", async () => {
     const engine = mockEngine({ liberateCurrentSystem: vi.fn() });
     const c = createLiveSceneController(engine);

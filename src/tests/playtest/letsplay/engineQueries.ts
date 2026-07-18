@@ -13,6 +13,7 @@
 import type { GameEngine } from "@/systems/GameEngine";
 import type { StarSystem } from "@/domain/StarSystem";
 import type { Planet } from "@/domain/Planet";
+import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
 import { RESOURCE_BASE_PRICES } from "@/config/balance";
@@ -416,13 +417,19 @@ export function takeableBoardQuestCount(
 export function acceptBoardQuests(
   engine: GameEngine,
   completedQuestsBaseline = 0,
+  onVisualAccept?: (quest: GeneratedQuest) => void,
 ): void {
   const planet = landedPlanet(engine);
   if (!planet) return;
   for (const offered of engine.getQuestBoard(planet.id)) {
     if (!canAcceptMoreDeliveryQuests(engine, completedQuestsBaseline)) break;
     if (!isTakeableBoardQuest(offered)) continue;
-    engine.acceptBoardQuest(offered, planet.id);
+    // `onVisualAccept` (the live autopilot's JobBoardPanel e2e seam) drives the
+    // SAME domain accept itself (`PlanetScene.acceptJob` → `acceptBoardQuest`)
+    // — call either this OR the direct domain call below, never both, or a
+    // quest would be double-accepted.
+    if (onVisualAccept) onVisualAccept(offered);
+    else engine.acceptBoardQuest(offered, planet.id);
   }
 }
 

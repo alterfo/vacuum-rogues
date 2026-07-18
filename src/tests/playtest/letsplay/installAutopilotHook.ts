@@ -29,6 +29,7 @@ import {
 } from "./MemoryHeuristicPolicy";
 import { isNeuralEnabled } from "@/systems/settings/gameSettings";
 import { GAME_BALANCE } from "@/config/balance";
+import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Encounter } from "@/systems/encounters/encounterGenerator";
 import type { EncounterChoice } from "@/systems/encounters/encounterOutcome";
 import {
@@ -700,6 +701,31 @@ export function createLiveSceneController(
       // No live market executor yet — safe no-op (mirrors the headless applier).
     },
     takeQuest() {
+      // Drive the real job-board panel when it's reachable (live report,
+      // 2026-07-19: watching the autopilot never showed it browsing the
+      // market/quests/info-bureau even though it clearly does) — same
+      // selection logic either way (`acceptBoardQuests`'s own filtering), this
+      // only makes the accept visible via `PlanetScene`'s e2e seam instead of
+      // a silent domain-only call. Unlike `openTrade` below, this carries NO
+      // regression risk: quest selection never depended on the panel being
+      // open, so there is no "leaves without acting" failure mode to trigger.
+      const scene = engine.currentScene as {
+        e2eOpenJobBoard?: () => void;
+        e2eAcceptBoardQuest?: (quest: GeneratedQuest) => void;
+        e2eCloseJobBoard?: () => void;
+      } | null;
+      if (
+        scene?.e2eOpenJobBoard &&
+        scene.e2eAcceptBoardQuest &&
+        scene.e2eCloseJobBoard
+      ) {
+        scene.e2eOpenJobBoard();
+        acceptBoardQuests(engine, getMemory().completedQuestsBaseline, (q) =>
+          scene.e2eAcceptBoardQuest!(q),
+        );
+        scene.e2eCloseJobBoard();
+        return;
+      }
       acceptBoardQuests(engine, getMemory().completedQuestsBaseline);
     },
     attack(targetId) {

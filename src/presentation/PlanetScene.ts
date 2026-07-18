@@ -1532,6 +1532,32 @@ export class PlanetScene extends GameScene {
     }
   }
 
+  /**
+   * E2E/dev-only seam: open the real job-board panel, exactly like clicking
+   * "Задания" — used by the live dev autopilot (`installAutopilotHook.ts`) so
+   * quest-taking is watchable instead of a silent domain-only accept
+   * (live report, 2026-07-19). Quest-selection logic itself stays entirely in
+   * the dev-only letsplay layer — this seam only drives the visual open/
+   * accept/close, never decides which quests to take.
+   */
+  e2eOpenJobBoard(): void {
+    if (!__DEBUG__) return;
+    this.openJobBoard();
+  }
+
+  /** E2E/dev-only seam: accept one board quest for real — domain accept +
+   * feedback message + panel refresh, exactly like clicking its Accept button. */
+  e2eAcceptBoardQuest(quest: GeneratedQuest): void {
+    if (!__DEBUG__) return;
+    this.acceptJob(quest);
+  }
+
+  /** E2E/dev-only seam: close the job-board panel (idempotent). */
+  e2eCloseJobBoard(): void {
+    if (!__DEBUG__) return;
+    this.closeJobBoard();
+  }
+
   private openGarage(): void {
     if (!this.gameEngine?.player) return;
     const ship = this.gameEngine.player.ship;
