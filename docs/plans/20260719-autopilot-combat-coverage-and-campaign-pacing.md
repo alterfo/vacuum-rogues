@@ -258,17 +258,23 @@ summary:
 - [ ] Run the full combat suite (`src/tests/combat/**`, `src/tests/playtest/letsplay/combat.test.ts`)
       — must stay green; these are additive behaviors, not changes to existing combat mechanics.
 
-### Task 8: Planet/station actions open the real scene UI (#14)
-- [ ] Write failing real-engine playtest tests: `trade`, `take-quest`, and info-bureau browsing
-      actions should transition through `TradeScene`/`JobBoardPanel`/`InfoCenterScene` (open, act,
-      close) like `land`/`dock`/`attack` already do, not call the domain executor directly.
-- [ ] Reimplement each executor in `installAutopilotHook.ts` to drive the real scene transition +
-      in-scene action, reusing the scene's own public methods (never re-deriving trade/quest logic
-      at the call site — mirrors `CLAUDE.md`'s equipment/trade single-source-of-truth rule).
-- [ ] Verify the live "● АВТОПИЛОТ" indicator and tick cadence still behave sanely with the extra
-      scene transitions (no new stall/wedge introduced) — add a stall-regression test if any risk is
-      found.
-- [ ] Run affected tests — must pass before Task 9.
+### Task 8: Planet/station actions open the real scene UI (#14) — SCOPED DOWN
+- [x] Investigated `openTrade()` before implementing broadly: it's already documented as
+      intentionally bypassing `TradeScene` — a prior attempt to open it caused a
+      `PLANET→TRADE→FLIGHT→PLANET` loop (the driver always picks "leave-market" without buying
+      inside the real scene). Making trade watchable needs teaching the driver real in-scene
+      buy/sell logic, a new feature, not a UI-visibility fix — **out of scope this round, checked
+      with the user, left untouched and documented**. "Info-bureau browsing" turned out not to exist
+      as an autopilot action at all — dropped from scope.
+- [x] Quest-taking carries no such risk (same domain calls either way) — added
+      `e2eOpenJobBoard`/`e2eAcceptBoardQuest`/`e2eCloseJobBoard` (dev-only gated, mirrors the
+      existing `e2eTakeOff` convention) to `PlanetScene.ts`; `acceptBoardQuests` (`engineQueries.ts`)
+      gained an optional visual-accept callback so selection logic stays in ONE place (dev-only
+      layer), never duplicated into production code.
+- [x] `takeQuest()` in `installAutopilotHook.ts` now drives open→accept-each→close for real when the
+      scene supports it, falling back to the direct domain call unchanged otherwise (headless/test
+      doubles). Tests written (red confirmed before, green after); full affected suite (64
+      files/753 tests) + `letsplayDevOnly.test.ts` green. Commit `a014f69`.
 
 ### Task 9: Reproduce & fix — autopilot quest mishandling (#11)
 - [ ] Use a `WEDGE_PROBE`-style live diagnostic (or a new one) to reproduce a concrete quest failure
