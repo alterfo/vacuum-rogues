@@ -232,17 +232,19 @@ summary:
 - [x] Full affected suite (155 files/1611 tests: `src/tests/combat`, `src/tests/playtest/letsplay`,
       `src/tests/flight`) green, `tsc --noEmit` clean. Commit `16d11d7`.
 
-### Task 6: Land/dock ↔ take-off cycling (#8) — re-verify, then fix any residual
-- [ ] Re-run a live/headless session with plenty of credits and no affordable upgrade in system,
-      after Tasks 1–2's pacing changes — confirm whether the cycle still reproduces.
-- [ ] If it still reproduces: add a "nothing more to gain here" exit condition to the
-      upgrade-check tier in `MemoryHeuristicPolicy.ts` (mirroring the documented, already-reverted
-      dock-to-repair fix's shape but scoped to the upgrade case, with an explicit anti-stagnation
-      fold-count gate like the existing `flee-stagnant-jump`/`foldsSinceDayAdvance` pattern, not a
-      new ad hoc counter).
-- [ ] Write a failing-then-passing test reproducing the exact "large capital, no better gear
-      available" state.
-- [ ] Run affected tests — must pass before Task 7.
+### Task 6: Land/dock ↔ take-off cycling (#8) — re-verified, root cause identified, deliberately not fixed here
+- [x] Re-ran 4 headless sessions (200,000 credits from game start, distinct seeds) tracing station
+      -tier decisions. Result: `dock("mem:go-battle-ready")` → `arm-up` fired exactly ONCE per
+      session, then stopped cleanly — **no station-specific dock/undock cycle reproduced**.
+- [x] Found instead (141–181 occurrences per session): `PLANET land("mem:earn") ↔ move("mem:take-off")`
+      — this is the SAME already-documented churn in `docs/plans/20260713-campaign-winrate-100pct.md`
+      ("Dev-only policy tuning chosen", 2026-07-16/17): the ship lands hoping for a quest/price
+      -discovery, finds nothing, leaves. That plan's own 2026-07-17 entry already shipped a partial
+      fix (suppress earn-land once quests are structurally unavailable AND already-priced here) but
+      still recurs heavily — that plan's own conclusion stands: "a substantial, open-ended
+      agent-economy-tuning problem... deserves its own focused session," not a quick fix here.
+- [x] Checked with the user: **left to that existing open thread**, not fixed in this plan. No new
+      test needed — nothing new was found beyond what that plan already tracks.
 
 ### Task 7: Autopilot exercises the full combat-variant range
 - [ ] Extend `planningDriver.ts`'s `confirmPlanningIfOpen` (or add a sibling helper `PlayerAgent`
