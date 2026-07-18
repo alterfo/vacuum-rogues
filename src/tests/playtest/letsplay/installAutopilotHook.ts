@@ -29,6 +29,8 @@ import {
 } from "./MemoryHeuristicPolicy";
 import { isNeuralEnabled } from "@/systems/settings/gameSettings";
 import { GAME_BALANCE } from "@/config/balance";
+import type { Encounter } from "@/systems/encounters/encounterGenerator";
+import type { EncounterChoice } from "@/systems/encounters/encounterOutcome";
 import {
   isHelpPanelOpen,
   dismissHelpPanel,
@@ -206,7 +208,16 @@ export function createLiveSceneController(
       return true;
     }
     const scene = engine.currentScene as {
-      npcManager?: { hasOpenModal?: () => boolean; closeModals?: () => void };
+      npcManager?: {
+        hasOpenModal?: () => boolean;
+        closeModals?: () => void;
+        isEncounterPromptOpen?: boolean;
+        activeEncounter?: Encounter | null;
+        applyEncounterChoice?: (
+          encounter: Encounter,
+          choice: EncounterChoice,
+        ) => unknown;
+      };
       pendingWarp?: unknown;
       plannedRoute?: { x: number; y: number } | null;
       shipPhysics?: { isMoving: boolean } | null;
@@ -215,10 +226,28 @@ export function createLiveSceneController(
       e2eStartTurn?: () => void;
       combatPause?: { paused?: boolean; resume?: () => void };
     } | null;
-    // Auto-dismiss any open encounter/contact-panel/OVERMIND overlay so the
-    // autopilot keeps flying without a human pointer click. A click on the
-    // overlay's dismiss button fires a native `pointerdown` that bubbles to
-    // `window`, triggering reclaim-on-input → stop(). Driving the close
+    // Exploration encounters (derelict/anomaly/distress) are worth resolving
+    // for real, not just clearing on sight (live report, 2026-07-19): "engage"
+    // is the choice that actually rolls the reward/risk outcome
+    // (applyEncounterChoice → resolveEncounter); the blanket closeModals()
+    // below used to blind-dismiss this prompt exactly like the contact-panel/
+    // OVERMIND overlays it also covers, silently forfeiting every encounter
+    // the autopilot ever rolled. Checked BEFORE the generic branch so contact
+    // -panel/OVERMIND dismissal below is completely unchanged.
+    if (
+      scene?.npcManager?.isEncounterPromptOpen &&
+      scene.npcManager.activeEncounter
+    ) {
+      scene.npcManager.applyEncounterChoice?.(
+        scene.npcManager.activeEncounter,
+        "engage",
+      );
+      return true;
+    }
+    // Auto-dismiss any open contact-panel/OVERMIND overlay so the autopilot
+    // keeps flying without a human pointer click. A click on the overlay's
+    // dismiss button fires a native `pointerdown` that bubbles to `window`,
+    // triggering reclaim-on-input → stop(). Driving the close
     // programmatically via closeModals() bypasses that race entirely.
     if (scene?.npcManager?.hasOpenModal?.()) {
       scene.npcManager.closeModals?.();

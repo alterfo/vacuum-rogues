@@ -910,6 +910,57 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(resume).not.toHaveBeenCalled();
   });
 
+  it("dismissBlockingModal() engages an open encounter prompt instead of blind-closing it (2026-07-19)", () => {
+    const closeModals = vi.fn();
+    const applyEncounterChoice = vi.fn();
+    const fakeEncounter = { id: "enc1" };
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          hasOpenModal: () => true,
+          closeModals,
+          isEncounterPromptOpen: true,
+          activeEncounter: fakeEncounter,
+          applyEncounterChoice,
+        },
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(applyEncounterChoice).toHaveBeenCalledWith(fakeEncounter, "engage");
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() still closes a non-encounter modal (contact panel/OVERMIND) as before", () => {
+    const closeModals = vi.fn();
+    const applyEncounterChoice = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          hasOpenModal: () => true,
+          closeModals,
+          isEncounterPromptOpen: false,
+          activeEncounter: null,
+          applyEncounterChoice,
+        },
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: false },
+        e2eStartTurn: vi.fn(),
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(closeModals).toHaveBeenCalledTimes(1);
+    expect(applyEncounterChoice).not.toHaveBeenCalled();
+  });
+
   it("tick() calls hud.closeModals() when the quest journal is open", () => {
     const closeModals = vi.fn();
     const engine = mockEngine({

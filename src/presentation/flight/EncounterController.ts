@@ -105,6 +105,16 @@ export class EncounterController {
     return this.overlay !== null;
   }
 
+  /**
+   * The encounter currently being presented, or `null` when none is open —
+   * exposed so a non-clicking driver (the dev-only live autopilot) can resolve
+   * the open prompt through the real {@link applyEncounterChoice} instead of
+   * only being able to blind-close it via `closeEncounterPrompt()`.
+   */
+  get current(): Encounter | null {
+    return this.activeEncounter;
+  }
+
   /** Tear down any open prompt overlay (manager destroy()). */
   destroy(): void {
     if (this.overlay) {

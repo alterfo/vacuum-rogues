@@ -680,6 +680,16 @@ export class NpcShipManager implements FlightModule {
     return this.encounters.isOpen;
   }
 
+  /**
+   * The encounter currently presented, or `null` when none is open. Forwards
+   * to {@link EncounterController.current} — lets a non-clicking driver (the
+   * dev-only live autopilot) resolve the open prompt through
+   * {@link applyEncounterChoice} instead of only being able to blind-close it.
+   */
+  get activeEncounter(): Encounter | null {
+    return this.encounters.current;
+  }
+
   /** True while the NPC contact panel is open (for the Escape close-chain). */
   get isContactPanelOpen(): boolean {
     return this.panels.isOpen;
