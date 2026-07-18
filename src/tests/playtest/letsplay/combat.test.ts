@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
-import { PlayerAgent } from "./PlayerAgent";
+import { PlayerAgent, LOOT_LINGER_TICKS } from "./PlayerAgent";
 import type { PlayerPolicy, Action } from "./PlayerPolicy";
 import type { Observation } from "./observe";
 import { SceneType } from "@/types";
@@ -122,6 +122,51 @@ describe("letsplay combat executor (Task 3)", () => {
     const combatFired =
       playerHullAfter !== playerHullBefore || npcHullAfter < npcHullBefore;
     expect(combatFired).toBe(true);
+    expect(harness.errors()).toHaveLength(0);
+  });
+
+  it("attack lingers at a fresh kill instead of leaving instantly, giving the wreck's staggered loot a chance to spawn+get picked up (2026-07-19 live report)", async () => {
+    const npc = forceAggressorInRange(harness, GAME_BALANCE.weaponRange);
+    if (!npc) {
+      const agent = new PlayerAgent(harness, scripted("attack"));
+      await agent.run(1);
+      expect(harness.errors()).toHaveLength(0);
+      return;
+    }
+    // Guarantee a one-hit kill so the whole kill+linger sequence happens
+    // within this single `agent.run(1)` step. Deliberately NOT calling
+    // engageCombatNow(): that flips driveAttack's `alreadyFighting` branch,
+    // whose exit condition is "no hostiles remain active" (any OTHER hostile
+    // in the system keeps it going) — the `!alreadyFighting` branch's exit is
+    // THIS specific target dying, independent of the rest of the system.
+    (npc as unknown as { hullHP: number }).hullHP = 1;
+
+    // Measure ticks-AFTER-death specifically, not total ticks — the chase/
+    // engage-to-range phase before the kill varies with the scene's own
+    // combat mechanics and isn't part of what this fix changes.
+    let deathTickIndex = -1;
+    const originalTick = harness.tick.bind(harness);
+    const tickSpy = vi
+      .spyOn(harness, "tick")
+      .mockImplementation((deltaMs?: number) => {
+        originalTick(deltaMs);
+        if (deathTickIndex === -1 && npc.hullHP <= 0) {
+          deathTickIndex = tickSpy.mock.calls.length - 1;
+        }
+      });
+
+    const agent = new PlayerAgent(harness, scripted("attack"));
+    await agent.run(1);
+
+    expect(deathTickIndex).toBeGreaterThanOrEqual(0); // confirms the kill happened
+    const ticksAfterDeath = tickSpy.mock.calls.length - 1 - deathTickIndex;
+    // Pre-fix, the loop broke the instant the kill was detected (0 more ticks).
+    // Post-fix it lingers LOOT_LINGER_TICKS more (the wreck's loot-emission
+    // spread window) so LootDropHandler's per-frame proximity pickup (already
+    // running regardless of who's driving) gets the chance to collect the
+    // staggered drops before the ship moves on. A few ticks of slack for the
+    // reaction-window/scene-transition checks that can still end the loop.
+    expect(ticksAfterDeath).toBeGreaterThanOrEqual(LOOT_LINGER_TICKS - 5);
     expect(harness.errors()).toHaveLength(0);
   });
 

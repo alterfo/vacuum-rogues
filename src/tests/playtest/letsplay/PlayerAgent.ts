@@ -21,7 +21,8 @@
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
 import { NpcState, QuestType, SceneType } from "@/types";
-import { GAME_BALANCE } from "@/config/balance";
+import { GAME_BALANCE, WRECK } from "@/config/balance";
+import { WRECK_LOOT_SPREAD_FRACTION } from "@/presentation/flight/combatExecution";
 import type { NpcShip } from "@/domain/NpcShip";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
@@ -136,6 +137,23 @@ export interface AgentRunResult {
  * per agent (so a new session = a new game = a clean slate) and is inspectable via
  * {@link belief}; {@link reset} starts it over for an explicit re-run.
  */
+
+/** `driveAttack`'s own 50ms tick granularity (matches `this.harness.tick(50)`). */
+const ATTACK_TICK_MS = 50;
+/**
+ * How many extra `ATTACK_TICK_MS` ticks to linger at a fresh kill before
+ * `driveAttack` finally breaks — long enough for the wreck's last staggered
+ * loot emission to have fired (`combatWreck.ts`'s `WRECK.lifeMs` ×
+ * `WRECK_LOOT_SPREAD_FRACTION`), so `LootDropHandler`'s per-tick proximity
+ * pickup (already running every frame regardless of who's driving) actually
+ * gets the chance to collect it. Live report, 2026-07-19: the autopilot never
+ * picked up loot from a kill — root cause was leaving the instant the target
+ * died, before any drop had spawned yet.
+ */
+export const LOOT_LINGER_TICKS = Math.ceil(
+  (WRECK.lifeMs * WRECK_LOOT_SPREAD_FRACTION) / ATTACK_TICK_MS,
+);
+
 export class PlayerAgent {
   /** Per-run belief state — folded from observations, never from omniscient state. */
   private memory: AgentMemory = createMemory();
@@ -876,6 +894,10 @@ export class PlayerAgent {
       (engine.player?.ship?.maxHull ?? 0) *
         GAME_BALANCE.combatRoundHullFraction,
     );
+    // Set once the kill/fight-resolution is first detected (below); a bounded
+    // countdown of extra ticks so the loop lingers at the kill point instead
+    // of breaking the instant it happens — see LOOT_LINGER_TICKS.
+    let lootLingerTicksLeft: number | null = null;
     for (let i = 0; i < 2000; i++) {
       // Un-pause before each tick so weapons fire (same discipline as
       // waitOneDay/completeWarp — a paused ship neither flies nor shoots).
@@ -899,16 +921,31 @@ export class PlayerAgent {
         break;
       // Scene changed mid-fight (player death → GAME_OVER): stop driving.
       if (engine.currentSceneType !== SceneType.SPACE_FLIGHT) return;
-      // Reaction window: one completed round ends the step (policy re-decides).
-      if (scene.combatModule?.roundComplete === true) break;
-      if (alreadyFighting) {
-        // Driving a pre-engaged exchange: done when the fight resolves.
-        if (scene.combatModule?.isActive !== true) break;
-      } else {
-        // Chasing our own pick: done when it dies or flees the system.
-        if (target.state === NpcState.DEAD || target.hullHP <= 0) break;
-        if (target.currentSystemId !== engine.player?.currentSystemId) break;
+      const resolved = alreadyFighting
+        ? // Driving a pre-engaged exchange: done when the fight resolves.
+          scene.combatModule?.isActive !== true
+        : // Chasing our own pick: done when it dies (loot lingers below) or
+          // flees the system (nothing to loot — break immediately, unchanged).
+          target.state === NpcState.DEAD || target.hullHP <= 0;
+      if (
+        !alreadyFighting &&
+        !resolved &&
+        target.currentSystemId !== engine.player?.currentSystemId
+      ) {
+        break;
       }
+      if (resolved) {
+        if (lootLingerTicksLeft === null) {
+          lootLingerTicksLeft = LOOT_LINGER_TICKS;
+        }
+        if (lootLingerTicksLeft <= 0) break;
+        lootLingerTicksLeft--;
+        continue;
+      }
+      // Reaction window: one completed round ends the step (policy re-decides).
+      // Skipped once lingering for loot — a round "completing" on the very
+      // kill tick must not cut the linger short.
+      if (scene.combatModule?.roundComplete === true) break;
     }
     if (scene.isTurnRunning && typeof scene.endTurn === "function") {
       scene.endTurn();

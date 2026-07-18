@@ -102,8 +102,14 @@ import {
 const SHOT_FX_MS = 280;
 /** Rough on-screen ship radius (px) for flash sizing + wreck silhouettes. */
 const SHIP_VISUAL_RADIUS = 16;
-/** Fraction of the wreck's life across which its loot emissions are staggered. */
-const WRECK_LOOT_SPREAD_FRACTION = 0.6;
+/**
+ * Fraction of the wreck's life across which its loot emissions are staggered.
+ * Exported so a non-clicking driver (the dev-only live autopilot's
+ * `PlayerAgent.driveAttack`) can compute how long to linger near a fresh kill
+ * before the last drop has had a chance to spawn — see its "loot lingering"
+ * comment.
+ */
+export const WRECK_LOOT_SPREAD_FRACTION = 0.6;
 /** Friendly ally tracer tint (distinct from the player's hot cyan). */
 const ALLY_SHOT_COLOR = 0x7dff9a;
 /** Toast tints matching the planning-phase convention. */
