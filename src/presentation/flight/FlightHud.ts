@@ -1330,6 +1330,25 @@ export class FlightHud implements FlightModule {
     this.onSpeedCycle?.(scale);
   }
 
+  /**
+   * Set an explicit game-speed step from outside the HUD (the dev-only live
+   * autopilot uses this to jump straight to the fastest tier on engage and
+   * restore the player's prior speed on disengage — see
+   * `installAutopilotHook.ts`). Unlike {@link applyGameSpeed} this also keeps
+   * {@link speedIndex} in sync, so a manual cycle click right afterward
+   * continues from the right step instead of jumping back to whatever the
+   * index was before the external set. An unknown multiplier is a no-op
+   * (mirrors {@link restoreGameSpeed}'s "unknown ⇒ ignore" contract, not
+   * `setSpeed`'s "unknown ⇒ default" — a caller here always names a real step).
+   */
+  setGameSpeed(scale: number): void {
+    const steps = GAME_BALANCE.gameSpeedMultipliers;
+    const idx = steps.findIndex((s) => s === scale);
+    if (idx < 0) return;
+    this.speedIndex = idx;
+    this.applyGameSpeed(steps[this.speedIndex]);
+  }
+
   /** Toggle quest journal UI. */
   toggleQuestJournal(): void {
     if (this.questJournalUI) {

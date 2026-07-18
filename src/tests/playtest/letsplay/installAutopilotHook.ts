@@ -28,6 +28,7 @@ import {
   warpWantsQuestBias,
 } from "./MemoryHeuristicPolicy";
 import { isNeuralEnabled } from "@/systems/settings/gameSettings";
+import { GAME_BALANCE } from "@/config/balance";
 import {
   isHelpPanelOpen,
   dismissHelpPanel,
@@ -882,11 +883,37 @@ export function installAutopilotHook(
   });
   controllerRef = controller;
 
+  // Auto-max speed on engage (2026-07-18 request): the autopilot is dull to
+  // watch at 1×, so engaging it jumps straight to the fastest selectable
+  // `GAME_BALANCE.gameSpeedMultipliers` tier (10×) and disengaging restores
+  // whatever the player had picked before — mirrors `FlightHud`'s own
+  // persist/restore contract (`restoreGameSpeed`) rather than inventing a
+  // second one. `hud` is read fresh each call (not captured once) since a
+  // land/take-off rebuilds the HUD instance between engage and disengage.
+  let speedBeforeAutopilot: number | null = null;
+  const hudForSpeed = (): { setGameSpeed?: (scale: number) => void } | null =>
+    (
+      engine.currentScene as {
+        hud?: { setGameSpeed?: (scale: number) => void };
+      } | null
+    )?.hud ?? null;
+
   const hook: AutopilotWindowHook = {
-    start: () => controller.start(),
-    stop: () => controller.stop(),
-    toggle: () =>
-      controller.isEngaged ? controller.stop() : controller.start(),
+    start: () => {
+      speedBeforeAutopilot = engine.gameSpeedMultiplier;
+      hudForSpeed()?.setGameSpeed?.(
+        Math.max(...GAME_BALANCE.gameSpeedMultipliers),
+      );
+      controller.start();
+    },
+    stop: () => {
+      controller.stop();
+      if (speedBeforeAutopilot !== null) {
+        hudForSpeed()?.setGameSpeed?.(speedBeforeAutopilot);
+        speedBeforeAutopilot = null;
+      }
+    },
+    toggle: () => (controller.isEngaged ? hook.stop() : hook.start()),
     get engaged() {
       return controller.isEngaged;
     },

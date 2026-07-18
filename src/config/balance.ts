@@ -512,7 +512,7 @@ export const GAME_BALANCE = {
   /** Default time-scale multiplier for ship physics (1.0 = real-time). */
   gameSpeedDefault: 1.0,
   /** Selectable time-scale steps cycled by the speed button in the HUD. */
-  gameSpeedMultipliers: [1.0, 2.0, 4.0] as const,
+  gameSpeedMultipliers: [1.0, 2.0, 4.0, 10.0] as const,
   /** Fraction of base price deviation that marks a deal (20% = buy/sell 20% off/above average). */
   tradeDealThreshold: 0.2,
   /**

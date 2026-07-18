@@ -168,6 +168,63 @@ describe("installAutopilotHook — window hook + hotkey", () => {
   });
 });
 
+describe("installAutopilotHook — auto game-speed on engage/disengage", () => {
+  beforeEach(() => {
+    clearWindowHook();
+  });
+  afterEach(() => {
+    clearWindowHook();
+  });
+
+  /** A minimal engine exposing the HUD speed seam through `currentScene`. */
+  function fakeEngineWithHud(initialSpeed: number) {
+    const setGameSpeed = vi.fn();
+    const engine = {
+      gameSpeedMultiplier: initialSpeed,
+      currentScene: { hud: { setGameSpeed } },
+    } as unknown as GameEngine;
+    return { engine, setGameSpeed };
+  }
+
+  it("start() jumps to the fastest selectable speed tier (2026-07-18 request)", () => {
+    const { engine, setGameSpeed } = fakeEngineWithHud(1);
+    const hook = installAutopilotHook(engine, quietDeps);
+
+    hook.start();
+
+    expect(setGameSpeed).toHaveBeenCalledWith(10);
+  });
+
+  it("stop() restores whatever speed was set before engaging", () => {
+    const { engine, setGameSpeed } = fakeEngineWithHud(2);
+    const hook = installAutopilotHook(engine, quietDeps);
+
+    hook.start();
+    hook.stop();
+
+    expect(setGameSpeed).toHaveBeenLastCalledWith(2);
+  });
+
+  it("toggle() applies the same auto-speed engage/restore as start()/stop()", () => {
+    const { engine, setGameSpeed } = fakeEngineWithHud(4);
+    const hook = installAutopilotHook(engine, quietDeps);
+
+    hook.toggle(); // engage
+    expect(setGameSpeed).toHaveBeenLastCalledWith(10);
+    hook.toggle(); // disengage
+    expect(setGameSpeed).toHaveBeenLastCalledWith(4);
+  });
+
+  it("never touches speed when the engine has no HUD to reach (headless-safe)", () => {
+    const hook = installAutopilotHook({} as GameEngine, quietDeps);
+
+    expect(() => {
+      hook.start();
+      hook.stop();
+    }).not.toThrow();
+  });
+});
+
 describe("installAutopilotHook — AgentMemory reset on galaxy-identity change (F6)", () => {
   beforeEach(() => {
     clearWindowHook();
