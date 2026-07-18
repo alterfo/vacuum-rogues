@@ -194,29 +194,29 @@ summary:
 - [ ] Report the final state (met/not met) — do not attempt a third tuning round in this task.
 
 ### Task 3: Encounter modals — act on them instead of blind-dismissing (#9)
-- [ ] Write a failing real-engine playtest test: an anomaly/derelict-ship encounter modal is open,
-      the autopilot ticks, and the modal should be resolved via a real choice (investigate/search),
-      not `closeModals()`.
-- [ ] In `installAutopilotHook.ts`, replace `dismissBlockingModal()`'s unconditional
-      `closeModals()` for an *encounter* overlay with a call into `NpcShipManager`'s real
-      `applyEncounterChoice()`/`showEncounterPrompt()` API — pick the choice the policy would (e.g.
-      always the "investigate/search" option, mirroring how `attack`/`flee` already pick a concrete
-      verb rather than defaulting to "do nothing").
-- [ ] Confirm other blocking-modal auto-dismiss paths (quest journal, settings, planet info) are
-      untouched — this change is scoped to the encounter-overlay branch only.
-- [ ] Write tests for both outcomes (a rewarding investigate, a risky one) and the fallback when no
-      real API is reachable (degrade to the old dismiss, never throw).
-- [ ] Run affected tests — must pass before Task 4.
+- [x] Wrote regression tests (unit-level over `createLiveSceneController`/`dismissBlockingModal`,
+      real engine already exercised via the broader letsplay suite): an open encounter prompt
+      resolves via the real `applyEncounterChoice(encounter, "engage")`, not `closeModals()`.
+- [x] `installAutopilotHook.ts`'s `dismissBlockingModal()` special-cases the encounter-prompt branch
+      before the generic contact-panel/OVERMIND dismissal (untouched).
+- [x] **Regression found and fixed same day**: the first version left the prompt open (never called
+      `closeEncounterPrompt()`), so the SAME encounter re-applied "engage" every tick forever
+      (confirmed live: infinite +300cr from one anomaly). Fixed by closing the prompt first, exactly
+      mirroring the real UI button's own order; added a test that drives `dismissBlockingModal()`
+      twice and asserts a single apply.
+- [x] Full suite + `letsplay:ci` + `test:playtest` green. Commits `666c3bb`, `2f4eff9`.
 
 ### Task 4: Dock teleport → real flight-in (#16)
-- [ ] Write a failing real-engine playtest test: `dock()` on a station should drive a real
-      `executeRouteTo`-style approach (mirroring `land()`'s `:374-419` branch), not an instant
+- [x] Wrote a failing test: `dock()` should drive `executeRouteTo` to the station marker, not
       teleport.
-- [ ] Implement the fix in `installAutopilotHook.ts`'s `dock()` executor, reusing `land()`'s route
-      -driving helper rather than forking a second implementation.
-- [ ] Verify a station with no reachable route degrades safely (no throw, falls back to the old
-      teleport only as a last resort, and is asserted as such by a test).
-- [ ] Run affected tests — must pass before Task 5.
+- [x] Implemented in `installAutopilotHook.ts`'s `dock()` executor, mirroring `land()`'s real-route
+      branch (`routeTargetStationId` + `executeRouteTo`, matching `PlanetManager.onStationClick` →
+      `SpaceFlightScene.handleStationDock`'s real click flow); the scene's own proactive
+      `DOCKING_RANGE` check completes it for real (refuel included), no manual scene-transition
+      needed on this path.
+- [x] Verified the no-route-available case (headless/test doubles) falls back to the previous
+      teleport behavior unchanged, asserted by the two pre-existing tests staying green untouched.
+- [x] Full suite (106 files/1096 tests in the affected areas) green. Commit `a0d6a0e`.
 
 ### Task 5: Loot pickup after a kill (#12)
 - [ ] Write a failing real-engine playtest test: after `driveAttack` kills its target, the ship
