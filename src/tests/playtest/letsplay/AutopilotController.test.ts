@@ -388,6 +388,54 @@ describe("AutopilotController — disengage", () => {
     expect(sch.cancels()).toBe(1);
   });
 
+  it("stops itself at a terminal scene instead of deciding forever (2026-07-18 live report)", async () => {
+    // Game Over / Win screen: only "wait" is ever legal there, so pre-fix the
+    // autopilot span on deciding "wait" forever, indicator up, looking like it
+    // was still "playing" a screen whose only real next step is a human
+    // restarting the game.
+    const sch = makeFakeScheduler();
+    const indicator: AutopilotIndicator = { show: vi.fn(), hide: vi.fn() };
+    const decide = vi.fn(() => ({ kind: "wait" }) as Action);
+    const { controller } = makeController();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: { name: "spy", decide },
+      controller,
+      scheduler: sch.scheduler,
+      indicator,
+      isTerminal: () => true,
+    });
+
+    ap.start();
+    expect(ap.isEngaged).toBe(true);
+
+    sch.fire();
+    await flush();
+
+    expect(ap.isEngaged).toBe(false);
+    expect(indicator.hide).toHaveBeenCalledTimes(1);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("without isTerminal, behaves exactly as before (opt-in, no default terminal check)", async () => {
+    const sch = makeFakeScheduler();
+    const { controller, calls } = makeController();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "wait" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+    });
+
+    ap.start();
+    sch.fire();
+    await flush();
+
+    expect(ap.isEngaged).toBe(true);
+    expect(calls).toEqual(["tick"]);
+  });
+
   it("does not tick before start or after stop", async () => {
     const sch = makeFakeScheduler();
     const decide = vi.fn(() => ({ kind: "wait" }) as Action);

@@ -879,6 +879,11 @@ export function installAutopilotHook(
     onError: (err) => logger.warn("Autopilot tick fault (continuing):", err),
     // The Shift+F oddity-flag hotkey (below) must never disengage the autopilot.
     ignoreReclaimKey: isOddityFlagKey,
+    // Game Over / Win screen ⇒ self-stop rather than spin on the sole legal
+    // "wait" forever (2026-07-18 live report).
+    isTerminal: () =>
+      engine.currentSceneType === SceneType.GAME_OVER ||
+      engine.currentSceneType === SceneType.WIN_SCREEN,
     ...overrides,
   });
   controllerRef = controller;

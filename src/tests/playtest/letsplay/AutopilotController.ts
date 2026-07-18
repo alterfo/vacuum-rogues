@@ -86,6 +86,17 @@ export interface AutopilotDeps {
   readonly tickIntervalMs?: number;
   /** Sink for a swallowed decision/apply fault (live: `logger.warn`). */
   readonly onError?: (err: unknown) => void;
+  /**
+   * Whether the game has reached a terminal screen (GAME_OVER/WIN_SCREEN) —
+   * checked at the top of every tick; when true the autopilot stops itself
+   * instead of deciding (live: only "wait" is legal there, so it would
+   * otherwise sit "engaged" forever showing the indicator with nothing left
+   * to do — a real 2026-07-18 live report: the pilot kept "playing" through a
+   * Game Over screen whose only real next step is a human restarting).
+   * Optional so existing tests/deps that don't care about terminal scenes are
+   * unaffected.
+   */
+  readonly isTerminal?: () => boolean;
 }
 
 /** Run `fn`, routing any throw to `onError` instead of propagating. */
@@ -229,6 +240,7 @@ export class AutopilotController {
   private readonly indicator: AutopilotIndicator;
   private readonly intervalMs: number;
   private readonly onError: (err: unknown) => void;
+  private readonly isTerminal: (() => boolean) | undefined;
 
   constructor(deps: AutopilotDeps) {
     this.observeFn = deps.observe;
@@ -240,6 +252,7 @@ export class AutopilotController {
     this.indicator = deps.indicator ?? domIndicator();
     this.intervalMs = deps.tickIntervalMs ?? DEFAULT_AUTOPILOT_TICK_MS;
     this.onError = deps.onError ?? (() => {});
+    this.isTerminal = deps.isTerminal;
   }
 
   /** Whether the autopilot is currently flying the ship. */
@@ -334,6 +347,16 @@ export class AutopilotController {
    */
   async tickOnce(): Promise<void> {
     if (!this.engaged || this.busy) return;
+    // Game Over / Win screen: only "wait" is ever legal there (`observe.ts`'s
+    // legalActionsForScene), so deciding would just spin harmlessly forever —
+    // but "harmless" still means the "● АВТОПИЛОТ" indicator stays up and the
+    // pilot visibly keeps "playing" a screen whose only real next step is a
+    // human restarting (live report, 2026-07-18). Stop cleanly instead of
+    // deciding once the game itself is over.
+    if (this.isTerminal?.()) {
+      this.stop();
+      return;
+    }
     this.busy = true;
     try {
       if (await this.controller.dismissBlockingModal?.()) return;
