@@ -38,11 +38,25 @@ architecture changes; it only pins the wire format.
 
 Trained on `tools/ai/dataset/train.jsonl` (200 goal-less `MemoryHeuristicPolicy`
 sessions × 500 steps = 100,000 rows at the 54-wide feature shape, exported via
-`npm run dataset:export` in 4 memory-bounded chunks —
-`LETSPLAY_EXPORT_MIX_SESSIONS_SCALE=0.25` with distinct
-`LETSPLAY_EXPORT_MIX_SEED_PREFIX=BC1..BC4` — since a single 200×500 run OOMs one
-vitest worker; see `tools/ai/README.md`) via `tools/ai/train_player.py`, trained
-**locally on Apple MPS** (not the RTX 4090 host):
+`npm run dataset:export`) via `tools/ai/train_player.py`, trained **locally on
+Apple MPS** (not the RTX 4090 host):
+
+**2026-07-18 retrain note:** the teacher's combat/garrison behavior changed
+materially since the 2026-07-07 run below (headless `attack` went from a no-op
+to genuinely driving combat, plus garrison-discount and combat-round
+hardening), so the dataset was regenerated from scratch rather than reused.
+Chunking widened from 4×0.25-scale to **10×0.1-scale** chunks (`BC1..BC10`) —
+the post-three-year-campaign engine state (Overmind arc, garrison layer) is
+heavier per session than when the 4-chunk scheme was sized, and a single
+0.25-scale (50-session) chunk now OOMs a vitest worker even with the memory
+budget that used to cover it. `NODE_OPTIONS=--max-old-space-size=10240` is
+also set for the export step as a second safety margin. See
+`tools/ai/dataset/retrain_combat.sh` for the full scripted pipeline
+(export ×10 → validate each chunk → concatenate → validate the full set →
+train). `tools/ai/dataset/validate_dataset.py` now also checks the featurize
+[0,1] range contract, per-column statistical outliers, and exact-duplicate
+rows (train/val leakage risk) before a training run is trusted — run it before
+`train_player.py`, not just after.
 
 ```bash
 python train_player.py \
@@ -72,25 +86,45 @@ python train_player.py \
 
 ## Result
 
-Converged and **early-stopped at epoch 448/500**, **val_acc 96.8%**,
-val_loss 0.083. No NaN loss at any point. `--parity-out` also wrote
-`fixtures/player.io.json`, a `{input, expected}` PyTorch↔TS parity fixture
-(float64 forward pass for bit-comparable maths), asserted against the pure-TS
-`mlp.forward` by `shippedParity.test.ts` (≤ 1e-5).
+**2026-07-18 retrain** (fresh 100K-row dataset, see note above): converged and
+**early-stopped at epoch 412/500**, **val_acc 90.5%**, val_loss 0.241. No NaN
+loss at any point. `--parity-out` also wrote `fixtures/player.io.json`,
+re-asserted by `shippedParity.test.ts` (≤ 1e-5).
 
-**Read the 96.8% val accuracy with the documented ceiling, not as a win-rate.**
-The dataset populates every reachable action head (`wait` 57.8%, `warp` 14.1%,
-`move` 7.8%, `land` 7.3%, `trade` 6.0%, `attack` 3.9%, `take-quest` 1.4%,
-`flee` 1.3%, `arm-up` 235 rows, `liberate` 12 rows), so — unlike the Task 10
-zero-extension's 8-dead-head dataset — this net genuinely learned to select
-`arm-up`/`liberate`, not just the trade/navigate/fight repertoire. But a BC
-clone can only **match**, not **exceed**, its teacher: measured **4% win-rate /
-25 sessions** vs the `MemoryHeuristicPolicy` teacher's own ~18%, because most
-seeds hit a pre-existing pure-argmax `PLANET↔TRADE` no-op collapse
-(`NeuralPolicy` has no anti-stagnation fallback — confirmed pre-existing via
-`git stash` on the committed weights, not a retrain regression). The neural
-flag stays **off** in production; see `docs/plans/20260706-three-year-campaign.md`
-Task 11 and `.claude/docs/systems/letsplay.md` for the full record.
+**Read val accuracy with the documented ceiling, not as a win-rate — and this
+retrain's ceiling got worse, not better.** The teacher's own action mix shifted
+a lot since the 07-07 run (`move` 31.0%, `land` 20.5%, `warp` 18.3%, `dock`
+8.6%, `wait` 10.6% — `wait` no longer dominates — `trade` 6.0%, `flee` 2.0%,
+`take-quest` 1.4%, `attack` 0.9%, `arm-up` 261 rows, `repair` 0.3%, `liberate`
+34 rows; `buy-gear`/`upgrade-hull`/`buy-module` are single/double-digit rows
+and `take-loan`/`repay-loan`/`sell-cargo` are still **dead heads** — a known,
+pre-existing headless-applier limitation, not new). `validate_dataset.py` also
+flags **49.8% exact-duplicate rows** (down from 63.4% in the stale 07-07
+dataset, but still high) — a real methodological caveat: some of that 90.5%
+val accuracy is train/val leakage from near-identical repeated states, not
+genuine held-out generalization.
+
+Measured **0% win-rate / 15 sessions** via `CAMPAIGN_POLICY=neural
+npm run letsplay:campaign` (`CAMPAIGN_SESSIONS=15`) — worse than the previous
+net's 4%/25 sessions, and **all 15 sessions wedged** (most within ~300 steps of
+day 0, several never leaving the home station) rather than merely losing. This
+is the same pre-existing structural collapse as before — `NeuralPolicy` has no
+anti-stagnation fallback, so a repetitive argmax loop (that a healthy episode's
+random/heuristic exploration would break out of) just runs out the step budget
+— not a new regression from this retrain, but confirmation the ceiling has not
+moved and may be more likely to trigger given the teacher's action mix shifted
+further from `wait`-dominated toward move/land/warp/dock, none of which are
+resolved by pure argmax on a static net when the observation stops changing.
+The neural flag stays **off** in production; see
+`docs/plans/20260706-three-year-campaign.md` Task 11 and
+`.claude/docs/systems/letsplay.md` for the full record.
+
+For context, the **teacher itself** (`MemoryHeuristicPolicy`, unretrained,
+what actually ships live) measured **6.7% win-rate / 15 sessions** the same
+day, with 2/15 sessions (13%) hitting a genuine calendar-freeze wedge
+(`SPACE_FLIGHT`/`attack` repeat pattern, day frozen ~300 steps) and one death
+from engaging combat at 11% hull — both real, open combat issues independent
+of this retrain, reported separately.
 
 ## Regenerating
 
