@@ -33,6 +33,59 @@ const GLOBAL_EVENT_CHANCE = 0.1;
 /** Duration of a TradeBoom effect in days. */
 const TRADE_BOOM_DURATION = 10;
 
+/**
+ * Minimum allowed distance (in raw `(q,r)` coordinate units) between any two
+ * generated systems — live report 2026-07-19: a screenshot showed two-three
+ * star-map system markers (and their name labels) rendered directly on top
+ * of each other, completely unreadable. The old generator picked each
+ * system's `{q, r}` independently and uniformly at random in a 100×100 grid
+ * with no minimum-distance check, so a close pair was a real, reproducible
+ * outcome at typical system counts (12-30), not a rare edge case. At
+ * `StarMapScene.MAP_SCALE = 4`, this floor is 48 screen px apart before
+ * zoom — enough room for `pickLabelPosition`'s existing per-label collision
+ * avoidance to actually find a clear spot, since the underlying markers are
+ * no longer touching in the first place.
+ */
+export const MIN_SYSTEM_DISTANCE = 12;
+
+/** Bounded rejection-sampling attempts before falling back (see {@link pickSystemCoordinate}). */
+const MAX_PLACEMENT_ATTEMPTS = 200;
+
+/**
+ * Pick a new system's `{q, r}` at least {@link MIN_SYSTEM_DISTANCE} from
+ * every already-placed coordinate. Bounded retry, not an unbounded loop: at
+ * very high system counts the 100×100 grid can't fit every pair that far
+ * apart (packing math), so after `MAX_PLACEMENT_ATTEMPTS` failed draws this
+ * falls back to the single best (farthest-nearest-neighbour) candidate seen
+ * so far — generation always terminates and every system still gets a
+ * placement, just not guaranteed to clear the floor in that dense a galaxy.
+ */
+function pickSystemCoordinate(
+  rng: SeededRNG,
+  placed: readonly { q: number; r: number }[],
+): { q: number; r: number } {
+  let best: { q: number; r: number } | null = null;
+  let bestNearestDist = -Infinity;
+  for (let attempt = 0; attempt < MAX_PLACEMENT_ATTEMPTS; attempt++) {
+    const candidate = { q: rng.nextInt(-50, 50), r: rng.nextInt(-50, 50) };
+    let nearestDist = Infinity;
+    for (const p of placed) {
+      const d = Math.hypot(candidate.q - p.q, candidate.r - p.r);
+      if (d < nearestDist) nearestDist = d;
+    }
+    if (placed.length === 0 || nearestDist >= MIN_SYSTEM_DISTANCE) {
+      return candidate;
+    }
+    if (nearestDist > bestNearestDist) {
+      bestNearestDist = nearestDist;
+      best = candidate;
+    }
+  }
+  // Every attempt fell short of the floor (a dense galaxy) — take the best
+  // (farthest-nearest-neighbour) candidate seen rather than looping forever.
+  return best ?? { q: rng.nextInt(-50, 50), r: rng.nextInt(-50, 50) };
+}
+
 export class GalaxySimulator {
   private _seed: string;
   private systems: StarSystem[] = [];
@@ -57,11 +110,19 @@ export class GalaxySimulator {
 
     // Generate systems with deterministic coordinates
     const generatedSystems: StarSystem[] = [];
+    const placedCoords: { q: number; r: number }[] = [];
     for (let i = 0; i < systemCount; i++) {
-      const coord = {
-        q: this.rng.nextInt(-50, 50),
-        r: this.rng.nextInt(-50, 50),
-      };
+      // Independent per-system sub-seed (mirrors pickStarType/pickSystemFaction
+      // below): rejection sampling needs a variable number of draws, and
+      // pulling those from the SHARED `this.rng` stream would shift every
+      // downstream consumer (tech levels, warp paths, NPC/faction seeding)
+      // for any seed that ever needed a retry — reshuffling a whole galaxy's
+      // layout/outcome, not just nudging a close pair apart.
+      const coord = pickSystemCoordinate(
+        new SeededRNG(`${seed}_coord_${i}`),
+        placedCoords,
+      );
+      placedCoords.push(coord);
 
       // Deterministically assign economy type and political system from seed
       const economyTypes = [

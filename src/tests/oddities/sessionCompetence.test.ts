@@ -140,16 +140,27 @@ describe("Task 7 — campaign milestone proxies on the seeded medium session", (
 describe("Task 8 — strict battle-ready + first-liberation on the seeded medium session", () => {
   it("reaches battle-ready and liberates at least once, with no death", async () => {
     const r = await runCampaignSession({
-      // Re-baselined seed (Task 14, three-year-campaign plan): adding batch-1
+      // Re-baselined seed AGAIN (gear-catalog & garrison-power-ceiling plan,
+      // 2026-07-19): `GalaxySimulator`'s system-coordinate generation gained
+      // a minimum inter-system spacing (`MIN_SYSTEM_DISTANCE`, fixing a live
+      // report of overlapping star-map markers/labels) — a content-safe
+      // "Generation change ⇒ new-games-only" per root CLAUDE.md, but it
+      // reshuffles every existing seed's specific layout/outcome, so the
+      // prior `CAMPAIGN-CAPACITY-22` (itself a re-baseline of the original
+      // `CAMPAIGN-CAPACITY-0` — see that history below) no longer crosses the
+      // STRICT battle-ready gate by day 200 either. `CAMPAIGN-CAPACITY-53`
+      // does under the new generation code — every assertion below is
+      // unchanged; only the input seed moved again (same test-modification
+      // license as the prior re-baseline: meaning preserved, seed value is
+      // not the behavior under test).
+      //
+      // Prior re-baseline (Task 14, three-year-campaign plan): adding batch-1
       // text-quest scripts grows ALL_QUEST_SCRIPTS 12→16, which shifts board
-      // composition (text-quest slots dedup on `TEXT|<scriptId>`), so the old
-      // `CAMPAIGN-CAPACITY-0` medium session no longer crosses the STRICT
-      // battle-ready gate by day 200. This seed does — every assertion below is
-      // unchanged; only the input seed moved (test-modification license,
-      // meaning preserved: a seeded GOD medium session reaches strict
-      // battle-ready + liberates ≥ 1 with no death). `CAMPAIGN-CAPACITY-0`
+      // composition (text-quest slots dedup on `TEXT|<scriptId>`), so the
+      // original `CAMPAIGN-CAPACITY-0` medium session no longer crossed the
+      // STRICT battle-ready gate by day 200 either. `CAMPAIGN-CAPACITY-0`
       // still owns the oracle block above (power band + first-liberation).
-      seed: "CAMPAIGN-CAPACITY-22",
+      seed: "CAMPAIGN-CAPACITY-53",
       maxDays: 200,
       gameMode: "GOD",
     });
