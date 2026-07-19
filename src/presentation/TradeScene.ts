@@ -5,6 +5,7 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
+import type { Faction } from "@/types/faction";
 import { SceneType, ResourceType } from "@/types";
 import { TradeSystem } from "@/systems/TradeSystem";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
@@ -37,6 +38,19 @@ export class TradeScene extends GameScene {
   /** Localized display name for a market good (falls back to the raw id). */
   private resourceName(resource: ResourceType | string): string {
     return t(`resource.${resource}`);
+  }
+
+  /**
+   * The faction controlling this planet's system — the real key into
+   * `player.reputation` for pricing (live report 2026-07-19: `TradeSystem`
+   * used to read `player.reputation[planet.id]`, a key that never matched any
+   * real faction id, silently zeroing the reputation-price effect).
+   */
+  private planetFaction(): Faction | undefined {
+    if (!this.gameEngine?.galaxy || !this.planet) return undefined;
+    return this.gameEngine.galaxy.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet!.id),
+    )?.ownerFaction;
   }
 
   constructor(renderer: Renderer) {
@@ -162,16 +176,19 @@ export class TradeScene extends GameScene {
     const freeHold = Math.max(0, cargoCapacity - totalCargo);
 
     let y = top + 28;
+    const planetFaction = this.planetFaction();
     for (const resource of Object.values(ResourceType)) {
       const buyPrice = this.tradeSystem.getBuyPrice(
         this.planet,
         resource,
         player,
+        planetFaction,
       );
       const sellPrice = this.tradeSystem.getSellPrice(
         this.planet,
         resource,
         player,
+        planetFaction,
       );
       const owned =
         player.inventory.resources.find((r) => r.type === resource)?.amount ??
@@ -419,6 +436,7 @@ export class TradeScene extends GameScene {
         isBuy,
         cargoCapacityOf(this.gameEngine.playerLoadout),
         this.gameEngine.bank,
+        this.planetFaction(),
       );
       const name = this.resourceName(resource);
       if (result.success) {

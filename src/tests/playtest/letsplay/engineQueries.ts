@@ -467,6 +467,7 @@ function sellAllCargo(
   const player = engine.player;
   if (!player) return;
   const capacity = cargoCapacityOf(engine.playerLoadout);
+  const planetFaction = currentSystem(engine)?.ownerFaction;
   for (const cargo of [...player.inventory.resources]) {
     if (cargo.amount <= 0 || protect.has(cargo.type)) continue;
     ts.executeTrade(
@@ -477,6 +478,7 @@ function sellAllCargo(
       false,
       capacity,
       engine.bank,
+      planetFaction,
     );
   }
 }
@@ -556,7 +558,8 @@ export function executeMemoryAwareTrade(
   const holdFree = Math.max(0, capacity - holdUsed);
   if (holdFree === 0) return;
 
-  const price = ts.getBuyPrice(planet, preferredGood, player);
+  const planetFaction = currentSystem(engine)?.ownerFaction;
+  const price = ts.getBuyPrice(planet, preferredGood, player, planetFaction);
   if (price <= 0 || player.credits < price) return;
   const reserveSpend = Math.floor(
     player.credits * (1 - TRADE_CREDIT_RESERVE_FRACTION),
@@ -576,6 +579,7 @@ export function executeMemoryAwareTrade(
       true,
       capacity,
       engine.bank,
+      planetFaction,
     );
   }
 }

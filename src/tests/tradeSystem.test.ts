@@ -8,6 +8,7 @@ import { Inventory } from "@/domain/Inventory";
 import { SkillTree } from "@/domain/SkillTree";
 import { FactionType, PoliticalSystem, ResourceType } from "@/types";
 import type { QuestLog, Journal } from "@/types";
+import { Faction } from "@/types/faction";
 
 function makePlayer(credits = 100_000): Player {
   return new Player(
@@ -105,6 +106,82 @@ describe("TradeSystem — buy/sell spread (Task 9)", () => {
     trade2.executeTrade(player, planet, ResourceType.CRYSTALS, 10, false);
 
     expect(player.credits).toBeLessThan(before);
+  });
+});
+
+// --- Reputation-affects-price (live report 2026-07-19) ---
+describe("TradeSystem — reputation-based pricing keys off the planet's controlling faction", () => {
+  const trade = new TradeSystem();
+
+  it("a genuinely different reputation with the planet's faction changes the market price", () => {
+    const planet = makePlanet();
+    const good = ResourceType.ELECTRONICS;
+
+    const hated = makePlayer();
+    (hated as Player & { reputation: Record<string, number> }).reputation = {
+      [Faction.INDEPENDENT]: -100,
+    };
+    const beloved = makePlayer();
+    (beloved as Player & { reputation: Record<string, number> }).reputation = {
+      [Faction.INDEPENDENT]: 100,
+    };
+
+    const priceHated = trade.getMarketPrice(
+      planet,
+      good,
+      hated,
+      Faction.INDEPENDENT,
+    );
+    const priceBeloved = trade.getMarketPrice(
+      planet,
+      good,
+      beloved,
+      Faction.INDEPENDENT,
+    );
+    expect(priceHated).not.toBe(priceBeloved);
+  });
+
+  it("omitting the planet faction stays reputation-neutral (0), regardless of stored reputation", () => {
+    // Regression for the live bug: getMarketPrice used to read
+    // `player.reputation[planet.id]` — a key that never matched any real
+    // faction id, so this was ALWAYS the effective behavior (silently). Now
+    // it's an explicit, documented default for callers that don't have the
+    // planet's faction handy, not an accidental dead feature.
+    const planet = makePlanet();
+    const good = ResourceType.ELECTRONICS;
+    const extreme = makePlayer();
+    (extreme as Player & { reputation: Record<string, number> }).reputation = {
+      [Faction.INDEPENDENT]: 100,
+    };
+
+    const withoutFaction = trade.getMarketPrice(planet, good, extreme);
+    const neutralPlayer = makePlayer();
+    const neutralPrice = trade.getMarketPrice(planet, good, neutralPlayer);
+    expect(withoutFaction).toBe(neutralPrice);
+  });
+
+  it("reputation with an UNRELATED faction never affects this planet's price", () => {
+    const planet = makePlanet();
+    const good = ResourceType.ELECTRONICS;
+    const player = makePlayer();
+    (player as Player & { reputation: Record<string, number> }).reputation = {
+      [Faction.BASTIONS]: 100, // not this planet's controlling faction
+    };
+
+    const price = trade.getMarketPrice(
+      planet,
+      good,
+      player,
+      Faction.INDEPENDENT,
+    );
+    const neutralPlayer = makePlayer();
+    const neutralPrice = trade.getMarketPrice(
+      planet,
+      good,
+      neutralPlayer,
+      Faction.INDEPENDENT,
+    );
+    expect(price).toBe(neutralPrice);
   });
 });
 

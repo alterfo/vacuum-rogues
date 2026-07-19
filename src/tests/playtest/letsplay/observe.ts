@@ -26,6 +26,7 @@
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, StationType, FactionType } from "@/types";
 import type { ResourceType, QuestType } from "@/types";
+import type { Faction } from "@/types/faction";
 import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { isDowned } from "@/systems/combat/godMode";
 import { playerPowerIndex } from "@/systems/campaign/playerPower";
@@ -702,11 +703,12 @@ export function legalActionsForScene(
 export function marketSnapshotFor(
   planet: Planet,
   player: Player,
+  planetFaction?: Faction,
 ): MarketGoodSnapshot[] {
   return planet.market.availableResources.map((resource) => ({
     resource,
-    buy: TRADE.getBuyPrice(planet, resource, player),
-    sell: TRADE.getSellPrice(planet, resource, player),
+    buy: TRADE.getBuyPrice(planet, resource, player, planetFaction),
+    sell: TRADE.getSellPrice(planet, resource, player, planetFaction),
   }));
 }
 
@@ -947,7 +949,7 @@ export function observe(
         availableQuests:
           systemSnapshot?.planets.find((p) => p.id === landed.id)
             ?.availableQuests ?? 0,
-        market: marketSnapshotFor(landed, player),
+        market: marketSnapshotFor(landed, player, system?.ownerFaction),
       }
     : null;
 

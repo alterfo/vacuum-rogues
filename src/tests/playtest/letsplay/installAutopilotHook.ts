@@ -698,7 +698,7 @@ export function createLiveSceneController(
             .map((q) => q.collectItem!.type),
         );
         const market = planet.market
-          ? marketSnapshotFor(planet, player)
+          ? marketSnapshotFor(planet, player, sys?.ownerFaction)
           : undefined;
         const questNeed = deliveryCargoNeed(quests, market);
         if (questNeed) {

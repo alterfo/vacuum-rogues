@@ -437,6 +437,24 @@ symptom class, triggered by planet-landing approach rather than a warp edge spec
 be additional instances of the same bug class worth re-checking now that this is fixed. Full project
 suite (5931 tests) green, `tsc`/`eslint` clean.
 
+**Adjacent finding fixed in the same live session — reputation-keyed-to-planet-id bug
+(not a plan task, documented here for provenance):** while investigating a live "why did the
+autopilot's reputation die?" report, found `TradeSystem.getMarketPrice` read
+`player.reputation[planet.id]` — but `Player.reputation` is keyed by `Faction` (`@/types/faction`),
+never by planet id, so this lookup was **always** a silent miss and reputation had zero effect on
+trade pricing for the entire life of the feature. Fixed by threading the planet's actual
+`ownerFaction` through `getMarketPrice`/`getBuyPrice`/`getSellPrice`/`executeTrade` (new optional
+last param, so existing positional callers are unaffected) from every real call site
+(`TradeScene`, and the letsplay `observe.ts`/`engineQueries.ts`/`installAutopilotHook.ts` trio).
+Added 3 regression tests in `tradeSystem.test.ts` (reputation-with-controlling-faction changes
+price; omitting the faction stays neutral — pins the old silent-miss default as an explicit,
+documented behavior for callers without the faction handy; reputation with an unrelated faction
+has no effect). Full trade/economy/letsplay/campaign suites green, `tsc`/`eslint` clean. Sanity-
+checked with a 20-session NORMAL campaign run post-fix: 2 win/16 loss/2 died/0 timeout (10.0%
+win-rate, battle-ready 20%, solo-liberation 30%, avg peak power 0.13) — no wedges/timeouts/error
+sessions, numbers in the same band as other campaign measurements this session; the fix does not
+destabilize the economy.
+
 ### Task 11: Reproduce & fix — system-entry orientation regression (#19)
 - [ ] Reproduce: enter a system and confirm whether the ship's initial heading actually faces the
       star, and if not, find the regression (check recent changes to system-entry spawn/heading

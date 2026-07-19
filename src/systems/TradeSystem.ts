@@ -4,6 +4,7 @@ import type {
   EconomyType,
   PoliticalSystem,
 } from "@/types";
+import type { Faction } from "@/types/faction";
 import type { Planet } from "@/domain/Planet";
 import type { Player } from "@/domain/Player";
 import { economyBaseline, applyMarketTradeImpact } from "@/domain/Market";
@@ -72,6 +73,15 @@ export class TradeSystem {
     planet: Planet,
     resource: ResourceType,
     player: Player,
+    // The faction that controls this planet's system (`StarSystem.ownerFaction`)
+    // — the real key into `player.reputation` (a `Record<Faction, number>`).
+    // Optional so existing minimal-fixture callers still type-check; omitted
+    // ⇒ neutral (0), the same "never interacted" default `reputationWith`
+    // uses elsewhere. Live report (2026-07-19): this used to read
+    // `player.reputation[planet.id]`, a stale key that never matched any real
+    // faction id, so the reputation term was silently always 0 regardless of
+    // real standing — no gameplay effect, just a dead feature.
+    planetFaction?: Faction,
   ): number {
     const basePrice = this.basePrices.get(resource) ?? 100;
 
@@ -88,7 +98,7 @@ export class TradeSystem {
     const supply =
       idx >= 0 ? Math.max(planet.market.supplyVector[idx] ?? 1, 0.01) : 1;
     const reputation =
-      player.reputation[planet.market.planet?.id ?? planet.id] ?? 0;
+      planetFaction != null ? (player.reputation[planetFaction] ?? 0) : 0;
 
     // Gather features for regressor
     const features = [
@@ -187,8 +197,13 @@ export class TradeSystem {
    * Price the player pays to BUY one unit at this planet (reference market
    * price adjusted by the faction's buy modifier).
    */
-  getBuyPrice(planet: Planet, resource: ResourceType, player: Player): number {
-    const market = this.getMarketPrice(planet, resource, player);
+  getBuyPrice(
+    planet: Planet,
+    resource: ResourceType,
+    player: Player,
+    planetFaction?: Faction,
+  ): number {
+    const market = this.getMarketPrice(planet, resource, player, planetFaction);
     const factionBonus = this.getFactionTradeBonus(player.faction);
     const buyMult = factionBonus?.buyMultiplier ?? 1.0;
     return Math.max(1, Math.round(market * buyMult));
@@ -199,8 +214,13 @@ export class TradeSystem {
    * less than {@link getBuyPrice} on the same planet (enforced by clamp), so
    * same-planet buy→sell can never turn a profit.
    */
-  getSellPrice(planet: Planet, resource: ResourceType, player: Player): number {
-    const buy = this.getBuyPrice(planet, resource, player);
+  getSellPrice(
+    planet: Planet,
+    resource: ResourceType,
+    player: Player,
+    planetFaction?: Faction,
+  ): number {
+    const buy = this.getBuyPrice(planet, resource, player, planetFaction);
     const factionBonus = this.getFactionTradeBonus(player.faction);
     const sellMult = factionBonus?.sellMultiplier ?? 1.0;
     // Anchor the haircut to the BUY price (not the raw market) so the spread is
@@ -296,6 +316,8 @@ export class TradeSystem {
     // poking `player.credits`. Optional — pure-pricing tests pass nothing and
     // fall back to a direct mutation, preserving the legacy delta.
     bank?: BankAccess | null,
+    // The faction controlling this planet's system — see getMarketPrice.
+    planetFaction?: Faction,
   ): TransactionResult {
     if (amount <= 0) {
       throw new GameBusinessException(
@@ -308,8 +330,8 @@ export class TradeSystem {
     // Buy and sell are priced separately; sell is always below buy on the same
     // planet (see getSellPrice), preventing same-planet arbitrage.
     const unitPrice = isBuy
-      ? this.getBuyPrice(planet, resource, player)
-      : this.getSellPrice(planet, resource, player);
+      ? this.getBuyPrice(planet, resource, player, planetFaction)
+      : this.getSellPrice(planet, resource, player, planetFaction);
     const totalPrice = unitPrice * amount;
 
     if (isBuy) {
