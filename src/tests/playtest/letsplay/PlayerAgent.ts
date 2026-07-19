@@ -154,6 +154,20 @@ export const LOOT_LINGER_TICKS = Math.ceil(
   (WRECK.lifeMs * WRECK_LOOT_SPREAD_FRACTION) / ATTACK_TICK_MS,
 );
 
+/**
+ * Combat-variant diversity (campaign-coverage plan Task 7): the shield-cell
+ * consumable id `driveAttack` activates when hull drops critical and one is
+ * owned — matches `combatConsumable.ts`'s `COMBAT_CONSUMABLES` catalog id.
+ * (No production acquisition path exists yet — CLAUDE.md's known gap — this
+ * only exercises the mechanic once a consumable IS owned, e.g. a scripted
+ * test or a future loot/shop grant.)
+ */
+export const SHIELD_CELL_CONSUMABLE_ID = "con_shield_cell";
+/** Hull fraction below which `driveAttack` activates an owned shield cell. */
+const SHIELD_CELL_HULL_FRACTION = 0.3;
+/** Target hull fraction below which `driveAttack` tries "demand-surrender". */
+const DEMAND_SURRENDER_TARGET_HULL_FRACTION = 0.3;
+
 export class PlayerAgent {
   /** Per-run belief state — folded from observations, never from omniscient state. */
   private memory: AgentMemory = createMemory();
@@ -870,14 +884,59 @@ export class PlayerAgent {
     // (slayerCampaign.test) never finishes its kill that way.
     const alreadyFighting = scene.combatModule?.isActive === true;
     if (!alreadyFighting) scene.npcManager.onAttackNpc(target);
+    // Combat-variant diversity (2026-07-19, campaign-coverage plan Task 7): the
+    // driver used to always "assign every weapon to one target, steer, hold
+    // nothing else" — never afterburner/consumables/comms, never split fire
+    // by weapon class.
+    //  - afterburner while still closing to engage (not yet alreadyFighting)
+    //    — irrelevant once already in range, so only set then.
+    //  - a shield-cell consumable when hull is critical and one is owned
+    //    (never granted in production yet — CLAUDE.md's known gap — but the
+    //    mechanic itself must work once it is) — ONE-SHOT per fight: retrying
+    //    every round would just re-activate/no-op after the first real use.
+    //  - "demand-surrender" once the target is already softened — also
+    //    ONE-SHOT: a refusal must fall through to normal combat every round
+    //    after, never block the kill forever by re-asking (confirmed live:
+    //    re-requesting every round the target stayed under the threshold
+    //    stalled the fight indefinitely, since the target can never actually
+    //    die while every round is spent hailing instead of firing).
+    //  - weapon-class-aware targeting: split missile fire onto a second
+    //    hostile instead of piling every gun on the one target (see
+    //    `confirmPlanningIfOpen`'s own doc comment).
+    const playerShip = engine.player?.ship;
+    let surrenderAttempted = false;
+    let consumableUsed = false;
+    const buildCombatOptions = () => {
+      const targetHullFraction =
+        target.maxHull > 0 ? target.hullHP / target.maxHull : 1;
+      const playerHullFraction =
+        playerShip && playerShip.maxHull > 0
+          ? playerShip.hullHP / playerShip.maxHull
+          : 1;
+      const wantsSurrender =
+        !surrenderAttempted &&
+        targetHullFraction < DEMAND_SURRENDER_TARGET_HULL_FRACTION;
+      if (wantsSurrender) surrenderAttempted = true;
+      const wantsConsumable =
+        !consumableUsed &&
+        playerHullFraction < SHIELD_CELL_HULL_FRACTION &&
+        (engine.player?.inventory.hasConsumable(SHIELD_CELL_CONSUMABLE_ID) ??
+          false);
+      if (wantsConsumable) consumableUsed = true;
+      return {
+        preferredTargetId: target.id,
+        closeOnTarget: true,
+        weaponClassAwareTargeting: true,
+        afterburner: !alreadyFighting,
+        consumableId: wantsConsumable ? SHIELD_CELL_CONSUMABLE_ID : null,
+        commsAction: wantsSurrender ? "demand-surrender" : null,
+      };
+    };
     // PLANNING may already be open (an e2e-staged or garrison-opened fight):
     // confirm the first round (weapons on the chased target, steer at it)
     // BEFORE the turn-start below — onPlayPause during PLANNING is the confirm
     // itself (14.5a) and would otherwise consume an EMPTY hold-fire draft.
-    confirmPlanningIfOpen(scene, {
-      preferredTargetId: target.id,
-      closeOnTarget: true,
-    });
+    confirmPlanningIfOpen(scene, buildCombatOptions());
     if (!scene.isTurnRunning) scene.onPlayPause();
     scene.combatModule?.beginCombatRound?.();
     // Driver-side reaction-window budget (review 2026-07-15): the legacy
@@ -909,11 +968,11 @@ export class PlayerAgent {
       }
       // Pause-and-plan loop (Task 14.5): each round, assign every weapon to
       // the chased target, steer at it (close into weapon range) and confirm
-      // — the headless equivalent of the player's assign-and-«Ход».
-      confirmPlanningIfOpen(scene, {
-        preferredTargetId: target.id,
-        closeOnTarget: true,
-      });
+      // — the headless equivalent of the player's assign-and-«Ход». Rebuilt
+      // each round (hull fractions move as the fight progresses), but the
+      // one-shot consumable/comms choices above ratchet off after their first
+      // use regardless.
+      confirmPlanningIfOpen(scene, buildCombatOptions());
       this.harness.tick(50);
       // Reaction window (see stepBudget above): enough incoming damage landed
       // this step — yield to the policy (flee vs fight on) before more does.

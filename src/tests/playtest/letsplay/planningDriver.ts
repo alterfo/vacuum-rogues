@@ -35,16 +35,24 @@ export interface PlanningCombatantView {
   readonly y: number;
 }
 
+/** The slice of a fitted weapon the driver reads for class-aware targeting. */
+export interface PlanningWeaponView {
+  readonly weaponClass?: string;
+}
+
 /** Structural view over the live/headless `SpaceFlightScene` planning seams. */
 export interface PlanningSceneView {
   combatPlanning?: {
     readonly isPlanning: boolean;
     assignWeapon(weapon: unknown, target: unknown): void;
     setDestination(dest: { x: number; y: number } | null): void;
+    setAfterburner?(on: boolean): void;
+    setConsumable?(id: string | null): void;
+    setComms?(action: string | null): void;
     confirm(): boolean;
   } | null;
   combatModule?: {
-    fittedWeapons?(): unknown[];
+    fittedWeapons?(): PlanningWeaponView[];
     combatants?: Iterable<PlanningCombatantView>;
     selectedTarget?: PlanningCombatantView | null;
   } | null;
@@ -67,6 +75,24 @@ export interface ConfirmPlanningOptions {
    * warp-edge/fly-forward route keeps flying).
    */
   closeOnTarget?: boolean;
+  /**
+   * Route MISSILE-class weapons at the FARTHEST combatant instead of the
+   * picked (nearest/preferred) target, when ≥2 combatants are present
+   * (default false — every other caller keeps the pre-existing "all weapons
+   * on one target" behavior byte-for-byte). Missiles track/reach at range, so
+   * a multi-hostile fight is better served splitting fire than piling every
+   * gun onto the same ship the beams/fragments already have covered — added
+   * for the dev-only autopilot's combat-variant coverage
+   * (`docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md`
+   * Task 7), off by default so nothing else changes.
+   */
+  weaponClassAwareTargeting?: boolean;
+  /** Toggle the afterburner for the coming execute window (default: untouched). */
+  afterburner?: boolean;
+  /** Activate this owned consumable this turn, or explicitly clear it with `null` (default: untouched). */
+  consumableId?: string | null;
+  /** Run this comms action this turn, or explicitly clear it with `null` (default: untouched). */
+  commsAction?: string | null;
 }
 
 /**
@@ -89,15 +115,49 @@ export function confirmPlanningIfOpen(
   const target = pickTarget(combatants, scene, opts.preferredTargetId);
 
   if (target && (opts.assignWeapons ?? true)) {
+    const farthest =
+      opts.weaponClassAwareTargeting && combatants.length >= 2
+        ? pickFarthest(combatants, scene)
+        : null;
     for (const weapon of combat?.fittedWeapons?.() ?? []) {
-      planning.assignWeapon(weapon, target);
+      const isMissile = weapon?.weaponClass === "MISSILE";
+      const weaponTarget = isMissile && farthest ? farthest : target;
+      planning.assignWeapon(weapon, weaponTarget);
     }
   }
   if (target && opts.closeOnTarget) {
     planning.setDestination({ x: target.x, y: target.y });
   }
+  if (opts.afterburner !== undefined) {
+    planning.setAfterburner?.(opts.afterburner);
+  }
+  if (opts.consumableId !== undefined) {
+    planning.setConsumable?.(opts.consumableId);
+  }
+  if (opts.commsAction !== undefined) {
+    planning.setComms?.(opts.commsAction);
+  }
   planning.confirm();
   return true;
+}
+
+/** The combatant farthest from the ship — the missile-routing target. */
+function pickFarthest(
+  combatants: PlanningCombatantView[],
+  scene: PlanningSceneView | null | undefined,
+): PlanningCombatantView | null {
+  const physics = scene?.shipPhysics;
+  if (!physics) return null;
+  let best: PlanningCombatantView | null = null;
+  let bestDist = -Infinity;
+  for (const c of combatants) {
+    const d = Math.hypot(c.x - physics.shipX, c.y - physics.shipY);
+    if (d > bestDist) {
+      bestDist = d;
+      best = c;
+    }
+  }
+  return best;
 }
 
 /** Explicit id → live selection (still a combatant) → nearest to the ship. */

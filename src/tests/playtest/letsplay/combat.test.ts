@@ -125,6 +125,36 @@ describe("letsplay combat executor (Task 3)", () => {
     expect(harness.errors()).toHaveLength(0);
   });
 
+  it("attack engages the afterburner while still closing to a fresh target (2026-07-19: combat-variant coverage, Task 7)", async () => {
+    // Wiring check for the real engine — the mechanism itself (which
+    // conditions set afterburner/consumable/comms/weapon-class routing) is
+    // covered exhaustively and deterministically at the unit tier in
+    // planningDriver.test.ts; this just proves driveAttack actually reaches
+    // the real CombatPlanningController through the live scene, unmocked.
+    const npc = forceAggressorInRange(harness, GAME_BALANCE.weaponRange);
+    if (!npc) {
+      const agent = new PlayerAgent(harness, scripted("attack"));
+      await agent.run(1);
+      expect(harness.errors()).toHaveLength(0);
+      return;
+    }
+    // Deliberately NOT calling engageCombatNow(): afterburner is only set
+    // while `!alreadyFighting` (still closing to engage).
+    const scene = harness.currentScene() as unknown as {
+      combatPlanning?: { setAfterburner?: (on: boolean) => void };
+    };
+    const setAfterburnerSpy = vi.spyOn(
+      scene.combatPlanning as { setAfterburner: (on: boolean) => void },
+      "setAfterburner",
+    );
+
+    const agent = new PlayerAgent(harness, scripted("attack"));
+    await agent.run(1);
+
+    expect(setAfterburnerSpy).toHaveBeenCalledWith(true);
+    expect(harness.errors()).toHaveLength(0);
+  });
+
   it("attack lingers at a fresh kill instead of leaving instantly, giving the wreck's staggered loot a chance to spawn+get picked up (2026-07-19 live report)", async () => {
     const npc = forceAggressorInRange(harness, GAME_BALANCE.weaponRange);
     if (!npc) {
@@ -139,7 +169,13 @@ describe("letsplay combat executor (Task 3)", () => {
     // whose exit condition is "no hostiles remain active" (any OTHER hostile
     // in the system keeps it going) — the `!alreadyFighting` branch's exit is
     // THIS specific target dying, independent of the rest of the system.
-    (npc as unknown as { hullHP: number }).hullHP = 1;
+    // `maxHull` is scaled down alongside `hullHP` (not left at 200) so the
+    // hull FRACTION stays above driveAttack's demand-surrender threshold
+    // (Task 7, 2026-07-19) — otherwise the near-zero fraction offers
+    // surrender instead of dying, which is a real, separate combat-variant
+    // path this test isn't about.
+    (npc as unknown as { hullHP: number; maxHull: number }).hullHP = 1;
+    (npc as unknown as { hullHP: number; maxHull: number }).maxHull = 2;
 
     // Measure ticks-AFTER-death specifically, not total ticks — the chase/
     // engage-to-range phase before the kill varies with the scene's own
