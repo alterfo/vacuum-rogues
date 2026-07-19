@@ -3,10 +3,70 @@ import {
   radarToWorld,
   avoidStarPath,
   planWarpEdgeRoute,
+  planetApproachPoint,
   questMarkerRadius,
   shouldReaim,
   warpEdgePoint,
 } from "@/utils/flightGeometry";
+
+describe("planetApproachPoint — landing dead zone (live report 2026-07-19, Task 10)", () => {
+  // Live-reproduced bug: the autopilot decided "land", the ship never moved,
+  // and executeRouteTo kept getting re-called every ~800ms forever ("hangs
+  // and thinks at [what looked like] a system edge"). Root cause: when the
+  // ship is already CLOSER to the planet than (radius + offset) — but not
+  // yet within the real auto-land trigger (radius + LANDING_RANGE, a
+  // SMALLER threshold from PlanetManager) — the old formula extrapolated an
+  // "approach point" behind the ship's own current position (since it
+  // blindly backs off `radius+offset` from the planet along the ship's own
+  // bearing, which overshoots past the ship when the ship is already nearer
+  // than that). The resulting path collapsed to a few px of noise that never
+  // advanced the ship into real landing range.
+  it("heads straight at the planet once inside the radius+offset ring (the dead zone)", () => {
+    // Live-captured numbers: ship at (742.5, 1244.3), planet at (784.6, 1089.8),
+    // radius 84, offset 80 (radius+offset=164) — real dist ≈160.16, so the ship
+    // is inside the ring but still outside the real landing trigger (144).
+    const shipX = 742.505002119266;
+    const shipY = 1244.3162688035698;
+    const planetX = 784.6317656732414;
+    const planetY = 1089.799601245169;
+    const radius = 84;
+    const offset = 80;
+    const dist = Math.hypot(planetX - shipX, planetY - shipY);
+    expect(dist).toBeLessThan(radius + offset); // confirms the dead zone
+    expect(dist).toBeGreaterThan(radius + 60); // still outside LANDING_RANGE=60
+
+    const ap = planetApproachPoint(
+      shipX,
+      shipY,
+      planetX,
+      planetY,
+      radius,
+      offset,
+    );
+
+    // The approach point must make REAL forward progress toward the planet —
+    // strictly closer to the planet than the ship's current position, and not
+    // degenerately close to the ship's own position (the bug: ~4px away).
+    const apToShip = Math.hypot(ap.x - shipX, ap.y - shipY);
+    const apToPlanet = Math.hypot(ap.x - planetX, ap.y - planetY);
+    expect(apToPlanet).toBeLessThan(dist);
+    expect(apToShip).toBeGreaterThan(10);
+  });
+
+  it("still backs off to the radius+offset ring when genuinely far away (unchanged behavior)", () => {
+    const ap = planetApproachPoint(0, 0, 1000, 0, 50, 30);
+    // Distance 1000, radius+offset=80 — well outside the dead zone: the
+    // classic "approach point on the ship-facing edge" behavior holds.
+    expect(ap.x).toBeCloseTo(1000 - 80, 5);
+    expect(ap.y).toBeCloseTo(0, 5);
+  });
+
+  it("handles the ship already coincident with the planet (degenerate distance)", () => {
+    const ap = planetApproachPoint(500, 500, 500, 500, 50, 30);
+    expect(Number.isFinite(ap.x)).toBe(true);
+    expect(Number.isFinite(ap.y)).toBe(true);
+  });
+});
 
 describe("questMarkerRadius (quest ring halos the planet, not a stray circle)", () => {
   it("scales with the planet's display radius (halo just outside the disc)", () => {

@@ -528,6 +528,19 @@ export function pointAlongPath(points: Point[], dist: number): PathSample {
  * instead of the planet centre prevents the preview line from cutting through
  * the disc, while the auto-land trigger (which fires when the ship is within
  * `LANDING_RANGE` of the surface) ensures the ship still lands on arrival.
+ *
+ * Live report (2026-07-19, Task 10 "autopilot hangs and thinks"): when the
+ * ship is ALREADY closer to the planet than `planetRadius + offset` — but not
+ * yet inside the real, smaller auto-land trigger radius
+ * (`planetRadius + LANDING_RANGE`, `PlanetManager.ts`) — backing off
+ * `radius + offset` from the planet along the ship's own bearing overshoots
+ * PAST the ship, producing an "approach point" a few px from the ship's
+ * current position pointed the wrong way. `executeRouteTo` then computes a
+ * near-zero-length path that never advances the ship into real landing
+ * range; the live autopilot re-decides "land" every tick and re-issues the
+ * same stuck route forever. Once inside that ring there is no bow left to
+ * fly — head straight at the planet centre; the proactive auto-land check
+ * fires well before the ship would ever reach the surface.
  */
 export function planetApproachPoint(
   shipX: number,
@@ -542,6 +555,9 @@ export function planetApproachPoint(
   const dist = Math.hypot(dx, dy);
   if (dist < 1e-6) {
     return { x: planetX + planetRadius + offset, y: planetY };
+  }
+  if (dist <= planetRadius + offset) {
+    return { x: planetX, y: planetY };
   }
   const nx = dx / dist;
   const ny = dy / dist;

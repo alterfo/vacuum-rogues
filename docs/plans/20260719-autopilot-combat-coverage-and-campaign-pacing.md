@@ -395,11 +395,47 @@ skipped). Committed as (see commit below).
   accordingly and report the measured tradeoff rather than assuming one attempt lands it.
 
 ### Task 10: Reproduce & fix — autopilot hangs at system edge (#13)
-- [ ] Reproduce via a live/headless diagnostic (check `MAX_STAR_MAP_WARP_STALLS` and edge-parking
+- [x] Reproduce via a live/headless diagnostic (check `MAX_STAR_MAP_WARP_STALLS` and edge-parking
       orbit logic first, per `flight/CLAUDE.md`).
-- [ ] Write a failing regression test, then fix.
-- [ ] Run affected tests — must pass before Task 11.
-- ⚠️ Same reproduction-budget caveat as Task 9.
+- [x] Write a failing regression test, then fix.
+- [x] Run affected tests — must pass before Task 11.
+- ⚠️ Same reproduction-budget caveat as Task 9 (not needed — reproduced live).
+
+**Outcome (2026-07-19):** Headless diagnosis hit a real methodological wall first: a headless probe
+showed `STAR_MAP → warp` steps consistently taking 50-500ms (vs. ~5ms median), but tracing it showed
+this was `PlayerAgent`'s own `completeWarp()` test-harness helper batch-ticking many frames
+synchronously to fast-forward travel time — a mechanism that doesn't exist in live play (a live ship
+just flies frame-by-frame via the browser's normal render loop). Diagnostic deleted; this class of bug
+needs a live session, matching this project's own "the headless agent can't see visual/perf oddities"
+convention.
+
+Reproduced live via `claude-in-chrome` browser automation: engaged the live dev autopilot
+(`window.__autopilot.start()`) against the running dev server, injected a state-sampling logger and
+wrapped `executeRouteTo` to trace calls. Caught the ship frozen in `SPACE_FLIGHT`, bit-identical
+position, for 70+ real seconds — the autopilot's last decision was `land` on a real, reachable planet,
+and `executeRouteTo` WAS being called every ~800ms (confirming the tick loop itself was fine, not a
+render-loop stall), but each call computed a near-zero-length, wrong-direction path.
+
+**Root cause** (`planetApproachPoint`, `src/utils/flightGeometry.ts`): the function backs a fixed
+`planetRadius + landingApproachOffset` off from the planet along the ship's own bearing to get an
+"outer approach point." When the ship is ALREADY closer to the planet than that distance — but not
+yet inside the real (smaller) auto-land trigger radius (`planetRadius + LANDING_RANGE`,
+`PlanetManager.ts`) — this overshoots PAST the ship, producing an approach point a few px from the
+ship's own current position, pointed the wrong way. Live-captured numbers proved the exact dead zone:
+ship-to-planet distance 160.16, trigger radius 144, approach-ring radius 164 — inside the ring, outside
+the trigger. `executeRouteTo` then computed a path that never advanced the ship into real landing
+range; the autopilot kept re-deciding `land` and re-issuing the same stuck route forever — read by a
+live user as "hangs and thinks."
+
+Fix: once inside the `radius + offset` ring, head straight at the planet centre instead of
+extrapolating an approach point — the proactive auto-land check fires well before the ship would
+reach the surface. Regression tests added to `flightGeometry.test.ts` (the exact live-captured dead
+zone, the far-away case unchanged, the ship-at-center degenerate case). Verified live via Vite HMR
+immediately after the fix: the same stuck ship flew forward and landed successfully. This was NOT
+literally a "system edge" (#13's original framing) — it was the SAME "autopilot hangs and thinks"
+symptom class, triggered by planet-landing approach rather than a warp edge specifically; #13/#23 may
+be additional instances of the same bug class worth re-checking now that this is fixed. Full project
+suite (5931 tests) green, `tsc`/`eslint` clean.
 
 ### Task 11: Reproduce & fix — system-entry orientation regression (#19)
 - [ ] Reproduce: enter a system and confirm whether the ship's initial heading actually faces the
