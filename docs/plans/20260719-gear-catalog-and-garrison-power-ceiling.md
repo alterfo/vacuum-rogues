@@ -220,37 +220,79 @@ factories (not per-call-site duplication) plus two other fixture literals the ne
 broke. Full `src/tests/playtest/letsplay/` + `src/tests/campaign/` + `src/tests/oddities/` (911
 tests) green, `tsc`/`eslint` clean.
 
-### Task 4: Retune the garrison power-bonus/discount formula
-- [ ] Using the new Task 3 metric as ground truth, adjust `overmindGarrisonPowerBonus`/`_Discount`
-      (`hostileScaling.ts`) and/or `OVERMIND_GARRISON_POWER_MAX_BONUS`/`_MAX_DISCOUNT`
-      (`balance.ts:1225,1239`) so a genuinely battle-ready-or-better solo ship (post-Task-1 gear) faces
-      a garrison it can plausibly win, without trivializing early-game garrisons for a weak ship —
-      the adaptive "gentle while weak, relentless once armed" design intent stays, but "relentless"
-      needs a ceiling that a maxed-out solo ship can still beat.
-- [ ] Write/update `hostileScalingCombat.test.ts`/`garrisonPowerScaling.test.ts` pinning the new
-      formula's output at representative power levels (weak/mid/maxed).
-- [ ] Run `src/tests/npc/**`, `src/tests/campaign/**`, `src/tests/combat/**` — must pass before Task 5.
+### Task 4: Retune the garrison power-bonus/discount formula — investigated, NOT changed (scope revised)
+- [x] Using the new Task 3 metric as ground truth, investigate whether `overmindGarrisonPowerBonus`/
+      `_Discount` (`hostileScaling.ts`) need retuning so a genuinely battle-ready-or-better solo ship
+      faces a garrison it can plausibly win.
+- [x] Measured a 50-session NORMAL-mode baseline with the new metric (see Task 3's commit) before
+      touching anything, per this session's established "measure, don't guess" discipline.
+- ⚠️ **No formula change made — the diagnosis this plan opened with was wrong, corrected here, and
+      the corrected picture points the real fix elsewhere.**
 
-### Task 5: Re-measure and iterate
-- [ ] Run `npm run letsplay:campaign -- --pool=forks` with `CAMPAIGN_SESSIONS=50` (NORMAL mode, the
-      mode the existing win-rate gate uses) and record: win-rate, the new solo-liberation-by-day-730
-      rate, battle-ready rate, death cause breakdown. Compare against this plan's baseline (recorded
-      in Task 1/pre-work) and the existing win-rate-100pct plan's last-known numbers.
-- [ ] If the solo-liberation rate is still near zero, do ONE more targeted adjustment (Task 1 catalog
-      tuning or Task 4 formula tuning, whichever the measurement points at) and re-measure once more —
-      do not attempt a third round without checking in with the user first (mirrors the Task 2b
-      constraint elsewhere in this session).
-- [ ] Append the final measured numbers to this plan and to `.claude/docs/systems/overmind.md`'s
-      "Known-unmet gate" section, whether the target was met or remains an open, documented gap.
+**Outcome (2026-07-19):** First caught and fixed a real bug in my own reasoning before writing any
+balance code: `hostileScaling.ts`'s docstring on `overmindGarrisonPowerDiscount` described the
+*old*, already-superseded `OVERMIND_GARRISON_POWER_MAX_DISCOUNT=1` "knife-edge" (fixed by
+`docs/plans/20260713-campaign-winrate-100pct.md`'s Task 2, which raised it to `4`) as if it were
+still current — a stale comment, not stale code. Cross-checking the actual constant
+(`balance.ts:1239`) and the existing `hostileScaling.test.ts` pinned tests confirmed the discount
+**already** grades smoothly (4→3→2→1→0) across the realistic power band real campaigns reach
+(~0.02–0.33 measured this session) — the premise behind this task's planned "rescale against a
+realistic ceiling" fix was false, so implementing it would have changed nothing real. Fixed the
+stale comment itself (a genuine, small, uncontroversial doc fix, landed regardless).
+
+With that premise gone, traced the ACTUAL bottleneck using the baseline data: solo-liberation (24%
+of 50 sessions, avg day 340) mostly happens **without** the ship ever reaching `isBattleReady()`
+(180hp/30dmg) — it's gradual, incidental attrition of an already-discounted small garrison through
+ordinary combat encounters (median 2 simultaneous combatants per death) over months, not the
+deliberate `MemoryHeuristicPolicy` "Overmind-slayer" assault tier (which requires battle-ready and
+only fires in the 10% of sessions that ever reach it). Worse: of the sampled battle-ready sessions,
+most **died** shortly after reaching it rather than liberating — the slayer tier's stand-and-fight
+behavior correlates with dying, not winning, in this sample. So the garrison bonus/discount formula
+was never the active constraint; the real blockers are (a) battle-ready rate itself (10%) — the
+arm-up/affordability wall already tracked as `docs/plans/20260719-autopilot-combat-coverage-and-
+campaign-pacing.md`'s Task 2b, and (b) a newly-observed risk in the slayer tier's engage decision
+that this plan did not open with and is out of scope to fix here.
+
+Per user decision: close this task as investigated-not-fixed rather than force a formula change the
+data says won't help (a further garrison-formula attempt would likely repeat the 2026-07-13 attempt's
+own measured "still plateaued" result). Task 5's "re-measure and iterate" is accordingly **not run
+separately** — nothing changed to re-measure; the Task 3 baseline stands as this plan's final
+measurement. Tracked as a new backlog item for a future session:
+
+- ➕ **Task 4b (new, open, not started): investigate why battle-ready ships die instead of winning.**
+  `OVERMIND_SLAYER_RETREAT_HULL_FRACTION`'s retreat gate apparently isn't preventing these deaths in
+  practice — needs its own reproduction (trace a battle-ready session through to its death) before
+  any fix, per this session's reproduction-first discipline. Distinct from, and likely more
+  actionable than, the garrison-formula angle this task ruled out.
+
+Full `src/tests/campaign/hostileScaling.test.ts` (comment-only change) still green (34 tests).
 
 ### Task 6: [Final] Verify acceptance criteria and update documentation
-- [ ] Verify every checkbox above is resolved or explicitly flagged `⚠️` with a reason.
-- [ ] Run the full unit suite, `npm run letsplay:ci`, `npm run test:playtest`, `npx tsc --noEmit`,
+- [x] Verify every checkbox above is resolved or explicitly flagged `⚠️` with a reason.
+- [x] Run the full unit suite, `npm run letsplay:ci`, `npm run test:playtest`, `npx tsc --noEmit`,
       `npm run lint`.
-- [ ] Update `.claude/docs/systems/equipment.md` with the new hull tier(s) (mirrors its existing hull
+- [x] Update `.claude/docs/systems/equipment.md` with the new hull tier(s) (mirrors its existing hull
       lineup description) and `.claude/docs/systems/overmind.md` with the final garrison-formula state
       and measured solo-liberation numbers.
-- [ ] Update root `CLAUDE.md` if the hull count/tiers are referenced there.
+- [x] Update root `CLAUDE.md` if the hull count/tiers are referenced there.
+
+**Outcome (2026-07-19):** Root `CLAUDE.md` has no hull-count reference (only the generic
+`GearCatalog`-is-source-of-truth rule) — nothing to update there. Updated
+`.claude/docs/systems/equipment.md`'s catalog-scope line (44→45 items, 6→7 hulls) with a new "Hull
+lineup" paragraph documenting the full tier list, the `HullClass`-must-be-1:1-with-hull-id migration
+gotcha this plan's Task 1 discovered, and the art-alias reuse pattern. Updated
+`.claude/docs/systems/overmind.md`'s "Known-unmet gate" section with a dated addendum covering: the
+stale-comment correction, the corrected garrison-discount understanding, and the new battle-ready-
+ships-die-instead-of-winning finding (Task 4b).
+
+Plan status: Tasks 1-3 landed real, tested changes (new hull, weapon-coverage verification, campaign
+metric). Task 4 landed a real doc fix (stale comment) but made no balance change — the data said a
+formula retune wasn't the right lever, and forcing one anyway would have repeated a prior session's
+already-measured "still plateaued" result. This plan's stated goal ("by end of year 2 the player can
+solo-liberate systems") is **not fully met** — solo-liberation happens in 24% of sessions, late (avg
+d340), gated upstream by battle-ready rate (10%, a pre-existing, separately-tracked affordability
+problem) and a newly-found slayer-tier death correlation (Task 4b, untouched). Documented as an open
+gap, not silently closed, per this session's standing discipline.
 
 ## Technical Details
 

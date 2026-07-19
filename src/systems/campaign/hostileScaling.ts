@@ -178,14 +178,20 @@ export function overmindGarrisonPowerBonus(
  * undiscounted range, only the upward bonus applies).
  *
  * `Math.floor` only has room for interior steps when `maxDiscount >= 2`
- * (mirrors the bonus's own `0.5` step at `maxBonus=2`). At the currently
- * shipped `OVERMIND_GARRISON_POWER_MAX_DISCOUNT=1` this is a knife-edge, not
- * a graded ramp: `floor((1 - p) * 1)` is `1` only at the exact literal
- * `p === 0` and `0` for every `p` in `(0, 1]`. Since `campaignPeakPower` is a
- * monotone ratchet that leaves 0 within the first in-game day of normal play
- * and never returns, the discount is realistically active only at the very
- * start of a fresh run — see `.claude/docs/systems/overmind.md`'s Known-unmet
- * gate section (2026-07-13 addendum) for the campaign-win-rate implication.
+ * (mirrors the bonus's own `0.5` step at `maxBonus=2`). At the CURRENT
+ * shipped `OVERMIND_GARRISON_POWER_MAX_DISCOUNT=4` (raised from the original
+ * `1` by `docs/plans/20260713-campaign-winrate-100pct.md`'s Task 2, exactly
+ * to fix the knife-edge described below) this is a genuine graded ramp
+ * across the realistic power band real campaigns actually reach (~0-0.33):
+ * `floor((1-p)*4)` steps 4→3→2→1→0 well within that range, not just at the
+ * literal endpoints. (Historical note, since superseded: at the old
+ * `maxDiscount=1`, `floor((1-p)*1)` was `1` only at the exact literal
+ * `p === 0` and `0` for every `p` in `(0, 1]` — a true knife-edge, since
+ * `campaignPeakPower` is a monotone ratchet that leaves 0 within the first
+ * in-game day and never returns. See `.claude/docs/systems/overmind.md`'s
+ * Known-unmet gate section for that history — the win-rate gate remained
+ * unmet even after this fix, so a low garrison-count alone isn't the whole
+ * story; see the gear-catalog & garrison-power-ceiling plan, 2026-07-19.)
  */
 export function overmindGarrisonPowerDiscount(
   powerIndex: number,

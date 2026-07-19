@@ -55,7 +55,20 @@ The `inventory.modules` bag is still the hangar-unequip target (via `slotToBagMo
 
 ## Catalog scope (post `20260707-gear-variety-and-hangar`)
 
-44 catalog items: 6 hulls, 12 weapons (4 each of ENERGY/FRAGMENT/MISSILE, T1–T8 ladder), 26 equipment (5 engine, 3 fuel tank, 3 radar, 3 scanner, 3 repair droid, 3 shield, 3 grapple, 3 grav-tractor). Every non-hull/weapon family has ≥3 items spanning the tech ladder — see `src/tests/equipment/catalogInvariants.test.ts` / `weaponCatalogInvariants.test.ts` for the enforced invariants (unique ids, price/mass growth per family, `rare` gating T5+). GRAPPLE went from enum-only to a real 3-item family (`eq_grapple_i/ii/iii`) with a live `derivedStats().grappleStrength` (best-grapple-wins, micromodule-scaled) consumed by `LootDropHandler`. `radarRange` now reads the item's `potency` directly (fixed the old latent tech-formula mismatch) with upgrade scaling preserved via a tech-ratio multiplier.
+45 catalog items: 7 hulls, 12 weapons (4 each of ENERGY/FRAGMENT/MISSILE, T1–T8 ladder), 26 equipment (5 engine, 3 fuel tank, 3 radar, 3 scanner, 3 repair droid, 3 shield, 3 grapple, 3 grav-tractor). Every non-hull/weapon family has ≥3 items spanning the tech ladder — see `src/tests/equipment/catalogInvariants.test.ts` / `weaponCatalogInvariants.test.ts` for the enforced invariants (unique ids, price/mass growth per family, `rare` gating T5+). GRAPPLE went from enum-only to a real 3-item family (`eq_grapple_i/ii/iii`) with a live `derivedStats().grappleStrength` (best-grapple-wins, micromodule-scaled) consumed by `LootDropHandler`. `radarRange` now reads the item's `potency` directly (fixed the old latent tech-formula mismatch) with upgrade scaling preserved via a tech-ratio multiplier.
+
+**Hull lineup** (gear-catalog & garrison-power-ceiling plan, 2026-07-19): `hull_scout` (T2, 55hp) →
+`hull_corvette`/`hull_courier` (T3, 140/120hp) → `hull_freighter` (T4, 180hp — the realistic
+"battle-ready" ceiling most campaigns reach) → `hull_warden` (T5, 220hp) → `hull_cruiser` (T6, 280hp,
+`HullClass.CRUISER`) → `hull_bastion` (T7, 360hp, `rare: true`, apex). `hull_cruiser` fills what was a
+single big jump between the common T5 Warden and the rare T7 Bastion; any `techLevel ≥ 6` hull is
+automatically `isRareGear()`-gated (`RARE_TECH_THRESHOLD`) regardless of an explicit `rare` flag.
+`HullClass` values map 1:1 to catalog hull ids (`MigrationPipeline.hullIdForHullClass` resolves a
+legacy save's `hullClass` string via `GEAR_CATALOG.find()`, which returns the **first** match) — a
+new hull must get its own `HullClass` value, never reuse an existing one, or old saves silently
+resolve to the wrong hull. `hull_cruiser` has no dedicated ship art yet; `PlayerShipRenderer`'s
+`HULL_ART_ALIAS` maps it to reuse `hull_bastion`'s "destroyer" art key (mirrors `NpcShipSprite`'s
+OVERMIND→"patrol" reuse-until-drawn pattern) until real art is generated.
 
 Weapon dimensions (`range`, `cooldownTurns`) have real consumers in real-time flight combat, not turn combat: `CombatModule.weaponFireIntervalMs()` derives per-weapon fire cadence from `cooldownTurns`; `pickTargetInRange()`/`advancePlayerWeapons()` bind engagement to each fitted weapon's own `range` (NPC side: `npcWeaponRange()`). No new stat gets added without a consumer landing in the same change.
 
