@@ -167,13 +167,24 @@ Full project suite (5923 tests) green, `npx tsc --noEmit` clean, `eslint src --e
 errors). Committed as (see commit below).
 
 ### Task 2: Verify/extend weapon coverage against the new hulls' weapon-slot counts
-- [ ] Confirm the existing 12-weapon catalog gives every new hull a sensible loadout at its tech
+- [x] Confirm the existing 12-weapon catalog gives every new hull a sensible loadout at its tech
       level (weapon slots × techLevel-appropriate weapon options) — this is a verification task, add
       new weapons ONLY if a genuine gap is found (per Context, weapons are not currently sparse).
-- [ ] If a gap is found, add the minimum new `WeaponSpec` entries needed, following the same
+- [x] If a gap is found, add the minimum new `WeaponSpec` entries needed, following the same
       catalog-invariant conventions as Task 1.
-- [ ] Write/update `weaponCatalogInvariants.test.ts` for any new entries.
-- [ ] Run `src/tests/equipment/**` — must pass before Task 3.
+- [x] Write/update `weaponCatalogInvariants.test.ts` for any new entries.
+- [x] Run `src/tests/equipment/**` — must pass before Task 3.
+
+**Outcome (2026-07-19): no gap found, no code change needed.** `hull_cruiser` (T6, 3 weapon slots)
+has 10 weapons available at techLevel ≤ 6 (`wpn_mining_laser` T1, `wpn_pulse`/`wpn_swarm_racks` T2,
+`wpn_scatter`/`wpn_rocket` T3, `wpn_railgun`/`wpn_flak_burst` T4, `wpn_beam`/`wpn_long_lance` T5,
+`wpn_torpedo` T6) spanning all 3 `WeaponClass` families — including `wpn_torpedo` (T6, 55dmg,
+HOMING, rare), a genuine tier-matched pairing for the new T6 hull. A full 3-slot loadout (e.g.
+beam 9 + torpedo 12 + railgun 8 = 29 mass) fits well within the hull's 85 `massCapacity` alongside
+an engine/tank — confirmed by the existing `catalogInvariants.test.ts` "every hull admits a basic
+same-tech engine+tank+weapon kit" check, already green from Task 1's run (no new test needed since
+nothing changed). This matches the plan's own Context research: weapons already cover techLevel
+1-8 cleanly, so this verification pass confirms rather than fixes anything.
 
 ### Task 3: Add a "solo liberation" measurement to the campaign harness
 - [ ] Add a new tracked milestone to `campaignMetrics.ts` (mirroring `firstLiberationDay`/
