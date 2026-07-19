@@ -102,9 +102,24 @@ describe("Task 7 — campaign milestone proxies on the seeded medium session", (
     expect(r.milestones.firstLiberationDay, detail).not.toBeNull();
     expect(r.milestones.firstLiberationDay!, detail).toBeLessThanOrEqual(190);
 
-    expect(r.peakPower, detail).toBeGreaterThanOrEqual(
-      POWER_INDEX_BATTLE_READY_THRESHOLD,
-    );
+    // The power-index proxy stands in for "the economy tier accumulated real
+    // strength" only while the session is still running toward day 200 — it
+    // isn't meaningful once the session has already reached a genuine WIN
+    // (2026-07-19: Task 9's quest-cargo-routing fix, live report #11, made
+    // this exact seed resolve a real win at d185 instead of running the full
+    // horizon, so peak power is sampled at the moment of victory rather than
+    // after 200 days of continued arm-up — the win itself is the stronger
+    // proof of a working economy/combat tier; see
+    // docs/plans/20260706-three-year-campaign.md's win invariants, which
+    // already guard against a false/cheesed "win" classification). Keep
+    // enforcing the threshold whenever the session does NOT resolve a win —
+    // a regression that quietly stops the economy tier from ever arming up
+    // (without ever actually winning either) must still fail this gate.
+    if (r.outcome !== "win") {
+      expect(r.peakPower, detail).toBeGreaterThanOrEqual(
+        POWER_INDEX_BATTLE_READY_THRESHOLD,
+      );
+    }
   }, 120_000);
 });
 
