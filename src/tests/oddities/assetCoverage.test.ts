@@ -58,6 +58,18 @@ const ROLE_PREFIX: Record<NpcRole, string> = {
 };
 const NEBULA_FAMILIES = ["red", "blue", "green", "teal"]; // SpaceBackgroundLayer
 const NEBULA_DEPTHS = ["far", "mid", "near"];
+// PlayerShipRenderer's `HULL_ART_ALIAS` (player_ships/<hullClass, aliased>_NN).
+const HULL_SHIP_PREFIX: Record<HullClass, string> = {
+  [HullClass.LIGHT_FIGHTER]: "light_fighter",
+  [HullClass.CORVETTE]: "corvette",
+  [HullClass.FRIGATE]: "frigate",
+  [HullClass.DESTROYER]: "destroyer",
+  [HullClass.TRANSPORT]: "transport",
+  [HullClass.HEAVY_FREIGHTER]: "heavy_freighter",
+  // Mirrors production: hull_cruiser reuses destroyer hull art until dedicated
+  // cruiser art lands (gear-catalog & garrison-power-ceiling plan, 2026-07-19).
+  [HullClass.CRUISER]: "destroyer",
+};
 
 /** A (category, prefix) the engine derives a `pickVariant` on. */
 interface ProdPrefix {
@@ -97,7 +109,7 @@ const PRODUCTION_PREFIXES: ProdPrefix[] = [
   },
   ...Object.values(HullClass).map((hc) => ({
     category: "player_ships",
-    prefix: hc.toLowerCase(),
+    prefix: HULL_SHIP_PREFIX[hc],
     source: "PlayerShipRenderer hull",
   })),
   ...Object.values(FactionType).map((f) => ({

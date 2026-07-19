@@ -238,6 +238,31 @@ const HULLS: HullSpec[] = [
     micromoduleSlots: 3,
   },
   {
+    id: "hull_cruiser",
+    name: "Каркас «Крейсер»",
+    kind: GearKind.HULL,
+    hullClass: HullClass.CRUISER,
+    techLevel: 6,
+    size: 13,
+    // Sits at the top of the tech-5/6 price band (5500-9000, `economyBalance.test.ts`).
+    basePrice: 8800,
+    mass: 30,
+    hp: 280,
+    slots: 8,
+    weaponSlots: 3,
+    equipmentSlots: 5,
+    cargo: 45,
+    massCapacity: 85,
+    micromoduleSlots: 3,
+    // Gear-catalog & garrison-power-ceiling plan (2026-07-19): a stepping stone
+    // between the common «Страж» (T5, 220hp, 7000cr) and the apex «Бастион»
+    // (T7, 360hp, 12000cr) — the old lineup jumped straight from a freely
+    // stocked mid-tier hull to a `RARE_TECH_THRESHOLD`-gated apex with nothing
+    // between. Explicit `rare: true` even though techLevel (6) already implies
+    // it via `isRareGear` — same documentation convention as «Бастион».
+    rare: true,
+  },
+  {
     id: "hull_bastion",
     name: "Каркас «Бастион»",
     kind: GearKind.HULL,

@@ -335,6 +335,14 @@ export enum HullClass {
   DESTROYER = "DESTROYER",
   TRANSPORT = "TRANSPORT",
   HEAVY_FREIGHTER = "HEAVY_FREIGHTER",
+  // Gear-catalog & garrison-power-ceiling plan (2026-07-19): a genuinely new
+  // archetype (`hull_cruiser`), not another DESTROYER — `hullIdForHullClass`
+  // (`MigrationPipeline.ts`) resolves a legacy save's hullClass string to ONE
+  // specific catalog hull id, an assumption that breaks the moment two hulls
+  // share a class (a real regression caught by `hullUnificationMigration.test.ts`
+  // while adding this hull — reusing DESTROYER silently redirected legacy
+  // DESTROYER saves onto the new hull instead of «Бастион»).
+  CRUISER = "CRUISER",
 }
 
 export interface HullClassSpec {
@@ -387,6 +395,13 @@ export const HULL_CLASS_SPECS: Record<HullClass, HullClassSpec> = {
     equipmentSlots: 5,
     cargoCapacity: 50,
     techLevel: 7,
+  },
+  [HullClass.CRUISER]: {
+    maxHp: 280,
+    weaponSlots: 3,
+    equipmentSlots: 5,
+    cargoCapacity: 45,
+    techLevel: 6,
   },
 };
 

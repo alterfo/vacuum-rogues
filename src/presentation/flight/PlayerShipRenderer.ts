@@ -60,6 +60,15 @@ export class PlayerShipRenderer implements FlightModule {
   // art. Empty ⇒ no specific hull known; the renderer falls back to ranger art.
   private readonly hullClassKey: string;
 
+  // `hull_cruiser` (gear-catalog & garrison-power-ceiling plan, 2026-07-19) has
+  // no dedicated ship art yet — reuses the Destroyer's key until dedicated
+  // "cruiser" art is generated, mirroring `NpcShipSprite`'s
+  // OVERMIND→"patrol" reuse-until-drawn pattern (`assetCoverage.test.ts`
+  // enforces every `player_ships/<hullClass>` prefix actually resolves).
+  private static readonly HULL_ART_ALIAS: Record<string, string> = {
+    cruiser: "destroyer",
+  };
+
   constructor(
     _renderer: Renderer,
     gameLayer: Container,
@@ -68,7 +77,8 @@ export class PlayerShipRenderer implements FlightModule {
   ) {
     this.gameLayer = gameLayer;
     this.shipPhysics = shipPhysics;
-    this.hullClassKey = hullClass.toLowerCase();
+    const key = hullClass.toLowerCase();
+    this.hullClassKey = PlayerShipRenderer.HULL_ART_ALIAS[key] ?? key;
   }
 
   // ---------------------------------------------------------------------------

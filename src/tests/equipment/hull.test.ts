@@ -50,9 +50,9 @@ describe("HullClass specs — slot counts", () => {
     }
   });
 
-  it("all 6 hull classes are defined", () => {
+  it("all 7 hull classes are defined", () => {
     const classes = Object.values(HullClass);
-    expect(classes).toHaveLength(6);
+    expect(classes).toHaveLength(7);
     for (const cls of classes) {
       expect(HULL_CLASS_SPECS[cls]).toBeDefined();
       expect(HULL_CLASS_SPECS[cls].maxHp).toBeGreaterThan(0);
