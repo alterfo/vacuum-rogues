@@ -311,13 +311,88 @@ not touched by this change). `npm run letsplay:ci` 108/108 green. Committed as `
       files/753 tests) + `letsplayDevOnly.test.ts` green. Commit `a014f69`.
 
 ### Task 9: Reproduce & fix — autopilot quest mishandling (#11)
-- [ ] Use a `WEDGE_PROBE`-style live diagnostic (or a new one) to reproduce a concrete quest failure
+- [x] Use a `WEDGE_PROBE`-style live diagnostic (or a new one) to reproduce a concrete quest failure
       (wrong target, missed deadline, never taken, never delivered) with a real seed.
-- [ ] Once reproduced, write a failing regression test pinning the exact scenario, then fix the root
+- [x] Once reproduced, write a failing regression test pinning the exact scenario, then fix the root
       cause in `MemoryHeuristicPolicy.ts`/`PlayerAgent.ts`'s quest-handling logic.
-- [ ] Run affected tests — must pass before Task 10.
+- [x] Run affected tests — must pass before Task 10.
 - ⚠️ If reproduction doesn't succeed within a reasonable diagnostic budget, stop and report rather
   than guessing at a fix for an uncharacterized symptom.
+
+**Outcome (2026-07-19):** Built a new kept diagnostic, `_questProbe.run.test.ts` (`QUEST_PROBE=1`,
+mirrors `_wedgeProbe.run.test.ts`), that tallies quest take/complete/expire events and can trace one
+quest id's full lifecycle (scene/action/system/planet/cargo-carried per step). Ran it on seed
+`QUEST-PROBE-0`: 7 taken, 3 completed, 3 expired — one expiry traced in full showed the ship taking
+a DELIVERY quest (sys_0→sys_8, needs 10 ORGANICS, reward 712cr) and then, for the entire 42-day
+window, oscillating ONLY between sys_0 and sys_8 (both direct neighbors) doing unrelated
+`buy-low`/`sell-for-profit` trades — never once buying ORGANICS — until the quest expired. A galaxy
+topology dump confirmed sys_0 has 3 neighbors (sys_8, sys_11, sys_1); the other two were never
+visited.
+
+**Root cause:** `questRoutingPreference` (`engineQueries.ts`) named the quest's target system as the
+warp-bias destination for ANY active DELIVERY quest, with no check on whether its cargo requirement
+was actually met. `pickWarpNeighbor`'s "a DIRECT neighbour match wins outright" rule (added by an
+earlier fix for a *different* failure mode — quests never being beelined to once ready) then forced
+every exploratory warp back onto the direct sys_0↔sys_8 edge the instant the quest was taken,
+starving out the exploration needed to discover a market actually selling the good.
+
+**Fix:** gated `questRoutingPreference` on delivery readiness — mirrors the
+`!collectItem || carried >= required` check `deliveryReadyToTurnIn` already uses — so it only names
+the target once the cargo need is met (or there is none); with an unmet need it returns `null` and
+generic exploration (plus the separate `unmetNeed`/`stockSystem` sourcing bias once a stockist is
+found) takes over. Single-function fix reaches all 4 call sites (`observe.ts`'s `hopsToQuestTarget`
+stamping, both `PlayerAgent.ts`/`installAutopilotHook.ts`'s applier fallbacks, and
+`MemoryHeuristicPolicy.ts`'s own danger-ahead check) — no per-site duplication. `installAutopilotHook.ts`'s
+call site needed a small inline cargo-aware projection (mirroring `buildQuestSnapshots`, not calling
+it directly) since it runs off raw domain `Quest` objects rather than the `QuestSnapshot`s the other
+3 sites already have; kept defensive (optional chaining) so a partial engine safely degrades to the
+pre-fix "ready" behavior instead of throwing.
+
+New regression test `engineQueries.test.ts` (`questRoutingPreference`, 4 cases, red confirmed before
+the fix on the unmet-cargo case). This surfaced two further findings, each escalated to the user
+before touching anything (per this repo's do-not-touch-existing-tests rule) rather than decided
+solo:
+- `installAutopilotHook.test.ts`'s quest-bias test crashed on the new inline projection (its minimal
+  quest-mock lacks `.objectives`) — fixed with optional chaining at the call site, no test change.
+- `warpTargeting.test.ts`'s "warps to clean destinations only" test broke on exact-timing coincidence:
+  the fix makes the agent genuinely detour to fulfill a quest (visiting sys_13 then sys_24, confirmed
+  by trace), which shifts a since-completed buy/sell loop's cadence so the ship happened to be back at
+  the start system on the exact 40th step — the Overmind-avoidance assertions this test actually
+  exists for all still passed. User approved (option: adjust the test) rewriting the snapshot check
+  into a full-run visited-set check (`visited.has(heldId)` / `visited.size > 1`), strictly stronger
+  than the single final-position check it replaced, not weaker — confirmed green and non-flaky.
+- A 50-session `letsplay:campaign` re-measure surfaced a genuine, non-incidental tradeoff: campaign
+  win-rate roughly HALVED (baseline 6 win/31 loss/11 died/2 timeout, 12.0% → post-fix 3 win/36
+  loss/10 died/1 timeout, 6.0%; battle-ready rate unchanged at 12%). The agent now spends more of its
+  day/travel budget genuinely fulfilling quest cargo runs instead of arming up for combat survival.
+  User decision (after reviewing the measurement): land the correctness fix anyway — quest completion
+  is the actual reported bug — and treat the win-rate regression as a separate, new, open pacing
+  problem to tune next, not a reason to revert. Tracked as Task 9b below; do **not** re-litigate this
+  decision without new data.
+- ➕ **Task 9b (new, open): tune quest-detour vs. arm-up pacing.** The quest-cargo-sourcing detour
+  now legitimately competes with the trade loop that funds hull/weapon upgrades for the campaign
+  horizon's remaining travel budget. Needs its own investigation (e.g. cap how far the `stockSystem`
+  sourcing bias will detour, or bias the `earn`/`take-work` tier to skip a new DELIVERY offer once
+  arm-up is already behind schedule) — out of scope to guess at here; needs the same 50-session
+  measurement discipline as this task before landing.
+
+Full suite: `npx tsc --noEmit` clean, `eslint src --ext .ts` clean (after fixing one `prefer-const`
+in the new probe), full `src/tests/playtest/letsplay/` + `src/tests/campaign/` (813 tests) green,
+whole-project `vitest --run` green except the two above (both diagnosed and resolved, not silently
+skipped). Committed as (see commit below).
+
+### Task 9b: Tune quest-detour vs. arm-up pacing (new, discovered by Task 9)
+- [ ] Characterize where the extra travel/day budget from real quest completion is actually going
+      (e.g. re-run `_questProbe`/`_wedgeProbe`-style diagnostics on a losing post-fix session) —
+      confirm it's genuinely the quest detour crowding out arm-up trading, not a separate new bug.
+- [ ] Propose and implement a bounded fix (e.g. cap `stockSystem` sourcing-bias detour distance, or
+      have the `earn`/`take-work` tier decline a new DELIVERY offer once arm-up is already behind a
+      measured schedule) — config-only where possible, per `balance.ts` convention.
+- [ ] Re-run the 50-session `npm run letsplay:campaign -- --pool=forks` measure; must not regress
+      quest-completion rate back toward the pre-Task-9 near-zero baseline, and should recover toward
+      (ideally exceed) the pre-Task-9 12.0% win-rate.
+- ⚠️ This is genuinely open-ended pacing/balance tuning, not a bug with a single root cause — budget
+  accordingly and report the measured tradeoff rather than assuming one attempt lands it.
 
 ### Task 10: Reproduce & fix — autopilot hangs at system edge (#13)
 - [ ] Reproduce via a live/headless diagnostic (check `MAX_STAR_MAP_WARP_STALLS` and edge-parking

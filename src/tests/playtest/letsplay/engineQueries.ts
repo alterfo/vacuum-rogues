@@ -235,13 +235,27 @@ export function overmindFrontHopDistances(
  * to pass as {@link pickWarpTarget}'s `prefer` so ordinary exploration warps
  * are biased toward actually finishing the quest instead of picking an
  * arbitrary unvisited neighbour. `null` with no active quest, a quest already
- * targeting the current system, or a non-DELIVERY quest (this loop never
- * takes any other type, see `isTakeableBoardQuest`, but stays defensive).
+ * targeting the current system, a non-DELIVERY quest (this loop never takes
+ * any other type, see `isTakeableBoardQuest`, but stays defensive), or —
+ * Task 9, live report #11 — a quest whose COLLECT_ITEM cargo need is still
+ * unmet. Without that last gate, `pickWarpNeighbor`'s direct-neighbour-wins
+ * bias beelines to the target the instant the quest is taken, regardless of
+ * whether the cargo has been bought; a `_questProbe` trace caught a real
+ * session oscillating ONLY between the departure and target systems for the
+ * whole 42-day quest window (both direct neighbours), never once landing on
+ * either of the OTHER two neighbours where the required good might actually
+ * be sold, and the quest simply expired. Gating on readiness (mirroring
+ * `deliveryReadyToTurnIn`'s `!collectItem || carried >= required` check) lets
+ * generic exploration — and the separate `unmetNeed`/`stockSystem` sourcing
+ * bias once a stockist is discovered — reach new systems while cargo is still
+ * being collected; the beeline resumes exactly as before once the delivery is
+ * actually ready to turn in.
  */
 export function questRoutingPreference(
   quests: readonly {
     type: QuestType;
     targetSystemId: string | null;
+    collectItem?: { carried: number; required: number } | null;
   }[],
   currentSystemId: string | null,
 ): string | null {
@@ -249,7 +263,8 @@ export function questRoutingPreference(
     (q) =>
       q.type === QuestType.DELIVERY &&
       q.targetSystemId != null &&
-      q.targetSystemId !== currentSystemId,
+      q.targetSystemId !== currentSystemId &&
+      (!q.collectItem || q.collectItem.carried >= q.collectItem.required),
   );
   return quest?.targetSystemId ?? null;
 }

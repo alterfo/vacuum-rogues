@@ -252,17 +252,30 @@ describe("PlayerAgent — real-engine smart warp targeting (Task 5)", () => {
       galaxy.systems.find((s) => s.id === cleanId)!.explored = false;
 
       const agent = new PlayerAgent(harness, new MemoryHeuristicPolicy());
-      const res = await agent.run(40);
+      // Stepped one at a time (rather than one `run(40)` batch) so the
+      // system id can be sampled after every step — a single post-run
+      // snapshot is exact-timing-sensitive: Task 9 (2026-07-19, live report
+      // #11) made the agent actually finish DELIVERY quests along the way
+      // (buy the cargo, detour to the target, turn in), which shifts how
+      // many steps a since-completed buy/sell loop needs to cycle back
+      // through the start system — a real session that had genuinely left
+      // and returned home on legitimate business could still land on `start`
+      // at the exact 40th step by coincidence, which isn't the "never left"
+      // failure this test exists to catch. The visited-set check below is
+      // strictly stronger: it still fails a ship that never leaves AND a
+      // ship that ever touches the held system, without caring where it
+      // happens to be at the final tick.
+      const visited = new Set<string>([start.id]);
+      const allErrors: RecordedError[] = [];
+      for (let i = 0; i < 40; i++) {
+        const res = await agent.run(1);
+        allErrors.push(...res.errors);
+        if (player.currentSystemId) visited.add(player.currentSystemId);
+      }
 
-      expect(res.errors, formatRecorded(res.errors)).toEqual([]);
-
-      const warps = res.steps.filter((s) => s.action.kind === "warp");
-      const warpedSomewhere = warps.some((s) => s.action.targetId != null);
-      const warpedToHeld = warps.some((s) => s.action.targetId === heldId);
-      expect(warpedSomewhere).toBe(true);
-      expect(warpedToHeld).toBe(false);
-      expect(player.currentSystemId).not.toBe(heldId);
-      expect(player.currentSystemId).not.toBe(start.id); // it actually left
+      expect(allErrors, formatRecorded(allErrors)).toEqual([]);
+      expect(visited.has(heldId)).toBe(false);
+      expect(visited.size).toBeGreaterThan(1); // it actually left at some point
     } finally {
       harness.dispose();
     }

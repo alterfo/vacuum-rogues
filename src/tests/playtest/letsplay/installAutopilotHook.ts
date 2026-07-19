@@ -599,8 +599,36 @@ export function createLiveSceneController(
         ...(engine.galaxy?.overmindSystems ?? []),
         ...(engine.galaxy?.pirateSystems ?? []),
       ]);
+      // Cargo-need-aware projection (Task 9, live report #11) mirroring
+      // `buildQuestSnapshots`, inlined with optional chaining rather than
+      // calling it directly: this applier-level fallback runs off the raw
+      // `Quest` domain objects, which real production quests always carry
+      // `.objectives`/a real player inventory for, but which minimal test
+      // doubles legitimately omit — this stays a safe no-op (collectItem:
+      // null, i.e. "ready", the pre-fix behavior) on those instead of
+      // throwing.
+      const player = engine.player;
       const rawQuestTarget = warpWantsQuestBias(reason)
-        ? questRoutingPreference(engine.questManager.getActiveQuests(), prevId)
+        ? questRoutingPreference(
+            engine.questManager.getActiveQuests().map((q) => {
+              const collectObj = q.objectives?.find(
+                (o) => o.type === "COLLECT_ITEM" && !o.completed && o.itemType,
+              );
+              const carried = collectObj
+                ? (player?.inventory?.resources?.find(
+                    (r) => r.type === collectObj.itemType,
+                  )?.amount ?? 0)
+                : 0;
+              return {
+                type: q.type,
+                targetSystemId: q.targetSystemId ?? null,
+                collectItem: collectObj
+                  ? { carried, required: collectObj.targetAmount }
+                  : null,
+              };
+            }),
+            prevId,
+          )
         : null;
       const questTarget =
         rawQuestTarget != null && hostileHeld.has(rawQuestTarget)
