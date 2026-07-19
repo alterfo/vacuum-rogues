@@ -410,6 +410,34 @@ skipped). Committed as (see commit below).
 - [ ] Run affected tests — must pass before the final task.
 - ⚠️ Same reproduction-budget caveat as Task 9.
 
+### Task 11b: Autopilot behavior when caught by customs with contraband (new, live report 2026-07-19)
+- User report: "непонятно что автопилот делает если его застали с контрабандой" (unclear what the
+  autopilot does if it gets caught with contraband) — a live-session observation, not yet root-caused.
+- Preliminary investigation (this session): `PlanetScene.checkCustoms()`
+  (`src/presentation/PlanetScene.ts:571`), called from `initialize()` (`:360`), rolls a 30% chance on
+  landing with illegal cargo aboard and opens `showCustomsModal()` (`:645`) — a full-screen blocking
+  `Container` with three choices (pay the fine, bribe — no reputation loss, or dump the cargo). Unlike
+  the encounter prompt this plan's Task 3 already taught the autopilot to resolve
+  (`isEncounterPromptOpen`/`applyEncounterChoice` on `npcManager`), this modal is a **plain local
+  variable** — never stored as scene instance state, never routed through `npcManager.hasOpenModal()`
+  — so `dismissBlockingModal()` (`installAutopilotHook.ts:199`) has no seam to detect or resolve it at
+  all. Hypothesis: the live autopilot keeps issuing its normal PLANET-scene actions underneath/through
+  this modal (via domain calls, not simulated clicks) while it sits on screen — which would explain
+  "unclear what it's doing": a human watching live sees the modal appear and can't tell if the
+  autopilot noticed it, is stuck, or is bypassing it silently.
+- [ ] Reproduce via a live/headless diagnostic: force `illegalGoods.length > 0` + the 30% roll (or
+      stub `Math.random`) on a landing with the live/dev autopilot engaged, and confirm what actually
+      happens (visually stuck modal + autopilot still acting underneath? modal never appears in
+      headless play because letsplay doesn't drive real pointer clicks? something else?).
+- [ ] Once characterized, write a failing regression test pinning the exact scenario.
+- [ ] Fix: most likely mirrors Task 3's encounter-prompt pattern — store the modal (+ `illegalGoods`/
+      `penalty`/`bribeCost`) as scene instance state, expose a query+resolve seam analogous to
+      `isEncounterPromptOpen`/`applyEncounterChoice`, and teach `dismissBlockingModal()` to resolve it
+      (favor the bribe — no reputation cost — falling back to dumping cargo if unaffordable, mirroring
+      the "engage" default already chosen for encounters). Do not guess at the fix before reproducing.
+- [ ] Run affected tests — must pass before Task 12.
+- ⚠️ Same reproduction-budget caveat as Task 9.
+
 ### Task 12: [Final] Verify acceptance criteria and update documentation
 - [ ] Verify every checkbox above is resolved or explicitly flagged `⚠️` with a reason.
 - [ ] Run the full unit suite, `npm run letsplay:ci`, `npm run test:playtest`, `npx tsc --noEmit`,
