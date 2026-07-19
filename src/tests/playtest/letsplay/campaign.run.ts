@@ -170,6 +170,7 @@ export async function runCampaignSession(
         maxHull: obs.player?.maxHull ?? 0,
         weaponDamage: obs.player?.weaponDamage ?? 0,
         overmindSystemCount: engine.galaxy?.overmindSystems.length ?? 0,
+        playerLiberations: engine.galaxy?.overmindArc.playerLiberations ?? 0,
       });
     };
 
@@ -278,6 +279,7 @@ export async function runCampaignSession(
       milestones: {
         battleReadyDay: milestones.battleReadyDay,
         firstLiberationDay: milestones.firstLiberationDay,
+        firstPlayerLiberationDay: milestones.firstPlayerLiberationDay,
         peakOvermindCount: milestones.peakOvermindCount,
       },
       died: outcome === "died",

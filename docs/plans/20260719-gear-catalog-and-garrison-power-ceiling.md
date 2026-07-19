@@ -187,12 +187,38 @@ nothing changed). This matches the plan's own Context research: weapons already 
 1-8 cleanly, so this verification pass confirms rather than fixes anything.
 
 ### Task 3: Add a "solo liberation" measurement to the campaign harness
-- [ ] Add a new tracked milestone to `campaignMetrics.ts` (mirroring `firstLiberationDay`/
+- [x] Add a new tracked milestone to `campaignMetrics.ts` (mirroring `firstLiberationDay`/
       `playerLiberations`): the day of the player's FIRST successful solo liberation of an
       Overmind-held system (a garrison assault the player's own ship — not an NPC ranger — wins),
       and whether one occurred by day ~730.
-- [ ] Write unit tests pinning the new metric's computation (success case, never-liberated case).
-- [ ] Run `src/tests/campaign/**` — must pass before Task 4.
+- [x] Write unit tests pinning the new metric's computation (success case, never-liberated case).
+- [x] Run `src/tests/campaign/**` — must pass before Task 4.
+
+**Outcome (2026-07-19):** Found real ground truth to build on instead of re-deriving a proxy:
+`Galaxy.tryLiberate(id, "player")` already increments a persisted `overmindArc.playerLiberations`
+counter specifically for a genuine player-driven liberation (a real combat clear or a completed
+DEFENSE quest) — never an NPC ranger convoy — because the arc's own `won` derivation already gates
+on it (root CLAUDE.md's "player participation" invariant). Added `firstPlayerLiberationDay` to
+`CampaignMilestones` (latches the first day `playerLiberations > 0`, mirroring `firstLiberationDay`'s
+latch pattern but keyed on this ground truth instead of the generic system-count-decrease proxy,
+which fires on ANY liberation), threaded `playerLiberations` through `CampaignDaySignal` →
+`campaign.run.ts`'s checkpoint (`engine.galaxy?.overmindArc.playerLiberations`) → the session
+report's `milestones` → `aggregateCampaign`'s new `playerLiberationRate`/
+`avgFirstPlayerLiberationDay` → `formatCampaignReport`'s per-session (`firstSoloLib=`) and aggregate
+(`solo-liberation N%`) lines.
+
+Verified end-to-end with a real 4-session `letsplay:campaign` run, not just unit tests: the metric
+correctly distinguished a session where the Overmind's system count dropped (an NPC liberation,
+`firstLib=d98`) but the player never personally liberated anything (`firstSoloLib=-`) from one where
+the player genuinely did (`firstLib=d101`, `firstSoloLib=d150` — later, since the generic proxy also
+catches earlier NPC liberations first). This is exactly the signal Task 4/5 need — it would have been
+invisible using only the existing `firstLiberationDay` proxy.
+
+New tests in `campaignMetrics.test.ts`: latching on `playerLiberations > 0` distinct from the generic
+proxy, and the never-liberated-stays-null case. Updated the file's shared `mkSignal`/`mkReport` test
+factories (not per-call-site duplication) plus two other fixture literals the new required field
+broke. Full `src/tests/playtest/letsplay/` + `src/tests/campaign/` + `src/tests/oddities/` (911
+tests) green, `tsc`/`eslint` clean.
 
 ### Task 4: Retune the garrison power-bonus/discount formula
 - [ ] Using the new Task 3 metric as ground truth, adjust `overmindGarrisonPowerBonus`/`_Discount`

@@ -69,6 +69,17 @@ export interface CampaignDaySignal {
   weaponDamage: number;
   /** How many systems the Overmind holds on that day. */
   overmindSystemCount: number;
+  /**
+   * `galaxy.overmindArc.playerLiberations` on that day — the ground-truth
+   * counter `Galaxy.tryLiberate(id, "player")` increments (a real combat
+   * clear or a completed DEFENSE quest), never an NPC ranger convoy or the
+   * garrison-cleared-and-held countdown. Gear-catalog & garrison-power-
+   * ceiling plan (2026-07-19) Task 3: the "solo liberation" ground truth,
+   * distinct from {@link CampaignMilestones.firstLiberationDay}'s
+   * system-count-decrease proxy (which fires on ANY liberation, player or
+   * not).
+   */
+  playerLiberations: number;
 }
 
 /** The campaign milestones folded from {@link CampaignDaySignal}s. */
@@ -85,6 +96,15 @@ export interface CampaignMilestones {
    * shrank.
    */
   firstLiberationDay: number | null;
+  /**
+   * First day `galaxy.overmindArc.playerLiberations` went above 0 — the day
+   * the PLAYER's own ship (not an NPC ranger) genuinely liberated an
+   * Overmind-held system, ground-truthed off the same counter the arc's
+   * `won` derivation gates on (see {@link CampaignDaySignal.playerLiberations}).
+   * `null` if it never happened. Gear-catalog & garrison-power-ceiling plan
+   * Task 3.
+   */
+  firstPlayerLiberationDay: number | null;
   /** The largest Overmind system count ever sampled (pressure peak). */
   peakOvermindCount: number;
   /** Internal: the previous sample's count, for the decrease detection. */
@@ -96,6 +116,7 @@ export function emptyMilestones(): CampaignMilestones {
   return {
     battleReadyDay: null,
     firstLiberationDay: null,
+    firstPlayerLiberationDay: null,
     peakOvermindCount: 0,
     lastOvermindCount: null,
   };
@@ -121,9 +142,12 @@ export function foldCampaignDay(
     (m.lastOvermindCount !== null && s.overmindSystemCount < m.lastOvermindCount
       ? s.day
       : null);
+  const firstPlayerLiberationDay =
+    m.firstPlayerLiberationDay ?? (s.playerLiberations > 0 ? s.day : null);
   return {
     battleReadyDay,
     firstLiberationDay,
+    firstPlayerLiberationDay,
     peakOvermindCount: Math.max(m.peakOvermindCount, s.overmindSystemCount),
     lastOvermindCount: s.overmindSystemCount,
   };
@@ -380,7 +404,10 @@ export interface CampaignSessionReport {
   /** Milestone days (battle-ready / first liberation) — see the fold. */
   milestones: Pick<
     CampaignMilestones,
-    "battleReadyDay" | "firstLiberationDay" | "peakOvermindCount"
+    | "battleReadyDay"
+    | "firstLiberationDay"
+    | "firstPlayerLiberationDay"
+    | "peakOvermindCount"
   >;
   /** `true` ⇔ the player died (outcome "died"). */
   died: boolean;
@@ -449,6 +476,14 @@ export interface CampaignRunSummary {
   liberationRate: number;
   /** Mean first-liberation day over sessions that had one; `null` if none. */
   avgFirstLiberationDay: number | null;
+  /**
+   * Fraction of sessions with at least one genuine PLAYER (not NPC) system
+   * liberation — the "solo liberation" ground truth, gear-catalog &
+   * garrison-power-ceiling plan Task 3.
+   */
+  playerLiberationRate: number;
+  /** Mean first-player-liberation day over sessions that had one; `null` if none. */
+  avgFirstPlayerLiberationDay: number | null;
   /** Mean end-of-session ratcheted peak power. */
   avgPeakPower: number;
   totalErrors: number;
@@ -487,6 +522,9 @@ export function aggregateCampaign(
   const liberations = sessions
     .map((s) => s.milestones.firstLiberationDay)
     .filter((d): d is number => d != null);
+  const playerLiberations = sessions
+    .map((s) => s.milestones.firstPlayerLiberationDay)
+    .filter((d): d is number => d != null);
   return {
     sessions: n,
     wins: wins.length,
@@ -502,6 +540,8 @@ export function aggregateCampaign(
     avgBattleReadyDay: meanOrNull(battleReady),
     liberationRate: n === 0 ? 0 : liberations.length / n,
     avgFirstLiberationDay: meanOrNull(liberations),
+    playerLiberationRate: n === 0 ? 0 : playerLiberations.length / n,
+    avgFirstPlayerLiberationDay: meanOrNull(playerLiberations),
     avgPeakPower:
       n === 0 ? 0 : sessions.reduce((a, s) => a + s.peakPower, 0) / n,
     totalErrors: sessions.reduce((a, s) => a + s.errors, 0),
@@ -552,7 +592,7 @@ export function formatCampaignReport(
       `  [${s.seed}] ${s.outcome.toUpperCase().padEnd(7)} ` +
         `resolved=${day(s.resolutionDay)} end=${day(s.finalDay)} steps=${s.steps}${stall} ` +
         `power=${s.peakPower.toFixed(2)} battleReady=${day(s.milestones.battleReadyDay)} ` +
-        `firstLib=${day(s.milestones.firstLiberationDay)} quests=${s.questsCompleted} credits=${s.finalCredits} ` +
+        `firstLib=${day(s.milestones.firstLiberationDay)} firstSoloLib=${day(s.milestones.firstPlayerLiberationDay)} quests=${s.questsCompleted} credits=${s.finalCredits} ` +
         `peakCredits=${s.peakCredits ?? s.finalCredits} loan=${s.loanBalance} ` +
         `share=${s.finalOvermindShare.toFixed(2)} errors=${s.errors} violations=${s.violations} ` +
         `wall=${(s.wallMs / 1000).toFixed(1)}s heapΔ=${s.heapDeltaMB.toFixed(0)}MB${st}${dc}`,
@@ -561,6 +601,7 @@ export function formatCampaignReport(
   lines.push(
     `  milestones: battle-ready ${(sum.battleReadyRate * 100).toFixed(0)}% (avg ${day(sum.avgBattleReadyDay)}), ` +
       `liberation ${(sum.liberationRate * 100).toFixed(0)}% (avg ${day(sum.avgFirstLiberationDay)}), ` +
+      `solo-liberation ${(sum.playerLiberationRate * 100).toFixed(0)}% (avg ${day(sum.avgFirstPlayerLiberationDay)}), ` +
       `median win ${day(sum.medianWinDay)}, avg peak power ${sum.avgPeakPower.toFixed(2)}`,
     `  faults: errors=${sum.totalErrors} violations=${sum.totalViolations} slowest=${(sum.maxWallMs / 1000).toFixed(1)}s`,
   );

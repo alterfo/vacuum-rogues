@@ -34,6 +34,7 @@ function mkSignal(over: Partial<CampaignDaySignal> = {}): CampaignDaySignal {
     maxHull: 130,
     weaponDamage: 14,
     overmindSystemCount: 0,
+    playerLiberations: 0,
     ...over,
   };
 }
@@ -71,6 +72,7 @@ function mkReport(
     milestones: {
       battleReadyDay: 120,
       firstLiberationDay: 300,
+      firstPlayerLiberationDay: null,
       peakOvermindCount: 6,
     },
     died: false,
@@ -348,6 +350,48 @@ describe("foldCampaignDay — milestone latching", () => {
     expect(m.peakOvermindCount).toBe(5);
   });
 
+  it("latches first PLAYER liberation on playerLiberations > 0, distinct from the generic liberation proxy (gear-catalog & garrison-power-ceiling plan Task 3)", () => {
+    let m = emptyMilestones();
+    // An Overmind system count decrease (an NPC ranger liberation) fires the
+    // generic proxy but must NOT fire the player-specific one.
+    m = foldCampaignDay(
+      m,
+      mkSignal({ day: 1, overmindSystemCount: 3, playerLiberations: 0 }),
+    );
+    m = foldCampaignDay(
+      m,
+      mkSignal({ day: 100, overmindSystemCount: 2, playerLiberations: 0 }),
+    );
+    expect(m.firstLiberationDay).toBe(100);
+    expect(m.firstPlayerLiberationDay).toBeNull();
+    // The player's own ship liberates one later — only now does the
+    // player-specific milestone latch.
+    m = foldCampaignDay(
+      m,
+      mkSignal({ day: 250, overmindSystemCount: 1, playerLiberations: 1 }),
+    );
+    expect(m.firstPlayerLiberationDay).toBe(250);
+    // Latched: a later increase doesn't move it.
+    m = foldCampaignDay(
+      m,
+      mkSignal({ day: 400, overmindSystemCount: 0, playerLiberations: 2 }),
+    );
+    expect(m.firstPlayerLiberationDay).toBe(250);
+  });
+
+  it("never-liberated case: stays null across a whole session with no player liberation", () => {
+    let m = emptyMilestones();
+    m = foldCampaignDay(
+      m,
+      mkSignal({ day: 1, overmindSystemCount: 2, playerLiberations: 0 }),
+    );
+    m = foldCampaignDay(
+      m,
+      mkSignal({ day: 730, overmindSystemCount: 8, playerLiberations: 0 }),
+    );
+    expect(m.firstPlayerLiberationDay).toBeNull();
+  });
+
   it("is pure — the input milestones value is never mutated", () => {
     const before = emptyMilestones();
     const frozen = JSON.stringify(before);
@@ -474,6 +518,7 @@ describe("aggregateCampaign", () => {
         milestones: {
           battleReadyDay: null,
           firstLiberationDay: null,
+          firstPlayerLiberationDay: null,
           peakOvermindCount: 9,
         },
       }),
