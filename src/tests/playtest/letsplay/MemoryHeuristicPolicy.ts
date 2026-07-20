@@ -1882,10 +1882,21 @@ export function decideWithMemory(
       // above) — this only removes the no-op opportunistic top-off, freeing
       // the ladder to fall through to `early-explore`/the move-fly fallback
       // below instead.
+      // Also suppressed while holding non-quest cargo (live report
+      // 2026-07-19/20): the sibling `discover-prices`/`early-explore` tiers
+      // above already gate on `!holdsNonQuestCargo` — this fallback was the
+      // one gap, and the `_autopilotDiag` harness measured it as the
+      // dominant contributor to the land/take-off churn: 3244 of 3519 barren
+      // "mem:earn" landings happened while the ship was already carrying
+      // sellable cargo it should be routing to sell, not stopping here to
+      // fish for a new quest. A laden ship still falls through to
+      // `dock`/`earn` or the move/warp fallbacks below, so this doesn't
+      // strand the ladder.
       const questsStructurallyUnavailable =
         (obs.overmindShare ?? 0) >= QUEST_ACCEPT_OVERMIND_SHARE_CEILING;
       if (
         earnPlanet !== undefined &&
+        !holdsNonQuestCargo &&
         !(questsStructurallyUnavailable && alreadyVisited)
       ) {
         push("land", "earn", earnPlanet);

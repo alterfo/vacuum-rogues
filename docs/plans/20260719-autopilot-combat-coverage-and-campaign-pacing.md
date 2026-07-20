@@ -246,6 +246,41 @@ summary:
 - [x] Checked with the user: **left to that existing open thread**, not fixed in this plan. No new
       test needed — nothing new was found beyond what that plan already tracks.
 
+**Follow-up fix (2026-07-20, that "existing open thread" acted on):** re-measured live-session
+churn with the project's `_autopilotDiag` harness (20 sessions × 1500 steps) and found the dominant
+contributor was NOT quest-scarcity (the thing the 2026-07-17 partial fix targeted) but a cargo gap:
+3244 of 3519 barren `mem:earn` landings (land → immediate take-off, nothing gained) happened while
+the ship was ALREADY carrying sellable cargo. The sibling `discover-prices`/`early-explore` tiers in
+`MemoryHeuristicPolicy`'s SPACE_FLIGHT ladder already gate on `!holdsNonQuestCargo` — the "land to
+earn" fallback was the one tier missing that check, so a laden ship blocked from safely warping
+toward its remembered sell destination (danger ahead / warp-cadence tripped) fell all the way
+through to a pointless earn-land instead. Added the same `!holdsNonQuestCargo` gate to that fallback.
+
+Regression test added (`MemoryHeuristicPolicy.test.ts`, "holding sellable cargo it can't act on right
+here ⇒ does not land to earn") — confirmed red before the fix, green after. Re-measured with the
+same 20×1500 diagnostic:
+
+| Metric | Before | After |
+|---|---|---|
+| avg land/take-off cycles | 200.25 | 109.55 (−45%) |
+| avg barren landings | 182.55 | 88.95 (−51%) |
+| barren `mem:earn` [laden] | 3244 | 1426 (−56%) |
+| died | 45% (9/20) | 35% (7/20) |
+| reached battle-ready | 10% | 15% |
+| galaxy fell (≥85%) | 70% | 65% |
+| avg credits delta | 883 | 657 (−25%, worse) |
+
+Net improvement on the target metric (churn) and on downstream safety signals (death down,
+battle-ready up) — the ship now spends more of its budget warping toward a real sell destination
+instead of no-op landing. The one caveat: avg credits delta dropped within this fixed 1500-step
+window, most likely because more of that budget is now spent *in transit* rather than racking up
+incidental trades/quests by chance — an open question a longer, day-based campaign measurement
+would resolve, but that's beyond this fix's scope. `sessionCompetence.test.ts`'s pinned strict
+battle-ready seed re-baselined a third time (`CAMPAIGN-CAPACITY-53` → `-27`; only seed of 0–59 still
+clearing the gate under the new deterministic decision ladder — searched via a temporary, deleted
+script). Full suite green (5935 tests), `letsplay:ci` 109/109, `test:playtest` 820/820,
+`tsc --noEmit`/`eslint` clean.
+
 ### Task 7: Autopilot exercises the full combat-variant range
 - [x] Extend `planningDriver.ts`'s `confirmPlanningIfOpen` (or add a sibling helper `PlayerAgent`
       calls under specific conditions) so the autopilot's combat behavior can express: afterburner

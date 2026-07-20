@@ -333,6 +333,27 @@ describe("decideWithMemory (pure)", () => {
       expect(action.kind).not.toBe("land");
       expect(action.reason).not.toBe("mem:earn");
     });
+
+    // Live report 2026-07-19/20: the _autopilotDiag harness measured 3244 of
+    // 3519 barren "mem:earn" landings (land -> immediate take-off, nothing
+    // gained) happening while the ship was ALREADY carrying sellable cargo —
+    // this fallback had no cargo check at all, unlike its sibling tiers
+    // above it (`discover-prices`/`early-explore`, both gated on
+    // `!holdsNonQuestCargo`). Fixture blocks every other candidate that would
+    // otherwise act on the held cargo (already-visited here, warp cadence
+    // tripped so `find-sell-destination` can't fire) to isolate this one gap.
+    it("holding sellable cargo it can't act on right here ⇒ does not land to earn", () => {
+      const mem = createMemory();
+      mem.priceBook.set("A", new Map([[M, rec(100, 100)]]));
+      mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
+      mem.consecutiveWarpsWithoutLanding = 99;
+      const action = decideWithMemory(
+        { ...singlePlanet(), overmindShare: 0.3 },
+        mem,
+      );
+      expect(action.kind).not.toBe("land");
+      expect(action.reason).not.toBe("mem:earn");
+    });
   });
 
   describe("survival still takes precedence", () => {
