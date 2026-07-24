@@ -144,8 +144,10 @@ export class CombatPlanningUi {
   >;
   private bar: Container | null = null;
   private buttons: { weapon: WeaponSpec; button: UiButton }[] = [];
+  private buttonWidths: number[] = [];
   private actionsBar: Container | null = null;
   private actionButtons: { key: string; button: UiButton }[] = [];
+  private actionWidths: number[] = [];
   private rings: Graphics | null = null;
 
   constructor(deps: CombatPlanningUiDeps) {
@@ -207,10 +209,52 @@ export class CombatPlanningUi {
       bar.addChild(button.container);
       return { weapon, button };
     });
+    this.buttonWidths = widths;
     this.deps.getUiLayer().addChild(bar);
     this.bar = bar;
     this.buildActionRow(screen, y - (btnH + BAR_GAP), btnH);
     this.refreshLabels();
+  }
+
+  /**
+   * Re-anchor the mounted weapon bar + action row to a new screen size. The
+   * bar's position is computed once at `enterPlanning()` time and otherwise
+   * never touched again — unlike `FlightHud`'s «Ход» button, which re-anchors
+   * on every window resize (`SpaceFlightScene.handleResize`). Without this, a
+   * window resize (DevTools opened, un-maximize, orientation change) mid-
+   * PLANNING leaves the stale, differently-positioned bar sitting wherever
+   * «Ход» has since moved to — PixiJS gives the later-mounted bar the top
+   * z-order, so it silently swallows the click with no message/sound, reading
+   * to the player as a dead button (live bug report 2026-07-24). No-op while
+   * planning isn't open; button widths/labels are unchanged by a resize, only
+   * their anchor position.
+   */
+  reposition(width: number, height: number): void {
+    if (this.bar) {
+      const { h: btnH } = barButtonSize();
+      const y = height - BAR_BOTTOM_OFFSET;
+      const total =
+        this.buttonWidths.reduce((sum, w) => sum + w, 0) +
+        (this.buttonWidths.length - 1) * BAR_GAP;
+      let x = Math.max(0, (width - total) / 2);
+      this.buttons.forEach(({ button }, i) => {
+        button.x = x;
+        button.y = y;
+        x += this.buttonWidths[i] + BAR_GAP;
+      });
+      if (this.actionsBar) {
+        const totalA =
+          this.actionWidths.reduce((sum, w) => sum + w, 0) +
+          (this.actionWidths.length - 1) * BAR_GAP;
+        let xa = Math.max(0, (width - totalA) / 2);
+        const yA = y - (btnH + BAR_GAP);
+        this.actionButtons.forEach(({ button }, i) => {
+          button.x = xa;
+          button.y = yA;
+          xa += this.actionWidths[i] + BAR_GAP;
+        });
+      }
+    }
   }
 
   /** Build the 14.5c action row (afterburner / owned devices / comms) above the
@@ -254,6 +298,7 @@ export class CombatPlanningUi {
       row.addChild(button.container);
       return { key, button };
     });
+    this.actionWidths = widths;
     this.deps.getUiLayer().addChild(row);
     this.actionsBar = row;
   }
@@ -289,12 +334,14 @@ export class CombatPlanningUi {
       this.bar = null;
     }
     this.buttons = [];
+    this.buttonWidths = [];
     if (this.actionsBar) {
       this.actionsBar.parent?.removeChild(this.actionsBar);
       this.actionsBar.destroy({ children: true });
       this.actionsBar = null;
     }
     this.actionButtons = [];
+    this.actionWidths = [];
   }
 
   /**

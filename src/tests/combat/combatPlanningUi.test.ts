@@ -120,6 +120,34 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
     expect(longLabelSpacing).toBeGreaterThan(shortLabelSpacing);
   });
 
+  it("reposition() re-anchors the bar + action row to a new screen size (window resize mid-PLANNING, live bug report 2026-07-24: «Ход» silently stopped responding)", () => {
+    // FlightHud's «Ход» button re-anchors on every window resize
+    // (SpaceFlightScene.handleResize → hud.reposition), but the planning bar
+    // was computed once at enterPlanning() and never touched again. A window
+    // shrink mid-fight left the stale, taller-positioned bar sitting where
+    // «Ход» has since moved to, silently swallowing the click (PixiJS gives
+    // the later-mounted bar the top z-order) with no message/sound — exactly
+    // as if the button just stopped responding.
+    const guns = [weapon("wpn_a", "Пульсар", 240)];
+    const h = makeHarness(guns, true);
+    h.ui.enterPlanning();
+
+    const barBefore = bar(h.uiLayer)!.getChildByLabel("cpw-0") as Container;
+    expect(barBefore.y).toBe(600 - 150); // BAR_BOTTOM_OFFSET off the mount-time height
+
+    h.ui.reposition(800, 300); // the window shrinks while PLANNING stays open
+
+    const barAfter = bar(h.uiLayer)!.getChildByLabel("cpw-0") as Container;
+    const rowAfter = h.uiLayer.getChildByLabel(
+      "combat-planning-actions",
+    ) as Container;
+    const actionAfter = rowAfter.getChildByLabel(
+      "cpa-afterburner",
+    ) as Container;
+    expect(barAfter.y).toBe(300 - 150); // re-anchored to the NEW height, not stale
+    expect(actionAfter.y).toBeLessThan(barAfter.y); // action row stays above the bar
+  });
+
   it("mounts no bar for a weaponless ship (nothing to assign)", () => {
     const h = makeHarness([]);
     h.ui.enterPlanning();

@@ -1136,6 +1136,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Re-anchor all screen-edge HUD elements (buttons, mini-map, mini-log, …).
     this.hud.reposition(w, h);
+    this.combatPlanningUi?.reposition(w, h); // else drifts onto «Ход» — prettier-ignore
 
     // Keep the ship framed after the viewport changed.
     if (this.shipPhysics) this.camera.centerOnShip();
