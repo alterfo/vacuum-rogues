@@ -38,7 +38,12 @@ STILL behind the modal guard — Space must never confirm a combat turn behind a
 contact/settings panel, review 2026-07-15);
 j/i toggle journal/inventory. `SpaceFlightScene.onKeyDown` is a thin delegate that
 builds `ctx` from live scene members; the extraction keeps the controller under the 1900-line
-guard. Unit-tested standalone in `flightKeyHandler.test.ts`).
+guard. Unit-tested standalone in `flightKeyHandler.test.ts`), flightEntrySpawn (`applyEntrySpawn`/
+`applyReentrySpawn`/`spawnShipBeside` — Task 9 entry-spawn precedence: preserveShipPos → take-off
+arc → station/landed-planet spawn; extracted 2026-07-24 for the line-count guard. The scene keeps
+same-named thin delegators built from one `entrySpawnDeps()` bundle; `applyReentrySpawn`/
+`spawnShipBeside` are non-private only because `spaceFlightSpawn.test.ts` calls them directly on
+the instance, same reason the e2e* methods are public).
 
 **Touch flight controls are additive and gated — the mouse path is byte-for-byte unchanged**
 (`docs/plans/20260625-mobile-adaptation.md` Phase 2). The pure `touchGestures.ts`

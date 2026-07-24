@@ -11,7 +11,6 @@ import {
   clampOutsideRadius,
   computeFlightPath,
   planWarpEdgeRoute,
-  takeoffArcPath,
   type Point,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
@@ -55,6 +54,12 @@ import {
   type FlightAutosaveState,
 } from "./flight/flightTurnEnd";
 import { E2ETestHooks } from "./flight/e2eTestHooks";
+import {
+  applyEntrySpawn as computeEntrySpawn,
+  applyReentrySpawn as computeReentrySpawn,
+  spawnShipBeside as computeSpawnShipBeside,
+  type EntrySpawnDeps,
+} from "./flight/flightEntrySpawn";
 
 /** Planet spiral-in hint: where to curve the approach when landing. */
 type LandingHint = { planetX: number; planetY: number; planetRadius: number };
@@ -1142,54 +1147,44 @@ export class SpaceFlightScene extends GameScene {
     if (this.shipPhysics) this.camera.centerOnShip();
   }
 
+  /** Builds the deps bundle for the entry-spawn helpers (flightEntrySpawn.ts). */
+  private entrySpawnDeps(): EntrySpawnDeps {
+    return {
+      shipPhysics: this.shipPhysics,
+      starCenter: {
+        x: this.starRenderer.centerX,
+        y: this.starRenderer.centerY,
+      },
+      findPlanetSprite: (id) =>
+        this.planetManager.planetSprites.find((s) => s.planet.id === id),
+      findStationMarker: (id) =>
+        this.planetManager.stationMarkers.find((m) => m.station.id === id),
+      startTakeoffArc: (arc) => this.playerShip.startTakeoffArc(arc),
+      setShipContainerPos: (x, y) => {
+        const shipC = this.playerShip?.container;
+        if (shipC) {
+          shipC.x = x;
+          shipC.y = y;
+        }
+      },
+      landedPlanetId: this.gameEngine?.player?.landedPlanetId,
+      clearLandedPlanetId: () => {
+        if (this.gameEngine?.player)
+          this.gameEngine.player.landedPlanetId = null;
+      },
+    };
+  }
+
   /**
-   * Decide where the ship sits on this SPACE_FLIGHT entry. Precedence:
-   * `preserveShipPos` (pure HUD re-init, e.g. font-scale change — keep the ship
-   * put, playtest4 A) → `fromPlanetId` take-off arc (Task 5) → station/landed-
-   * planet spawn (Task 9).
+   * Decide where the ship sits on this SPACE_FLIGHT entry (Task 9); the pure
+   * decision tree lives in `flight/flightEntrySpawn.ts` (line-count guard).
    */
   private applyEntrySpawn(ctx?: {
     preserveShipPos?: { x: number; y: number };
     fromPlanetId?: string;
     fromStationId?: string;
   }): void {
-    if (!this.shipPhysics) return;
-
-    if (ctx?.preserveShipPos) {
-      this.shipPhysics.teleport(ctx.preserveShipPos.x, ctx.preserveShipPos.y);
-      return;
-    }
-
-    // Took off from a planet → spawn right next to it, not at the system edge.
-    if (ctx?.fromPlanetId) {
-      const sprite = this.planetManager.planetSprites.find(
-        (s) => s.planet.id === ctx.fromPlanetId,
-      );
-      if (sprite) {
-        const dx = sprite.screenX - this.starRenderer.centerX;
-        const dy = sprite.screenY - this.starRenderer.centerY;
-        const len = Math.hypot(dx, dy) || 1;
-        // Take-off flourish: fly a short outward arc, then hand off to autopilot.
-        // teleport() parks physics at the arc END so it's cosmetic (no days burned).
-        const arc = takeoffArcPath(
-          sprite.screenX,
-          sprite.screenY,
-          dx / len,
-          dy / len,
-          sprite.displayRadius,
-          90,
-        );
-        const end = arc[arc.length - 1];
-        this.shipPhysics.teleport(end.x, end.y);
-        this.playerShip.startTakeoffArc(arc);
-      }
-      // Took off → no longer parked at the planet, so a later context-less
-      // re-entry keeps its own spawn instead of snapping back here.
-      if (this.gameEngine?.player) this.gameEngine.player.landedPlanetId = null;
-      return;
-    }
-
-    this.applyReentrySpawn(ctx?.fromStationId);
+    computeEntrySpawn(this.entrySpawnDeps(), ctx);
   }
 
   /**
@@ -1205,71 +1200,29 @@ export class SpaceFlightScene extends GameScene {
     this.npcManager?.refreshFontScale();
   }
 
-  /**
-   * Position the ship after a non-take-off entry to SPACE_FLIGHT (Task 9).
-   * Priority: the station we just undocked from (`fromStationId`), else the last
-   * planet we landed on (`player.landedPlanetId`, consumed once). If neither is
-   * known the ship keeps its default edge spawn.
-   */
-  private applyReentrySpawn(fromStationId?: string): void {
-    if (!this.shipPhysics) return;
-
-    if (fromStationId) {
-      const marker = this.planetManager.stationMarkers.find(
-        (m) => m.station.id === fromStationId,
-      );
-      if (marker) {
-        this.spawnShipBeside(marker.x, marker.y, 20);
-        // Consume any pending landing too, so a later free-flight re-entry isn't
-        // snapped back to a stale planet (docstring: landedPlanetId is one-shot).
-        if (this.gameEngine?.player)
-          this.gameEngine.player.landedPlanetId = null;
-        return;
-      }
-    }
-
-    const player = this.gameEngine?.player;
-    const landedId = player?.landedPlanetId;
-    if (landedId) {
-      const sprite = this.planetManager.planetSprites.find(
-        (s) => s.planet.id === landedId,
-      );
-      if (sprite) {
-        this.spawnShipBeside(
-          sprite.screenX,
-          sprite.screenY,
-          sprite.displayRadius,
-        );
-      }
-      // Consume so a later free-flight entry doesn't keep snapping the ship back.
-      if (player) player.landedPlanetId = null;
-    }
+  // Not called internally (SpaceFlightScene.applyEntrySpawn delegates the whole
+  // decision tree to flightEntrySpawn.ts in one call) — kept as a thin public
+  // wrapper because spaceFlightSpawn.test.ts exercises it directly, same as the
+  // e2e* methods below.
+  /** Re-entry spawn beside the station left / last-landed planet (flightEntrySpawn.ts). */
+  applyReentrySpawn(fromStationId?: string): void {
+    computeReentrySpawn(this.entrySpawnDeps(), fromStationId);
   }
 
-  /**
-   * Park the ship just outside a body (planet/station) instead of at the system
-   * edge — used when re-entering SPACE_FLIGHT after docking/landing (Task 9).
-   * Places it `bodyRadius + margin` px out along the radial from the star, so it
-   * sits clear of the body's disc and never on top of the star.
-   */
-  private spawnShipBeside(
+  /** Parks the ship just outside a body along the star radial (flightEntrySpawn.ts). */
+  spawnShipBeside(
     bodyX: number,
     bodyY: number,
     bodyRadius: number,
     margin = 40,
   ): void {
-    if (!this.shipPhysics) return;
-    const dx = bodyX - this.starRenderer.centerX;
-    const dy = bodyY - this.starRenderer.centerY;
-    const len = Math.hypot(dx, dy) || 1;
-    const spawnX = bodyX + (dx / len) * (bodyRadius + margin);
-    const spawnY = bodyY + (dy / len) * (bodyRadius + margin);
-    this.shipPhysics.teleport(spawnX, spawnY);
-    const shipC = this.playerShip?.container;
-    if (shipC) {
-      shipC.x = spawnX;
-      shipC.y = spawnY;
-    }
+    computeSpawnShipBeside(
+      this.entrySpawnDeps(),
+      bodyX,
+      bodyY,
+      bodyRadius,
+      margin,
+    );
   }
 
   private updateShip(deltaTime: number): void {
