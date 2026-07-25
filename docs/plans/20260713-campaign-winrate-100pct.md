@@ -1502,17 +1502,56 @@ pacing regression documented above.
 
 ### Task 8: [Final] Verify acceptance criteria and update documentation
 
-- [ ] Verify Gate B was met (or the escalation happened and the user gave further direction — update
-      this task's scope accordingly if so).
-- [ ] Run full unit suite, `tsc --noEmit`, `npm run lint`, `npm run test:playtest`,
-      `npm run letsplay:ci`, `npm run test:save-compat` — all must be green.
-- [ ] Update `.claude/docs/systems/overmind.md`'s "Known-unmet gate" section with this plan's
+- [x] Verify Gate B was met (or the escalation happened and the user gave further direction — update
+      this task's scope accordingly if so). — **Gate B was NOT met (18%, Task 7) and the escalation
+      clause was applied**; no further user direction has been given, so this task's scope is the
+      honest close-out below (run the gates, record measured results, update docs), not a certification
+      of a passed gate. The plan remains **open, escalated to the user** for a spread-pacing scope
+      decision.
+- [x] Run full unit suite, `tsc --noEmit`, `npm run lint`, `npm run test:playtest`,
+      `npm run letsplay:ci`, `npm run test:save-compat` — all must be green. — **run 2026-07-25**:
+      `tsc --noEmit` GREEN, `npm run lint` GREEN, `test:playtest` GREEN (817 passed / 10 skipped),
+      `test:save-compat` GREEN (22 passed). Unit suite **624 passed / 1 failed** and `letsplay:ci`
+      **108 passed / 1 failed** — the single failure in both is the **same, documented pre-existing**
+      `sessionCompetence.test.ts > Task 7 — campaign milestone proxies` regression (`expected 196 to be
+      less than or equal to 190`, seed `CAMPAIGN-CAPACITY-0` liberates d196 / TIMEOUTs d200). This is
+      exactly the pacing-drift Task 7 recorded as pre-existing on clean HEAD and out of this plan's
+      authorized scope — fixing it requires either editing a pinned assertion (forbidden by the
+      standing rule) or moving the user-reserved spread-pacing levers. No production code was changed
+      in this documentation task, so this is not a new regression; reported honestly, not marked green.
+- [x] Update `.claude/docs/systems/overmind.md`'s "Known-unmet gate" section with this plan's
       measured results — add to the existing dated history (2026-07-07 → 2026-07-13 garrison
-      discount → this plan's dated entry), do not delete prior honest numbers.
-- [ ] Update `CLAUDE.md`'s Overmind Arc section if the pirate-discount lever or the day-1000 pacing
-      floor becomes a named invariant worth calling out.
-- [ ] Record final lever values and measured results (all gates, all sweeps) in this plan's
-      Technical Details section.
+      discount → this plan's dated entry), do not delete prior honest numbers. — **done**: appended a
+      "2026-07-25 Gate B outcome + plan close-out" addendum recording the six verified escalations,
+      the 18% Gate B miss, and the death→LOSS taxonomy flip; prior dated entries left intact.
+- [x] Update `CLAUDE.md`'s Overmind Arc section if the pirate-discount lever or the day-1000 pacing
+      floor becomes a named invariant worth calling out. — **done**: corrected the stale "pirate
+      garrisons stay unscaled by design" line (Task 3 reversed it) — the discount now covers both
+      Overmind- and pirate-held garrisons with a GOD-mode exemption, and the binding constraint is
+      recorded as Overmind spread-cadence / the creep floor, not garrison count.
+- [x] Record final lever values and measured results (all gates, all sweeps) in this plan's
+      Technical Details section. — **done**: Technical Details now lists every landed lever value and
+      the full per-escalation measurement progression (4% → 2% → 18% → Gate B 18% miss).
+
+#### Task 8 outcome (2026-07-25) — plan closed out honestly, gate NOT met, escalated to the user
+
+This plan is **complete as a documentation/verification close-out**, not as a met acceptance gate.
+Gate B measured 18% (Task 7) against a ≥80% target; the balance-lever space this plan was authorized
+to touch is exhausted across six individually-verified escalations (garrison discount 1→4 + pirate
+reversal + GOD exemption, `HOSTILE_SCALING_WEAK_MULT` 0.9→0.5, current-hull round budget, fire-timer
+stagger, death-cause telemetry), none of which moved the win-rate off its ~2–18% band. The failure
+mode has flipped from death-dominant to **LOSS-dominant** (the Overmind front outruns the player at
+~day 428 as the creep floor collapses the spread cadence), so the single evidence-indicated remaining
+lever is Overmind spread-cadence / the creep floor — value-pinned in `adaptivePacing.test.ts` and
+reserved to the user per this plan's "one pre-authorized reversal only" rule. **The plan remains open,
+escalated to the user** for a scope decision on either (1) a pinned spread-pacing reversal (recommended
+first move, also serves the day-1000 floor) or (2) player liberation-throughput architecture in
+`MemoryHeuristicPolicy`/combat-coverage. Gate battery re-run 2026-07-25: `tsc`/`lint`/`test:playtest`
+(817)/`test:save-compat` (22) all green; the one red — `sessionCompetence.test.ts`'s GOD-milestone
+proxy — is the same pre-existing pacing drift, out of scope to fix here (see the second Task 8
+checkbox). Documentation updates landed in `.claude/docs/systems/overmind.md` and `CLAUDE.md`. The
+300-session final acceptance run stays deferred in Post-Completion (interim Gate B was never stably
+met, so running it would only re-confirm the ~18% plateau).
 
 ## Technical Details
 
@@ -1522,16 +1561,48 @@ pacing regression documented above.
 - **GOD-mode exemption**: `mode === GOD ⇒ discount = 0` at the `fillGarrison` call site — GOD's hull
   floor already prevents the death this discount targets, so it has nothing to gain and (per the
   prior plan's Task 2 finding) a real combat-loot-income downside to lose.
-- **Pirate-garrison discount**: new/extended function, `fillGarrison(..., overmind=false)` path,
-  exact shape decided in Task 1 (record final shape here once implemented).
+- **Pirate-garrison discount**: implemented per Task 1's recorded shape — the `overmind ? : 0` guard
+  on `powerDiscount` in `NpcGarrisonCombat.ts::fillGarrison` was dropped, so **both** branches call
+  `overmindGarrisonPowerDiscount(peakPower)` with the same `maxDiscount=4`, keeping only the GOD-mode
+  exemption (`powerDiscount = this.gameMode !== "GOD" ? overmindGarrisonPowerDiscount(peakPower) : 0`).
+  The upward `overmindGarrisonPowerBonus` stays Overmind-only (the pressure-ramp bonus was not part of
+  the reversal). No pirate-specific constant — pirate systems fill to the same `[GARRISON_MIN 5,
+  GARRISON_MAX 10]` baseline.
 - **Day-1000 floor**: primarily a **measurement/tuning target** (median win day within
   `[1000, 1095]` at the final gate), not a new mechanical win-block coded into
   `overmindSpread.ts` — record here if Task 7 finds this interpretation insufficient (e.g. if
   individual sessions win dramatically early, like day 300-400, even though the *median* lands
   correctly) and a harder per-session floor becomes necessary; that would be new engine logic and
   its own scope decision, out of this plan's default assumption.
-- **Final lever values and measured results**: [fill in as each task completes — win-rate/median-day
-  per gate, all sweeps tried and reverted/kept, per the prior plan's own record-keeping convention].
+- **Final lever values (landed, in `src/config/balance.ts` unless noted)**:
+  - `OVERMIND_GARRISON_POWER_MAX_DISCOUNT = 4` (was `1`) — graded ramp `4→3→2→1→0` across `p∈[0,1)`.
+  - GOD-mode discount exemption at `NpcGarrisonCombat.ts::fillGarrison` call site (both branches).
+  - Pirate-garrison discount enabled (guard dropped — see Pirate-garrison discount above).
+  - `HOSTILE_SCALING_WEAK_MULT = 0.5` (was `0.9`) — Task 5; kept above `NEUTRAL_SCALING_WEAK_MULT=0.4`
+    to preserve the "held-system harder than neutral" gradient.
+  - `combatJoinFireStaggerMs = 300` (new) — Task 5 fix #2; staggers batch-join fire timers.
+  - Round-damage budget computed off **current** hull (`combatRounds.ts::roundIsComplete`) — Task 5 fix #1.
+  - Structured death-cause telemetry: `PlayerDeathCause` on `CombatModule`, surfaced via
+    `RealEngineHarness.lastDeathCause()`, aggregated in `campaignMetrics.ts` — dev/test only, no
+    domain/schema/save impact.
+- **Measured results (all `npm run letsplay:campaign`, 50 sessions unless noted)**:
+  - Prior-plan baseline (before this plan): **4.0%** (2/50).
+  - Gate A after Task 2/3 (garrison discount + pirate reversal): **2.0%** (1/50) — MISS (target ≥40%).
+  - After Task 5 `HOSTILE_SCALING_WEAK_MULT` 0.9→0.5: **2.0%** — no-op (lever structurally unreachable
+    for the pre-battle-ready death population).
+  - After combat fix #1 (current-hull round budget): **2.0%** — no-op.
+  - After combat fix #2 (fire-timer stagger): **2.0%** — no-op (not byte-identical; taxonomy shifted).
+  - After sibling-plan pacing (`ADAPTIVE_SPREAD_SLOW_DAYS` 45→55, freighter price trim): **18.0%**.
+  - **Gate B (Task 7): 18.0%** (9/50), median win **d325** — MISS on both axes (targets ≥80%, ≥d1000).
+  - **Final gate (300 sessions, ≥99%): NOT RUN** — deferred; interim Gate B was never stably met, so
+    the plan escalated instead of proceeding to the acceptance run.
+- **Escalation outcome**: the balance-constant lever space this plan is authorized to touch is
+  exhausted. Failure mode flipped death-dominant → **LOSS-dominant** (front outruns the player at
+  ~day 428). The one evidence-indicated remaining lever — Overmind spread-cadence / creep floor
+  (`ADAPTIVE_CREEP_START_DAY`/`_CREEP_MIN_DAYS`) — is value-pinned in `adaptivePacing.test.ts` (`:109`,
+  `:110`) and doubly-blocked by its idle-loss `resolvedDay < 900` invariant (`:219`), reserved to the
+  user. Next round needs a user scope decision (spread-pacing pin reversal, or liberation-throughput
+  architecture in `MemoryHeuristicPolicy`), not another autonomous parameter guess.
 
 ## Post-Completion
 
