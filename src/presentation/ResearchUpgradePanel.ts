@@ -23,6 +23,15 @@ export class ResearchUpgradePanel {
     private readonly engine: GameEngine,
     private readonly onBack: () => void,
     private readonly showToast: (msg: string, color: number) => void,
+    // The scene owns the toast node; the panel re-mounts it at the end of every
+    // self-render (same contract HangarPanel uses) so a post-upgrade toast fired
+    // AFTER the re-render lands on a live slot instead of the wiped one.
+    private readonly addToastSlot: (
+      px: number,
+      py: number,
+      pw: number,
+      ph: number,
+    ) => void,
   ) {}
 
   /** Render the panel into `parent`; clears existing children first. */
@@ -224,6 +233,10 @@ export class ResearchUpgradePanel {
       back.alpha = 1;
     });
     parent.addChild(back);
+
+    // Toast slot last so an upgrade-confirmation message renders on top and
+    // survives this panel's own re-render on the next upgrade.
+    this.addToastSlot(PX, PY, PW, PH);
   }
 
   private doUpgrade(
@@ -261,11 +274,13 @@ export class ResearchUpgradePanel {
       logger.info(
         `ResearchUpgradePanel: upgraded ${gearId} to T${upgradedGear.techLevel} (+${upgradedGear.upgrades})`,
       );
+      // Re-render first so the toast slot is freshly mounted, THEN show the
+      // message — otherwise the re-render wipes the toast before it can paint.
+      this.render(parent, sw, sh);
       this.showToast(
         `${baseGear.name} улучшен до T${upgradedGear.techLevel}!`,
         0xcc88ff,
       );
-      this.render(parent, sw, sh);
     } catch (err) {
       if (err instanceof GameBusinessException) {
         this.showToast(err.errorMessage, 0xff5544);

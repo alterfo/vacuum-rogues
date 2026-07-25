@@ -1083,6 +1083,10 @@ export class StationScene extends GameScene {
       back.alpha = 1;
     });
     this.mainContainer!.addChild(back);
+
+    // Toast slot so purchases in the gear shop confirm on screen (mirrors
+    // renderMain). Without it `this.toast` is null and `showToast` no-ops.
+    this.addToastSlot(PX, PY, PW, PH);
   }
 
   private buyItem(listing: GearListing): void {
@@ -1104,8 +1108,10 @@ export class StationScene extends GameScene {
     // stocked and fitted later (by category + mass) in the hangar.
     acquireUninstalledGear(player, listing.gear.id);
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
-    this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
+    // Re-render first (rebuilds the toast slot), THEN toast — the re-render
+    // wipes any toast set before it, so a pre-render message never paints.
     this.render();
+    this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
   }
 
   // ── micromodule shop sub-view ──────────────────────────────────────────────
@@ -1266,6 +1272,9 @@ export class StationScene extends GameScene {
         buyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
           const result = buyMicromodule(this.gameEngine?.bank, player, mm);
+          // Re-render first (rebuilds the toast slot), THEN toast — the
+          // re-render wipes any toast set before it.
+          this.render();
           if (result.ok) {
             this.showToast(`Куплено: ${mm.name}`, 0x44ff88);
           } else {
@@ -1276,7 +1285,6 @@ export class StationScene extends GameScene {
               0xff8844,
             );
           }
-          this.render();
         });
         buyBtn.on("pointerover", () => {
           buyBtn.alpha = 0.7;
@@ -1331,6 +1339,10 @@ export class StationScene extends GameScene {
       back.alpha = 1;
     });
     this.mainContainer!.addChild(back);
+
+    // Toast slot so micromodule purchases confirm on screen (mirrors
+    // renderMain). Without it `this.toast` is null and `showToast` no-ops.
+    this.addToastSlot(PX, PY, PW, PH);
   }
 
   private renderMicromoduleApplyPanel(): void {
@@ -1375,6 +1387,7 @@ export class StationScene extends GameScene {
           this.render();
         },
         (msg, color) => this.showToast(msg, color),
+        (px, py, pw, ph) => this.addToastSlot(px, py, pw, ph),
       );
     }
     this.researchPanel.render(this.mainContainer!, sw, sh);

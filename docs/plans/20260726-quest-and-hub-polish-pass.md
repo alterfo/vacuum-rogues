@@ -251,15 +251,27 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       `no-explicit-any` backlog in test files, unrelated to this change.)
 
 ### Task 7: Wire up silent purchase/upgrade toast feedback
-- [ ] `StationScene.ts`: `renderShop()` (~885-1080), `renderMicromoduleShop()` (~1107-1328),
-      `renderResearch()` (~1359-1375) never call `addToastSlot()` — `this.toast` stays `null` outside
-      `renderMain()`, so buying a micromodule gives zero feedback. Wire toast feedback into all three.
-- [ ] `EquipmentShopScene.ts`: the СНАРЯЖЕНИЕ and КОРПУС tabs don't call `addToastSlot` (only
-      `renderHangar()` does) — wire it in for gear and hull purchase/sale, the most frequent interaction
-      loop in the hub.
-- [ ] write tests asserting a toast is queued after a purchase/sale/upgrade action on each of the
-      newly-wired tabs
-- [ ] run tests — must pass before Task 8
+- [x] `StationScene.ts`: `renderShop()`, `renderMicromoduleShop()`, `renderResearch()` never called
+      `addToastSlot()` — `this.toast` stayed `null` outside `renderMain()`, so buying a micromodule gave
+      zero feedback. Done: `renderShop`/`renderMicromoduleShop` now mount a toast slot after their back
+      button; `renderResearch` passes an `addToastSlot` callback to `ResearchUpgradePanel` (new 4th ctor
+      param, mirroring the `HangarPanel` `addToastSlot` contract — the panel re-mounts the slot at the
+      end of every self-render so a post-upgrade toast survives the re-render). Reordered the gear-buy
+      (`buyItem`) and micromodule-buy handlers, and the panel's `doUpgrade`, to re-render FIRST then
+      `showToast` — a message set before the re-render is wiped by it and never paints.
+- [x] `EquipmentShopScene.ts`: the СНАРЯЖЕНИЕ and КОРПУС tabs didn't call `addToastSlot` (only
+      `renderHangar()` did). Done: `render()`'s gear/hull path now mounts a toast slot; `buyItem`
+      (gear) and `sellHoldItem` show «Куплено»/«Продано» after their in-place partial re-render (which
+      leaves the render()-mounted slot intact), and `buyHull` shows «Установлен корпус» after `rebuild()`
+      (reordered, since rebuild wipes the container). Cyrillic ratchet regenerated (EquipmentShopScene
+      34→38 for the 4 new literals).
+- [x] write tests asserting a toast is queued after a purchase/sale/upgrade action on each of the
+      newly-wired tabs. Done: `src/tests/presentation/shopToastFeedback.test.ts` drives the real scenes
+      (fake-pixi) and asserts a live toast (`this.toast` non-null, alpha 1, message) after: station
+      gear-buy, station micromodule-buy (via rendered button handler), station research-upgrade, and
+      equipment-shop gear-buy / gear-sell / hull-buy.
+- [x] run tests — must pass before Task 8. Done: new suite 6 passed; full unit suite 5991 passed / 13
+      skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 8: Add missing SFX in HangarPanel
 - [ ] `ui/HangarPanel.ts` currently has **zero** sound effects anywhere (repair, sell, install, jettison,

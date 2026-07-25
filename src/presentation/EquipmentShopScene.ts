@@ -450,6 +450,11 @@ export class EquipmentShopScene extends GameScene {
       back.alpha = 1;
     });
     this.mainContainer.addChild(back);
+
+    // Toast slot so gear/hull purchases + sales confirm on screen (the АНГАР
+    // tab already has one via HangarPanel). Without it `this.toast` is null and
+    // `showToast` no-ops on the СНАРЯЖЕНИЕ/КОРПУС tabs.
+    this.addToastSlot(PX, PY, PW, PH);
     // Mouse-wheel scroll is handled by a window-level listener (attached in
     // initialize via attachWheelScroll); a federated `backdrop.on("wheel")`
     // never fires because the list rows on top swallow the event.
@@ -690,7 +695,11 @@ export class EquipmentShopScene extends GameScene {
         ".",
     );
 
+    // Rebuild first (mounts a fresh toast slot), THEN toast — rebuild() wipes
+    // the container, so a pre-rebuild message never paints. The КОРПУС tab was
+    // silent on the largest transaction in the game before this.
     this.rebuild();
+    this.showToast(`Установлен корпус: ${hull.name}`, 0x44ff88);
   }
 
   private rebuild(): void {
@@ -1215,6 +1224,10 @@ export class EquipmentShopScene extends GameScene {
       this.creditsText.text = `${player.credits.toLocaleString("ru")}₡`;
     }
     this.renderHold();
+    // The partial re-render above leaves the render()-mounted toast slot intact,
+    // so confirm the sale on screen (previously silent on the gear tab).
+    const soldName = gearById(gearId)?.name ?? "предмет";
+    this.showToast(`Продано: ${soldName} (+${refund}₡)`, 0xffcc44);
   }
 
   private scroll(dir: number): void {
@@ -1273,6 +1286,9 @@ export class EquipmentShopScene extends GameScene {
     this.renderRows((sw - PW) / 2, PY + 96, PW);
     // A purchase with no free slot lands in the ТРЮМ — refresh that strip too.
     this.renderHold();
+    // The partial re-render above leaves the render()-mounted toast slot intact,
+    // so confirm the purchase on screen (previously silent on the gear tab).
+    this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
   }
 
   private onKeyDown(e: KeyboardEvent): void {
