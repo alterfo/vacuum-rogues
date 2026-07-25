@@ -590,6 +590,10 @@ destabilize the economy.
       Confirmed identical on a `git stash -u` clean HEAD (d196 with or without the working-tree
       changes) — the exact pre-existing brittle seed the plan's Task 11b note already documents, not
       introduced or touched by any task here; left unmodified per the do-not-touch-existing-tests rule.
+      **Correction (revert `0d67fda`, 2026-07-25):** this "pre-existing on clean HEAD" verdict was a
+      mis-diagnosis — `git stash -u` stashes only the working tree, so the *committed* #19 spawn-heading
+      change (`b70f50d`) stayed in place and was the actual cause of the d196 drift. That commit was
+      reverted, restoring `sessionCompetence`/`letsplay:ci` to **green**. No remaining known red.
 - [x] Updated `.claude/docs/systems/overmind.md`'s "Known-unmet gate" section with the final Gate A
       outcome (2026-07-25 final addendum: 4.0%→12.0%→18.0% progression, Gate A ≥40% **NOT met at 18%**,
       credits-bound premise aged out, true binding constraint is Overmind spread-pacing / arming).
@@ -600,9 +604,13 @@ destabilize the economy.
 
 ## Technical Details
 
-- All autopilot-facing code changes live under `src/tests/playtest/letsplay/` (dev-only,
-  `letsplayDevOnly.test.ts`-enforced) — no production/`src/systems`/`src/presentation` changes except
-  the balance-config levers in Tasks 1–2, which are plain constants.
+- Most autopilot-facing code changes live under `src/tests/playtest/letsplay/` (dev-only,
+  `letsplayDevOnly.test.ts`-enforced). **Correction:** this branch does also touch production code —
+  the scene seams that the autopilot drives require it: `PlanetScene.ts` (Task 11b customs modal seam),
+  `SpaceFlightScene.ts` + new `src/presentation/flight/flightEntrySpawn.ts` + `combatPlanningUi.ts`
+  (entry-spawn extraction, `#19` revert, combat-bar resize fix), and `src/systems/equipment/GearCatalog.ts`
+  (Task 2b freighter price). The balance-config levers in Tasks 1–2 are plain constants; the seam changes
+  are additive query/resolve methods covered by red-before/green-after tests.
 - `docs/plans/20260713-campaign-winrate-100pct.md` remains the authoritative history for the
   campaign-pacing investigation; Tasks 1–2 here append to it rather than fork a parallel narrative.
 

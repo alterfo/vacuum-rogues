@@ -1556,8 +1556,13 @@ escalated to the user** for a scope decision on either (1) a pinned spread-pacin
 first move, also serves the day-1000 floor) or (2) player liberation-throughput architecture in
 `MemoryHeuristicPolicy`/combat-coverage. Gate battery re-run 2026-07-25: `tsc`/`lint`/`test:playtest`
 (817)/`test:save-compat` (22) all green; the one red — `sessionCompetence.test.ts`'s GOD-milestone
-proxy — is the same pre-existing pacing drift, out of scope to fix here (see the second Task 8
-checkbox). Documentation updates landed in `.claude/docs/systems/overmind.md` and `CLAUDE.md`. The
+proxy — was recorded here as pre-existing pacing drift. **Correction (revert `0d67fda`, same day):**
+that red was NOT pre-existing — it was self-inflicted by the committed #19 sun-facing spawn-heading
+change (`b70f50d`), which perturbed the `CAMPAIGN-CAPACITY-0` seed's arc past the day-190 proxy.
+Reverting the `?? 0` heading line restored the gate: `letsplay:ci`/`sessionCompetence` is now **green**
+(see the "letsplay:ci regression — MISDIAGNOSED" note above). The out-of-scope conclusion in the
+second Task 8 checkbox is therefore superseded — no remaining known red. Documentation updates landed
+in `.claude/docs/systems/overmind.md` and `CLAUDE.md`. The
 300-session final acceptance run stays deferred in Post-Completion (interim Gate B was never stably
 met, so running it would only re-confirm the ~18% plateau).
 
