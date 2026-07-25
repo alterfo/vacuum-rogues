@@ -421,14 +421,14 @@ export class SpaceFlightScene extends GameScene {
       ? loadoutStats.speed
       : (this.DISTANCE_PER_DAY / 1000) *
         Math.min(1.4, Math.max(0.8, ship?.speed ?? 1));
-    // Without an explicit arrival heading (fresh game / context-less re-entry),
-    // face the sun (system centre) from the spawn point instead of a hard-reset
-    // to angle 0 (which pointed the ship east regardless of where it spawned —
-    // playtest #19). A warp arrival passes its own sun-facing departure heading,
-    // so it is unaffected.
-    const spawnHeading =
-      ctx?.arrivalHeading ?? Math.atan2(centerY - entryY, centerX - entryX);
-    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1, spawnHeading); // prettier-ignore
+    // Context-less entry (fresh game / re-entry) hard-resets the heading to 0.
+    // A sun-facing default was tried (#19) but reverted: ShipPhysics uses
+    // arc-only steering, so the initial heading changes the *flight path*, not
+    // just the visual facing — the sun-facing default perturbed the seeded
+    // campaign trajectory and slipped `sessionCompetence.test.ts`'s pinned
+    // first-liberation proxy (d185→d196), reding the letsplay:ci gate. A warp
+    // arrival still passes its own sun-facing departure heading via ctx.
+    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1, ctx?.arrivalHeading ?? 0); // prettier-ignore
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();

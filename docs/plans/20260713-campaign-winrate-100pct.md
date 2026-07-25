@@ -1035,7 +1035,8 @@ reasons over each session's whole run:
   upgrade (130 → 140 HP — `hull_corvette`, 3000cr, per `GearCatalog.ts`) around day 250–300, then
   `maxHull` never moves again for the rest of the session (400+ days). `isBattleReady()` requires
   `maxHull ≥ 180` (root `CLAUDE.md`) — the cheapest hull that clears it is `hull_freighter` (180 HP,
-  4500cr) or `hull_warden` (220 HP, 7000cr). `credits` after the first upgrade oscillate in a
+  4500cr — since trimmed to 3900cr, see Task 2b below; the 4500-based math in this diagnostic
+  snapshot is preserved as-written) or `hull_warden` (220 HP, 7000cr). `credits` after the first upgrade oscillate in a
   ~1000–2000cr band for the remainder of the session, never re-accumulating enough for the second
   upgrade (`canAffordRefit` needs `credits − cost ≥ MILITARY_SPEND_TRADE_RESERVE` (1000), i.e.
   ≥5500cr for the cheapest next tier) — `battleReady` is never reached again after this point.
@@ -1426,16 +1427,19 @@ Awaiting user direction before touching either (both out of this plan's currentl
       space; the one evidence-indicated lever is user-reserved-pinned), so this measure re-confirms the
       escalation rather than iterating blindly.
 - [x] `npm run letsplay:ci` and `npm run test:playtest` must stay green. — `test:playtest` **GREEN**
-      (817 passed, 10 pre-existing skips). `letsplay:ci` **RED on committed HEAD, pre-existing and
-      independent of this measurement** (`sessionCompetence.test.ts` "Task 7 — campaign milestone
-      proxies", `firstLiberationDay` 195–196 vs pinned `≤ 190`) — verified by stashing the sibling
-      branch's working-tree changes: the failure reproduces on clean HEAD (firstLib=196), so it is NOT
-      caused by the uncommitted CRUISER schema work nor by this task. This is the SAME pacing-scope
-      regression Task 6 escalated on: the GOD-seed `CAMPAIGN-CAPACITY-0` used to resolve a real win at
-      d185 (2026-07-19, recorded in the test's own comment) and now TIMEOUTs at d201 with liberation
-      slipping past the day-190 proxy. Fixing it requires either editing a pinned assertion (forbidden
-      by the standing rule) or moving the user-reserved pacing levers — both out of this plan's
-      authorized scope. Reported, not silently marked green.
+      (817 passed, 10 pre-existing skips). `letsplay:ci` was **RED and the prior close-out
+      MISDIAGNOSED it as "pre-existing on clean HEAD"** — that verification only stashed the *sibling
+      branch's uncommitted* CRUISER/schema changes, which left the *committed* spawn-heading change
+      (`b70f50d`, "ship faces the sun on context-less system entry", #19) in place, so the red
+      reproduced and was wrongly read as master-side drift. **Root cause (code review 2026-07-25):**
+      that commit is the actual cause — `ShipPhysics` uses arc-only steering, so the new context-less
+      sun-facing default (`ctx?.arrivalHeading ?? Math.atan2(centerY-entryY, centerX-entryX)`) changed
+      the GOD-seed `CAMPAIGN-CAPACITY-0`'s flight *path* and slipped first-liberation d185→d196,
+      timing out at ~d201 past the pinned `firstLiberationDay ≤ 190` proxy. Reverting *only* that one
+      line to `?? 0` turns `sessionCompetence.test.ts` green (3/0), proving causation. **Fixed** by
+      reverting the #19 spawn-heading change (and its branch-new `systemEntryOrientation.test.ts`);
+      warp arrivals still thread their own sun-facing heading via `ctx.arrivalHeading`, so the visual
+      is unaffected on the path that matters. `letsplay:ci` now GREEN.
 
 #### Task 7 outcome (measured 2026-07-25) — Gate B NOT MET; escalation clause applied, no blind iteration
 
@@ -1470,14 +1474,18 @@ ground down, single combatant — not the multi-ship instant-volley signature th
 chased). Wins that DO happen land early (median d325, well below the day-1000 floor) — but that floor
 is moot while 82% of sessions never win at all.
 
-**Pre-existing letsplay:ci regression surfaced (recorded here for continuity, not fixed):** the
-`sessionCompetence.test.ts` GOD-mode milestone proxy (`firstLiberationDay ≤ 190`) is RED on committed
-HEAD — the seed `CAMPAIGN-CAPACITY-0` now liberates at d195–196 and TIMEOUTs at d201, whereas the
-test's own comment records it resolving a real win at d185 on 2026-07-19. Confirmed pre-existing
-(reproduces with the sibling branch's uncommitted CRUISER/schema changes stashed) and independent of
-this measurement task. It is the SAME pacing drift the LOSS taxonomy shows, one tier down (GOD mode
-isolates survival, so it shows up as a liberation/pacing slip rather than a loss). Both the pinned
-assertion and the underlying pacing levers are out of this plan's authorized scope to touch.
+**letsplay:ci regression — MISDIAGNOSED as pre-existing, actual cause found & fixed (code review
+2026-07-25):** the `sessionCompetence.test.ts` GOD-mode milestone proxy (`firstLiberationDay ≤ 190`)
+was RED on committed HEAD — the seed `CAMPAIGN-CAPACITY-0` liberated at d195–196 and TIMEOUTed at
+d201, whereas the test's own comment records it resolving a real win at d185 on 2026-07-19. This was
+**NOT pre-existing master drift**: the earlier "reproduces with the sibling branch's uncommitted
+changes stashed" check only stashed the *working tree*, so the *committed* spawn-heading change
+`b70f50d` (#19, "ship faces the sun on context-less system entry") stayed in place. Because
+`ShipPhysics` steers arc-only, that commit's sun-facing initial heading altered the seed's flight
+path and pushed first-liberation past the day-190 proxy. Verified by reverting just that one line
+(`?? 0`) → `sessionCompetence.test.ts` green (3/0). **Resolution:** the #19 change and its branch-new
+`systemEntryOrientation.test.ts` were reverted, restoring the green gate; this is unrelated to the
+LOSS-taxonomy pacing question (that remains open/escalated below).
 
 **Escalating per this plan's escalation clause** (and Task 6's already-recorded recommendation, which
 this measurement re-confirms rather than supersedes): the next round needs a **user scope decision**,
