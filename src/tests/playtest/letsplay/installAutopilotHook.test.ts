@@ -1078,6 +1078,72 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(applyEncounterChoice).not.toHaveBeenCalled();
   });
 
+  it("dismissBlockingModal() bribes an open customs modal when the bribe is affordable (Task 11b, #contraband)", () => {
+    // Live report 2026-07-19: "unclear what the autopilot does if caught with
+    // contraband." The PlanetScene customs modal is a blocking overlay the
+    // autopilot otherwise acts underneath. Prefer the cheapest clearance (bribe,
+    // no reputation cost) when the ship can afford it.
+    const applyCustomsChoice = vi.fn().mockReturnValue(true);
+    const engine = mockEngine({
+      currentSceneType: SceneType.PLANET,
+      player: { credits: 5000, currentSystemId: "sys1", landedPlanetId: "p1" },
+      currentScene: {
+        isCustomsModalOpen: true,
+        customsBribeCost: 900,
+        applyCustomsChoice,
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(applyCustomsChoice).toHaveBeenCalledWith("bribe");
+  });
+
+  it("dismissBlockingModal() dumps the cargo when the customs bribe is unaffordable", () => {
+    const applyCustomsChoice = vi.fn().mockReturnValue(true);
+    const engine = mockEngine({
+      currentSceneType: SceneType.PLANET,
+      player: { credits: 100, currentSystemId: "sys1", landedPlanetId: "p1" },
+      currentScene: {
+        isCustomsModalOpen: true,
+        customsBribeCost: 900,
+        applyCustomsChoice,
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(applyCustomsChoice).toHaveBeenCalledWith("dump");
+  });
+
+  it("dismissBlockingModal() dumps when no bribe cost is exposed (defensive)", () => {
+    const applyCustomsChoice = vi.fn().mockReturnValue(true);
+    const engine = mockEngine({
+      currentSceneType: SceneType.PLANET,
+      player: { credits: 5000, currentSystemId: "sys1", landedPlanetId: "p1" },
+      currentScene: {
+        isCustomsModalOpen: true,
+        customsBribeCost: null,
+        applyCustomsChoice,
+      },
+    });
+    createLiveSceneController(engine).dismissBlockingModal!();
+    expect(applyCustomsChoice).toHaveBeenCalledWith("dump");
+  });
+
+  it("dismissBlockingModal() ignores a closed customs modal (returns false, touches nothing)", () => {
+    const applyCustomsChoice = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.PLANET,
+      currentScene: {
+        isCustomsModalOpen: false,
+        customsBribeCost: 900,
+        applyCustomsChoice,
+      },
+    });
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(false);
+    expect(applyCustomsChoice).not.toHaveBeenCalled();
+  });
+
   it("tick() calls hud.closeModals() when the quest journal is open", () => {
     const closeModals = vi.fn();
     const engine = mockEngine({

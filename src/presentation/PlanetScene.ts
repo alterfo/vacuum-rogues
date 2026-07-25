@@ -311,6 +311,21 @@ export class PlanetScene extends GameScene {
   /** Set from `resumeTextQuest === false` in the init context: skips the one
    *  auto-resume on the immediate return from an exited text quest. */
   private suppressTextQuestResume = false;
+  /**
+   * Open customs-inspection modal + the context needed to resolve it. Both are
+   * `null` while the modal is closed. Stored as scene state (not a plain local)
+   * so the dev autopilot's `dismissBlockingModal()` can detect and resolve it
+   * through {@link isCustomsModalOpen}/{@link applyCustomsChoice} — the same
+   * query+resolve seam the encounter prompt exposes (Task 11b). Without this a
+   * human sees the blocking modal while the autopilot keeps acting underneath it.
+   */
+  private customsModal: Container | null = null;
+  private customsContext: {
+    illegalGoods: { type: ResourceType; amount: number }[];
+    penalty: number;
+    bribeCost: number;
+    faction: string;
+  } | null = null;
 
   // Planet backdrop (F5, 2026-06-10): the flat-sprite light parallax below is
   // the PRIMARY backdrop. The Task 8 GLSL `PanoramaViewer` projection was
@@ -768,65 +783,20 @@ export class PlanetScene extends GameScene {
       modal.addChild(btn);
     };
 
-    const player = this.gameEngine!.player!;
-
-    makeBtn(`Заплатить штраф (${penalty} ₡)`, 110, 0x660000, () => {
-      // Pay the fine for one-time clearance — a meaningful credit cost, but no
-      // reputation hit (the old −20 was a recovery dead-end). `false` ⇒ can't
-      // afford it, so leave the modal up.
-      if (!payCustomsFine(this.gameEngine?.bank, player, penalty)) {
-        this.showMessage(
-          `Недостаточно кредитов (нужно ${penalty} ₡)`,
-          0xff5544,
-        );
-        return;
-      }
-      this.refreshCreditsHud();
-      logger.info(`Customs fine paid: ${penalty} cr (faction ${faction})`);
-      modal.destroy({ children: true });
-      this.showMessage(`Штраф уплачен: −${penalty} ₡`, 0xff8844);
-    });
+    makeBtn(`Заплатить штраф (${penalty} ₡)`, 110, 0x660000, () =>
+      this.performCustomsChoice("pay"),
+    );
 
     makeBtn(
       `Дать взятку (${bribeCost} ₡) — без потери репутации`,
       155,
       0x664400,
-      () => {
-        if (player.credits < bribeCost) {
-          this.showMessage(
-            `Недостаточно кредитов (нужно ${bribeCost} ₡)`,
-            0xff5544,
-          );
-          return;
-        }
-        adjustPlayerCredits(
-          this.gameEngine?.bank,
-          player,
-          -bribeCost,
-          GL_COUNTERPARTY.BRIBES,
-          "Взятка таможне",
-        );
-        this.refreshCreditsHud();
-        logger.info(`Customs bribed: ${bribeCost} cr`);
-        modal.destroy({ children: true });
-        this.showMessage(`Взятка уплачена: −${bribeCost} ₡`, 0xffaa44);
-      },
+      () => this.performCustomsChoice("bribe"),
     );
 
-    makeBtn("Выбросить груз — без штрафа", 200, 0x004400, () => {
-      for (const good of illegalGoods) {
-        const stack = player.inventory.resources.find(
-          (r) => r.type === good.type,
-        );
-        if (stack) stack.amount = 0;
-        player.contrabandGoods = player.contrabandGoods.filter(
-          (g) => g !== (good.type as string),
-        );
-      }
-      logger.info("Contraband dumped to avoid customs");
-      modal.destroy({ children: true });
-      this.showMessage("Нелегальный груз выброшен", 0x66ff66);
-    });
+    makeBtn("Выбросить груз — без штрафа", 200, 0x004400, () =>
+      this.performCustomsChoice("dump"),
+    );
 
     addLabel(
       `Штраф: ${penalty} ₡  •  Взятка: ${bribeCost} ₡`,
@@ -836,7 +806,109 @@ export class PlanetScene extends GameScene {
       0xaaaaaa,
     );
 
+    // Store the modal + its resolution context as scene state so the dev
+    // autopilot can resolve it through the seam below (Task 11b), then mount it.
+    this.customsModal = modal;
+    this.customsContext = { illegalGoods, penalty, bribeCost, faction };
     this.renderer.uiLayer.addChild(modal);
+  }
+
+  /**
+   * True while the customs-inspection modal is on screen. The dev autopilot's
+   * `dismissBlockingModal()` reads this seam to resolve the blocking modal the
+   * same way it resolves an encounter prompt (Task 11b) — otherwise a human
+   * watching sees the modal while the autopilot keeps acting underneath it.
+   */
+  get isCustomsModalOpen(): boolean {
+    return this.customsModal != null && !this.customsModal.destroyed;
+  }
+
+  /** The bribe cost (cheapest clearance) of the open customs modal, else null. */
+  get customsBribeCost(): number | null {
+    return this.customsContext?.bribeCost ?? null;
+  }
+
+  /**
+   * Resolve an open customs modal programmatically (dev autopilot seam, mirrors
+   * the real button handlers). Returns true when the choice cleared the modal,
+   * false when it couldn't (bribe/fine unaffordable — the modal stays up exactly
+   * like clicking the button would).
+   */
+  applyCustomsChoice(choice: "pay" | "bribe" | "dump"): boolean {
+    return this.performCustomsChoice(choice);
+  }
+
+  /** Tear down the open customs modal and clear its seam state. */
+  private closeCustomsModal(): void {
+    this.customsModal?.destroy({ children: true });
+    this.customsModal = null;
+    this.customsContext = null;
+  }
+
+  /**
+   * The single implementation behind both the customs modal's buttons and the
+   * autopilot seam. Pay the fine (credit cost, no reputation hit), bribe (cheaper,
+   * no reputation hit), or dump the cargo (no cost). An unaffordable pay/bribe
+   * leaves the modal up and returns false.
+   */
+  private performCustomsChoice(choice: "pay" | "bribe" | "dump"): boolean {
+    const ctx = this.customsContext;
+    const player = this.gameEngine?.player;
+    if (!ctx || !this.isCustomsModalOpen || !player) return false;
+    const { illegalGoods, penalty, bribeCost, faction } = ctx;
+
+    if (choice === "pay") {
+      // `false` ⇒ can't afford it, so leave the modal up.
+      if (!payCustomsFine(this.gameEngine?.bank, player, penalty)) {
+        this.showMessage(
+          `Недостаточно кредитов (нужно ${penalty} ₡)`,
+          0xff5544,
+        );
+        return false;
+      }
+      this.refreshCreditsHud();
+      logger.info(`Customs fine paid: ${penalty} cr (faction ${faction})`);
+      this.closeCustomsModal();
+      this.showMessage(`Штраф уплачен: −${penalty} ₡`, 0xff8844);
+      return true;
+    }
+
+    if (choice === "bribe") {
+      if (player.credits < bribeCost) {
+        this.showMessage(
+          `Недостаточно кредитов (нужно ${bribeCost} ₡)`,
+          0xff5544,
+        );
+        return false;
+      }
+      adjustPlayerCredits(
+        this.gameEngine?.bank,
+        player,
+        -bribeCost,
+        GL_COUNTERPARTY.BRIBES,
+        "Взятка таможне",
+      );
+      this.refreshCreditsHud();
+      logger.info(`Customs bribed: ${bribeCost} cr`);
+      this.closeCustomsModal();
+      this.showMessage(`Взятка уплачена: −${bribeCost} ₡`, 0xffaa44);
+      return true;
+    }
+
+    // dump — always succeeds (no cost), loses the contraband cargo.
+    for (const good of illegalGoods) {
+      const stack = player.inventory.resources.find(
+        (r) => r.type === good.type,
+      );
+      if (stack) stack.amount = 0;
+      player.contrabandGoods = player.contrabandGoods.filter(
+        (g) => g !== (good.type as string),
+      );
+    }
+    logger.info("Contraband dumped to avoid customs");
+    this.closeCustomsModal();
+    this.showMessage("Нелегальный груз выброшен", 0x66ff66);
+    return true;
   }
 
   /**
@@ -875,6 +947,10 @@ export class PlanetScene extends GameScene {
     this.boundPanoramaUp = null;
     this.panoramaSprite = null;
     this.isPanningPanorama = false;
+    // clearUILayer() below destroys the modal's display objects; drop our
+    // references so the seam reads closed after teardown.
+    this.customsModal = null;
+    this.customsContext = null;
     this.closeJobBoard();
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();

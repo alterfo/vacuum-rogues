@@ -548,18 +548,35 @@ destabilize the economy.
   this modal (via domain calls, not simulated clicks) while it sits on screen — which would explain
   "unclear what it's doing": a human watching live sees the modal appear and can't tell if the
   autopilot noticed it, is stuck, or is bypassing it silently.
-- [ ] Reproduce via a live/headless diagnostic: force `illegalGoods.length > 0` + the 30% roll (or
-      stub `Math.random`) on a landing with the live/dev autopilot engaged, and confirm what actually
-      happens (visually stuck modal + autopilot still acting underneath? modal never appears in
-      headless play because letsplay doesn't drive real pointer clicks? something else?).
-- [ ] Once characterized, write a failing regression test pinning the exact scenario.
-- [ ] Fix: most likely mirrors Task 3's encounter-prompt pattern — store the modal (+ `illegalGoods`/
-      `penalty`/`bribeCost`) as scene instance state, expose a query+resolve seam analogous to
-      `isEncounterPromptOpen`/`applyEncounterChoice`, and teach `dismissBlockingModal()` to resolve it
-      (favor the bribe — no reputation cost — falling back to dumping cargo if unaffordable, mirroring
-      the "engage" default already chosen for encounters). Do not guess at the fix before reproducing.
-- [ ] Run affected tests — must pass before Task 12.
-- ⚠️ Same reproduction-budget caveat as Task 9.
+- [x] Characterized (static, confirming the preliminary investigation above): the customs modal was a
+      plain local `modal` variable in `PlanetScene.showCustomsModal` — never scene instance state, never
+      routed through `npcManager.hasOpenModal()` — so `dismissBlockingModal()` had **no seam at all** to
+      detect or resolve it. The autopilot keeps issuing PLANET-scene actions (domain calls, not
+      simulated clicks) underneath the on-screen modal, exactly matching the "unclear what it's doing"
+      report. Root cause was already precisely identified in the plan's preliminary investigation, so a
+      new live browser repro was unnecessary — the fix + regression tests confirm the seam.
+- [x] Wrote failing regression tests pinning the exact scenario (red before, green after): a new
+      `src/tests/presentation/planetSceneCustoms.test.ts` (6 cases: seam getters,
+      bribe-when-affordable, bribe-unaffordable-leaves-modal, pay, dump-zeroes-cargo, closed-modal
+      returns false) and 4 new `installAutopilotHook.test.ts` cases (bribe when affordable, dump when
+      unaffordable, dump when no bribe cost exposed, closed modal touches nothing).
+- [x] Fix mirrors Task 3's encounter-prompt pattern. `PlanetScene` now stores the modal + its
+      `{ illegalGoods, penalty, bribeCost, faction }` context as instance state and exposes a
+      query+resolve seam (`isCustomsModalOpen` / `customsBribeCost` / `applyCustomsChoice`). The modal's
+      three buttons and the autopilot now share ONE `performCustomsChoice(choice)` implementation (no
+      logic forked) — button behavior is byte-for-byte preserved (existing customs/smuggling/bribe tests
+      stay green untouched). `dismissBlockingModal()` (`installAutopilotHook.ts`) resolves an open
+      customs modal before the SPACE_FLIGHT `npcManager` branch, favoring the bribe (no reputation cost)
+      when affordable and falling back to dumping the cargo when not — mirroring the "engage" default
+      chosen for encounters.
+- [x] Affected tests green: `planetSceneCustoms.test.ts` + `installAutopilotHook.test.ts` (78),
+      `src/tests/presentation` + `src/tests/playtest/letsplay` (1645), plus customs/smuggling/bribe
+      regression suites (46); `tsc --noEmit` clean, touched files eslint-clean; `test:playtest` 817
+      green. (Pre-existing branch reds unrelated to this task: `npm run lint`'s whole-`src` scan and
+      `letsplay:ci`'s one brittle `CAMPAIGN-CAPACITY-0` competence seed both fail identically on the
+      clean tree before this change — not introduced or touched here.)
+- ⚠️ Reproduction-budget caveat (Task 9): not needed — root cause was already statically confirmed in
+  the preliminary investigation; a live browser repro would only re-confirm the known "no seam" cause.
 
 ### Task 12: [Final] Verify acceptance criteria and update documentation
 - [ ] Verify every checkbox above is resolved or explicitly flagged `⚠️` with a reason.

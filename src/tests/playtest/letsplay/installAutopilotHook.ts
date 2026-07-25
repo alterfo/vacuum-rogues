@@ -208,6 +208,27 @@ export function createLiveSceneController(
       dismissHelpPanel();
       return true;
     }
+    // Customs-inspection modal (PlanetScene, live report 2026-07-19: "unclear
+    // what the autopilot does when caught with contraband"). Unlike the
+    // encounter prompt, this is a PLANET-scene blocking overlay; without a seam
+    // the autopilot keeps issuing PLANET actions underneath it while a human
+    // sees a stuck modal. Resolve it the same way the encounter prompt is
+    // resolved: prefer the cheapest clearance (bribe — no reputation cost),
+    // falling back to dumping the cargo when the bribe is unaffordable (dump
+    // always succeeds). Checked before the SPACE_FLIGHT npcManager branch below,
+    // which never applies on the PLANET scene anyway.
+    const planetScene = engine.currentScene as {
+      isCustomsModalOpen?: boolean;
+      customsBribeCost?: number | null;
+      applyCustomsChoice?: (choice: "pay" | "bribe" | "dump") => boolean;
+    } | null;
+    if (planetScene?.isCustomsModalOpen && planetScene.applyCustomsChoice) {
+      const bribe = planetScene.customsBribeCost ?? null;
+      const credits = engine.player?.credits ?? 0;
+      const choice = bribe != null && credits >= bribe ? "bribe" : "dump";
+      planetScene.applyCustomsChoice(choice);
+      return true;
+    }
     const scene = engine.currentScene as {
       npcManager?: {
         hasOpenModal?: () => boolean;
