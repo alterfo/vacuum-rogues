@@ -64,6 +64,30 @@ export function formatCredits(amount: number): string {
 }
 
 /**
+ * Semantic toast colours for the Bank screen, so contradictory outcomes never
+ * share a hue. `BankScene.showToast` maps each action to exactly one of these:
+ *
+ *  - `success` (green) — money moved as intended (deposit / withdraw / loan
+ *    granted / repayment).
+ *  - `info` (blue) — a neutral no-op ("nothing to repay") — deliberately *not*
+ *    the success hue, so "no debt to repay" can't be mistaken for a completed
+ *    withdrawal.
+ *  - `warn` (amber) — the action was **denied** (a new loan is blocked) —
+ *    deliberately *not* the success hue, so "credit denied" can't be mistaken
+ *    for "credit granted".
+ *  - `error` (salmon) — a hard failure (insufficient funds).
+ *
+ * Distinctness (and the two must-differ pairs above) is pinned by
+ * `bankSceneView.test.ts`.
+ */
+export const BANK_TOAST = {
+  success: 0x66ddaa,
+  info: 0x66ddff,
+  warn: 0xffcc44,
+  error: 0xff8866,
+} as const;
+
+/**
  * The customer accounts to show, in `accountIds` order, skipping any not yet
  * open on the ledger (a player may have no savings/loan). Each row carries the
  * account's current GL balance.

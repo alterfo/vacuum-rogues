@@ -6,6 +6,7 @@ import {
   type JournalEntry,
 } from "@/domain/banking/Ledger";
 import {
+  BANK_TOAST,
   accountTypeLabel,
   describeCommand,
   describePosting,
@@ -241,6 +242,22 @@ describe("describeCommand / describePosting", () => {
       ],
     });
     expect(describePosting(entry)).toBe("✓ ГК: Продажа: Металлы (2 пров.)");
+  });
+});
+
+describe("BANK_TOAST semantic colours", () => {
+  it("gives every outcome a distinct hue", () => {
+    const values = Object.values(BANK_TOAST);
+    expect(new Set(values).size).toBe(values.length);
+  });
+
+  it("keeps the two must-differ pairs apart", () => {
+    // A denied loan (warn) must never read like a granted one (success)…
+    expect(BANK_TOAST.warn).not.toBe(BANK_TOAST.success);
+    // …and a neutral "nothing to repay" (info) must never read like a
+    // completed withdrawal (success). These are the two contradictions the
+    // Task 5 colour fix targets.
+    expect(BANK_TOAST.info).not.toBe(BANK_TOAST.success);
   });
 });
 

@@ -1,7 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { Planet } from "@/domain/Planet";
-import type { Faction } from "@/types/faction";
-import { FACTION_LABEL } from "@/config/factionConfig";
+import { Faction } from "@/types/faction";
+import { factionDisplayLabel } from "@/config/factionConfig";
 
 export class PlanetInfoPanel {
   public readonly container: Container;
@@ -57,10 +57,12 @@ export class PlanetInfoPanel {
     type.y = 35;
     this.container.addChild(type);
 
-    const factionName =
-      this.ownerFaction !== undefined
-        ? (FACTION_LABEL[this.ownerFaction as Faction] ?? this.ownerFaction)
-        : "Окраинники";
+    // Unowned/unset systems are the project's "Независимая" (independent), not
+    // "Окраинники" (the OUTLANDERS faction) — the former hardcoded fallback
+    // silently mislabelled every ownerless planet as an Outlander world.
+    const factionName = factionDisplayLabel(
+      this.ownerFaction ?? Faction.INDEPENDENT,
+    );
     const habitability = new Text({
       text: this.planet.isHabitable
         ? `Фракция: ${factionName}`

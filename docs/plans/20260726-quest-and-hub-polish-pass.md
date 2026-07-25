@@ -196,19 +196,40 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       clean; `eslint` 0 errors.
 
 ### Task 5: BankScene / PlanetInfoPanel cosmetic fixes
-- [ ] `bankSceneView.ts` (~line 144): translate the leftover English "Transfer" bus-log label to Russian
-      (the only untranslated command type of six)
-- [ ] `BankScene.ts` (~lines 646, 660-663, 674, 681, 700-703): fix contradictory toast colors — "credit
+- [x] ⚠️ `bankSceneView.ts` (~line 144): translate the leftover English "Transfer" bus-log label to
+      Russian (the only untranslated command type of six). **DEFERRED — blocked by a known-good test.**
+      `src/tests/banking/bankSceneView.test.ts:195` asserts `describeCommand({kind:"Transfer",…})` ⇒
+      exactly `"Transfer 250 ₡ — Продажа товара"` — i.e. it locks in the English label. Translating it
+      (e.g. `Transfer` → `Перевод`) reds that existing assertion. Per this plan's Development Approach
+      ("if a content change makes an existing assertion fail… stop and flag it (⚠️) rather than editing
+      the test") and the standing no-touch-existing-tests rule, this label change + its test update need
+      the user's explicit go-ahead — left for a follow-up (mirrors Task 3's tribunal sign-bug deferral).
+      All other Task 5 fixes landed.
+- [x] `BankScene.ts` (~lines 646, 660-663, 674, 681, 700-703): fix contradictory toast colors — "credit
       denied" and "credit granted" currently share a color, and "no debt to repay" shares a color with
-      an unrelated action's "withdrawal succeeded"
-- [ ] `BankScene.ts` (~lines 725-751): migrate `showToast` to the shared `scaledText` helper (currently
-      the only text in the scene ignoring the S/M/L font-scale setting)
-- [ ] `PlanetInfoPanel.ts` (~lines 60-63): fix the empty/unset `ownerFaction` fallback — it currently
+      an unrelated action's "withdrawal succeeded". Done: added exported semantic `BANK_TOAST`
+      (`success`/`info`/`warn`/`error`) in `bankSceneView.ts`; every `showToast` call site now maps to
+      one — granted→`success`, denied→`warn`, no-debt-repay→`info`, withdraw/deposit/repay→`success`,
+      insufficient-funds→`error` — so the two contradictory pairs are now distinct hues.
+- [x] `BankScene.ts` (~lines 725-751): migrate `showToast` to the shared `scaledText` helper (currently
+      the only text in the scene ignoring the S/M/L font-scale setting). Done: `showToast` now builds the
+      toast via `scaledText(text, 15, color, { fontWeight:"bold", align:"center", rawColor:true })` —
+      `rawColor` keeps the semantic `BANK_TOAST` hue exact (the salmon error tone sits under the
+      readability floor). Removed the now-unused `Text` import.
+- [x] `PlanetInfoPanel.ts` (~lines 60-63): fix the empty/unset `ownerFaction` fallback — it currently
       renders as "Окраинники" instead of the project's established "Независимая" via
-      `factionDisplayLabel`
-- [ ] write tests for the corrected toast colors (or a color-distinctness assertion) and translated label
-- [ ] write a test for the faction fallback label
-- [ ] run tests — must pass before Task 6
+      `factionDisplayLabel`. Done: fallback is now `factionDisplayLabel(this.ownerFaction ??
+      Faction.INDEPENDENT)` → "Независимая"; removed the hardcoded "Окраинники" literal (Cyrillic
+      ratchet regenerated 13→12).
+- [x] write tests for the corrected toast colors (or a color-distinctness assertion) and translated
+      label. Done: `bankSceneView.test.ts` adds a `BANK_TOAST` distinctness + must-differ-pairs block;
+      new `bankSceneToast.test.ts` drives the real `BankScene` actions (granted vs denied, no-debt-repay
+      vs withdraw-success) and pins each call site's colour. (Translated-label test deferred with the ⚠️
+      item above.)
+- [x] write a test for the faction fallback label. Done: new `planetInfoPanelFaction.test.ts` asserts the
+      unset/`INDEPENDENT` owner renders "Независимая" (not "Окраинники") and a known owner still resolves.
+- [x] run tests — must pass before Task 6. Done: full unit suite green (Cyrillic baseline regenerated for
+      the intentional literal removal); `tsc --noEmit` clean; `npm run lint` exit 0.
 
 ### Task 6: Fix misleading launch-denial message
 - [ ] `StationScene.ts` (~lines 856-868) and `PlanetScene.ts` (~lines 1912-1913): the launch-denied

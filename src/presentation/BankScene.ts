@@ -1,4 +1,4 @@
-import { Container, Graphics, Rectangle, Text } from "pixi.js";
+import { Container, Graphics, Rectangle } from "pixi.js";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { BankSceneHost } from "./BankSceneHost";
@@ -32,6 +32,7 @@ import {
   withdraw,
 } from "@/systems/banking/products";
 import {
+  BANK_TOAST,
   accountTypeLabel,
   borrowBlockReason,
   describeCommand,
@@ -607,12 +608,15 @@ export class BankScene extends GameScene {
     const player = engine?.player;
     if (!engine || !player) return;
     if (player.credits < DEPOSIT_STEP) {
-      this.showToast("Недостаточно средств для вклада", 0xff8866);
+      this.showToast("Недостаточно средств для вклада", BANK_TOAST.error);
       return;
     }
     const sav = openSavings(engine.bankBus, engine.bankingService, player.id);
     deposit(engine.bankBus, player.currentAccountId, sav, DEPOSIT_STEP);
-    this.showToast(`Внесено ${formatCredits(DEPOSIT_STEP)} во вклад`, 0x44ff88);
+    this.showToast(
+      `Внесено ${formatCredits(DEPOSIT_STEP)} во вклад`,
+      BANK_TOAST.success,
+    );
     this.render();
   }
 
@@ -624,11 +628,14 @@ export class BankScene extends GameScene {
     const savBal = engine.bankingService.balanceOf(savId);
     const amount = wholeCreditsToCurrent(WITHDRAW_STEP, savBal);
     if (amount <= 0) {
-      this.showToast("На вкладе нет средств", 0xff8866);
+      this.showToast("На вкладе нет средств", BANK_TOAST.error);
       return;
     }
     withdraw(engine.bankBus, savId, player.currentAccountId, amount);
-    this.showToast(`Снято ${formatCredits(amount)} со вклада`, 0x66ddff);
+    this.showToast(
+      `Снято ${formatCredits(amount)} со вклада`,
+      BANK_TOAST.success,
+    );
     this.render();
   }
 
@@ -643,7 +650,7 @@ export class BankScene extends GameScene {
       engine.bankingService.loanDefaultStateOf(loanId),
     );
     if (block) {
-      this.showToast(block, 0xffcc44);
+      this.showToast(block, BANK_TOAST.warn);
       return;
     }
     takeLoan(
@@ -659,7 +666,7 @@ export class BankScene extends GameScene {
     );
     this.showToast(
       `Кредит ${formatCredits(LOAN_PRINCIPAL)} зачислен`,
-      0xffcc44,
+      BANK_TOAST.success,
     );
     this.render();
   }
@@ -671,14 +678,14 @@ export class BankScene extends GameScene {
     const loanId = loanAccountId(player.id);
     const owed = -engine.bankingService.balanceOf(loanId); // positive when in debt
     if (owed <= 0) {
-      this.showToast("Нет действующего кредита", 0x66ddff);
+      this.showToast("Нет действующего кредита", BANK_TOAST.info);
       return;
     }
     // Whole credits we can move off the integer-only current account this press.
     const amount = wholeCreditsToCurrent(REPAY_STEP, owed, player.credits);
     if (amount <= 0 && owed >= 1) {
       // A whole credit of debt remains but the player has no funds to pay it.
-      this.showToast("Недостаточно средств для погашения", 0xff8866);
+      this.showToast("Недостаточно средств для погашения", BANK_TOAST.error);
       return;
     }
     if (amount > 0) {
@@ -699,7 +706,7 @@ export class BankScene extends GameScene {
     }
     this.showToast(
       amount > 0 ? `Погашено ${formatCredits(amount)}` : "Кредит закрыт",
-      0xff8866,
+      BANK_TOAST.success,
     );
     this.render();
   }
@@ -726,15 +733,13 @@ export class BankScene extends GameScene {
     const existing = this.uiContainer?.getChildByLabel?.("bank-toast");
     if (existing) existing.destroy();
 
-    const toast = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 15,
-        fill: color,
-        fontWeight: "bold",
-        align: "center",
-      },
+    // `rawColor` keeps the semantic `BANK_TOAST` hue exact — these are already
+    // bright/intentional colours, so the dark-panel readability floor must not
+    // shift them (the salmon error tone sits just under the floor).
+    const toast = scaledText(text, 15, color, {
+      fontWeight: "bold",
+      align: "center",
+      rawColor: true,
     });
     toast.label = "bank-toast";
     toast.anchor.set(0.5);
