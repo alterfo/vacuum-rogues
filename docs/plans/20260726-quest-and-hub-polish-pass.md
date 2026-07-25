@@ -274,14 +274,30 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 8: Add missing SFX in HangarPanel
-- [ ] `ui/HangarPanel.ts` currently has **zero** sound effects anywhere (repair, sell, install, jettison,
-      loadout presets) — add appropriate existing `SfxKey`s to each action
-- [ ] Also fix (`renderFilledSlot`): `GearBridge.gearMicromoduleCategory` produces a misleading
+- [x] `ui/HangarPanel.ts` currently has **zero** sound effects anywhere (repair, sell, install, jettison,
+      loadout presets) — add appropriate existing `SfxKey`s to each action. Done: added an optional
+      `playSfx?(key: SfxKey)` seam to `HangarPanelContext` (wired from both `StationScene` and
+      `EquipmentShopScene` → `gameEngine.audio.playSfx`, no-op in headless tests) + a private `sfx(key)`
+      helper. Actions now fire: sell → `"sell"`, repair (paid service) → `"buy"`, install →
+      `"ui_click"`, jettison-confirm → `"ui_click"`, preset save/apply/clear → `"ui_click"`, and the
+      drag-drop micromodule apply → `"ui_click"`.
+- [x] Also fix (`renderFilledSlot`): `GearBridge.gearMicromoduleCategory` produces a misleading
       "[нет микромодулей]" label for gear that structurally can never take a micromodule — dead today,
-      but a trap for a future `GearKind`; correct the label logic
-- [ ] write tests asserting the correct SFX key fires for each hangar action
-- [ ] write a test for the corrected micromodule-category label
-- [ ] run tests — must pass before Task 9
+      but a trap for a future `GearKind`; correct the label logic. Done: extracted a pure exported
+      `micromoduleSlotControl(mmCategory, hasMatchingMm)` returning `{label, actionable}` with three
+      distinct states — non-fittable (`mmCategory === null`) → «[микромодуль не ставится]» (NOT the
+      "you own none" label), fittable-but-none-owned → «[нет микромодулей]», compatible-on-hand →
+      «[установить микромодуль]». `renderFilledSlot` now delegates to it. Cyrillic ratchet regenerated
+      (HangarPanel 65→66 for the one new literal).
+- [x] write tests asserting the correct SFX key fires for each hangar action. Done:
+      `hangarPanelSfxAndLabel.test.ts` drives the real panel (fake-pixi) and asserts sell→"sell",
+      install→"ui_click", repair→"buy" (and NOT fired when unaffordable), jettison-confirm→"ui_click",
+      and preset save/apply/clear→"ui_click".
+- [x] write a test for the corrected micromodule-category label. Done: same file — pure-helper tests
+      for all three states (plus render tests that a fitted weapon shows «нет микромодулей» with none
+      owned and the actionable install label once a compatible module is owned).
+- [x] run tests — must pass before Task 9. Done: new suite green; full unit suite 6017 passed / 0
+      failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 9: Surface population/economy/politics/attitude in PlanetInfoPanel
 - [ ] `PlanetInfoPanel.ts` (~lines 52-72) / `PlanetScene.ts` `addInfoPanel()` (~1396-1497): the domain

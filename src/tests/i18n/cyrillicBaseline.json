@@ -33,7 +33,7 @@
   "src/presentation/flight/flightKeyHandler.ts": 2,
   "src/presentation/flight/flightSystemMenu.ts": 4,
   "src/presentation/input/keymap.ts": 1,
-  "src/presentation/ui/HangarPanel.ts": 65,
+  "src/presentation/ui/HangarPanel.ts": 66,
   "src/presentation/ui/MicromoduleApplyPanel.ts": 6,
   "src/systems/CombatSystem.ts": 6,
   "src/systems/DayTickController.ts": 4,

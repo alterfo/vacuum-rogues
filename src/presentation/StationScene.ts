@@ -1432,6 +1432,9 @@ export class StationScene extends GameScene {
         if (this.gameEngine) this.gameEngine.playerLoadoutPresets = next;
       },
       showToast: (msg, color) => this.showToast(msg, color),
+      playSfx: (key) => {
+        this.gameEngine?.audio.playSfx(key).catch(() => {});
+      },
       addToastSlot: (px, py, pw, ph) => this.addToastSlot(px, py, pw, ph),
       rerender: () => this.render(),
       back: () => {

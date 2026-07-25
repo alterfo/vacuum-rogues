@@ -14,7 +14,13 @@ import { gearIconKey, mountGearIcon } from "./gearIcon";
 import type { Renderer } from "../Renderer";
 import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
-import type { MicroModule, LoadoutPreset, LoadoutPresetName } from "@/types";
+import type {
+  MicroModule,
+  LoadoutPreset,
+  LoadoutPresetName,
+  ModuleCategory,
+} from "@/types";
+import type { SfxKey } from "@/systems/AudioManager";
 import {
   GearKind,
   EquipmentClass,
@@ -147,6 +153,30 @@ export function explainInstallBlock(
 }
 
 /**
+ * The micromodule-slot control shown on a fitted item that has no micromodule
+ * yet: its label and whether it is an actionable button. Three distinct states
+ * so the label never misleads —
+ *  - `mmCategory === null`: the gear structurally **cannot** take a micromodule
+ *    (a future non-fittable `GearKind`; hulls never reach a fitted slot). The
+ *    old code showed "[нет микромодулей]" here too, wrongly implying that owning
+ *    a module would help — so this returns a dedicated "not applicable" label;
+ *  - the gear can take one but the player owns no compatible module: the
+ *    "нет микромодулей" hint (buy one at a Центр крафта);
+ *  - a compatible module is on hand: the actionable "install" label.
+ *
+ * Pure (no PixiJS/Player) so it's unit-testable directly.
+ */
+export function micromoduleSlotControl(
+  mmCategory: ModuleCategory | null,
+  hasMatchingMm: boolean,
+): { label: string; actionable: boolean } {
+  if (mmCategory === null)
+    return { label: "[микромодуль не ставится]", actionable: false };
+  if (!hasMatchingMm) return { label: "[нет микромодулей]", actionable: false };
+  return { label: "[установить микромодуль]", actionable: true };
+}
+
+/**
  * The host scene context the hangar panel draws against. Player/loadout are the
  * canonical fitting model; the callbacks let the panel coordinate scene-owned
  * concerns (toast, navigation, re-render) without forking any logic.
@@ -165,6 +195,9 @@ export interface HangarPanelContext {
   mutatePresets(next: LoadoutPreset[]): void;
   /** Flash a status message in the panel's toast slot. */
   showToast(msg: string, color: number): void;
+  /** Play a one-shot sound effect for a hangar action (repair/sell/install/
+   *  jettison/preset). Optional — omitted in headless tests + no-op host stubs. */
+  playSfx?(key: SfxKey): void;
   /** Mount the host scene's toast at the given panel geometry. */
   addToastSlot(px: number, py: number, pw: number, ph: number): void;
   /** Re-render the host scene (refreshes the hangar in place). */
@@ -254,6 +287,11 @@ export class HangarPanel {
   private detachRightWheel: (() => void) | null = null;
 
   constructor(private readonly renderer: Renderer) {}
+
+  /** Play a one-shot SFX for a hangar action, if the host wired the seam. */
+  private sfx(key: SfxKey): void {
+    this.ctx?.playSfx?.(key);
+  }
 
   /** Current scroll offset/max per column (E2E + tests, read-only). */
   getScrollInfo(): {
@@ -576,6 +614,7 @@ export class HangarPanel {
           this.ctx!.mutatePresets(
             upsertLoadoutPreset(this.ctx!.presets, captured),
           );
+          this.sfx("ui_click");
           this.ctx!.showToast(`Комплектация ${name} сохранена`, 0x66ddaa);
           this.ctx!.rerender();
         });
@@ -601,6 +640,7 @@ export class HangarPanel {
         applyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
           const result = applyLoadoutPreset(player, loadout, preset);
+          this.sfx("ui_click");
           const msg =
             result.skipped.length > 0
               ? `Комплектация ${name} применена (пропущено: ${result.skipped.length})`
@@ -627,6 +667,7 @@ export class HangarPanel {
         clearBtn.on("pointerdown", (e) => {
           e.stopPropagation();
           this.ctx!.mutatePresets(removeLoadoutPreset(this.ctx!.presets, name));
+          this.sfx("ui_click");
           this.ctx!.showToast(`Комплектация ${name} очищена`, 0xaaaaaa);
           this.ctx!.rerender();
         });
@@ -1045,19 +1086,22 @@ export class HangarPanel {
         player.inventory.micromodules.some(
           (mm) => mm.targetCategory === mmCategory,
         );
-      // Explicit label: spell out the action when a compatible micromodule is on
-      // hand, and *why* it's disabled otherwise — the old "[+ микромодуль]" never
-      // said it slots an upgrade chip nor that you needed to own a matching one.
+      // Explicit label via the pure resolver: spell out the action when a
+      // compatible micromodule is on hand, distinguish "you own none" from
+      // "this gear can't take one at all", and *why* it's disabled otherwise —
+      // the old "[+ микромодуль]" never said it slots an upgrade chip, and
+      // "[нет микромодулей]" wrongly implied a non-fittable item just lacked one.
+      const control = micromoduleSlotControl(mmCategory, hasMatchingMm);
       const mmBtn = scaledText(
-        hasMatchingMm ? "[установить микромодуль]" : "[нет микромодулей]",
+        control.label,
         10,
-        hasMatchingMm ? 0xffaa22 : 0xb4bcc4,
+        control.actionable ? 0xffaa22 : 0xb4bcc4,
         { rawColor: true, fontFamily: "monospace" },
       );
       mmBtn.anchor.set(1, 0.5);
       mmBtn.x = x + w - 8;
       mmBtn.y = mmRowY + mmStep / 2;
-      if (hasMatchingMm) {
+      if (control.actionable) {
         mmBtn.eventMode = "static";
         mmBtn.cursor = "pointer";
         mmBtn.on("pointerdown", (e) => {
@@ -1335,6 +1379,7 @@ export class HangarPanel {
     if (outcome === "ok") {
       const idx = player.inventory.micromodules.indexOf(drag.mm);
       if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
+      this.sfx("ui_click");
       logger.info(
         `Drag-applied micromodule ${drag.mm.id} → ${zone.target.kind}`,
       );
@@ -1554,6 +1599,7 @@ export class HangarPanel {
             e.stopPropagation();
             const refund = sellUninstalledGear(player, gearId, this.ctx!.bank);
             if (refund > 0) {
+              this.sfx("sell");
               this.ctx!.showToast(
                 `Продано: ${gear.name} (+${refund} ₡)`,
                 0x44ff88,
@@ -1799,6 +1845,7 @@ export class HangarPanel {
         "Ремонт корпуса",
       );
       ship.repair();
+      this.sfx("buy");
       this.ctx!.showToast(`Корпус восстановлен за ${cost} ₡`, 0x44ff88);
       this.ctx!.rerender();
     });
@@ -1848,6 +1895,9 @@ export class HangarPanel {
         }
       }
     }
+    // Reached only on a non-blocked install (the block path returned above), so
+    // the fit succeeded — confirm it with the install click.
+    this.sfx("ui_click");
     this.ctx!.rerender();
   }
 
@@ -1887,6 +1937,7 @@ export class HangarPanel {
         );
       }
     }
+    this.sfx("ui_click");
     ctx.rerender();
   }
 }

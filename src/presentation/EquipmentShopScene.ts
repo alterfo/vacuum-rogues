@@ -1147,6 +1147,9 @@ export class EquipmentShopScene extends GameScene {
         if (this.gameEngine) this.gameEngine.playerLoadoutPresets = next;
       },
       showToast: (msg, color) => this.showToast(msg, color),
+      playSfx: (key) => {
+        this.gameEngine?.audio.playSfx(key).catch(() => {});
+      },
       addToastSlot: (px, py, pw, ph) => this.addToastSlot(px, py, pw, ph),
       // The shop's render() appends (it doesn't clear), so a fit re-render must
       // tear the screen down first — rebuild() destroys + recreates the
