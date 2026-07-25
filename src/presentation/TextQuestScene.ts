@@ -1,6 +1,7 @@
 import { Container, Graphics, Text, Sprite } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { isReducedMotionSet } from "./ui/reducedMotion";
 import { lineStepFor } from "./ui/questCardLayout";
 import { scaledFont } from "@/utils/fontScale";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
@@ -30,6 +31,15 @@ export function deriveRestartSeed(
 ): string {
   return attempt <= 0 ? String(baseSeed) : `${baseSeed}:${attempt}`;
 }
+
+/**
+ * Typewriter reveal speed for quest narration (Task 2). A short per-character
+ * delay, but capped so a long paragraph never types slower than
+ * {@link REVEAL_MAX_MS} in total — the effect adds reading rhythm without ever
+ * becoming a chore. Bypassed entirely under reduced motion.
+ */
+const REVEAL_MS_PER_CHAR = 16;
+const REVEAL_MAX_MS = 2200;
 
 export interface TextQuestContext {
   gameEngine?: GameEngine;
@@ -70,6 +80,22 @@ export class TextQuestScene extends GameScene {
   private vmParamPanel: Container | null = null;
   private autoExecuteTimer: ReturnType<typeof setTimeout> | null = null;
   private successTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // ── Typewriter reveal state (Task 2) ───────────────────────────────────────
+  /** Full narration text currently being (or already) revealed. */
+  private revealTarget = "";
+  /** How many characters of {@link revealTarget} are shown so far. */
+  private revealShown = 0;
+  /** Milliseconds elapsed into the current reveal (accumulated in `update`). */
+  private revealElapsed = 0;
+  /** True while the narration is still typing out character-by-character. */
+  private revealing = false;
+  /**
+   * Continuation run once the current node's text has fully revealed (or been
+   * skipped): renders the auto-advance beat / handles a finished quest. Manual
+   * choice nodes render their buttons immediately, so they pass `null`.
+   */
+  private onRevealComplete: (() => void) | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
@@ -146,7 +172,66 @@ export class TextQuestScene extends GameScene {
     logger.info(`TextQuestScene: started quest "${this.quest.title}"`);
   }
 
-  update(_dt: number): void {}
+  update(dt: number): void {
+    if (!this.revealing || !this.vmNarrationText) return;
+    this.revealElapsed += dt;
+    const len = this.revealTarget.length;
+    const msPerChar = Math.min(
+      REVEAL_MS_PER_CHAR,
+      REVEAL_MAX_MS / Math.max(1, len),
+    );
+    const shown = Math.min(len, Math.floor(this.revealElapsed / msPerChar));
+    if (shown !== this.revealShown) {
+      this.revealShown = shown;
+      this.vmNarrationText.text = this.revealTarget.slice(0, shown);
+    }
+    if (this.revealShown >= len) this.finishReveal();
+  }
+
+  /**
+   * Begin the typewriter reveal of `fullText`. Under reduced motion (or empty
+   * text) it snaps to the full string and runs `onComplete` synchronously —
+   * matching the project's accessibility convention. Otherwise the narration
+   * types out over `update` ticks and `onComplete` fires on the last character.
+   */
+  private startReveal(fullText: string, onComplete: (() => void) | null): void {
+    this.onRevealComplete = onComplete;
+    this.revealTarget = fullText;
+    this.revealElapsed = 0;
+
+    if (isReducedMotionSet() || fullText.length === 0) {
+      this.revealShown = fullText.length;
+      this.revealing = false;
+      if (this.vmNarrationText) this.vmNarrationText.text = fullText;
+      this.fireRevealComplete();
+      return;
+    }
+
+    this.revealShown = 0;
+    this.revealing = true;
+    if (this.vmNarrationText) this.vmNarrationText.text = "";
+  }
+
+  /** Snap the narration to full text and fire the continuation (click-to-skip). */
+  private completeReveal(): void {
+    if (!this.revealing) return;
+    this.finishReveal();
+  }
+
+  /** Shared tail of a completed reveal: pin full text, then run the continuation. */
+  private finishReveal(): void {
+    this.revealShown = this.revealTarget.length;
+    this.revealing = false;
+    if (this.vmNarrationText) this.vmNarrationText.text = this.revealTarget;
+    this.fireRevealComplete();
+  }
+
+  /** Run the pending reveal continuation exactly once. */
+  private fireRevealComplete(): void {
+    const cb = this.onRevealComplete;
+    this.onRevealComplete = null;
+    cb?.();
+  }
 
   destroy(): void {
     this.helpTeardown?.();
@@ -163,6 +248,9 @@ export class TextQuestScene extends GameScene {
       clearTimeout(this.successTimer);
       this.successTimer = null;
     }
+    this.revealing = false;
+    this.onRevealComplete = null;
+    this.revealTarget = "";
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.uiContainer = null;
@@ -241,6 +329,22 @@ export class TextQuestScene extends GameScene {
     narText.eventMode = "none";
     this.vmNarrationText = narText;
     ui.addChild(narText);
+
+    // Click-to-skip catcher over the description panel (Task 2): a click/tap
+    // while the narration is still typing snaps it to full text. It sits over
+    // the description area only (not the button area below), so choice buttons
+    // stay a single, direct click. Harmless no-op when nothing is revealing.
+    const skipCatcher = new Graphics();
+    skipCatcher.rect(8, contentTop, CONTENT_W - 16, descH);
+    skipCatcher.fill({ color: 0x000000, alpha: 0.001 });
+    skipCatcher.eventMode = "static";
+    skipCatcher.on("pointerdown", (e) => {
+      if (this.revealing) {
+        e.stopPropagation();
+        this.completeReveal();
+      }
+    });
+    ui.addChild(skipCatcher);
 
     // Button area (bottom 40%)
     const btnAreaY = contentTop + descH + 8;
@@ -468,7 +572,7 @@ export class TextQuestScene extends GameScene {
     if (!this.vm || !this.vmNarrationText || !this.vmChoiceContainer) return;
 
     const loc = this.vm.currentLocation();
-    this.vmNarrationText.text = this.vm.interpolate(loc.text);
+    const fullText = this.vm.interpolate(loc.text);
     this.refreshVmParamPanel();
 
     // Clear old buttons
@@ -479,6 +583,10 @@ export class TextQuestScene extends GameScene {
     }
 
     if (this.vm.isFinished()) {
+      // Reveal the ending prose (cosmetic); resolve win/fail synchronously as
+      // before — the terminal isn't part of a rapid chain, so its toast/return
+      // timing is unchanged.
+      this.startReveal(fullText, null);
       this.handleVmFinished();
       return;
     }
@@ -491,28 +599,24 @@ export class TextQuestScene extends GameScene {
     const btnH = 36;
     const gap = 8;
 
-    // Auto-execute: all available transitions are auto (routing/branching nodes)
+    // Auto-execute: all available transitions are auto (routing/branching nodes).
+    // Arm the 800 ms beat, then reveal the text. In a live render loop the actual
+    // advance is deferred until the reveal has fully typed out (or been skipped),
+    // so a chain of routing nodes no longer flashes past unread (the auction's 8
+    // auto-executing lots, Task 2). Order matters: schedule the beat *before*
+    // startReveal so the reduced-motion (synchronous) reveal-complete callback
+    // still sees a pending timer and lets the 800 ms beat run, not an instant hop.
     const autoT = transitions.find((t) => t.autoExecute);
     if (autoT && transitions.every((t) => t.autoExecute)) {
-      const ellipsis = scaledText("...", 16, 0x6688aa, { rawColor: true });
-      ellipsis.x = 8;
-      ellipsis.y = 8;
-      ellipsis.eventMode = "none";
-      this.vmChoiceContainer.addChild(ellipsis);
-
-      this.autoExecuteTimer = setTimeout(() => {
-        this.autoExecuteTimer = null;
-        if (this.vm) {
-          try {
-            this.vm.execute(autoT.id);
-          } catch (e) {
-            logger.warn("TextQuestScene VM: auto-execute failed", e);
-          }
-          this.renderVmLocation();
-        }
-      }, 800);
+      this.scheduleAutoExecute(autoT.id);
+      this.startReveal(fullText, () => this.onAutoRevealDone(autoT.id));
       return;
     }
+
+    // Manual choices: type the narration out but render the buttons immediately
+    // so they stay a single click while the text reveals (the description area
+    // above is click-to-skip).
+    this.startReveal(fullText, null);
 
     const limit = Math.min(transitions.length, 8);
     // Switch to a 2-column grid when there are more buttons than fit single-column
@@ -532,6 +636,56 @@ export class TextQuestScene extends GameScene {
         () => this.executeVmTransition(t.id),
       );
     }
+  }
+
+  /**
+   * Show the auto-advance beat and arm the 800 ms minimum-beat timer. When it
+   * fires it advances immediately UNLESS a live render loop is still typing the
+   * node's text (`revealing` with `revealElapsed > 0`) — in that case the
+   * advance is deferred to {@link onAutoRevealDone}, so the player never loses a
+   * routing node to a blind timer. In a headless/no-`update` context (tests,
+   * `revealElapsed === 0`) the beat advances at 800 ms exactly as before.
+   */
+  private scheduleAutoExecute(transitionId: string): void {
+    if (this.vmChoiceContainer) {
+      const ellipsis = scaledText("...", 16, 0x6688aa, { rawColor: true });
+      ellipsis.x = 8;
+      ellipsis.y = 8;
+      ellipsis.eventMode = "none";
+      this.vmChoiceContainer.addChild(ellipsis);
+    }
+
+    this.autoExecuteTimer = setTimeout(() => {
+      this.autoExecuteTimer = null;
+      // Live render loop still typing the text out → wait for the reveal to
+      // finish (or be skipped); onAutoRevealDone will advance.
+      if (this.revealing && this.revealElapsed > 0) return;
+      this.doAutoAdvance(transitionId);
+    }, 800);
+  }
+
+  /**
+   * The node's reveal just finished (or was skipped). Advance now only if the
+   * 800 ms beat has already elapsed (`autoExecuteTimer` cleared); otherwise the
+   * still-pending beat timer will advance, preserving the minimum pause.
+   */
+  private onAutoRevealDone(transitionId: string): void {
+    if (this.autoExecuteTimer === null) this.doAutoAdvance(transitionId);
+  }
+
+  /** Execute an auto transition and render the next node (single entry point). */
+  private doAutoAdvance(transitionId: string): void {
+    if (this.autoExecuteTimer !== null) {
+      clearTimeout(this.autoExecuteTimer);
+      this.autoExecuteTimer = null;
+    }
+    if (!this.vm) return;
+    try {
+      this.vm.execute(transitionId);
+    } catch (e) {
+      logger.warn("TextQuestScene VM: auto-execute failed", e);
+    }
+    this.renderVmLocation();
   }
 
   private addVmTransitionButton(

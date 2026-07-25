@@ -115,22 +115,30 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
 - [x] run tests — must pass before Task 2 (full suite: 5953 passed / 13 skipped; tsc + lint green)
 
 ### Task 2: Progressive (typewriter) text reveal for quest narration
-- [ ] `src/presentation/TextQuestScene.ts`: `renderVmLocation` (`~line 454`) sets
-      `this.vmNarrationText.text = this.vm.interpolate(loc.text)` instantly — replace with a
-      character-by-character (or word-by-word) reveal over a short duration.
-- [ ] Gate on `isReducedMotionSet()` (`ui/reducedMotion.ts`) — instant/full text when reduced motion is
-      on, matching the project's existing accessibility convention.
-- [ ] Add a click-to-complete affordance: clicking/tapping while text is revealing snaps it to full
-      text immediately (standard quest-UI pattern, and necessary since some players read faster than
-      the animation).
-- [ ] The auto-execute chain (`~line 485-503`, currently an 800 ms blind `setTimeout`) must not advance
-      to the next node until the current node's text has finished revealing (or been skipped) — this is
-      the actual fix for "auction lots flash by unreadably fast."
-- [ ] write a test for the reveal timing/skip behavior (presentation unit test, per Testing Strategy)
-- [ ] write a test confirming reduced-motion shows full text with no delay
-- [ ] add/extend an e2e regression case in `playtest-regression.spec.ts` for the auto-execute chain no
-      longer skipping unread text
-- [ ] run tests — must pass before Task 3
+- [x] `src/presentation/TextQuestScene.ts`: `renderVmLocation` sets the narration instantly — replaced
+      with an `update(dt)`-driven character-by-character reveal (`startReveal`/`update`/`finishReveal`,
+      `REVEAL_MS_PER_CHAR = 16` capped at `REVEAL_MAX_MS = 2200`). Manual-choice nodes render their
+      buttons immediately while the text types out; the description panel above is the skip zone.
+- [x] Gate on `isReducedMotionSet()` (`ui/reducedMotion.ts`) — `startReveal` snaps to full text and runs
+      its continuation synchronously under reduced motion (or empty text), matching the accessibility
+      convention.
+- [x] Click-to-complete affordance: a transparent `skipCatcher` `Graphics` over the description panel
+      calls `completeReveal()` on `pointerdown` while `revealing`, snapping to full text.
+- [x] The auto-execute chain no longer flashes past unread. Design: `scheduleAutoExecute` arms an 800 ms
+      **minimum-beat** timer; in a live render loop (`revealing && revealElapsed > 0`) the timer callback
+      **defers** the real advance to `onAutoRevealDone` (fired when the reveal finishes/skips), so long
+      routing text is fully readable. In a headless/no-`update` context (`revealElapsed === 0`) it
+      advances at 800 ms exactly as before — this preserves the existing `customsExit.test.ts`
+      fake-timer regression (which drives the VM with no `update()` loop) rather than weakening it.
+      `handleVmFinished` stays synchronous (ending prose reveals cosmetically; toast/return timing
+      unchanged).
+- [x] test for the reveal timing/skip behavior + auto-execute deferral (`textQuestReveal.test.ts`:
+      types-over-ticks, click-to-skip, deferred-advance-while-typing, skip-advances-at-beat,
+      headless-advances-at-beat)
+- [x] test confirming reduced-motion shows full text with no delay (`textQuestReveal.test.ts`)
+- [x] e2e regression case in `playtest-regression.spec.ts` (auction start lot: progressive partial
+      reveal, no synchronous flash-advance while typing, full text on skip)
+- [x] run tests — full unit suite 5972 passed / 0 failed; `tsc --noEmit` clean; `eslint src` 0 errors
 
 ### Task 3: Quick text/content fixes across quest scripts
 - [ ] `cargo-sort.ts` (~lines 81,88,96): "Дог" → "Док"

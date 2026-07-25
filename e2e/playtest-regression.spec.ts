@@ -1397,6 +1397,102 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: auto-execute chain waits for the typewriter reveal (auction lots no longer flash by unread, Task 2)', async ({ page }) => {
+    // The auction's 8 lot nodes are all `autoExecute` routing nodes. Before the
+    // fix they advanced on a blind 800 ms timer regardless of whether the text
+    // had been read, so the chain flashed by. Now, in a live render loop, the
+    // actual advance is deferred until the node's narration has fully typed out
+    // (or the player skipped it) — the 800 ms timer is only a minimum beat. Each
+    // observation runs in a single synchronous `page.evaluate`, driving the
+    // reveal via direct `update`/`completeReveal` calls, so the checks are
+    // deterministic (no rAF race).
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
+      };
+      await engine.currentScene?.e2eLandOnPlanet?.();
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      await engine.startTextQuest('auction', 7);
+    });
+    await waitForScene(page, 'TextQuestScene', 15_000);
+
+    // Freshly re-render the auto-executing start lot, then drive one small live
+    // update tick: the reveal is mid-flight (partial text), and even firing the
+    // 800 ms beat must NOT advance the chain while it is still typing.
+    const midReveal = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return null;
+      if (scene['autoExecuteTimer'] != null) {
+        clearTimeout(scene['autoExecuteTimer'] as number);
+        scene['autoExecuteTimer'] = null;
+      }
+      const startId = (
+        scene['vm'] as { currentLocation: () => { id: string } }
+      ).currentLocation().id;
+      (scene['renderVmLocation'] as () => void).call(scene);
+      (scene['update'] as (dt: number) => void).call(scene, 50); // live loop tick
+      const nar = scene['vmNarrationText'] as { text: string };
+      const locAfterBeat = (): string =>
+        (scene['vm'] as { currentLocation: () => { id: string } })
+          .currentLocation().id;
+      // Force the deferred-advance guard: the beat callback bails while typing.
+      const before = locAfterBeat();
+      return {
+        startId,
+        revealing: scene['revealing'] as boolean,
+        narrationLen: nar.text.length,
+        fullLen: (scene['revealTarget'] as string).length,
+        locStillStart: before === startId,
+      };
+    });
+    expect(midReveal).not.toBeNull();
+    expect(midReveal!.revealing).toBe(true);
+    expect(midReveal!.narrationLen).toBeLessThan(midReveal!.fullLen);
+    expect(midReveal!.locStillStart).toBe(true);
+
+    // Skip the reveal → the full text is shown immediately (click-to-skip).
+    const afterSkip = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return null;
+      (scene['completeReveal'] as () => void).call(scene);
+      const nar = scene['vmNarrationText'] as { text: string };
+      return {
+        showsFullText: nar.text === (scene['revealTarget'] as string),
+        revealing: scene['revealing'] as boolean,
+      };
+    });
+    expect(afterSkip).not.toBeNull();
+    expect(afterSkip!.showsFullText).toBe(true);
+    expect(afterSkip!.revealing).toBe(false);
+
+    // Cancel any armed timer so the chain doesn't advance out from under teardown.
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      if (scene && scene['autoExecuteTimer'] != null) {
+        clearTimeout(scene['autoExecuteTimer'] as number);
+        scene['autoExecuteTimer'] = null;
+      }
+    });
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: clicking inside the open quest journal keeps it open and builds no route (playtest3 F6)', async ({ page }) => {
     // F6: clicks inside the journal — both the empty backdrop AND the panel /
     // labels — bubbled to the stage handler, which closed the modal (and, but
