@@ -275,6 +275,14 @@ describe("installAutopilotHook — AgentMemory reset on galaxy-identity change (
 });
 
 describe("createLiveSceneController — verb → live engine call", () => {
+  // The F3 help-panel tests below mutate the module-level `isHelpPanelOpen`
+  // mock inline. Reset it here so a mid-test failure or a reorder can't leave
+  // sibling tests silently taking the help-panel early-return branch.
+  beforeEach(() => {
+    vi.mocked(isHelpPanelOpen).mockReturnValue(false);
+    vi.mocked(dismissHelpPanel).mockClear();
+  });
+
   function mockEngine(over: Partial<Record<string, unknown>> = {}) {
     const planet = { id: "p1", availableQuests: [] as { id: string }[] };
     const station = { id: "s1" };

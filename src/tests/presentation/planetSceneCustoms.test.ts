@@ -58,6 +58,11 @@ function makeScene(opts: {
     contrabandGoods: illegal.map((g) => g.type),
   };
   const modal: FakeModal = { destroyed: false, destroy: vi.fn() };
+  // Faithful to PixiJS Container.destroy: flip `destroyed` so the seam's
+  // `!customsModal.destroyed` guard is exercised, not just the null-reference path.
+  modal.destroy.mockImplementation(() => {
+    modal.destroyed = true;
+  });
   const fields = scene as unknown as Record<string, unknown>;
   fields.gameEngine = { player, bank: undefined };
   fields.uiContainer = null; // showMessage no-ops
@@ -134,6 +139,15 @@ describe("PlanetScene customs seam (Task 11b)", () => {
     expect(s.isCustomsModalOpen()).toBe(false);
   });
 
+  it("pay leaves the modal open and takes no credits when unaffordable", () => {
+    const s = makeScene({ credits: 500, penalty: 1500, bribeCost: 900 });
+    const ok = s.applyCustomsChoice("pay");
+    expect(ok).toBe(false);
+    expect(s.player.credits).toBe(500);
+    expect(s.modal.destroy).not.toHaveBeenCalled();
+    expect(s.isCustomsModalOpen()).toBe(true);
+  });
+
   it("dump zeroes the contraband stacks and clears the modal (no credit cost)", () => {
     const s = makeScene({
       credits: 100,
@@ -146,6 +160,15 @@ describe("PlanetScene customs seam (Task 11b)", () => {
     expect(s.player.credits).toBe(100);
     expect(s.player.inventory.resources[0].amount).toBe(0);
     expect(s.player.contrabandGoods).not.toContain("DRUGS");
+    expect(s.isCustomsModalOpen()).toBe(false);
+  });
+
+  it("reports closed via the destroyed guard even while the modal reference lingers", () => {
+    const s = makeScene({ credits: 5000, penalty: 1500, bribeCost: 900 });
+    expect(s.isCustomsModalOpen()).toBe(true);
+    // Modal destroyed but reference not yet nulled — the `!customsModal.destroyed`
+    // guard (not the null check) must report it closed.
+    s.modal.destroyed = true;
     expect(s.isCustomsModalOpen()).toBe(false);
   });
 });

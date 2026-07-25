@@ -114,7 +114,7 @@ The live controller (`createLiveSceneController`) routes:
 - `land(planetId?)` — resolves to habitable planet only (never uninhabited fallback); refuels to max on landing
 - `dock(stationId?)` — docks at a station; **refuels to max** on dock (mirrors `onLandOnPlanet`; see Task 7)
 - `warp(systemId?)` — honors an explicit `action.targetId` (policy's `pickWarpNeighbor` chooses an unvisited non-Overmind neighbor), falls back to `pickWarpTarget`; anti-ping-pong via `visitedSystemIds`
-- `tick()` — auto-dismisses encounter overlays (`closeModals()`) + drives pendingWarp route
+- `tick()` — runs `dismissBlockingModal()` (which now *resolves* blocking modals, not just closes them: an exploration-encounter prompt via `applyEncounterChoice("engage")`; the PlanetScene customs modal via `applyCustomsChoice` — bribe when affordable, else dump; contact-panel/OVERMIND overlays still `closeModals()`) + drives pendingWarp route
 - `attack(targetId?)` / `flee()` — delegate to `NpcShipManager.e2eEngageCombat`/`breakOffCombatPursuit`
 
 **Headless `attack` is active, not passive** (garrison-growth plan Task 4):

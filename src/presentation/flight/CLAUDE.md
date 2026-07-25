@@ -139,6 +139,12 @@ fire") and never blocks confirm:
   `combatWeaponTargeting.ts`): arm a gun (`armWeapon`) → click an enemy sprite
   (`handleTargetClick` via the `selectCombatTarget` seam; combatants only; out-of-range is
   **flagged, not rejected**). A weapon left unassigned **holds fire** for the whole window.
+  The bar's screen position is computed **once** at `enterPlanning()` and must be re-anchored on
+  window resize via `reposition(w, h)` (called from `SpaceFlightScene.handleResize`, next to
+  `hud.reposition`) — without it, a resize mid-PLANNING (DevTools opened, un-maximize, orientation
+  change) leaves the stale bar sitting where «Ход» has since moved to, and PixiJS gives the
+  later-mounted bar the top z-order, so it silently swallows the confirm click (dead-button live
+  bug `bc9b3bb`, 2026-07-24).
 - **Afterburner toggle, ≤1 consumable, ≤1 comms action** — the action row above the weapon bar
   (`toggleAction(key)`; afterburner ⛔-labelled once the engine is spent).
 

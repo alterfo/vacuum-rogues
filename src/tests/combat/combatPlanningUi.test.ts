@@ -148,6 +148,33 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
     expect(actionAfter.y).toBeLessThan(barAfter.y); // action row stays above the bar
   });
 
+  it("reposition() re-centres the bar horizontally on a genuine width change (not just the vertical anchor)", () => {
+    // The 800→300 shrink above keeps width==mount width, so the x re-centre
+    // (Math.max(0, (width - total) / 2)) is a no-op there. A real width change
+    // with ≥2 weapons must move the first button's x AND keep the buttons in
+    // order — the "bar overlaps «Ход»" failure mode is an off-centre bar.
+    const guns = [weapon("wpn_a", "Пульсар", 240), weapon("wpn_b", "Луч", 360)];
+    const h = makeHarness(guns);
+    h.ui.enterPlanning();
+
+    const mounted = () => bar(h.uiLayer)!;
+    const xBefore0 = (mounted().getChildByLabel("cpw-0") as Container).x;
+
+    h.ui.reposition(1200, 600); // wider window: bar re-centres to the right
+
+    const x0 = (mounted().getChildByLabel("cpw-0") as Container).x;
+    const x1 = (mounted().getChildByLabel("cpw-1") as Container).x;
+    expect(x0).toBeGreaterThan(xBefore0); // re-centred rightward for the wider screen
+    expect(x1).toBeGreaterThan(x0); // second button still to the right of the first
+  });
+
+  it("reposition() is a no-op before enterPlanning() (nothing mounted to move)", () => {
+    const h = makeHarness([weapon("wpn_a", "Пульсар", 240)]);
+    expect(() => h.ui.reposition(800, 300)).not.toThrow();
+    expect(h.ui.isOpen).toBe(false);
+    expect(bar(h.uiLayer)).toBeNull();
+  });
+
   it("mounts no bar for a weaponless ship (nothing to assign)", () => {
     const h = makeHarness([]);
     h.ui.enterPlanning();
