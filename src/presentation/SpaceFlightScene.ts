@@ -421,7 +421,14 @@ export class SpaceFlightScene extends GameScene {
       ? loadoutStats.speed
       : (this.DISTANCE_PER_DAY / 1000) *
         Math.min(1.4, Math.max(0.8, ship?.speed ?? 1));
-    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1, ctx?.arrivalHeading ?? 0); // prettier-ignore
+    // Without an explicit arrival heading (fresh game / context-less re-entry),
+    // face the sun (system centre) from the spawn point instead of a hard-reset
+    // to angle 0 (which pointed the ship east regardless of where it spawned —
+    // playtest #19). A warp arrival passes its own sun-facing departure heading,
+    // so it is unaffected.
+    const spawnHeading =
+      ctx?.arrivalHeading ?? Math.atan2(centerY - entryY, centerX - entryX);
+    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1, spawnHeading); // prettier-ignore
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();

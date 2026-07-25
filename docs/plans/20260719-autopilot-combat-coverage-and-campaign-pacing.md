@@ -514,13 +514,24 @@ sessions, numbers in the same band as other campaign measurements this session; 
 destabilize the economy.
 
 ### Task 11: Reproduce & fix — system-entry orientation regression (#19)
-- [ ] Reproduce: enter a system and confirm whether the ship's initial heading actually faces the
-      star, and if not, find the regression (check recent changes to system-entry spawn/heading
-      logic, e.g. `warpEdgePoint`/entry-vector code touched by `docs/plans/20260711-autopilot-reliability-fixes.md`'s Task 2 "departure vector" work, which changed related entry-vector derivation).
-- [ ] Write a failing regression test pinning the expected sun-facing heading on entry.
-- [ ] Fix the root cause.
-- [ ] Run affected tests — must pass before the final task.
-- ⚠️ Same reproduction-budget caveat as Task 9.
+- [x] Reproduce: a fresh game / context-less re-entry boots into `SPACE_FLIGHT` with only
+      `{ gameEngine }` — no `ctx.arrivalHeading` — so `SpaceFlightScene.initialize()` constructed
+      `ShipPhysics(..., ctx?.arrivalHeading ?? 0)`, hard-resetting the heading to `0` (pointing east)
+      regardless of where the ship spawned on the system edge. The ship therefore does NOT face the
+      star on entry (#19). A warp arrival was already unaffected — it threads its own sun-facing
+      departure heading via `ctx.arrivalHeading` (`warpArrivalHeading.test.ts`).
+- [x] Wrote a failing regression test (`src/tests/playtest/systemEntryOrientation.test.ts`, real-engine
+      harness) pinning the sun-facing entry heading `atan2(centerY - shipY, centerX - shipX)`; confirmed
+      red before the fix (expected ≈ -1.5708, received 0) and green after.
+- [x] Fix (`SpaceFlightScene.ts`): default the spawn heading to face the system centre from the spawn
+      point — `const spawnHeading = ctx?.arrivalHeading ?? Math.atan2(centerY - entryY, centerX - entryX)` —
+      instead of a hard-reset `0`. Warp arrivals still pass their own heading, so they are byte-for-byte
+      unchanged.
+- [x] Affected tests green: new test red→green, `src/tests/flight` (413), `src/tests/playtest` (823,
+      incl. `warpArrivalHeading`); `tsc --noEmit`/`eslint` clean; `SpaceFlightScene.ts` at 1859 lines
+      (≤ 1898 guard).
+- ⚠️ Same reproduction-budget caveat as Task 9 — not needed, root cause was directly in the context-less
+  entry path.
 
 ### Task 11b: Autopilot behavior when caught by customs with contraband (new, live report 2026-07-19)
 - User report: "непонятно что автопилот делает если его застали с контрабандой" (unclear what the
