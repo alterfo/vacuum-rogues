@@ -79,6 +79,7 @@ export const PlayerShipSchema = z.object({
       "DESTROYER",
       "TRANSPORT",
       "HEAVY_FREIGHTER",
+      "CRUISER",
     ])
     .default("CORVETTE"),
   // Legacy 3-slot fitting — removed from PlayerShip in the dual-hull

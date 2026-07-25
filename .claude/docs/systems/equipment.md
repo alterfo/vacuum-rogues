@@ -66,7 +66,12 @@ automatically `isRareGear()`-gated (`RARE_TECH_THRESHOLD`) regardless of an expl
 `HullClass` values map 1:1 to catalog hull ids (`MigrationPipeline.hullIdForHullClass` resolves a
 legacy save's `hullClass` string via `GEAR_CATALOG.find()`, which returns the **first** match) — a
 new hull must get its own `HullClass` value, never reuse an existing one, or old saves silently
-resolve to the wrong hull. `hull_cruiser` has no dedicated ship art yet; `PlayerShipRenderer`'s
+resolve to the wrong hull. **A new `HullClass` value must also be added to `PlayerShipSchema.hullClass`'s
+hardcoded `z.enum([...])` in `src/validation/schemas.ts`** — `applyLoadoutHullToShip` writes
+`ship.hullClass` into the save, and `SaveManager.loadGame` runs `validateSaveState` **before**
+migration, so an unlisted value hard-rejects the save (a `.default(...)` only fills `undefined`, not an
+invalid string). This widening needs no version bump (existing saves never carry the new value).
+`hull_cruiser` has no dedicated ship art yet; `PlayerShipRenderer`'s
 `HULL_ART_ALIAS` maps it to reuse `hull_bastion`'s "destroyer" art key (mirrors `NpcShipSprite`'s
 OVERMIND→"patrol" reuse-until-drawn pattern) until real art is generated.
 

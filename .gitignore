@@ -55,3 +55,6 @@ e2e/screenshots/letsplay/
 e2e/screenshots/task17/
 # Letsplay engine run artifacts (transcript + failure report, regenerated each run)
 .letsplay/
+
+# Personal scratch notes, not project docs
+TALK.md

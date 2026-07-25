@@ -130,7 +130,7 @@ describe("GearCatalog hull entries", () => {
     expect((g as HullSpec).hullClass).toBe(HullClass.CORVETTE);
   });
 
-  it("all 6 hull classes are represented in the catalog", () => {
+  it("all 7 hull classes are represented in the catalog", () => {
     const hullClasses = GEAR_CATALOG.filter(
       (g): g is HullSpec => g.kind === GearKind.HULL,
     ).map((h) => h.hullClass);
