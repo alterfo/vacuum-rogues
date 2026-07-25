@@ -17,6 +17,20 @@ import type { NarratorContext } from "@/ai/adapters/QuestNarrator";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
 
+/**
+ * Derive a fresh, still-reproducible seed for a quest restart. Mixing in the
+ * attempt counter means a failed run replays with different random rolls
+ * (no foreknowledge exploit), while staying derivable from the original seed
+ * + attempt for debugging/log reproduction. `attempt` 0 returns the base seed
+ * unchanged so the very first run is unaffected.
+ */
+export function deriveRestartSeed(
+  baseSeed: number | string,
+  attempt: number,
+): string {
+  return attempt <= 0 ? String(baseSeed) : `${baseSeed}:${attempt}`;
+}
+
 export interface TextQuestContext {
   gameEngine?: GameEngine;
   quest?: TextQuest;
@@ -43,6 +57,12 @@ export class TextQuestScene extends GameScene {
   // QuestVM path
   private vm: QuestVM | null = null;
   private vmSeed: number | string = 0;
+  /**
+   * Restart counter mixed into the seed on «Начать заново» so a failed run
+   * does not replay with full foreknowledge of every random roll. Kept
+   * derivable from `vmSeed` + attempt so a specific retry stays reproducible.
+   */
+  private restartAttempt = 0;
   private questScript: QuestScript | null = null;
   private questId: string | null = null;
   private vmNarrationText: Text | null = null;
@@ -261,16 +281,7 @@ export class TextQuestScene extends GameScene {
       h - 86,
       btnPanelW,
       30,
-      () => {
-        if (this.successTimer !== null) {
-          clearTimeout(this.successTimer);
-          this.successTimer = null;
-        }
-        if (this.questScript) {
-          this.vm = new QuestVM(this.questScript, this.vmSeed);
-          this.renderVmLocation();
-        }
-      },
+      () => this.restartVm(),
     );
     ui.addChild(restartBtn);
 
@@ -586,6 +597,26 @@ export class TextQuestScene extends GameScene {
       logger.warn("TextQuestScene VM: transition failed", e);
       return;
     }
+    this.renderVmLocation();
+  }
+
+  /**
+   * Restart the current VM quest with a freshly-derived seed so a failed run
+   * cannot be replayed with foreknowledge of every random outcome (Task 1).
+   */
+  private restartVm(): void {
+    if (this.successTimer !== null) {
+      clearTimeout(this.successTimer);
+      this.successTimer = null;
+    }
+    if (this.autoExecuteTimer !== null) {
+      clearTimeout(this.autoExecuteTimer);
+      this.autoExecuteTimer = null;
+    }
+    if (!this.questScript) return;
+    this.restartAttempt += 1;
+    const seed = deriveRestartSeed(this.vmSeed, this.restartAttempt);
+    this.vm = new QuestVM(this.questScript, seed);
     this.renderVmLocation();
   }
 
