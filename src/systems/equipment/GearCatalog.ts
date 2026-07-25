@@ -227,7 +227,20 @@ const HULLS: HullSpec[] = [
     hullClass: HullClass.HEAVY_FREIGHTER,
     techLevel: 4,
     size: 16,
-    basePrice: 4500,
+    // Autopilot-combat-coverage / campaign-pacing plan (2026-07-25, Task 2b):
+    // the freighter (180 hp) is the campaign agent's designated battle-ready hull
+    // (`BATTLE_READY_MAX_HULL = 180`), yet the "second-hull-tier affordability
+    // wall" (`docs/plans/20260713-campaign-winrate-100pct.md`'s "Diagnostic
+    // resolved" trace) kept it out of reach: after the one early corvette buy the
+    // wallet plateaus at ~1000–2000cr, but the net upgrade needs
+    // `price − corvette-trade-in (0.4×3000=1200) + MILITARY_SPEND_TRADE_RESERVE
+    // (1000)` = 4300cr at the old 4500 price. Trimmed 4500→3900 to lower that wall
+    // to 3700cr — the deepest cut that still preserves every gear-curve invariant:
+    // it stays strictly above the corvette (3000, so it never *dominates* it —
+    // `gearCurve.test.ts` `hullDominates`) and keeps the corvette the best HP/cr
+    // hull (180/3900 = 0.0462 < 140/3000 = 0.0467), inside the locked tech-3/4
+    // 2000–5000 price band (`economyBalance.test.ts`).
+    basePrice: 3900,
     mass: 28,
     hp: 180,
     slots: 6,

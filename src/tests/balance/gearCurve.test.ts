@@ -13,6 +13,11 @@ import {
   ARTIFACT_DROP_COUNT_MAX,
   RESOURCE_BASE_PRICES,
 } from "@/config/balance";
+import { HULL_TRADE_IN_RATE } from "@/systems/equipment/sellHull";
+import {
+  BATTLE_READY_MAX_HULL,
+  MILITARY_SPEND_TRADE_RESERVE,
+} from "../playtest/letsplay/MemoryHeuristicPolicy";
 
 // ---------------------------------------------------------------------------
 // Task 4 — oddity sweep: remove gear-curve dominance inversions and tame the
@@ -143,6 +148,44 @@ describe("gear curve — no dominance inversions (Task 4)", () => {
           : "",
       ).toBeUndefined();
     }
+  });
+});
+
+describe("second-hull-tier affordability wall (2026-07-25 Task 2b)", () => {
+  // The freighter is the campaign agent's designated battle-ready hull
+  // (`BATTLE_READY_MAX_HULL = 180`). Task 2b trimmed its price 4500→3900 to lower
+  // the "second-hull-tier affordability wall" while preserving every gear-curve
+  // invariant. Pin the new value and the relationships that make the cut safe.
+  const freighter = gearById("hull_freighter") as HullSpec;
+  const corvette = gearById("hull_corvette") as HullSpec;
+
+  it("freighter is priced at the tuned 3900cr", () => {
+    expect(freighter.basePrice).toBe(3900);
+    // 180 hp — still the battle-ready hull the campaign agent aims for.
+    expect(freighter.hp).toBe(BATTLE_READY_MAX_HULL);
+  });
+
+  it("stays strictly above the corvette so it never dominates it", () => {
+    // hullDominates would flag the freighter (≥ corvette on every capacity stat)
+    // the instant it is priced at-or-below the corvette — keep the gap.
+    expect(freighter.basePrice).toBeGreaterThan(corvette.basePrice);
+  });
+
+  it("keeps the corvette the best HP-per-credit hull in the lineup", () => {
+    const bestEfficiency = HULLS.reduce((best, h) =>
+      h.hp / h.basePrice > best.hp / best.basePrice ? h : best,
+    );
+    expect(bestEfficiency.id).toBe("hull_corvette");
+  });
+
+  it("lowers the net upgrade wall from the corvette to 3700cr", () => {
+    // Net upgrade cost = price − corvette trade-in (0.4×3000=1200); the agent's
+    // affordability gate adds MILITARY_SPEND_TRADE_RESERVE on top.
+    const tradeIn = Math.floor(corvette.basePrice * HULL_TRADE_IN_RATE);
+    const wall = freighter.basePrice - tradeIn + MILITARY_SPEND_TRADE_RESERVE;
+    expect(wall).toBe(3700);
+    // …a real reduction from the old 4500-price wall of 4300cr.
+    expect(wall).toBeLessThan(4300);
   });
 });
 

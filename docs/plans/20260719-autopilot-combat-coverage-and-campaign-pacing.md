@@ -183,15 +183,27 @@ summary:
       tension (grace vs. arming-up urgency) worth the user weighing in on before further balance
       changes. Proceeding to Task 3+ (the confirmed bug fixes), which don't depend on Gate A's outcome.
 
-### Task 2b: Deferred — ease the second-hull-tier affordability wall (not started this round)
-- [ ] Per the existing plan's "Diagnostic resolved" trace, identify the exact hull-tier price/income
-      numbers behind the day-250–300 plateau (`GearCatalog`, `src/config/balance.ts`).
-- [ ] Apply one targeted, documented economy lever (price or income-side, whichever is the smaller
-      surgical change) — not a broad economy rebalance.
-- [ ] Write/update tests pinning the new value(s).
-- [ ] Re-measure against Gate A once more; append the result to
-      `docs/plans/20260713-campaign-winrate-100pct.md`'s Task 5 section either way.
-- [ ] Report the final state (met/not met) — do not attempt a third tuning round in this task.
+### Task 2b: Ease the second-hull-tier affordability wall — lever applied, measured a no-op, root cause reframed (2026-07-25)
+- [x] Identified the exact numbers behind the wall: the battle-ready hull is `hull_freighter` (180 hp,
+      `BATTLE_READY_MAX_HULL`), priced 4500cr; net upgrade from the corvette = `4500 − 0.4×3000 trade-in
+      (1200) + MILITARY_SPEND_TRADE_RESERVE (1000)` = 4300cr, vs the diagnostic's ~1000–2000cr plateau.
+- [x] Applied one targeted price-side lever: trimmed `hull_freighter` basePrice 4500→3900 in
+      `GearCatalog.ts` — the deepest cut that preserves every gear-curve invariant (stays strictly above
+      the corvette so it never *dominates* it, keeps the corvette best HP/cr, stays in the locked tech-3/4
+      2000–5000 band). Lowers the net wall to 3700cr.
+- [x] Wrote tests pinning the new value + invariants (`src/tests/balance/gearCurve.test.ts`, 4 new cases:
+      price=3900, freighter > corvette, corvette stays best HP/cr, wall=3700cr).
+- [x] Re-measured Gate A with a **clean same-HEAD A/B** (50 sessions each, `--pool=forks`, seeds
+      `CAMPAIGN-0..49`): **3900 → 18.0% (9/50)**, **4500 baseline → 18.0% (9/50)** — win-rate AND
+      battle-ready rate identical, the price lever is a confirmed no-op on the gate (only battle-ready
+      timing moved, d223 vs d239). Appended the full table to
+      `docs/plans/20260713-campaign-winrate-100pct.md`'s Task 5 section.
+- [x] Final state: **Gate A (≥40%) NOT met (18%)**. Kept the 3900 change as a minimal, invariant-safe,
+      zero-regression pacing improvement (earlier battle-ready), but the **credits-bound premise has aged
+      out** — many LOSS sessions now bank 5k–60k peak credits and still lose at 92% share, even when
+      battle-ready by d119. The binding constraint is now the Overmind spread pacing / arming behavior,
+      not hull affordability. Did not attempt a third tuning round; recommend the next round target
+      spread-pacing (option (a)), not further hull pricing.
 
 ### Task 3: Encounter modals — act on them instead of blind-dismissing (#9)
 - [x] Wrote regression tests (unit-level over `createLiveSceneController`/`dismissBlockingModal`,

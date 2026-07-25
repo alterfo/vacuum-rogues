@@ -1235,6 +1235,43 @@ thread (the second-hull-tier affordability wall) — **stopping here to report**
 straight into Task 2b unchecked, per this plan's own escalation discipline and the tension option (a) just
 surfaced between "give the player more time" and "keep enough Overmind pressure to motivate arming up."
 
+#### Task 2b applied — freighter price 4500→3900 (2026-07-25) — a confirmed **no-op on win-rate** in a clean same-HEAD A/B; the credits-bound premise has aged out
+
+Per `docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md` Task 2b, took the economy option:
+eased the "second-hull-tier affordability wall" the 2026-07-16 "Diagnostic resolved" trace named. The
+battle-ready hull is the `hull_freighter` (180 hp, `BATTLE_READY_MAX_HULL`); trimmed its price 4500→3900 —
+the deepest cut that still preserves every gear-curve invariant (stays strictly above the corvette so it
+never *dominates* it, keeps the corvette the best HP/cr hull, stays inside the locked tech-3/4 2000–5000
+band). That lowers the net upgrade wall from the corvette from 4300cr to 3700cr
+(`price − 0.4×3000 trade-in + 1000 reserve`). Pinned in `src/tests/balance/gearCurve.test.ts`.
+
+Ran a **clean same-HEAD A/B** (both 50 sessions, `--pool=forks`, identical seed set `CAMPAIGN-0..49`, only
+the freighter price differing):
+
+| Metric | 3900 (Task 2b) | 4500 (baseline, same HEAD) |
+|---|---|---|
+| Win rate | **18.0% (9/50)** | **18.0% (9/50)** |
+| Died | 10% (5/50) | 8% (4/50) |
+| Loss (arc) | 72% (36/50) | 74% (37/50) |
+| Battle-ready rate | 18% | 18% |
+| Battle-ready avg day | d223 | d239 |
+
+**Win-rate and battle-ready rate are identical — the price lever is a no-op on Gate A.** The only movement is
+battle-ready reached ~16 days sooner (d223 vs d239, small-n), so the change is kept as a minimal,
+invariant-safe, zero-regression pacing improvement rather than reverted, but it does **not** move the gate.
+
+The measurement also shows **the original credits-bound premise has substantially aged out** since the
+2026-07-16 diagnostic: many LOSS sessions now bank far more than the ~5500cr the second hull ever needed
+(`CAMPAIGN-2` peakCredits 53716, `CAMPAIGN-46` 63558, `CAMPAIGN-26` 23200, `CAMPAIGN-42` 16479) yet still lose
+at `share=0.92`, and sessions that reach battle-ready *early* (`CAMPAIGN-46` at d119 with 63k peak credits)
+still LOSS. Credits are no longer the binding constraint — the intervening trade/quest/reputation fixes
+(Tasks 6–10 of the sibling plan) fixed the plateau. **The binding constraint is now the Overmind spread
+outrunning the player regardless of wallet or arming** — i.e. squarely back in option (a) (spread-pacing)
+territory, which Task 5 above could only partially open (`SLOW_DAYS` 45→55; `GRACE_DAYS` still blocked by
+`sessionCompetence.test.ts`). Note also the current-HEAD baseline is **18%**, well above Task 5's 12% —
+the sibling plan's Tasks 6–10 lifted it further on their own. Gate A (≥40%) still not met; recommend the next
+round target spread-pacing / arming-behavior, not further hull pricing.
+
 - [ ] Based on Task 5's re-measured death taxonomy, iterate remaining unpinned levers (record every
       sweep and result, mirroring the prior plan's sweep-log format): candidates include further
       `HOSTILE_SCALING_WEAK_MULT` tuning, `NEUTRAL_AGGRO_POWER_THRESHOLD` (gates whether wandering

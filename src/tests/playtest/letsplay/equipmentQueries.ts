@@ -90,8 +90,8 @@ export function bestAffordableGear(engine: GameEngine): GearListing | null {
  * gating on gross made the autopilot believe a battle-ready hull was out of reach
  * one upgrade before a real player at the same wallet could buy it — the exact
  * gap that kept the campaign agent stranded at hull 180 (freighter) with the
- * warden (220) always "unaffordable" despite the ~1800cr freighter trade-in that
- * covers the difference.
+ * warden (220) always "unaffordable" despite the ~1560cr freighter trade-in that
+ * covers the difference (0.4 × the 2026-07-25-tuned 3900cr freighter price).
  */
 export function bestAffordableHull(engine: GameEngine): GearListing | null {
   const credits = engine.player?.credits ?? 0;
