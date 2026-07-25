@@ -124,6 +124,37 @@ auto-follow), un-pauses each 50 ms tick, and ends the step after one completed
 combat round (the policy's reaction window). An already-engaged fight is
 *driven*, never re-targeted. `flee`/`repair` remain degraded ticks.
 
+**Combat now drives the full variant range, not just fire-and-close**
+(`docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md` Task 7):
+`ConfirmPlanningOptions` (`planningDriver.ts`) gained optional
+`afterburner`/`consumableId`/`commsAction`/`weaponClassAwareTargeting` fields —
+all default-off, so every pre-existing caller keeps byte-for-byte behavior (locked
+by a dedicated regression test). `PlayerAgent.driveAttack` builds these once per
+kill-decision via a **one-shot** `buildCombatOptions()` closure (flags set once per
+`driveAttack` call, never recomputed per round — recomputing broke Task 5's
+loot-linger by re-offering surrender every tick): afterburner while still closing
+on a fresh target, a shield-cell consumable below 30% hull, and a demand-surrender
+comms action below 30% hull as a last-ditch move — all reusing
+`MemoryHeuristicPolicy`'s existing hull-fraction signals, no new threat arithmetic.
+Missile-class weapons route to the farthest combatant when ≥2 hostiles are present;
+single-hostile fights are unaffected. Tests: `planningDriver.test.ts` (13 cases,
+incl. the untouched-by-default lock) + real-engine wiring in
+`playtest/letsplay/combat.test.ts`.
+
+**Planet quest-taking opens the real scene UI, not just a domain call**
+(same plan, Task 8): `takeQuest()` (`installAutopilotHook.ts`) now drives
+open→accept-each→close through `PlanetScene`'s dev-only
+`e2eOpenJobBoard`/`e2eAcceptBoardQuest`/`e2eCloseJobBoard` seams when the scene
+supports them (mirroring the `e2eTakeOff` convention), falling back to the direct
+`acceptBoardQuests` domain call unchanged for headless/test doubles — selection
+logic stays in one place (`engineQueries.ts` gained an optional visual-accept
+callback), never duplicated into production code. `openTrade()` was investigated
+and **deliberately left as a domain-only bypass**: opening `TradeScene` for real
+caused a `PLANET→TRADE→FLIGHT→PLANET` loop (the driver always picks "leave-market"
+without buying inside the real scene), so making trade watchable needs a real
+in-scene buy/sell driver — a new feature, out of scope. "Info-bureau browsing"
+does not exist as an autopilot action and was dropped from scope.
+
 **Live-head parity:** the seven previously no-op economy heads in
 `installAutopilotHook.ts` (`repair`, `buy-gear`, `upgrade-hull`, `buy-module`,
 `take-loan`, `repay-loan`, `sell-cargo`) are wired to the same headless executors

@@ -579,14 +579,24 @@ destabilize the economy.
   the preliminary investigation; a live browser repro would only re-confirm the known "no seam" cause.
 
 ### Task 12: [Final] Verify acceptance criteria and update documentation
-- [ ] Verify every checkbox above is resolved or explicitly flagged `⚠️` with a reason.
-- [ ] Run the full unit suite, `npm run letsplay:ci`, `npm run test:playtest`, `npx tsc --noEmit`,
-      `npm run lint`.
-- [ ] Update `.claude/docs/systems/overmind.md`'s "Known-unmet gate" section with the final Gate
-      A/B outcome from Tasks 1–2 (met, or the honest current numbers if not).
-- [ ] Update `.claude/docs/systems/letsplay.md` with the new combat-variant-driving behavior (Task 7)
-      and the scene-opening planet-action behavior (Task 8), since both change documented autopilot
-      behavior other docs currently describe as headless-bypass.
+- [x] Verified every checkbox above is resolved or explicitly flagged `⚠️`: Tasks 1–2b, 3–11b are all
+      `[x]` (with 2/2b/9b honestly reporting Gate A NOT met at 18% and the escalation stop-to-report
+      discipline; Tasks 6/9/10 include `⚠️` reproduction-budget/scope caveats already resolved).
+- [x] Ran the full gauntlet (2026-07-25): `npx tsc --noEmit` clean (0 errors); `npm run lint` 0 errors
+      (46 pre-existing `no-explicit-any` warnings in test/vendor files, untouched here);
+      `npm run test:playtest` 817 passed / 10 skipped green; full unit suite 5942 passed / 13 skipped
+      with **1 pre-existing failure** — `sessionCompetence.test.ts`'s brittle `CAMPAIGN-CAPACITY-0`
+      competence seed (`firstLiberationDay` d196 vs. its ≤190 pin), also the sole `letsplay:ci` red.
+      Confirmed identical on a `git stash -u` clean HEAD (d196 with or without the working-tree
+      changes) — the exact pre-existing brittle seed the plan's Task 11b note already documents, not
+      introduced or touched by any task here; left unmodified per the do-not-touch-existing-tests rule.
+- [x] Updated `.claude/docs/systems/overmind.md`'s "Known-unmet gate" section with the final Gate A
+      outcome (2026-07-25 final addendum: 4.0%→12.0%→18.0% progression, Gate A ≥40% **NOT met at 18%**,
+      credits-bound premise aged out, true binding constraint is Overmind spread-pacing / arming).
+- [x] Updated `.claude/docs/systems/letsplay.md` with the new combat-variant-driving behavior (Task 7:
+      afterburner/consumable/comms/weapon-class-aware targeting via `ConfirmPlanningOptions`) and the
+      scene-opening planet quest-taking behavior (Task 8: `e2e*JobBoard` seams; `openTrade` deliberately
+      left as a documented domain-only bypass).
 
 ## Technical Details
 
