@@ -536,6 +536,33 @@ describe("aggregateCampaign", () => {
     expect(sum.avgFirstLiberationDay).toBe(300);
   });
 
+  it("rates and averages solo (player) liberation days over non-null sessions only", () => {
+    const sum = aggregateCampaign([
+      mkReport({
+        milestones: {
+          battleReadyDay: 100,
+          firstLiberationDay: 200,
+          firstPlayerLiberationDay: 250,
+          peakOvermindCount: 6,
+        },
+      }),
+      mkReport({
+        index: 1,
+        seed: "SYN-1",
+        milestones: {
+          battleReadyDay: 100,
+          firstLiberationDay: 200,
+          firstPlayerLiberationDay: 350,
+          peakOvermindCount: 6,
+        },
+      }),
+      // never solo-liberated — excluded from the rate numerator and the mean
+      mkReport({ index: 2, seed: "SYN-2" }),
+    ]);
+    expect(sum.playerLiberationRate).toBeCloseTo(2 / 3);
+    expect(sum.avgFirstPlayerLiberationDay).toBe(300); // mean of 250/350, null skipped
+  });
+
   it("sums faults and takes the slowest wall time", () => {
     const sum = aggregateCampaign([
       mkReport({ errors: 1, violations: 2, wallMs: 30_000 }),
@@ -553,6 +580,8 @@ describe("aggregateCampaign", () => {
     expect(sum.medianWinDay).toBeNull();
     expect(sum.avgBattleReadyDay).toBeNull();
     expect(sum.avgFirstLiberationDay).toBeNull();
+    expect(sum.playerLiberationRate).toBe(0);
+    expect(sum.avgFirstPlayerLiberationDay).toBeNull();
     expect(sum.avgPeakPower).toBe(0);
     expect(sum.maxWallMs).toBe(0);
   });
@@ -612,5 +641,22 @@ describe("formatCampaignReport", () => {
     expect(text).toContain("resolved=-"); // a timeout has no resolution day
     expect(text).toContain("battleReady=d120");
     expect(text).toContain("win-rate 33.3%");
+  });
+
+  it("renders the solo-liberation day per row and rate in the footer", () => {
+    const text = formatCampaignReport([
+      mkReport({
+        milestones: {
+          battleReadyDay: 120,
+          firstLiberationDay: 300,
+          firstPlayerLiberationDay: 450,
+          peakOvermindCount: 6,
+        },
+      }),
+      mkReport({ index: 1, seed: "SYN-1" }), // never solo-liberated
+    ]);
+    expect(text).toContain("firstSoloLib=d450"); // the liberating session's row
+    expect(text).toContain("firstSoloLib=-"); // the never-liberated session's row
+    expect(text).toContain("solo-liberation 50% (avg d450)"); // footer aggregate
   });
 });
