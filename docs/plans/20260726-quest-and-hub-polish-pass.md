@@ -232,12 +232,23 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       the intentional literal removal); `tsc --noEmit` clean; `npm run lint` exit 0.
 
 ### Task 6: Fix misleading launch-denial message
-- [ ] `StationScene.ts` (~lines 856-868) and `PlanetScene.ts` (~lines 1912-1913): the launch-denied
+- [x] `StationScene.ts` (~lines 856-868) and `PlanetScene.ts` (~lines 1912-1913): the launch-denied
       message always blames "no engine installed," even when the real cause is an empty fuel tank —
-      both scenes duplicate this bug, fix once and mirror the fix in both
-- [ ] write a test asserting the correct denial reason is reported for each of the actual failure causes
-      (no engine vs no fuel tank) in both scenes
-- [ ] run tests — must pass before Task 7
+      both scenes duplicate this bug, fix once and mirror the fix in both. Done: new pure
+      `launchDenialReason(stats)` (`src/systems/equipment/launchDenial.ts`) recovers the real cause from
+      the already-exposed derived fields — `speed === 0` ⟺ no engine, `fuelCapacity === 0` ⟺ no fuel tank
+      (both exact by construction in `derivedStats`) — so no `DerivedStats` interface change / no
+      migration. `StationScene.undock` and `PlanetScene.takeOff` now branch on it: engine →
+      «Нет двигателя — …», fuel → «Нет топливного бака — …» (keeping each scene's own verb, отстыковка /
+      взлёт). Cyrillic ratchet regenerated (+1 literal each: PlanetScene 73→74, StationScene 61→62).
+- [x] write a test asserting the correct denial reason is reported for each of the actual failure causes
+      (no engine vs no fuel tank) in both scenes. Done: `launchDenialReason.test.ts` — pins the pure
+      resolver (null / engine / fuel / both-missing→engine) and drives real `PlanetScene.takeOff` /
+      `StationScene.undock` for each cause, asserting the message names двигатель vs топливный бак and
+      that launch is blocked (no `transitionTo`).
+- [x] run tests — must pass before Task 7. Done: full unit suite 5998 passed / 0 failed; `tsc --noEmit`
+      clean; new files lint clean. (Repo-wide `npm run lint` fails identically on HEAD — a pre-existing
+      `no-explicit-any` backlog in test files, unrelated to this change.)
 
 ### Task 7: Wire up silent purchase/upgrade toast feedback
 - [ ] `StationScene.ts`: `renderShop()` (~885-1080), `renderMicromoduleShop()` (~1107-1328),

@@ -37,6 +37,7 @@ import { mountSceneHelp, helpButtonRect } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
 import { hullStatus } from "@/systems/equipment/hullStatus";
+import { launchDenialReason } from "@/systems/equipment/launchDenial";
 import { t } from "@/i18n/i18n";
 
 interface PlanetContext {
@@ -1910,7 +1911,12 @@ export class PlanetScene extends GameScene {
     if (!this.gameEngine) return;
     const loadoutStats = this.gameEngine.playerLoadout?.derivedStats();
     if (loadoutStats && !loadoutStats.canTakeOff) {
-      this.showMessage("Нет двигателя — взлёт невозможен", 0xff4444);
+      this.showMessage(
+        launchDenialReason(loadoutStats) === "fuel"
+          ? "Нет топливного бака — взлёт невозможен"
+          : "Нет двигателя — взлёт невозможен",
+        0xff4444,
+      );
       return;
     }
     // Checkpoint every take-off into the "auto" slot. This is the rollback point

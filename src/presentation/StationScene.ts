@@ -10,6 +10,7 @@ import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Station } from "@/domain/Station";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import { launchDenialReason } from "@/systems/equipment/launchDenial";
 import { SceneType, StationType, QuestType, type MicroModule } from "@/types";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
@@ -857,7 +858,12 @@ export class StationScene extends GameScene {
     if (!this.gameEngine) return;
     const loadoutStats = this.gameEngine.playerLoadout?.derivedStats();
     if (loadoutStats && !loadoutStats.canTakeOff) {
-      this.showToast("Нет двигателя — отстыковка невозможна", 0xff4444);
+      this.showToast(
+        launchDenialReason(loadoutStats) === "fuel"
+          ? "Нет топливного бака — отстыковка невозможна"
+          : "Нет двигателя — отстыковка невозможна",
+        0xff4444,
+      );
       return;
     }
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
