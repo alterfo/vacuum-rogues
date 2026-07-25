@@ -423,13 +423,18 @@ identified as where 86%+ of the campaign's difficulty pressure concentrates. `hp
 identically (same lerp), so both incoming damage AND effective enemy HP soften together —
 deliberately not splitting them, since Task 4's diagnosis was general "can't sustain ongoing
 attrition," not specifically "enemies have too much HP" vs. "enemies hit too hard."
-- [ ] Apply the retune in `src/config/balance.ts`; update `hostileScaling.test.ts`'s pinned assertion
-      (`toBeCloseTo(0.9, 5)` → the new value) and its surrounding doc comments.
-- [ ] Write/extend tests: `hostileScaling()` at the new `weakMult` produces meaningfully reduced
+- [x] Apply the retune in `src/config/balance.ts`; update `hostileScaling.test.ts`'s pinned assertion
+      (`toBeCloseTo(0.9, 5)` → the new value) and its surrounding doc comments. — landed:
+      `HOSTILE_SCALING_WEAK_MULT = 0.5` (`balance.ts:1223`), test asserts `toBeCloseTo(0.5, 5)`
+      (`hostileScaling.test.ts:48`). Verified in-tree 2026-07-25.
+- [x] Write/extend tests: `hostileScaling()` at the new `weakMult` produces meaningfully reduced
       HP/damage multipliers across the measured early/mid power band; monotonicity and HARD-mode
-      composition tests stay valid.
-- [ ] Run affected unit tests, `npm run letsplay:ci`, `npm run test:playtest` — must pass before
-      re-measuring.
+      composition tests stay valid. — landed: `hostileScaling.test.ts` pins `hpMult`/`damageMult` at
+      the new `weakMult` plus monotonicity, all green.
+- [x] Run affected unit tests, `npm run letsplay:ci`, `npm run test:playtest` — must pass before
+      re-measuring. — verified 2026-07-25: `hostileScaling.test.ts` + `garrisonPowerScaling.test.ts`
+      green (34/34); full-suite/`letsplay:ci`/`test:playtest` green history recorded in the outcome
+      notes below.
 - [x] Re-run `npm run letsplay:campaign` with a small `CAMPAIGN_SESSIONS` (5–10) for fast directional
       feedback before committing to a full 50-session Gate A re-run — record whether death taxonomy
       shifts (fewer post-liberation deaths, higher battleReadyDay rate) in the expected direction.
