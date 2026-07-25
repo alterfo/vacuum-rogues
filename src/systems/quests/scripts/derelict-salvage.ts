@@ -137,7 +137,7 @@ export const derelictSalvageScript: QuestScript = {
       transitions: [
         {
           id: "cg_damaged",
-          label: "...",
+          label: "Груз повреждён прожигом",
           toLocation: "cargo_damaged",
           condition: "forced == 1",
           effects: [],
@@ -145,7 +145,7 @@ export const derelictSalvageScript: QuestScript = {
         },
         {
           id: "cg_full",
-          label: "...",
+          label: "Груз цел",
           toLocation: "cargo_full",
           effects: [],
           autoExecute: true,
@@ -200,7 +200,7 @@ export const derelictSalvageScript: QuestScript = {
       transitions: [
         {
           id: "rg_seized",
-          label: "...",
+          label: "Сканеры находят образец",
           toLocation: "ending_sample_seized",
           condition: "sample == 1",
           effects: ["credits -= 500"],
@@ -208,7 +208,7 @@ export const derelictSalvageScript: QuestScript = {
         },
         {
           id: "rg_clean",
-          label: "...",
+          label: "Досмотр чист",
           toLocation: "ending_report",
           effects: ["credits += 1000", "rating += 40"],
           autoExecute: true,
@@ -221,7 +221,7 @@ export const derelictSalvageScript: QuestScript = {
       transitions: [
         {
           id: "bg_outbreak",
-          label: "...",
+          label: "Контейнер не выдержал",
           toLocation: "ending_outbreak",
           condition: "sample == 1",
           effects: ["rating -= 60"],
@@ -229,7 +229,7 @@ export const derelictSalvageScript: QuestScript = {
         },
         {
           id: "bg_sold",
-          label: "...",
+          label: "Сделка закрыта",
           toLocation: "ending_blackmarket",
           effects: ["credits += 2500", "rating -= 30"],
           autoExecute: true,

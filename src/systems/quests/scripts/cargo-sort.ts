@@ -3,7 +3,7 @@ import type { QuestScript } from "../QuestScript";
 // Дизайн: Диспетчер орбитального склада. 5 прибывающих транспортов (A-E),
 // 3 разгрузочных дока. Доки не могут смешивать типы. Время разгрузки транспорта
 // random(1,4) часов. Один транспорт ломается (+2 часа, определяется random(0,4)).
-// Распредели транспорты по докам так, чтобы ни один дог не превысил 12 ч.
+// Распредели транспорты по докам так, чтобы ни один док не превысил 12 ч.
 // Победа: все 5 назначены и overtime (сверхурочные доки) == 0.
 //
 // Технически: QuestVM не поддерживает param += param, поэтому:
@@ -77,7 +77,7 @@ export const cargoSortScript: QuestScript = {
     // Dock loads (accumulated hours)
     {
       id: "dock1_load",
-      name: "Дог 1 (ч)",
+      name: "Док 1 (ч)",
       min: 0,
       max: 99,
       initial: 0,
@@ -85,7 +85,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "dock2_load",
-      name: "Дог 2 (ч)",
+      name: "Док 2 (ч)",
       min: 0,
       max: 99,
       initial: 0,
@@ -93,7 +93,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "dock3_load",
-      name: "Дог 3 (ч)",
+      name: "Док 3 (ч)",
       min: 0,
       max: 99,
       initial: 0,

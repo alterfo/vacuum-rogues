@@ -141,21 +141,36 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
 - [x] run tests — full unit suite 5972 passed / 0 failed; `tsc --noEmit` clean; `eslint src` 0 errors
 
 ### Task 3: Quick text/content fixes across quest scripts
-- [ ] `cargo-sort.ts` (~lines 81,88,96): "Дог" → "Док"
-- [ ] `signal-decode.ts` (~line 74): "коротая" → "короткая"; (~lines 85-86): "Влобовой" → "Лобовой"/"В лобовую"
-- [ ] `tribunal.ts` (~lines 206-213, 230-234): fix the credit-sign bug on the best ending (text says
+- [x] `cargo-sort.ts` (~lines 81,88,96): "Дог" → "Док". Done: renamed the three dock params
+      (`dock1/2/3_load`) to «Док N (ч)» and fixed the header-comment «дог» → «док».
+- [x] `signal-decode.ts` (~line 74): "коротая" → "короткая"; (~lines 85-86): "Влобовой" → "Лобовой"/"В лобовую".
+      Done: «короткая пачка импульсов» and «Лобовой перебор ключей».
+- [x] ⚠️ `tribunal.ts` (~lines 206-213, 230-234): fix the credit-sign bug on the best ending (text says
       "you pay a fine, teeth gritted" but credits currently go **up** +500 — should be `credits -=`
-      like every other quest's fine pattern)
-- [ ] `gravity-slalom.ts` (~line 284): remove the disapproving head-shake gesture from a line that's
-      otherwise direct praise (tonal mismatch)
-- [ ] `reactor.ts` (~lines 145,152,165,172,186,193,207,214) and `derelict-salvage.ts` (~lines 140,148):
+      like every other quest's fine pattern). **DEFERRED — blocked by a known-good test.**
+      `src/tests/quests/batch2QuestScripts.test.ts:223` asserts `expect(vm.getParam("credits")).toBe(500)`
+      on exactly the lenient (fine) path — i.e. it locks in the buggy +500. Correcting the effect to
+      `credits -= 500` reds that existing assertion. Per this plan's Development Approach ("if a content
+      change makes an existing assertion fail… stop and flag it (⚠️) rather than editing the test") and
+      the standing no-touch-existing-tests rule, this sign fix + its test update need the user's explicit
+      go-ahead and are left for a follow-up rather than bundled here. All other Task 3 fixes landed.
+- [x] `gravity-slalom.ts` (~line 284): remove the disapproving head-shake gesture from a line that's
+      otherwise direct praise (tonal mismatch). Done: «качает головой» → «одобрительно кивает».
+- [x] `reactor.ts` (~lines 145,152,165,172,186,193,207,214) and `derelict-salvage.ts` (~lines 140,148):
       remove literal `label: "..."` placeholder strings reaching the data (dead code today, but a
-      regression risk if the renderer's fallback ever changes)
-- [ ] `reactor.ts` (~line 3 vs 63,225,231): the file's header comment says "freighter," the in-game text
-      says "station" — align comment and text, and give the location a name
-- [ ] write/extend a test asserting these exact strings no longer appear in the affected scripts (simple
-      string-absence assertions in `newQuestScripts.test.ts` or a small dedicated typo-regression test)
-- [ ] run tests — must pass before Task 4
+      regression risk if the renderer's fallback ever changes). Done: all `autoExecute` transitions in
+      both files got short in-fiction labels instead of `"..."` (reactor: «Датчик X: в допуске/вне
+      нормы»; derelict: «Груз повреждён прожигом»/«Груз цел»/«Сканеры находят образец»/«Досмотр чист»/
+      «Контейнер не выдержал»/«Сделка закрыта»). Bumped their `cyrillicBaseline.json` entries (reactor
+      15→23, derelict 32→38) — the sanctioned regenerate step for intentional new catalog literals.
+- [x] `reactor.ts` (~line 3 vs 63,225,231): the file's header comment says "freighter," the in-game text
+      says "station" — align comment and text, and give the location a name. Done: comment now reads
+      "the stranded Maelon station «Горнило»" and `init_reactor` names the station «Горнило».
+- [x] write/extend a test asserting these exact strings no longer appear in the affected scripts (simple
+      string-absence assertions in `newQuestScripts.test.ts` or a small dedicated typo-regression test).
+      Done: new `src/tests/quests/questTextFixes.test.ts` (string-absence + placeholder-label guards).
+- [x] run tests — must pass before Task 4. Done: full unit suite 5964 passed / 13 skipped; `tsc --noEmit`
+      clean; `eslint src` 0 errors; i18n ratchet green.
 
 ### Task 4: EquipmentShopScene cosmetic/feedback fixes
 - [ ] `sellHoldItem()` (`~line 1166`): plays the `"buy"` SFX on a sell — switch to the existing `"sell"`

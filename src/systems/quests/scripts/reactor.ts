@@ -1,6 +1,6 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: Emergency reactor aboard a stranded Maelon freighter. 4 control rods (A/B/C/D),
+// Design: Emergency reactor aboard the stranded Maelon station «Горнило». 4 control rods (A/B/C/D),
 // each at level 0–5. The unique stable state satisfying all 4 conditions is A=3, B=4, C=4, D=2:
 //   A + B = 7  ✓ (3+4)
 //   C − D = 2  ✓ (4-2)
@@ -60,7 +60,7 @@ export const reactorScript: QuestScript = {
     // Init: player reads the alarm message, then manually advances to the control panel
     {
       id: "init_reactor",
-      text: "СИРЕНА РАЗРЫВАЕТ УШИ.\n\nАварийные лампы заливают отсек багровым. Реактор потерял контроль: температура ползёт в красную зону, где-то с шипением стравливается хладагент. Голос корабельной автоматики монотонно повторяет одно слово — «Критично. Критично. Критично».\n\nПанель управления стержнями оживает под ладонью. Секунды идут. Либо ты выведешь конфигурацию к стабильной — либо от станции останется облако раскалённого металла.",
+      text: "СИРЕНА РАЗРЫВАЕТ УШИ.\n\nАварийные лампы заливают отсек станции «Горнило» багровым. Реактор потерял контроль: температура ползёт в красную зону, где-то с шипением стравливается хладагент. Голос станционной автоматики монотонно повторяет одно слово — «Критично. Критично. Критично».\n\nПанель управления стержнями оживает под ладонью. Секунды идут. Либо ты выведешь конфигурацию к стабильной — либо от станции останется облако раскалённого металла.",
       transitions: [
         {
           id: "begin",
@@ -142,7 +142,7 @@ export const reactorScript: QuestScript = {
       transitions: [
         {
           id: "check_a_ok",
-          label: "...",
+          label: "Датчик A: в допуске",
           toLocation: "check_b",
           condition: "rod_a == 3",
           effects: [],
@@ -150,7 +150,7 @@ export const reactorScript: QuestScript = {
         },
         {
           id: "check_a_fail",
-          label: "...",
+          label: "Датчик A: вне нормы",
           toLocation: "reactor_control",
           effects: [],
           autoExecute: true,
@@ -163,7 +163,7 @@ export const reactorScript: QuestScript = {
       transitions: [
         {
           id: "check_b_ok",
-          label: "...",
+          label: "Датчик B: в допуске",
           toLocation: "check_c",
           condition: "rod_b == 4",
           effects: [],
@@ -171,7 +171,7 @@ export const reactorScript: QuestScript = {
         },
         {
           id: "check_b_fail",
-          label: "...",
+          label: "Датчик B: вне нормы",
           toLocation: "reactor_control",
           effects: [],
           autoExecute: true,
@@ -184,7 +184,7 @@ export const reactorScript: QuestScript = {
       transitions: [
         {
           id: "check_c_ok",
-          label: "...",
+          label: "Датчик C: в допуске",
           toLocation: "check_d",
           condition: "rod_c == 4",
           effects: [],
@@ -192,7 +192,7 @@ export const reactorScript: QuestScript = {
         },
         {
           id: "check_c_fail",
-          label: "...",
+          label: "Датчик C: вне нормы",
           toLocation: "reactor_control",
           effects: [],
           autoExecute: true,
@@ -205,7 +205,7 @@ export const reactorScript: QuestScript = {
       transitions: [
         {
           id: "check_d_ok",
-          label: "...",
+          label: "Датчик D: в допуске",
           toLocation: "stable",
           condition: "rod_d == 2",
           effects: [],
@@ -213,7 +213,7 @@ export const reactorScript: QuestScript = {
         },
         {
           id: "check_d_fail",
-          label: "...",
+          label: "Датчик D: вне нормы",
           toLocation: "reactor_control",
           effects: [],
           autoExecute: true,
