@@ -1308,7 +1308,7 @@ Task 9's regression has already been fully absorbed by later work, so there is n
 recover from. Recommend the next round target the true binding constraint identified in Task 2b above —
 Overmind **spread-pacing / arming behavior** (option (a)), not further autopilot quest-gating heuristics.
 
-- [ ] Based on Task 5's re-measured death taxonomy, iterate remaining unpinned levers (record every
+- [x] Based on Task 5's re-measured death taxonomy, iterate remaining unpinned levers (record every
       sweep and result, mirroring the prior plan's sweep-log format): candidates include further
       `HOSTILE_SCALING_WEAK_MULT` tuning, `NEUTRAL_AGGRO_POWER_THRESHOLD` (gates whether wandering
       neutral packs chase a weak ship at all — raising it extends the "not hunted while weak"
@@ -1316,27 +1316,189 @@ Overmind **spread-pacing / arming behavior** (option (a)), not further autopilot
       directions from Task 4's escalation, if Task 5's single lever isn't sufficient alone). Do not
       re-try `NEUTRAL_SCALING_WEAK_MULT` (already diagnostically ruled out) or
       `OVERMIND_GARRISON_POWER_MAX_BONUS` (still categorically pinned) without a fresh scope
-      decision.
-- [ ] After each sweep, check the **pacing** side too: if median win day is trending well below
+      decision. — **candidate levers analyzed against the current (2026-07-25) taxonomy and all
+      found blocked or evidence-ruled-out; escalated, no blind sweep run — see outcome below.**
+- [x] After each sweep, check the **pacing** side too: if median win day is trending well below
       1000 as win-rate climbs, note it now (don't wait for Task 7) — the fix is an
       `adaptivePacing.ts` lever (`ADAPTIVE_GRACE_DAYS`/spread interval), not a further difficulty
-      cut, since a too-fast win is this plan's other named failure mode.
-- [ ] Run 50-session measures per sweep; run `letsplay:ci`/`test:playtest` after each production
-      change — must stay green throughout.
+      cut, since a too-fast win is this plan's other named failure mode. — **noted: the 9 current
+      wins land far too early (e.g. `CAMPAIGN-1` d325) — but this is moot while win-rate is 18%, and
+      the day-1000 floor is a pacing concern to revisit only once survivability actually crosses the
+      gate. Recorded, not acted on.**
+- [x] Run 50-session measures per sweep; run `letsplay:ci`/`test:playtest` after each production
+      change — must stay green throughout. — **no production change made this round (escalation, not
+      a sweep); the current 50-session baseline (18.0%, `.letsplay/campaign-summary.txt`, measured
+      today by the sibling plan's Task 2b same-HEAD A/B) is the reference. No tree change to
+      validate.**
+
+#### Task 6 outcome (2026-07-25) — sweep-tune lever set exhausted; escalating per this plan's clause, no blind sixth+ guess
+
+Before running any sweep I re-grounded Task 6's four candidate levers in the **current** failure
+taxonomy (today's `.letsplay/campaign-summary.txt`, the sibling plan's fresh same-HEAD 50-session
+baseline), rather than the stale Task-4/Task-5-era death census the checkbox text was written
+against. The taxonomy has shifted decisively since then:
+
+| Metric (current HEAD, 50 sessions) | Value |
+|---|---|
+| Win rate | **18.0% (9/50)** |
+| **Loss (Overmind wins the arc)** | **72% (36/50)** — the dominant mode |
+| Died (combat) | 10% (5/50) |
+| Timeout / wedged | 0% |
+| LOSS resolution day (representative) | **d417–459 at `share=0.92`** (loss-share 0.85 already crossed) |
+| battle-ready reached on a LOSS session | never (`battleReady=-` on the sampled losses) |
+
+**The binding constraint is unambiguously Overmind spread-pacing, not survivability.** The dominant
+outcome is now LOSS (72%), not death (10%) — the front reaches loss-share (`0.92 > 0.85`) around
+**day ~450**, which is exactly where the creep floor bites (`ADAPTIVE_CREEP_START_DAY=360` measured
+from `dayZero ≈ 90`, then interval collapses `~50 → 12` days). Sessions that bank tens of thousands
+of credits still LOSS at `share=0.92` (`CAMPAIGN-2`: peakCredits 53716, LOSS d458) — confirming the
+2026-07-25 finding that **credits/arming are no longer binding; the spread outruns the player
+regardless of wallet.**
+
+Each candidate lever, checked against this taxonomy:
+- **Overmind spread-cadence pacing (the evidence-indicated lever)** — every `ADAPTIVE_*` constant is
+  **value-pinned** in `src/tests/campaign/adaptivePacing.test.ts` (`SLOW_DAYS=55`@:103,
+  `GRACE_DAYS=90`@:104, `FAST_DAYS=10`@:108, `CREEP_START_DAY=360`@:109, `CREEP_MIN_DAYS=12`@:110).
+  The single highest-leverage move — pushing the creep floor later so the front doesn't collapse to
+  a 12-day cadence at day ~450 — is *doubly* blocked: the value-pin at :109 **and** the idle-loss
+  invariant (`resolvedDay < 900`, :219) which a later creep would violate. `GRACE_DAYS` is
+  additionally blocked by `sessionCompetence.test.ts` (two prior widening attempts, recorded
+  2026-07-19). Touching any of these is a fresh pinned-test scope decision, which this plan reserves
+  to the user (only the pirate-garrison reversal was pre-authorized).
+- **`NEUTRAL_AGGRO_POWER_THRESHOLD`** — not value-pinned (only referenced in
+  `neutralAggroGating.test.ts`), so technically sweepable, **but it only touches the 10% DIED
+  population** (it gates whether wandering neutral packs hunt a weak ship). It structurally cannot
+  close a gate dominated by the 72% LOSS mode — even converting *every* death to a win caps at ~28%,
+  short of Gate A's 40%. Sweeping it would be a blind guess against the evidence.
+- **`HOSTILE_SCALING_WEAK_MULT`** — Task 5 already proved this lever structurally unreachable for the
+  dominant population (only fires inside already-held systems, gated on battle-ready, which LOSS
+  sessions never reach). Further tuning is ruled out with evidence.
+- **Economy-recovery pacing** — the current data (banking 53k and still LOSS) confirms credits are
+  not the binding constraint; ruled out with evidence (consistent with sibling Task 2b's freighter
+  no-op).
+
+**Conclusion — escalating per this plan's escalation clause.** The balance-constant sweep space that
+is this plan's actual authorized scope ("any Overmind pacing/garrison-count/combat-scaling lever
+lives in `balance.ts`") is now exhausted: the one lever the current evidence points at (spread
+cadence, specifically the creep floor) is fully pinned by a recently- and deliberately-set known-good
+test, and every other candidate is either evidence-ruled-out or structurally unable to close a
+LOSS-dominant gate. No sweep run — running a 50-session measure with no production change would only
+re-confirm today's already-measured 18% baseline for zero new information, and touching the pinned
+spread-pacing tests autonomously would violate the standing "never weaken an existing assertion; STOP
+and ask" rule.
+
+**Recommendation for the user (concrete, per the escalation clause's requirement to name an
+architectural direction, not another parameter guess):** the next round needs a scope decision on
+one of —
+1. **Authorize a pinned spread-pacing scope decision** (mirroring Task 1's pirate reversal): push the
+   creep floor out (`ADAPTIVE_CREEP_START_DAY` and/or `ADAPTIVE_CREEP_MIN_DAYS`) so the front does
+   not collapse to a 12-day cadence at ~day 450, re-pinning `adaptivePacing.test.ts` and re-scoping
+   the idle-loss `<900` invariant. This is the single change the current data most directly implicates
+   and is the recommended first move. (Note: this also naturally serves the day-1000 *floor* — a
+   slower creep pushes both LOSS and WIN resolution later.)
+2. **Player liberation throughput** (architecture, sibling-plan territory): the LOSS sessions land a
+   `firstLib` (~d98) but never a *solo* liberation and never battle-ready — the player clears one
+   assisted system then stalls. Improving how fast the autopilot actually contests/clears the front
+   is a `MemoryHeuristicPolicy`/combat-coverage problem, not a `balance.ts` constant; Task 9b showed
+   quest-gating tweaks are net-negative, so this needs a real coverage/targeting change, not another
+   heuristic gate.
+
+Awaiting user direction before touching either (both out of this plan's currently-authorized scope).
 
 ### Task 7: Measure against Gate B
 
-- [ ] Run `npm run letsplay:campaign` with `CAMPAIGN_SESSIONS=50`; record win-rate, median win day,
-      death taxonomy. Compare against Gate B (≥ 80% win-rate, median win day ≥ 1000).
-- [ ] If median win day is below 1000 despite a high win-rate, apply the pacing-lever fix identified
+- [x] Run `npm run letsplay:campaign` with `CAMPAIGN_SESSIONS=50`; record win-rate, median win day,
+      death taxonomy. Compare against Gate B (≥ 80% win-rate, median win day ≥ 1000). — measured
+      2026-07-25: **18.0% win-rate, median win d325 — Gate B missed on both axes** (see outcome below).
+- [x] If median win day is below 1000 despite a high win-rate, apply the pacing-lever fix identified
       in Task 6 and re-measure — this is expected to be a real, needed step given every prior
       measurement in this codebase's history has the opposite problem (dying too early, never
       winning too early), so Gate B's day-1000 floor is genuinely un-tested territory once
-      survivability actually improves.
-- [ ] If Gate B is not met after reasonable iteration (record what was tried), apply this plan's
+      survivability actually improves. — **NOT reachable**: the conditional's premise ("high win-rate,
+      low win day") does not hold — win-rate is 18% (low), not high. And the pacing lever Task 6
+      identified (spread-cadence / creep floor) is fully value-pinned and reserved to the user (Task 6
+      escalation), so it cannot be applied autonomously. The day-1000 floor stays moot while win-rate
+      is 18% — nobody wins early enough to threaten it; the dominant outcome is LOSS at day ~428.
+- [x] If Gate B is not met after reasonable iteration (record what was tried), apply this plan's
       escalation clause — report to the user with the honest measured numbers and a concrete
-      next-step recommendation, do not silently loosen the gate.
-- [ ] `npm run letsplay:ci` and `npm run test:playtest` must stay green.
+      next-step recommendation, do not silently loosen the gate. — **escalating** (see outcome below):
+      no reasonable iteration is available inside authorized scope (Task 6 exhausted the balance-lever
+      space; the one evidence-indicated lever is user-reserved-pinned), so this measure re-confirms the
+      escalation rather than iterating blindly.
+- [x] `npm run letsplay:ci` and `npm run test:playtest` must stay green. — `test:playtest` **GREEN**
+      (817 passed, 10 pre-existing skips). `letsplay:ci` **RED on committed HEAD, pre-existing and
+      independent of this measurement** (`sessionCompetence.test.ts` "Task 7 — campaign milestone
+      proxies", `firstLiberationDay` 195–196 vs pinned `≤ 190`) — verified by stashing the sibling
+      branch's working-tree changes: the failure reproduces on clean HEAD (firstLib=196), so it is NOT
+      caused by the uncommitted CRUISER schema work nor by this task. This is the SAME pacing-scope
+      regression Task 6 escalated on: the GOD-seed `CAMPAIGN-CAPACITY-0` used to resolve a real win at
+      d185 (2026-07-19, recorded in the test's own comment) and now TIMEOUTs at d201 with liberation
+      slipping past the day-190 proxy. Fixing it requires either editing a pinned assertion (forbidden
+      by the standing rule) or moving the user-reserved pacing levers — both out of this plan's
+      authorized scope. Reported, not silently marked green.
+
+#### Task 7 outcome (measured 2026-07-25) — Gate B NOT MET; escalation clause applied, no blind iteration
+
+Fresh 50-session `npm run letsplay:campaign` on current HEAD (`.letsplay/campaign-summary.txt`,
+gitignored):
+
+| Metric | Result | Gate B target |
+|---|---|---|
+| Win rate | **18.0% (9/50)** | ≥ 80% |
+| Median win day | **d325** (wins span d98–d422) | ≥ 1000 |
+| **Loss (Overmind wins the arc)** | **74% (37/50)** — dominant mode | — |
+| Died (combat) | 8% (4/50) | — |
+| Timeout / wedged | 0% | — |
+| LOSS resolution day | median ~**d428** (range d409–486) | — |
+| Milestones | battle-ready 20% (avg d229), liberation 100% (avg d90), solo-lib 26% (avg d332) | — |
+| Avg peak power | 0.12 | — |
+| Death causes | OVERMIND = 4/4 (100%), median hull@engage 0.10, median 1 simultaneous combatant | — |
+
+**Gate B missed on both axes by a wide margin** (18% vs ≥80%; median win d325 vs ≥1000). This is a
+byte-for-byte reproduction of Task 6's same-HEAD baseline (Task 6 measured 9 win / 36 loss / 5 died;
+this run 9 win / 37 loss / 4 died — statistically identical, the ±1 died/loss is one session
+re-classified), confirming the campaign is exactly where Task 6 left it: the balance-lever space this
+plan is authorized to touch is exhausted, and the single evidence-indicated remaining lever (Overmind
+spread-cadence / creep floor) is fully value-pinned in `adaptivePacing.test.ts` and reserved to the
+user by this plan's own "one pre-authorized reversal only" rule.
+
+**The failure taxonomy is unchanged from Task 6 and remains pacing-bound, not survivability-bound:**
+the dominant outcome is LOSS (74%) — the front reaches loss-share (~0.85+) around day ~428, exactly
+where the creep floor collapses the spread cadence to a 12-day interval after `ADAPTIVE_CREEP_START_DAY`.
+Combat death is a minor mode (8%), and even those 4 deaths are late (hull@engage 0.10, i.e. already
+ground down, single combatant — not the multi-ship instant-volley signature the earlier escalations
+chased). Wins that DO happen land early (median d325, well below the day-1000 floor) — but that floor
+is moot while 82% of sessions never win at all.
+
+**Pre-existing letsplay:ci regression surfaced (recorded here for continuity, not fixed):** the
+`sessionCompetence.test.ts` GOD-mode milestone proxy (`firstLiberationDay ≤ 190`) is RED on committed
+HEAD — the seed `CAMPAIGN-CAPACITY-0` now liberates at d195–196 and TIMEOUTs at d201, whereas the
+test's own comment records it resolving a real win at d185 on 2026-07-19. Confirmed pre-existing
+(reproduces with the sibling branch's uncommitted CRUISER/schema changes stashed) and independent of
+this measurement task. It is the SAME pacing drift the LOSS taxonomy shows, one tier down (GOD mode
+isolates survival, so it shows up as a liberation/pacing slip rather than a loss). Both the pinned
+assertion and the underlying pacing levers are out of this plan's authorized scope to touch.
+
+**Escalating per this plan's escalation clause** (and Task 6's already-recorded recommendation, which
+this measurement re-confirms rather than supersedes): the next round needs a **user scope decision**,
+not another autonomous lever guess. Concretely, the two candidates Task 6 named still stand, in
+priority order:
+1. **Authorize a pinned spread-pacing scope decision** (mirroring Task 1's pirate reversal): push the
+   creep floor out (`ADAPTIVE_CREEP_START_DAY` / `ADAPTIVE_CREEP_MIN_DAYS`) so the front does not
+   collapse to a 12-day cadence at ~day 450, re-pinning `adaptivePacing.test.ts` and re-scoping the
+   idle-loss `<900` invariant. This is the single change the LOSS-dominant data most directly
+   implicates, and it naturally also serves the day-1000 *floor* (a slower creep pushes both LOSS and
+   WIN resolution later). Fixing the letsplay:ci `sessionCompetence` red is downstream of this same
+   decision. **Recommended first move.**
+2. **Player liberation throughput** (architecture, sibling-plan territory, `MemoryHeuristicPolicy` /
+   combat-coverage — not a `balance.ts` constant): LOSS sessions land an assisted `firstLib` (~d90)
+   but 74% never reach a *solo* liberation and never battle-ready — the player clears one assisted
+   system then stalls while the front outruns them. Task 9b already showed heuristic quest-gating
+   tweaks are net-negative, so this needs a real coverage/targeting change.
+
+Awaiting user direction before touching either (both out of this plan's currently-authorized scope).
+`test:playtest` stays green; the `letsplay:ci` red is the pre-existing, in-scope-for-escalation
+pacing regression documented above.
 
 ### Task 8: [Final] Verify acceptance criteria and update documentation
 
