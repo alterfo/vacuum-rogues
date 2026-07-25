@@ -91,6 +91,63 @@ export function gearStatLine(gear: Gear): string {
   return `Мощность: ${formatStat(gear.potency)}`;
 }
 
+/**
+ * Find the installed gear whose slot-class matches `gear` — the item a purchase
+ * would replace, used to show the "→ Заменит X" comparison. Weapons match by
+ * {@link WeaponClass}, standard equipment by {@link EquipmentClass}; a hull has
+ * no per-class replacement. Pure over an installed-id list (resolved through the
+ * catalog) so it's unit-testable without a live loadout.
+ */
+export function installedSameClass(
+  installedIds: Iterable<string>,
+  gear: Gear,
+): Gear | null {
+  if (gear.kind === GearKind.HULL) return null;
+  for (const id of installedIds) {
+    const inst = gearById(id);
+    if (!inst) continue;
+    if (
+      gear.kind === GearKind.WEAPON &&
+      inst.kind === GearKind.WEAPON &&
+      inst.weaponClass === gear.weaponClass
+    ) {
+      return inst;
+    }
+    if (
+      gear.kind === GearKind.EQUIPMENT &&
+      inst.kind === GearKind.EQUIPMENT &&
+      inst.equipmentClass === gear.equipmentClass
+    ) {
+      return inst;
+    }
+  }
+  return null;
+}
+
+/**
+ * The comparison suffix appended to a shop row's stat line when the browsed
+ * item would replace an installed one. Weapons compare by `damage`; engines by
+ * tech level (speed is tech-driven, see {@link gearStatLine}); other equipment
+ * by `potency`.
+ */
+export function gearComparisonSuffix(gear: Gear, replacing: Gear): string {
+  let delta: number;
+  if (gear.kind === GearKind.WEAPON && replacing.kind === GearKind.WEAPON) {
+    delta = gear.damage - replacing.damage;
+  } else if (
+    gear.kind === GearKind.EQUIPMENT &&
+    replacing.kind === GearKind.EQUIPMENT
+  ) {
+    delta =
+      gear.equipmentClass === EquipmentClass.ENGINE
+        ? gear.techLevel - replacing.techLevel
+        : gear.potency - replacing.potency;
+  } else {
+    delta = gear.techLevel - replacing.techLevel;
+  }
+  return `  (${formatStatDelta(delta)} vs ${replacing.name})`;
+}
+
 /** Bank labels for the per-listing fit indicator (mirrors the hangar's banks). */
 const BANK_LABEL: Record<SlotCategory, string> = {
   weapon: "ОРУЖИЕ",
@@ -318,7 +375,10 @@ export class EquipmentShopScene extends GameScene {
 
     const credits = this.gameEngine?.player?.credits ?? 0;
     this.creditsText = scaledText(
-      `${credits.toLocaleString("ru")} ₡`,
+      // No space before ₡ — the scene-wide convention (matches every row-price
+      // and «Мало₡» label here; the gear-row price format is locked by
+      // equipmentShopFontScaleLayout.test.ts).
+      `${credits.toLocaleString("ru")}₡`,
       14,
       0xffee55,
       { rawColor: true, fontWeight: "bold" },
@@ -618,6 +678,10 @@ export class EquipmentShopScene extends GameScene {
       listing.price,
     );
 
+    // A hull swap is the single largest transaction in the shop — give it the
+    // same purchase audio cue every other buy path plays.
+    this.gameEngine?.audio.playSfx("buy").catch(() => {});
+
     logger.info(
       `Installed hull ${hull.name} (${hull.hullClass}) for ${listing.price} credits` +
         (result.tradeIn > 0
@@ -672,25 +736,14 @@ export class EquipmentShopScene extends GameScene {
   }
 
   /**
-   * For an equipment item, find the currently installed gear of the same class
-   * (used to show "→ Заменит X" in the comparison column).
+   * Find the currently installed gear of the same slot-class as `gear` (weapon
+   * or equipment) — used to show "→ Заменит X" in the comparison column. Weapons
+   * now get the same treatment equipment always had.
    */
-  private installedOfSameClass(gear: Gear): EquipmentSpec | null {
-    if (gear.kind !== GearKind.EQUIPMENT) return null;
-    const shopItem = gear as EquipmentSpec;
+  private installedOfSameClass(gear: Gear): Gear | null {
     const loadout = this.gameEngine?.playerLoadout;
     if (!loadout) return null;
-    for (const id of loadout.installedGearIds()) {
-      const installed = gearById(id);
-      if (
-        installed &&
-        installed.kind === GearKind.EQUIPMENT &&
-        (installed as EquipmentSpec).equipmentClass === shopItem.equipmentClass
-      ) {
-        return installed as EquipmentSpec;
-      }
-    }
-    return null;
+    return installedSameClass(loadout.installedGearIds(), gear);
   }
 
   /**
@@ -785,17 +838,11 @@ export class EquipmentShopScene extends GameScene {
       this.listContainer.addChild(nameText);
 
       // Stat line — show comparison delta if this item replaces an installed one
+      // (weapons compare by damage, engines by tech level, other gear by potency;
+      // see gearComparisonSuffix).
       let statLine = gearStatLine(gear);
       if (replacing && !isInstalled) {
-        // Engine speed is tech-level-driven, not potency-driven (see
-        // gearStatLine) — compare tech level so the delta reflects the stat
-        // that actually changes, not a same-tier mass/price tradeoff.
-        const isEngine =
-          (gear as EquipmentSpec).equipmentClass === EquipmentClass.ENGINE;
-        const delta = isEngine
-          ? gear.techLevel - replacing.techLevel
-          : (gear as EquipmentSpec).potency - replacing.potency;
-        statLine += `  (${formatStatDelta(delta)} vs ${replacing.name})`;
+        statLine += gearComparisonSuffix(gear, replacing);
       }
       const statText = scaledText(
         statLine,
@@ -1163,9 +1210,9 @@ export class EquipmentShopScene extends GameScene {
     if (!player) return;
     const refund = sellUninstalledGear(player, gearId, this.gameEngine?.bank);
     if (refund <= 0) return;
-    this.gameEngine?.audio.playSfx("buy").catch(() => {});
+    this.gameEngine?.audio.playSfx("sell").catch(() => {});
     if (this.creditsText) {
-      this.creditsText.text = `${player.credits.toLocaleString("ru")} ₡`;
+      this.creditsText.text = `${player.credits.toLocaleString("ru")}₡`;
     }
     this.renderHold();
   }
@@ -1217,7 +1264,7 @@ export class EquipmentShopScene extends GameScene {
 
     // Update credits display and re-render rows so affordability badges update.
     if (this.creditsText) {
-      this.creditsText.text = `${player.credits.toLocaleString("ru")} ₡`;
+      this.creditsText.text = `${player.credits.toLocaleString("ru")}₡`;
     }
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;

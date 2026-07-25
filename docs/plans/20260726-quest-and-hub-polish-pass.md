@@ -173,18 +173,27 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       clean; `eslint src` 0 errors; i18n ratchet green.
 
 ### Task 4: EquipmentShopScene cosmetic/feedback fixes
-- [ ] `sellHoldItem()` (`~line 1166`): plays the `"buy"` SFX on a sell — switch to the existing `"sell"`
-      `SfxKey`
-- [ ] `buyHull()` (`~lines 596-630`): plays no SFX at all on the largest transaction in the game — add
-      the purchase SFX
-- [ ] Currency formatting inconsistency (`~lines 320-321` vs `531-545, 836-837, 1042`): pick one
-      convention (space before ₡ or not) and apply it uniformly in this scene
-- [ ] Weapons never get the "→ replaces X" stat comparison that other gear categories show
-      (`installedOfSameClass()` ~lines 674-694) — extend it to weapons
-- [ ] write tests for the SFX key selection on buy vs sell (unit test on the scene's sound-selection
-      logic, not a full render test)
-- [ ] write a test for the weapon comparison text now appearing
-- [ ] run tests — must pass before Task 5
+- [x] `sellHoldItem()` (`~line 1166`): plays the `"buy"` SFX on a sell — switch to the existing `"sell"`
+      `SfxKey`. Done: now `playSfx("sell")`.
+- [x] `buyHull()` (`~lines 596-630`): plays no SFX at all on the largest transaction in the game — add
+      the purchase SFX. Done: added `playSfx("buy")` right before `this.rebuild()`.
+- [x] Currency formatting inconsistency (`~lines 320-321` vs `531-545, 836-837, 1042`): pick one
+      convention (space before ₡ or not) and apply it uniformly in this scene. Done: **no-space** is now
+      uniform — the gear-row price format (`"200₡"`) is locked by `equipmentShopFontScaleLayout.test.ts`,
+      so the three header credit-readouts were switched from `" ₡"` to `"₡"` to match every row-price /
+      «Мало₡» label already in the scene (space-before would have red'd the locked test).
+- [x] Weapons never get the "→ replaces X" stat comparison that other gear categories show
+      (`installedOfSameClass()` ~lines 674-694) — extend it to weapons. Done: extracted pure exported
+      `installedSameClass(installedIds, gear)` (matches weapons by `weaponClass`, equipment by
+      `equipmentClass`) + `gearComparisonSuffix(gear, replacing)` (weapons compare by `damage`, engines
+      by tech level, other gear by potency); `installedOfSameClass` now delegates and returns `Gear`.
+- [x] write tests for the SFX key selection on buy vs sell (unit test on the scene's sound-selection
+      logic, not a full render test). Done: `equipmentShopSfxAndCompare.test.ts` asserts sell→"sell",
+      gear-buy→"buy", hull-buy→"buy".
+- [x] write a test for the weapon comparison text now appearing. Done: same file — pure-helper tests plus
+      a render test asserting a weapon row shows «vs <installed weapon>».
+- [x] run tests — must pass before Task 5. Done: full unit suite 5970 passed / 13 skipped; `tsc --noEmit`
+      clean; `eslint` 0 errors.
 
 ### Task 5: BankScene / PlanetInfoPanel cosmetic fixes
 - [ ] `bankSceneView.ts` (~line 144): translate the leftover English "Transfer" bus-log label to Russian
