@@ -428,18 +428,29 @@ in the new probe), full `src/tests/playtest/letsplay/` + `src/tests/campaign/` (
 whole-project `vitest --run` green except the two above (both diagnosed and resolved, not silently
 skipped). Committed as (see commit below).
 
-### Task 9b: Tune quest-detour vs. arm-up pacing (new, discovered by Task 9)
-- [ ] Characterize where the extra travel/day budget from real quest completion is actually going
-      (e.g. re-run `_questProbe`/`_wedgeProbe`-style diagnostics on a losing post-fix session) —
-      confirm it's genuinely the quest detour crowding out arm-up trading, not a separate new bug.
-- [ ] Propose and implement a bounded fix (e.g. cap `stockSystem` sourcing-bias detour distance, or
-      have the `earn`/`take-work` tier decline a new DELIVERY offer once arm-up is already behind a
-      measured schedule) — config-only where possible, per `balance.ts` convention.
-- [ ] Re-run the 50-session `npm run letsplay:campaign -- --pool=forks` measure; must not regress
-      quest-completion rate back toward the pre-Task-9 near-zero baseline, and should recover toward
-      (ideally exceed) the pre-Task-9 12.0% win-rate.
-- ⚠️ This is genuinely open-ended pacing/balance tuning, not a bug with a single root cause — budget
-  accordingly and report the measured tradeoff rather than assuming one attempt lands it.
+### Task 9b: Tune quest-detour vs. arm-up pacing (new, discovered by Task 9) — probed, premise aged out, no code landed (2026-07-25)
+- [x] Characterized via a **clean same-HEAD A/B** (50 sessions each, `--pool=forks`, identical seeds
+      `CAMPAIGN-0..49`) rather than a single-session probe — the decisive measurement. Finding: Task
+      9b's motivating premise (Task 9's 12.0%→6.0% win-rate halving) **has already aged out**. Task 9's
+      6% was measured on an older HEAD; the intervening Task 2b (freighter 3900) + reputation-faction /
+      `planetApproachPoint` fixes (Task 10) lifted the current same-HEAD baseline to **18.0%** — the
+      regression Task 9b was meant to recover no longer exists. The extra quest-travel budget is not a
+      new bug; it is exactly the quest-completion Task 9 restored, and the current economy already
+      absorbs it.
+- [x] Implemented and measured the bounded fix (candidate lever `ARMUP_PRIORITY_OVERMIND_SHARE = 0.35`
+      gating the `take-work` tier off for a not-yet-battle-ready ship once the Overmind front crosses
+      0.35, config-only). **A/B verdict: net-negative on every metric** — win-rate 18.0%→14.0%, avg
+      quests completed 4.72→4.40 (regresses the very metric Task 9 fixed), battle-ready 20%→18%,
+      solo-liberation 30%→24%. Reverted; **not landed** (a neutral-to-negative heuristic isn't worth
+      the added complexity — "fix the game, don't bolt on an inert lever").
+- [x] Re-ran the 50-session `npm run letsplay:campaign -- --pool=forks` measure (both arms). Result:
+      quest-completion did NOT regress toward the pre-Task-9 near-zero baseline in either arm (4.4–4.7
+      quests/session — Task 9's fix holds); win-rate is already **18.0% on the current baseline** (well
+      above the pre-Task-9 12.0%), and the arm-up-priority gate would only push it back down to 14.0%.
+      Appended the full A/B table to `docs/plans/20260713-campaign-winrate-100pct.md`'s Task 5 section.
+- ⚠️ Reported the measured tradeoff rather than assuming one attempt lands it (per the escalation
+  discipline). Recommendation for the next round: target the true current binding constraint —
+  Overmind **spread-pacing / arming behavior** (option (a)), not further autopilot quest-gating.
 
 ### Task 10: Reproduce & fix — autopilot hangs at system edge (#13)
 - [x] Reproduce via a live/headless diagnostic (check `MAX_STAR_MAP_WARP_STALLS` and edge-parking

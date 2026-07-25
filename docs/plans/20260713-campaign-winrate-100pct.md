@@ -1272,6 +1272,37 @@ territory, which Task 5 above could only partially open (`SLOW_DAYS` 45→55; `G
 the sibling plan's Tasks 6–10 lifted it further on their own. Gate A (≥40%) still not met; recommend the next
 round target spread-pacing / arming-behavior, not further hull pricing.
 
+#### Task 9b probed — arm-up-priority quest gate is a confirmed **net-negative** in a clean same-HEAD A/B; not landed (2026-07-25)
+
+Per `docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md` Task 9b, took the "decline
+new board work once arming up is behind schedule" option: a candidate lever
+`ARMUP_PRIORITY_OVERMIND_SHARE = 0.35` gating the `take-work` tier off for a not-yet-battle-ready ship
+once the Overmind share crosses 0.35, so its remaining travel budget funds the refit instead of a fresh
+sourcing/delivery detour. The premise (from Task 9) was that genuine quest sourcing had *halved*
+win-rate 12.0% → 6.0% and needed recovery.
+
+Ran a **clean same-HEAD A/B** (both 50 sessions, `--pool=forks`, identical seed set `CAMPAIGN-0..49`,
+only the MHP quest-gate differing):
+
+| Metric | With arm-up-priority gate | Baseline (gate reverted, same HEAD) |
+|---|---|---|
+| Win rate | **14.0% (7/50)** | **18.0% (9/50)** |
+| Died | 8% (4/50) | 10% (5/50) |
+| Avg quests completed / session | 4.40 | 4.72 |
+| Battle-ready rate | 18% (avg d230) | 20% (avg d239) |
+| Solo-liberation rate | 24% (avg d365) | 30% (avg d364) |
+
+**Every metric moves the wrong way with the gate** — win-rate, quest-completion (the very thing Task 9's
+correctness fix restored), battle-ready rate, and solo-liberation all regress slightly. The gate suppresses
+quest-taking activity for no win-rate gain. Reverted; not landed.
+
+The measurement also confirms **Task 9b's motivating premise has aged out**: Task 9's 12%→6% halving was
+measured on an *older* HEAD, before Task 2b (freighter 3900) and the intervening reputation-faction /
+`planetApproachPoint` fixes (sibling plan Task 10). On the current HEAD the same-HEAD baseline is **18%** —
+Task 9's regression has already been fully absorbed by later work, so there is no 6% regression left to
+recover from. Recommend the next round target the true binding constraint identified in Task 2b above —
+Overmind **spread-pacing / arming behavior** (option (a)), not further autopilot quest-gating heuristics.
+
 - [ ] Based on Task 5's re-measured death taxonomy, iterate remaining unpinned levers (record every
       sweep and result, mirroring the prior plan's sweep-log format): candidates include further
       `HOSTILE_SCALING_WEAK_MULT` tuning, `NEUTRAL_AGGRO_POWER_THRESHOLD` (gates whether wandering
