@@ -397,13 +397,23 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       6038 passed / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 13: Hide/restyle the BankScene debug bus panel
-- [ ] `BankScene.ts` (~80-81, 436-465): the "ШИНА: команды → проводки" panel is, by its own code
+- [x] `BankScene.ts` (~80-81, 436-465): the "ШИНА: команды → проводки" panel is, by its own code
       comment, a demo/debug artifact taking up half the screen. Either gate it behind `__DEBUG__` or
       restyle it as in-fiction bank-clerk log lines — pick one (recommend `__DEBUG__`-gating as the
-      smaller, lower-risk change; note the alternative as a `➕` follow-up if deferred).
-- [ ] write a test confirming the panel is absent/hidden outside `__DEBUG__` (or renders as clerk-log
-      text, matching whichever option is implemented)
-- [ ] run tests — must pass before Task 14
+      smaller, lower-risk change; note the alternative as a `➕` follow-up if deferred). Done:
+      `__DEBUG__`-gated (the smaller, lower-risk option). New pure exported `showBankBusPanel(debug)` in
+      `bankSceneView.ts` (returns `debug`); `renderStatementAndBus` now early-returns after the ВЫПИСКА
+      statement section when `!showBankBusPanel(__DEBUG__)`, so dev/e2e keep the teaching panel and
+      production ships without it. No i18n/Cyrillic change (the ШИНА literals just stop rendering in
+      prod), no save/schema impact (presentation-only). ➕ Follow-up (deferred): the in-fiction
+      bank-clerk-log restyle alternative — a larger content pass, out of scope for this gating fix.
+- [x] write a test confirming the panel is absent/hidden outside `__DEBUG__` (or renders as clerk-log
+      text, matching whichever option is implemented). Done: `bankSceneBusPanelGate.test.ts` — pure
+      `showBankBusPanel(false)===false` / `(true)===true`, plus real-scene (fake-pixi) render tests with
+      the gate override forced off (ШИНА header absent, ВЫПИСКА header still present) and on (ШИНА header
+      present).
+- [x] run tests — must pass before Task 14. Done: new suite 4 passed; full unit suite 6042 passed / 0
+      failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 14: Variance primitive for QuestScript locations
 This is the foundation the 20 per-quest tasks below build on — get it right once.

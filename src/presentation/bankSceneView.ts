@@ -88,6 +88,20 @@ export const BANK_TOAST = {
 } as const;
 
 /**
+ * Whether the "ШИНА: команды → проводки" live bus-log panel should render.
+ *
+ * By its own code comment that panel is a teaching/debug artifact (it makes the
+ * core-banking command→posting flow visible for the demo) and it takes up the
+ * bottom half of the right column — dead weight for a real player. Gate it on
+ * the build's `__DEBUG__` flag so it stays available in dev/e2e but is stripped
+ * from production. Pure predicate so both branches are unit-testable without a
+ * compile-time flag toggle.
+ */
+export function showBankBusPanel(debug: boolean): boolean {
+  return debug;
+}
+
+/**
  * The customer accounts to show, in `accountIds` order, skipping any not yet
  * open on the ledger (a player may have no savings/loan). Each row carries the
  * account's current GL balance.

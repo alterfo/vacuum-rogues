@@ -40,6 +40,7 @@ import {
   formatCredits,
   loanPanelLines,
   playerAccountRows,
+  showBankBusPanel,
   statementRows,
   wholeCreditsToCurrent,
   type AccountRow,
@@ -432,6 +433,13 @@ export class BankScene extends GameScene {
       this.renderStatementLine(ui, row, x, y, width);
       y += statementRowStep;
     }
+
+    // The "ШИНА" live command→posting log is a teaching/debug artifact (see the
+    // class comment): it takes up the bottom half of the column and means
+    // nothing to a real player. Gate it on `__DEBUG__` so dev/e2e keep it but
+    // production ships without it. Pure `showBankBusPanel` keeps both branches
+    // unit-testable.
+    if (!showBankBusPanel(__DEBUG__)) return;
 
     y += 16;
     y = this.sectionHeader(ui, "ШИНА: команды → проводки", x, y, width);
