@@ -857,11 +857,33 @@ branches/endings, never removing/loosening what's there) and running the full qu
       `ending_purged` is a success dead-end) — no existing assertion touched. Cyrillic baseline regenerated
       (quarantine 26→34 for the new endings/beats/threshold literals). Full unit suite 6137 passed / 13
       skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
-- [ ] **Task 30 — `reactor.ts`**: turn the 8 identical ±1-rod buttons into a loop with at least 1-2
+- [x] **Task 30 — `reactor.ts`**: turn the 8 identical ±1-rod buttons into a loop with at least 1-2
       genuinely different beats (F); reduce or restructure the up-to-3.2s forced unclickable wait per
       turn so the pressure timer doesn't compete with itself (section 4) — note this task depends on
       Task 3 already having fixed this file's cosmetic issues (placeholder labels, freighter/station
-      naming). Write/extend tests; run tests.
+      naming). Write/extend tests; run tests. Done: (1) **Section-4 forced-wait fixed** — the four-node
+      sensor chain (`check_stable`→`check_b`→`check_c`→`check_d`, each an 800 ms auto-beat = up to ~3.2 s
+      of unclickable dead wait per turn) is collapsed into a **single `check_stable` sweep** with five
+      ordered autoExecute transitions: four mismatch guards (`rod_a != 3` … `rod_d != 2`, tried A→B→C→D,
+      first-available wins per declaration order — matches both `TextQuestScene:608`'s `find(autoExecute)`
+      and the test helper's `avail[0]`) routing back to `reactor_control`, plus one unconditional fallback
+      winning to `stable`. Same logic, one beat per turn instead of up to four. (2) **F genuinely-different
+      beat** — added a bounded emergency steam-vent: new `vents_left` resource (min 0/max 2/initial 2,
+      shown in UI) and a distinct narrated `coolant_vent` screen reachable from `reactor_control` via
+      `vent_steam` (condition `vents_left > 0`). It's a coarse panic button (not a precise ±1 nudge):
+      each pull spends a charge, buys +15 s, and kicks rod D loose (`rod_d = random(0,5)`) — a real gamble
+      the nudge loop never offers, non-farmable because it's capped at 2 uses. The greedy solver never
+      vents, so every locked winnability/determinism/behaviour test stays green (513 quest assertions
+      pass); the `advanceAutoReactor`/`solveReactor` helpers are id-agnostic across the check sweep and the
+      removed `check_b/c/d` nodes are referenced nowhere. Extended the Reactor describe block with 7 new
+      `it(...)` blocks (single-sweep structure + fallback-last, failing move resolves in one auto-beat,
+      full-solution takes the fallback to `stable`, 2 vents at start, vent buys 15 s / spends a charge /
+      scrambles D, vent is a distinct narrated screen flowing into the sweep, vent gated once spent while
+      ±1 nudges remain) — no existing assertion touched. Cyrillic baseline regenerated (reactor.ts 23→21 —
+      a net reduction, the collapsed check nodes dropped more literals than the vent added). Full unit
+      suite 6157 passed / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues. ➕ Note: the
+      exact vent economy (+15 s vs the D-scramble risk, 2 charges) is a manual-playtest feel item, not
+      test-gated — chosen so the vent reads as a desperation tool, never a free time farm.
 - [ ] **Task 31 — `sabotage-heist.ts`**: give `hack_check`'s roll its own text (D); give the partner a
       name and more presence before the betrayal roll (H); fix `slip_out` so bringing the partner
       actually changes the outcome (currently identical to going without one, wasting the 500₡ team cost)

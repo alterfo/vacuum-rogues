@@ -8,6 +8,15 @@ import type { QuestScript } from "../QuestScript";
 //   B + D = 6  ✓ (4+2)
 // Each rod adjustment costs 5 seconds from time_left=120. At time_left<1 the reactor explodes.
 // Max Manhattan distance to solution from any random(0,5) start = 14 moves; budget = 24 moves.
+//
+// Two beats break the ±1-rod monotony (Task 30):
+//   - A single `check_stable` sensor sweep resolves all four conditions in ONE auto-beat instead of a
+//     four-node chain (four sequential auto-advances used to force up to ~3.2 s of unclickable wait per
+//     turn — the pressure timer competed with itself). First mismatching rod (in A→B→C→D order) routes
+//     back to the panel; if none mismatch, the unconditional fallback wins to `stable`.
+//   - An emergency steam-vent (`coolant_vent`): a coarse panic button, not a precise nudge. Bounded to
+//     `vents_left` uses so it can't farm time; each pull buys 15 s but kicks rod D loose to a random
+//     position — a genuine gamble the precise ±1 loop never offers.
 export const reactorScript: QuestScript = {
   id: "reactor",
   title: "Реактор",
@@ -54,6 +63,14 @@ export const reactorScript: QuestScript = {
       critTarget: "reactor_explosion",
       showInUI: true,
     },
+    {
+      id: "vents_left",
+      name: "Аварийных сбросов",
+      min: 0,
+      max: 2,
+      initial: 2,
+      showInUI: true,
+    },
   ],
   startLocation: "init_reactor",
   locations: [
@@ -70,10 +87,11 @@ export const reactorScript: QuestScript = {
         },
       ],
     },
-    // Main control panel — all 8 rod adjustments lead to check_stable
+    // Main control panel — the eight ±1 rod nudges plus the emergency steam-vent all lead through
+    // the check sweep.
     {
       id: "reactor_control",
-      text: "РЕАКТОР НЕСТАБИЛЕН. По ладони течёт пот, палец подрагивает над кнопками.\n\nТекущее положение стержней:\n  Стержень A: {rod_a} | Стержень B: {rod_b} | Стержень C: {rod_c} | Стержень D: {rod_d}\nДО ВЗРЫВА: {time_left} сек   (каждое движение стержня — минус 5 сек)\n\nНА ТАБЛО МИГАЮТ УСЛОВИЯ СТАБИЛЬНОСТИ — все четыре должны сойтись разом:\n  A + B = 7\n  C − D = 2\n  A × C = 12\n  B + D = 6\n\nТолько одна комбинация гасит цепную реакцию. Считай в уме, двигай стержни — и не промахнись со временем.",
+      text: "РЕАКТОР НЕСТАБИЛЕН. По ладони течёт пот, палец подрагивает над кнопками.\n\nТекущее положение стержней:\n  Стержень A: {rod_a} | Стержень B: {rod_b} | Стержень C: {rod_c} | Стержень D: {rod_d}\nДО ВЗРЫВА: {time_left} сек   (каждое движение стержня — минус 5 сек)\n\nНА ТАБЛО МИГАЮТ УСЛОВИЯ СТАБИЛЬНОСТИ — все четыре должны сойтись разом:\n  A + B = 7\n  C − D = 2\n  A × C = 12\n  B + D = 6\n\nСлева мигает клапан аварийного сброса пара: рывок за рычаг выигрывает секунды, но сшибает стержень D с позиции. Аварийных сбросов осталось: {vents_left}.\n\nТолько одна комбинация гасит цепную реакцию. Считай в уме, двигай стержни — и не промахнись со временем.",
       transitions: [
         {
           id: "a_up",
@@ -131,41 +149,49 @@ export const reactorScript: QuestScript = {
           condition: "rod_d > 0",
           effects: ["rod_d -= 1", "time_left -= 5"],
         },
+        // A genuinely different beat: the emergency steam-vent. Coarse panic button, bounded to
+        // `vents_left` pulls so it can't farm time; buys 15 s but scrambles rod D.
+        {
+          id: "vent_steam",
+          label: "⚠ Аварийный сброс пара — +15 сек, но собьёт D",
+          toLocation: "coolant_vent",
+          condition: "vents_left > 0",
+          effects: [
+            "vents_left -= 1",
+            "time_left += 15",
+            "rod_d = random(0,5)",
+          ],
+        },
       ],
     },
-    // Victory check chain: all four rods must match the unique stable state (A=3 B=4 C=4 D=2).
-    // Each step: if the rod matches, advance to the next check; otherwise return to control panel.
-    // Ordering within each location is critical — conditional transition must precede the fallback.
+    // The steam-vent aftermath beat — a distinct screen, then straight into the sensor sweep.
     {
-      id: "check_stable",
-      text: "Датчик стержня A мигает — идёт сверка...",
+      id: "coolant_vent",
+      text: "Ты рвёшь рычаг аварийного сброса. С оглушительным шипением контур стравливает перегретый пар, стрелка манометра валится из красной зоны — на табло отыграно вспять пятнадцать секунд.\n\nНо отдача бьёт по D-линии: стержень D срывается с места и застревает в положении {rod_d}. На табло: {time_left} сек. Аварийных сбросов осталось: {vents_left}.",
       transitions: [
         {
-          id: "check_a_ok",
-          label: "Датчик A: в допуске",
-          toLocation: "check_b",
-          condition: "rod_a == 3",
+          id: "vent_settle",
+          label: "Датчики пересчитывают конфигурацию",
+          toLocation: "check_stable",
           effects: [],
           autoExecute: true,
         },
+      ],
+    },
+    // Single-sweep victory check: all four rods must match the unique stable state (A=3 B=4 C=4 D=2).
+    // Ordering is critical — the four mismatch guards are tried A→B→C→D, and the first that fires routes
+    // back to the panel; only when none mismatch does the unconditional fallback win to `stable`. This
+    // resolves all four conditions in ONE auto-beat (the old four-node chain forced up to ~3.2 s of
+    // dead wait per turn).
+    {
+      id: "check_stable",
+      text: "Датчики стройной цепочкой уходят на сверку — четыре условия, одно решение...",
+      transitions: [
         {
           id: "check_a_fail",
           label: "Датчик A: вне нормы",
           toLocation: "reactor_control",
-          effects: [],
-          autoExecute: true,
-        },
-      ],
-    },
-    {
-      id: "check_b",
-      text: "A в допуске — датчик B уходит на сверку...",
-      transitions: [
-        {
-          id: "check_b_ok",
-          label: "Датчик B: в допуске",
-          toLocation: "check_c",
-          condition: "rod_b == 4",
+          condition: "rod_a != 3",
           effects: [],
           autoExecute: true,
         },
@@ -173,20 +199,7 @@ export const reactorScript: QuestScript = {
           id: "check_b_fail",
           label: "Датчик B: вне нормы",
           toLocation: "reactor_control",
-          effects: [],
-          autoExecute: true,
-        },
-      ],
-    },
-    {
-      id: "check_c",
-      text: "B в допуске — очередь стержня C...",
-      transitions: [
-        {
-          id: "check_c_ok",
-          label: "Датчик C: в допуске",
-          toLocation: "check_d",
-          condition: "rod_c == 4",
+          condition: "rod_b != 4",
           effects: [],
           autoExecute: true,
         },
@@ -194,20 +207,7 @@ export const reactorScript: QuestScript = {
           id: "check_c_fail",
           label: "Датчик C: вне нормы",
           toLocation: "reactor_control",
-          effects: [],
-          autoExecute: true,
-        },
-      ],
-    },
-    {
-      id: "check_d",
-      text: "C в допуске — последняя сверка, стержень D...",
-      transitions: [
-        {
-          id: "check_d_ok",
-          label: "Датчик D: в допуске",
-          toLocation: "stable",
-          condition: "rod_d == 2",
+          condition: "rod_c != 4",
           effects: [],
           autoExecute: true,
         },
@@ -215,6 +215,14 @@ export const reactorScript: QuestScript = {
           id: "check_d_fail",
           label: "Датчик D: вне нормы",
           toLocation: "reactor_control",
+          condition: "rod_d != 2",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "check_all_ok",
+          label: "Все датчики в допуске",
+          toLocation: "stable",
           effects: [],
           autoExecute: true,
         },

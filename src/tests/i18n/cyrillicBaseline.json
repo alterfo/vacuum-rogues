@@ -77,7 +77,7 @@
   "src/systems/quests/scripts/orbital-escape.ts": 30,
   "src/systems/quests/scripts/plague-crisis.ts": 32,
   "src/systems/quests/scripts/quarantine.ts": 34,
-  "src/systems/quests/scripts/reactor.ts": 23,
+  "src/systems/quests/scripts/reactor.ts": 21,
   "src/systems/quests/scripts/sabotage-heist.ts": 30,
   "src/systems/quests/scripts/signal-decode.ts": 20,
   "src/systems/quests/scripts/smuggling-run.ts": 19,

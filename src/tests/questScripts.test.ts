@@ -1530,6 +1530,98 @@ describe("Reactor quest", () => {
     expect(vm.currentLocation().id).toBe("reactor_explosion");
     expect(text).toContain("2"); // rod_a was 1, now 2 after a_up
   });
+
+  // --- Task 30: single-sweep check + emergency steam-vent beat ---
+
+  it("the check chain is a single sweep node, not the old 4-node chain", () => {
+    const ids = new Set(reactorScript.locations.map((l) => l.id));
+    // The old check_b/check_c/check_d nodes are gone — one node resolves all four.
+    expect(ids.has("check_stable")).toBe(true);
+    expect(ids.has("check_b")).toBe(false);
+    expect(ids.has("check_c")).toBe(false);
+    expect(ids.has("check_d")).toBe(false);
+    const sweep = reactorScript.locations.find((l) => l.id === "check_stable")!;
+    // Four mismatch guards (A→B→C→D) + one unconditional fallback, all auto-executing.
+    expect(sweep.transitions.length).toBe(5);
+    expect(sweep.transitions.every((t) => t.autoExecute)).toBe(true);
+    const last = sweep.transitions[sweep.transitions.length - 1];
+    expect(last.toLocation).toBe("stable");
+    expect(last.condition).toBeUndefined();
+  });
+
+  it("a failing move resolves in ONE auto-beat (no 4-node dead wait)", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 3);
+    vm.setParam("rod_b", 4);
+    vm.setParam("rod_c", 4);
+    vm.setParam("rod_d", 5); // only D wrong
+    vm.execute("d_down"); // rod_d = 4, still wrong → check_stable
+    expect(vm.currentLocation().id).toBe("check_stable");
+    const avail = vm.availableTransitions();
+    expect(avail.every((t) => t.autoExecute)).toBe(true);
+    // First available mismatch is D (A,B,C already in tolerance).
+    expect(avail[0].id).toBe("check_d_fail");
+    vm.execute(avail[0].id); // single beat lands back at the panel
+    expect(vm.currentLocation().id).toBe("reactor_control");
+  });
+
+  it("a full-solution sweep takes the unconditional fallback to stable", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 3);
+    vm.setParam("rod_b", 4);
+    vm.setParam("rod_c", 4);
+    vm.setParam("rod_d", 1);
+    vm.execute("d_up"); // rod_d = 2 → all four match → check_stable
+    const avail = vm.availableTransitions();
+    // No mismatch guard fires; only the fallback remains.
+    expect(avail.map((t) => t.id)).toEqual(["check_all_ok"]);
+    vm.execute("check_all_ok");
+    expect(vm.currentLocation().id).toBe("stable");
+    expect(vm.isSuccess()).toBe(true);
+  });
+
+  it("starts with 2 emergency vents available", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    expect(vm.getParam("vents_left")).toBe(2);
+  });
+
+  it("emergency vent buys 15 seconds, spends a charge, and scrambles rod D", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("time_left", 60); // below max so the +15 isn't clamped
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("vent_steam");
+    vm.execute("vent_steam");
+    expect(vm.currentLocation().id).toBe("coolant_vent");
+    expect(vm.getParam("vents_left")).toBe(1);
+    expect(vm.getParam("time_left")).toBe(75);
+    const d = vm.getParam("rod_d");
+    expect(d).toBeGreaterThanOrEqual(0);
+    expect(d).toBeLessThanOrEqual(5);
+  });
+
+  it("the vent beat is a distinct narrated screen that flows into the sweep", () => {
+    const coolant = reactorScript.locations.find(
+      (l) => l.id === "coolant_vent",
+    );
+    expect(coolant).toBeDefined();
+    expect(coolant!.text.length).toBeGreaterThan(40); // real prose, not a stub
+    expect(coolant!.transitions.length).toBe(1);
+    expect(coolant!.transitions[0].autoExecute).toBe(true);
+    expect(coolant!.transitions[0].toLocation).toBe("check_stable");
+  });
+
+  it("the emergency vent is unavailable once charges are spent", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("vents_left", 0);
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).not.toContain("vent_steam");
+    // The precise ±1 nudges are still there — only the panic button is gated.
+    expect(ids).toContain("a_up");
+  });
 });
 
 // Advance all autoExecute transitions until manual choice or finished
