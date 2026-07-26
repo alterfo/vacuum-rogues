@@ -33,6 +33,7 @@ import { UiButton, type ButtonAccent } from "./ui/UiButton";
 import { factionColor as resolveFactionColor } from "./ui/palette";
 import { Faction } from "@/types/faction";
 import { factionDisplayLabel } from "@/config/factionConfig";
+import { capturedSystemOccupierName } from "@/utils/planetTooltip";
 import { mountSceneHelp, helpButtonRect } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 import {
@@ -1091,9 +1092,15 @@ export class PlanetScene extends GameScene {
       ui.addChild(dot);
     }
 
-    // Capture warning banner
-    if (this.planet.capturedBy) {
-      const captureName = factionDisplayLabel(this.planet.capturedBy);
+    // Capture warning banner — capture is tracked per-*system* on the galaxy
+    // (`overmindSystems`/`pirateSystems`), never on `planet.capturedBy` (never
+    // written in production, so the old `capturedBy` check could never fire).
+    // Resolve the live occupier the same way the hover tooltip / landing gate do.
+    const captureName = capturedSystemOccupierName(
+      this.gameEngine?.galaxy,
+      system?.id,
+    );
+    if (captureName) {
       const captureBg = new Graphics();
       captureBg.rect(bannerX, bannerY + bannerH + 22, bannerW + 40, 24);
       captureBg.fill({ color: 0xff0000, alpha: 0.85 });

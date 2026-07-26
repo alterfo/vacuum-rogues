@@ -4,6 +4,7 @@ import { PlanetType, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import {
   buildPlanetTooltipLines,
+  capturedSystemOccupierName,
   FACTION_COLOR,
   FACTION_DISPLAY_NAME,
 } from "@/utils/planetTooltip";
@@ -281,5 +282,57 @@ describe("buildPlanetTooltipLines", () => {
     expect(lines[lines.length - 1].text).toBe(
       landingDenialMessage("pirate-rep"),
     );
+  });
+});
+
+describe("capturedSystemOccupierName (PlanetScene capture banner, Task 12)", () => {
+  // The banner previously keyed off `planet.capturedBy` (never written in
+  // production), so it never fired. This resolver keys off the per-system galaxy
+  // capture state instead, matching the hover-tooltip occupier naming.
+  const overmindGalaxy = {
+    isOvermindSystem: (id: string) => id === "sys-overmind",
+    isPirateSystem: () => false,
+  };
+  const pirateGalaxy = {
+    isOvermindSystem: () => false,
+    isPirateSystem: (id: string) => id === "sys-pirate",
+  };
+
+  it("names the Overmind for an Overmind-held system", () => {
+    expect(capturedSystemOccupierName(overmindGalaxy, "sys-overmind")).toBe(
+      FACTION_DISPLAY_NAME[Faction.OVERMIND],
+    );
+  });
+
+  it("names the pirates for a pirate-held system", () => {
+    expect(capturedSystemOccupierName(pirateGalaxy, "sys-pirate")).toBe(
+      "Пираты",
+    );
+  });
+
+  it("returns null (no banner) for an uncaptured system", () => {
+    expect(
+      capturedSystemOccupierName(overmindGalaxy, "sys-friendly"),
+    ).toBeNull();
+    expect(capturedSystemOccupierName(pirateGalaxy, "sys-friendly")).toBeNull();
+  });
+
+  it("prefers the Overmind label when a system is somehow both", () => {
+    const both = {
+      isOvermindSystem: () => true,
+      isPirateSystem: () => true,
+    };
+    expect(capturedSystemOccupierName(both, "sys-x")).toBe(
+      FACTION_DISPLAY_NAME[Faction.OVERMIND],
+    );
+  });
+
+  it("returns null (context unavailable) for missing galaxy / systemId / capture API", () => {
+    expect(capturedSystemOccupierName(null, "sys-overmind")).toBeNull();
+    expect(capturedSystemOccupierName(undefined, "sys-overmind")).toBeNull();
+    expect(capturedSystemOccupierName(overmindGalaxy, null)).toBeNull();
+    expect(capturedSystemOccupierName(overmindGalaxy, undefined)).toBeNull();
+    // A partial unit-harness galaxy without the capture API must not crash.
+    expect(capturedSystemOccupierName({}, "sys-overmind")).toBeNull();
   });
 });

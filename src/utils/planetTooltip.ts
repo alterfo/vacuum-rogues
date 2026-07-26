@@ -47,6 +47,42 @@ const OCCUPIER_COLOR: Record<string, number> = {
   [PIRATE_FACTION_ID]: 0xff4444,
 };
 
+/** Minimal galaxy view for the capture-banner resolver (method-presence guarded). */
+export interface CaptureBannerGalaxyView {
+  isOvermindSystem?(systemId: string): boolean;
+  isPirateSystem?(systemId: string): boolean;
+}
+
+/**
+ * Occupier display name for a captured *system*, or `null` when it is not
+ * hostile. Capture is tracked per-system on the galaxy (`overmindSystems` /
+ * `pirateSystems`) — **never** on `planet.capturedBy` (typed `FactionType`, no
+ * Overmind/Pirate member, never written in production), so a banner keyed off
+ * `capturedBy` could never fire. This is the single resolver the capture banner
+ * shares with the hover tooltip's occupier line, so the two never disagree.
+ * Method presence is guarded so a partial unit-harness galaxy (no capture API)
+ * counts as "context unavailable" (no banner) rather than crashing.
+ */
+export function capturedSystemOccupierName(
+  galaxy: CaptureBannerGalaxyView | null | undefined,
+  systemId: string | null | undefined,
+): string | null {
+  if (!galaxy || !systemId) return null;
+  if (
+    typeof galaxy.isOvermindSystem === "function" &&
+    galaxy.isOvermindSystem(systemId)
+  ) {
+    return FACTION_DISPLAY_NAME[Faction.OVERMIND];
+  }
+  if (
+    typeof galaxy.isPirateSystem === "function" &&
+    galaxy.isPirateSystem(systemId)
+  ) {
+    return OCCUPIER_DISPLAY_NAME[PIRATE_FACTION_ID];
+  }
+  return null;
+}
+
 export function reputationLabel(rep: number): string {
   if (rep >= 50) return "Союзник";
   if (rep >= 20) return "Дружественный";

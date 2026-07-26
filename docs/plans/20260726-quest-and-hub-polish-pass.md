@@ -380,11 +380,21 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       e2e case passes under Playwright.
 
 ### Task 12: Remove dead "ЗАХВАЧЕНА" banner code path
-- [ ] `PlanetScene.ts` (~1087-1109 vs ~1365-1367): the captured-system banner reads `planet.capturedBy`,
-      which by the file's own comment is never written in production. Replace with the already-used
-      `isPirateSystem`/`isHostileSystem` check so the banner actually fires when it should.
-- [ ] write a test asserting the banner shows for a hostile/pirate-controlled system and not otherwise
-- [ ] run tests — must pass before Task 13
+- [x] `PlanetScene.ts` (~1087-1109 vs ~1365-1367): the captured-system banner read `planet.capturedBy`,
+      which by the file's own comment is never written in production, so it never fired. Done: new shared
+      pure resolver `capturedSystemOccupierName(galaxy, systemId)` in `src/utils/planetTooltip.ts` keys
+      off the per-system galaxy capture state (`isOvermindSystem`/`isPirateSystem`, method-presence
+      guarded for partial unit-harness galaxies) and returns the occupier name (Овермайнд / Пираты) or
+      `null`. `createUI`'s banner now branches on that resolver against the current `system.id` instead of
+      `planet.capturedBy`, reusing the same occupier names the hover tooltip shows so the two never
+      disagree. No new Cyrillic literal (the `⚠ ЗАХВАЧЕНА:` prefix is unchanged; the occupier names are
+      grandfathered in `planetTooltip.ts`), so the ratchet stays green.
+- [x] write a test asserting the banner shows for a hostile/pirate-controlled system and not otherwise.
+      Done: extended `src/tests/planetTooltip.test.ts` with a `capturedSystemOccupierName` block —
+      Overmind-held → Овермайнд, pirate-held → Пираты, uncaptured → null, both-held → Overmind wins, and
+      missing galaxy / systemId / capture-API → null (no crash).
+- [x] run tests — must pass before Task 13. Done: `planetTooltip.test.ts` 22 passed; full unit suite
+      6038 passed / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 13: Hide/restyle the BankScene debug bus panel
 - [ ] `BankScene.ts` (~80-81, 436-465): the "ШИНА: команды → проводки" panel is, by its own code
