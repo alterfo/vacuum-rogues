@@ -349,14 +349,35 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 11: Fix landing-denied button still clickable
-- [ ] `PlanetInfoPanel.ts` (~82-99) computes `landingDenial()` for the hover tooltip but the click
+- [x] `PlanetInfoPanel.ts` (~82-99) computes `landingDenial()` for the hover tooltip but the click
       handler doesn't re-check it — clicking "Приземлиться" when landing should be denied still burns a
       game day (`PlanetManager.ts` ~509-566, `SpaceFlightScene.ts` ~937-946). Re-check the denial
-      condition in the click handler and block/no-op when denied.
-- [ ] write a unit test asserting a click on a denied landing does not advance the game day / does not
-      attempt the landing
-- [ ] add/extend an e2e regression case for this (visual/interaction bug, per root CLAUDE.md's tiering)
-- [ ] run tests — must pass before Task 12
+      condition in the click handler and block/no-op when denied. Done: code had drifted — the landing
+      gate now lives in `PlanetManager.landingDenial` and `SpaceFlightScene.onLandOnPlanet` already
+      blocks the *transition*, but the panel's «Приземлиться» button was still green/clickable and fell
+      through to that downstream gate (message + `endTurn()`). Fix moved to the click surface itself:
+      `PlanetInfoPanel` gained a trailing optional `landingDenialText?` ctor param — `PlanetManager.
+      handlePlanetClick` resolves it once via the same `landingDenial(planet)` + shared
+      `landingDenialMessage`, so a denied planet renders the button inert (dimmed grey, `cursor:default`,
+      no hover) with a red reason line, and its `pointerdown` `stopPropagation()`s then no-ops instead of
+      invoking `onLand`. Also hardened `landingDenial` to guard the per-system `isOvermindSystem`/
+      `isPirateSystem` lookups by method presence (a partial unit-harness galaxy = "context unavailable",
+      falls through to `planet.capturedBy` per the method's own doc — no crash). No new Cyrillic literal
+      (reason text comes from `t()` via `landingDenialMessage`), so the ratchet stays green.
+- [x] write a unit test asserting a click on a denied landing does not advance the game day / does not
+      attempt the landing. Done: `src/tests/presentation/planetInfoPanelLandingDenied.test.ts` (fake-pixi
+      records each node's handlers) — a real `pointerdown` on the land button invokes `onLand` when
+      allowed and NO-OPs when denied (so no downstream land attempt / turn-end / wasted day), plus the
+      reason line + non-interactive-cursor assertions.
+- [x] add/extend an e2e regression case for this (visual/interaction bug, per root CLAUDE.md's tiering).
+      Done: `playtest-regression.spec.ts` — forces the current system into Overmind capture, parks the
+      ship on the first planet, opens the info panel, then fires a **real pointer** click at the land
+      button's live global bounds and asserts the scene stays `SpaceFlightScene` (no PLANET transition)
+      and `galaxy.gameDays` is unchanged.
+- [x] run tests — must pass before Task 12. Done: `tsc --noEmit` (incl. e2e) clean; `eslint` on changed
+      files 0 issues; full unit suite green (the lone `sessionCompetence` battle-ready milestone is a
+      known stochastic campaign gate, unrelated to this presentation change — passed on rerun); the new
+      e2e case passes under Playwright.
 
 ### Task 12: Remove dead "ЗАХВАЧЕНА" banner code path
 - [ ] `PlanetScene.ts` (~1087-1109 vs ~1365-1367): the captured-system banner reads `planet.capturedBy`,

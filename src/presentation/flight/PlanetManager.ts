@@ -17,6 +17,7 @@ import { solveInterceptPoint } from "@/utils/intercept";
 import { GAME_BALANCE } from "@/config/balance";
 import {
   canLandOnPlanet,
+  landingDenialMessage,
   OVERMIND_FACTION_ID,
   PIRATE_FACTION_ID,
   type LandingDenialReason,
@@ -268,7 +269,16 @@ export class PlanetManager implements FlightModule {
     const systemId = player.currentSystemId;
     let captor: string | null =
       (planet.capturedBy as unknown as string | null) ?? null;
-    if (galaxy && systemId) {
+    // The per-system capture lookups are guarded by method presence: a partial
+    // galaxy (a unit harness with no capture-tracking API) counts as "context
+    // unavailable" and falls through to the planet's own `capturedBy`, per the
+    // note above — never a hard crash on the missing method.
+    if (
+      galaxy &&
+      systemId &&
+      typeof galaxy.isOvermindSystem === "function" &&
+      typeof galaxy.isPirateSystem === "function"
+    ) {
       if (galaxy.isOvermindSystem(systemId)) captor = OVERMIND_FACTION_ID;
       else if (galaxy.isPirateSystem(systemId)) captor = PIRATE_FACTION_ID;
     }
@@ -561,6 +571,11 @@ export class PlanetManager implements FlightModule {
       ownerFaction != null && typeof player?.getReputation === "function"
         ? player.getReputation(ownerFaction)
         : undefined;
+    // Same landing gate the tooltip/land-attempt use — resolved here so a denied
+    // planet's «Приземлиться» button renders inert (and explains why) instead of
+    // firing a doomed land attempt that would burn a game day.
+    const denial = this.landingDenial(planet);
+    const landingDenialText = denial ? landingDenialMessage(denial) : undefined;
     this.planetInfoPanel = new PlanetInfoPanel(
       planet,
       this.renderer.app.screen.width,
@@ -571,6 +586,7 @@ export class PlanetManager implements FlightModule {
       currentSystem?.economyType,
       currentSystem?.politicalSystem,
       reputation,
+      landingDenialText,
     );
     this.uiLayer.addChild(this.planetInfoPanel.container);
   }

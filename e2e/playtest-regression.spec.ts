@@ -135,6 +135,103 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: a REAL click on the land button of a denied (Overmind-held) planet no-ops (Task 11)', async ({ page }) => {
+    // The «Приземлиться» button re-checks the landing gate at click time: on an
+    // un-landable (Overmind-held) planet a click must do NOTHING — no PLANET
+    // transition, no wasted game day. A `e2e*` driver would bypass PixiJS hit
+    // testing, so this uses a REAL pointer at the button's live global bounds.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Force the current system into Overmind capture, park the ship on the first
+    // planet (so the land button is offered), then open the info panel. Return
+    // the land button's on-screen centre + the pre-click state to compare against.
+    const setup = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+        galaxy: {
+          gameDays: number;
+          addOvermindSystem: (id: string) => void;
+        } | null;
+        player: { currentSystemId: string } | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene || !engine.galaxy || !engine.player) return null;
+
+      engine.galaxy.addOvermindSystem(engine.player.currentSystemId);
+
+      const pm = scene['planetManager'] as
+        | {
+            planetSprites: Array<{
+              planet: { id: string; isHabitable?: boolean };
+              screenX: number;
+              screenY: number;
+            }>;
+            handlePlanetClick: (planet: unknown) => void;
+          }
+        | undefined;
+      const physics = scene['shipPhysics'] as
+        | { shipX: number; shipY: number }
+        | undefined;
+      const sprite = pm?.planetSprites?.[0];
+      if (!pm || !physics || !sprite) return null;
+
+      // Teleport the ship onto the planet so `shipAtPlanet` is true → land button.
+      physics.shipX = sprite.screenX;
+      physics.shipY = sprite.screenY;
+      pm.handlePlanetClick(sprite.planet);
+
+      const panel = pm as unknown as {
+        planetInfoPanel?: {
+          container: {
+            children: Array<{
+              text?: string;
+              getBounds: () => { x: number; y: number; width: number; height: number };
+            }>;
+          };
+        } | null;
+      };
+      const children = panel.planetInfoPanel?.container.children ?? [];
+      const button = children.find((c) => c.text === '[Приземлиться]');
+      if (!button) return null;
+      const b = button.getBounds();
+
+      return {
+        cx: b.x + b.width / 2,
+        cy: b.y + b.height / 2,
+        gameDaysBefore: engine.galaxy.gameDays,
+        sceneBefore: scene.constructor?.name ?? null,
+      };
+    });
+
+    expect(setup, 'land button should be present on the denied planet panel').not.toBeNull();
+    const { cx, cy, gameDaysBefore, sceneBefore } = setup!;
+    expect(sceneBefore).toBe('SpaceFlightScene');
+
+    // A REAL pointer click on the button — it IS hit-testable (eventMode static),
+    // but its handler must no-op because landing is denied.
+    await page.mouse.move(cx, cy);
+    await page.mouse.click(cx, cy);
+    await page.waitForTimeout(200);
+
+    const after = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+        galaxy: { gameDays: number } | null;
+      };
+      return {
+        sceneAfter: engine.currentScene?.constructor?.name ?? null,
+        gameDaysAfter: engine.galaxy?.gameDays ?? null,
+      };
+    });
+
+    // Still in flight (no PLANET transition) and not a single day burned.
+    expect(after.sceneAfter).toBe('SpaceFlightScene');
+    expect(after.gameDaysAfter).toBe(gameDaysBefore);
+
+    errorCollector.assertAndDetach();
+  });
+
   // ---------------------------------------------------------------------------
   // SpaceFlightScene smoke tests (Task 5 of 20260609-e2e-visual-spaceflightscene).
   // Fast, platform-independent regression guards for the visual/behavioural fixes

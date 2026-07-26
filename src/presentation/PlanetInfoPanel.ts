@@ -24,6 +24,16 @@ export class PlanetInfoPanel {
   private readonly economyType?: string;
   private readonly politicalSystem?: string;
   private readonly reputation?: number;
+  /**
+   * Localized landing-denial reason (Overmind / pirate-rep) when the current
+   * player may NOT land here, else undefined. When set, the «Приземлиться»
+   * button is rendered inert (dimmed, no hover) and its click no-ops — the same
+   * gate the scene's land-attempt applies, moved to the click surface so a
+   * denied planet never even *attempts* the land (which would show a message and
+   * burn a wait-turn day downstream). The wording comes from the shared
+   * `landingDenialMessage`, so it matches the hover tooltip verbatim.
+   */
+  private readonly landingDenialText?: string;
 
   constructor(
     planet: Planet,
@@ -35,6 +45,7 @@ export class PlanetInfoPanel {
     economyType?: string,
     politicalSystem?: string,
     reputation?: number,
+    landingDenialText?: string,
   ) {
     this.planet = planet;
     this.flightDays = flightDays;
@@ -43,6 +54,7 @@ export class PlanetInfoPanel {
     this.economyType = economyType;
     this.politicalSystem = politicalSystem;
     this.reputation = reputation;
+    this.landingDenialText = landingDenialText;
     this.container = new Container();
     this.container.x = screenWidth - 240;
     this.container.y = 80;
@@ -70,7 +82,15 @@ export class PlanetInfoPanel {
     // mounted (behind everything) before the lines — avoids reordering the
     // scene graph after the fact.
     const infoLineCount = this.planet.isHabitable ? 7 : 3;
-    const panelHeight = contentTop + infoLineCount * LINE_STEP + LINE_STEP + 12;
+    // A denied land button carries an extra reason line below it — reserve room
+    // so the background rect covers it instead of the text spilling past the box.
+    const denialLine = this.onLand && this.landingDenialText ? 1 : 0;
+    const panelHeight =
+      contentTop +
+      infoLineCount * LINE_STEP +
+      LINE_STEP +
+      denialLine * LINE_STEP +
+      12;
 
     const bg = new Graphics();
     bg.rect(0, 0, PANEL_WIDTH, panelHeight);
@@ -122,26 +142,50 @@ export class PlanetInfoPanel {
     addLine(`Перелёт: ${this.flightDays} дн.`, 0xffaa00);
 
     if (this.onLand) {
-      const land = scaledText("[Приземлиться]", 12, 0x00ff00, {
-        fontWeight: "bold",
-        rawColor: true,
-      });
+      const denied =
+        this.landingDenialText != null && this.landingDenialText !== "";
+      const land = scaledText(
+        "[Приземлиться]",
+        12,
+        denied ? 0x888888 : 0x00ff00,
+        {
+          fontWeight: "bold",
+          rawColor: true,
+        },
+      );
       land.x = 10;
       land.y = y + 4;
       land.eventMode = "static";
-      land.cursor = "pointer";
+      land.cursor = denied ? "default" : "pointer";
       land.on("pointerdown", (e) => {
         e.stopPropagation();
+        // Re-check the landing gate at click time: an un-landable planet's
+        // button must no-op, never fall through to a doomed land attempt (which
+        // shows a denial message and ends the turn — a wasted game day).
+        if (this.landingDenialText != null && this.landingDenialText !== "")
+          return;
         this.onLand?.();
       });
       land.on("pointerover", () => {
-        land.alpha = 0.7;
+        if (!denied) land.alpha = 0.7;
       });
       land.on("pointerout", () => {
         land.alpha = 1;
       });
       this.container.addChild(land);
       y = land.y + LINE_STEP;
+      if (denied) {
+        // Say WHY landing is closed (Overmind / pirate rep) — same shared
+        // wording as the hover tooltip, so the panel and tooltip never disagree.
+        const reason = scaledText(this.landingDenialText, 10, 0xff6666, {
+          rawColor: true,
+        });
+        reason.x = 10;
+        reason.y = y;
+        reason.eventMode = "none";
+        this.container.addChild(reason);
+        y += LINE_STEP;
+      }
     } else {
       const hint = scaledText(
         "Подлетите ближе,\nчтобы приземлиться",
