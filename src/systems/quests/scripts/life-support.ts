@@ -9,15 +9,23 @@ import type { QuestScript } from "../QuestScript";
 // ending_suffocate — the budget floor). Distinct from plague-crisis (that is a
 // TIME budget); here the scarce resource is air itself.
 // Choice points:
-//   1. First section to repressurise — the bridge (2, cheap), the packed cargo
-//      hold (6, expensive), or engineering (2, cheap, the repair console).
+//   1. First section to repressurise — the bridge (cheap, 2 people), the packed
+//      cargo hold (expensive, 6), engineering (cheap, 2, the repair console), OR
+//      the cracked-bulkhead medbay: a genuine EARLY gamble — a good roll saves
+//      four on the machines for almost no air, a bad one blows the patch and
+//      wastes reserve on a single soul. Risk is no longer concentrated on one
+//      late coin-flip: the run is a bet from the first move.
 //   2. Restart the scrubber (roll: +5 air on success, −2 on failure) vs conserve.
+//      The restart result now gets its OWN beat (scrubber_restored / dead) so the
+//      roll isn't silent, and its label discloses the failure penalty, not just
+//      the −1 purge cost and +5 upside.
 //   3. The last section — spend the remaining air to save them (+6) vs seal it
 //      off and guarantee the survivors you already have.
 // Outcomes (by `saved`):
 //   - ending_all_survive (>=10 — everyone breathes)                     SUCCESS
 //   - ending_most        (>=6 — most saved)                             SUCCESS
-//   - ending_few         (<6 — a handful, hard choices)                 SUCCESS
+//   - ending_few_more    (4-5 — a fair number, not most)                SUCCESS
+//   - ending_few         (<4 — a handful, hard choices)                 SUCCESS
 //   - ending_suffocate   (reserve blew mid-op, mass decompression)      FAILURE
 export const lifeSupportScript: QuestScript = {
   id: "life-support",
@@ -70,7 +78,7 @@ export const lifeSupportScript: QuestScript = {
   locations: [
     {
       id: "scene",
-      text: "Пассажирский лайнер «Тихая гавань» получил пробоину и травит атмосферу в пустоту. Скрубберы мертвы, регенерации нет — только то, что осталось в аварийных баллонах.\nРезерв воздуха: {oxygen}\n\nТри загерметизированных отсека колотят в переборки, задыхаясь. Наддуть все сразу воздуха не хватит. Куда пустить его первым?",
+      text: "Пассажирский лайнер «Тихая гавань» получил пробоину и травит атмосферу в пустоту. Скрубберы мертвы, регенерации нет — только то, что осталось в аварийных баллонах.\nРезерв воздуха: {oxygen}\n\nЗапертые отсеки колотят в переборки, задыхаясь. Наддуть все сразу воздуха не хватит. Куда пустить его первым?",
       transitions: [
         {
           id: "air_bridge",
@@ -93,6 +101,60 @@ export const lifeSupportScript: QuestScript = {
           toLocation: "allocate2",
           effects: ["oxygen -= 2", "saved += 2"],
         },
+        {
+          id: "air_medbay",
+          label:
+            "В лазарет — четверо на аппаратах, но переборка треснула: наддув дёшев, если пластырь ляжет ровно, и напрасен, если сорвёт (−2 воздуха, рискованно)",
+          toLocation: "medbay_check",
+          effects: ["oxygen -= 2", "roll = random(0,9)"],
+        },
+      ],
+    },
+    {
+      id: "medbay_check",
+      text: "Пластырь с шипением расползается по трещине, давление в лазарете ползёт вверх...",
+      transitions: [
+        {
+          id: "medbay_ok",
+          label: "Переборка держит",
+          toLocation: "medbay_held",
+          condition: "roll >= 5",
+          effects: ["saved += 4", "rating += 5"],
+          autoExecute: true,
+        },
+        {
+          id: "medbay_fail",
+          label: "Пластырь срывает",
+          toLocation: "medbay_blown",
+          effects: ["saved += 1", "oxygen -= 2"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "medbay_held",
+      text: "Заплатка держит давление — четверых с аппаратов вытаскивают в живой воздух, ещё дышащих. Дешёвая ставка окупилась.\nРезерв воздуха: {oxygen} | Спасено людей: {saved}",
+      transitions: [
+        {
+          id: "medbay_held_go",
+          label: "Дальше — резерв ещё тает",
+          toLocation: "allocate2",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "medbay_blown",
+      text: "Пластырь лопается с треском, лазарет выхлёстывает половину наддува в пустоту. Вы успеваете выдернуть за шиворот одного — остальные аппараты гаснут за смыкающейся переборкой. Ставка не легла.\nРезерв воздуха: {oxygen} | Спасено людей: {saved}",
+      transitions: [
+        {
+          id: "medbay_blown_go",
+          label: "Дальше — с тем, что осталось",
+          toLocation: "allocate2",
+          effects: [],
+          autoExecute: true,
+        },
       ],
     },
     {
@@ -102,7 +164,7 @@ export const lifeSupportScript: QuestScript = {
         {
           id: "fix_scrubber",
           label:
-            "Перезапустить скруббер — продувка стоит воздуха (−1), но при удаче даст +5",
+            "Перезапустить скруббер — продувка стоит воздуха (−1); оживёт — +5, заклинит — ещё −2",
           toLocation: "scrubber_check",
           effects: ["oxygen -= 1", "roll = random(0,9)"],
         },
@@ -120,17 +182,43 @@ export const lifeSupportScript: QuestScript = {
       transitions: [
         {
           id: "scrub_ok",
-          label: "...",
-          toLocation: "final_seal",
+          label: "Скруббер оживает",
+          toLocation: "scrubber_restored",
           condition: "roll >= 5",
           effects: ["oxygen += 5"],
           autoExecute: true,
         },
         {
           id: "scrub_fail",
-          label: "...",
-          toLocation: "final_seal",
+          label: "Скруббер захлёбывается",
+          toLocation: "scrubber_dead",
           effects: ["oxygen -= 2"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "scrubber_restored",
+      text: "Турбина берёт обороты, из решёток тянет прохладным, живым воздухом — скруббер ожил. Стрелка резерва впервые за смену поползла вверх.\nРезерв воздуха: {oxygen}",
+      transitions: [
+        {
+          id: "scrubber_restored_go",
+          label: "К последнему отсеку",
+          toLocation: "final_seal",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "scrubber_dead",
+      text: "Турбина давится, выплёвывает сноп искр и глохнет намертво. Продувка ушла впустую — да ещё и стравила драгоценный литр в закоротивший контур.\nРезерв воздуха: {oxygen}",
+      transitions: [
+        {
+          id: "scrubber_dead_go",
+          label: "К последнему отсеку",
+          toLocation: "final_seal",
+          effects: [],
           autoExecute: true,
         },
       ],
@@ -176,6 +264,14 @@ export const lifeSupportScript: QuestScript = {
           autoExecute: true,
         },
         {
+          id: "tally_some",
+          label: "...",
+          toLocation: "ending_few_more",
+          condition: "saved >= 4",
+          effects: ["credits += 900", "rating += 3"],
+          autoExecute: true,
+        },
+        {
           id: "tally_few",
           label: "...",
           toLocation: "ending_few",
@@ -193,6 +289,12 @@ export const lifeSupportScript: QuestScript = {
     {
       id: "ending_most",
       text: "Большинство спасено — полные шлюзы живых людей. Резерва хватило почти на всех, и «почти» — это те, кого вы не смогли достать вовремя. Вы сделали трудный, но правильный расчёт, и корабль дошёл.\nКредиты: {credits} | Репутация: {rating}",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
+      id: "ending_few_more",
+      text: "Не горстка, но и не большинство — ровно столько, на сколько хватило воздуха и решимости. За переборкой остались те, кому не досталось ни литра, и это будет сниться вам ещё долго. Но на трапах живых больше, чем тёмных, тихих отсеков за спиной, — и это уже что-то.\nКредиты: {credits} | Репутация: {rating}",
       isSuccess: true,
       transitions: [],
     },

@@ -720,11 +720,34 @@ branches/endings, never removing/loosening what's there) and running the full qu
       voice analysis gives away the mystery too readily) is a manual-playtest acceptance item — the
       analysis is an opt-in deep-dive the solver/casual player can skip, so it reads as a reward for
       thorough investigation rather than an auto-solve.
-- [ ] **Task 25 — `life-support.ts`**: make the deterministic run-up to the best ending's 50/50 roll
+- [x] **Task 25 — `life-support.ts`**: make the deterministic run-up to the best ending's 50/50 roll
       carry real risk earlier, not just at the final roll (A); give `scrubber_check` — the quest's only
       real risk branch — its own success/fail text (D); stop `fix_scrubber`'s label from hiding the real
       failure penalty (G); split `tally_few`'s collapsed saved-2-to-5 range into distinct text per count
-      or sub-range (B). Write/extend tests; run tests.
+      or sub-range (B). Write/extend tests; run tests. Done: (1) **Early risk (A)** — added a fourth
+      first-choice `air_medbay`, a genuine gamble (cracked-bulkhead medbay): `-2` air + a `roll` router
+      (`medbay_check` → `medbay_held`/`medbay_blown`, mirroring the scrubber gate's conditioned +
+      unconditioned-fallback shape) — a good roll saves four for almost no air, a bad one blows the patch
+      (`saved += 1`, extra `-2` air). Risk now starts at move 1, not only the late scrubber flip. The three
+      locked first-choices (`air_bridge`/`air_hold`/`air_eng`) and their exact downstream oxygen/saved
+      values are untouched. (2) **Scrubber roll narrated (D)** — `scrub_ok`/`scrub_fail` (previously silent
+      `"..."` jumps straight to `final_seal`) now route through distinct beat nodes `scrubber_restored`
+      («турбина ожила, стрелка резерва поползла вверх») / `scrubber_dead` («давится, глохнет намертво,
+      стравила литр в закоротивший контур»), each auto-advancing on to `final_seal` — so `advanceAuto`
+      still lands the two locked tests on `final_seal` at oxygen 8 / 4 exactly, but the player now reads the
+      result. Gave `scrub_ok`/`scrub_fail`/`medbay_*` real in-fiction labels instead of `"..."`. (3) **Label
+      honesty (G)** — `fix_scrubber` label now reads «продувка стоит воздуха (−1); оживёт — +5, заклинит —
+      ещё −2», disclosing the failure penalty it previously hid. (4) **Ending split (B)** — the medbay
+      gamble makes `saved` values 1/4/5 reachable in the former «few» (<6) band, so `tally` gained a
+      `tally_some` tier (`saved >= 4`, +900cr) → new `ending_few_more` («не горстка, но и не большинство»)
+      distinct from `ending_few` (0-3). The locked `saved==2 → ending_few` test still lands (2 < 4).
+      Extended the Life-support describe block with 9 new `it(...)` blocks (lucky/blown medbay + one-branch
+      router, restored/dead distinct beats + no-`...` prose, label-discloses-penalty, few_more reachable +
+      distinct-prose) — no existing assertion touched. Cyrillic baseline regenerated (life-support 22→37 for
+      the new catalog literals). Full unit suite 6124 passed / 0 failed; `tsc --noEmit` clean; `eslint` on
+      changed files 0 issues. ➕ Note: net win-rate/feel of the medbay gamble's numbers is a manual-playtest
+      acceptance item (not test-gated); +4-for-2-air on a win is intentionally juicy but genuinely risked by
+      the 1-soul-for-4-air loss, so it reads as a bet, not a strictly dominant free lunch.
 - [ ] **Task 26 — `locked-room.ts`**: give `press_check` and `verdict_gate` — the quest's two key
       dramatic beats — their own success/fail narrative text instead of a silent roll (D); give each
       suspect more than one adjective of characterization (H). Write/extend tests; run tests.

@@ -325,6 +325,112 @@ describe("Life-support resource-allocation quest", () => {
     expect(vm.currentLocation().id).toBe("final_seal");
     expect(vm.getParam("oxygen")).toBe(4);
   });
+
+  // Task 25 — (A) real risk earlier: the medbay is an early gamble, so the run
+  // is a bet from the first move, not just at the late scrubber coin-flip.
+  it("(A) a lucky medbay patch saves four for almost no air", () => {
+    const vm = new QuestVM(lifeSupportScript, 1);
+    vm.execute("air_medbay"); // oxygen 8, roll randomised
+    vm.setParam("roll", 9); // patch holds
+    advanceAuto(vm); // medbay_ok → medbay_held → allocate2
+    expect(vm.currentLocation().id).toBe("allocate2");
+    expect(vm.getParam("saved")).toBe(4);
+    expect(vm.getParam("oxygen")).toBe(8); // only the -2 attempt cost
+  });
+
+  it("(A) a blown medbay patch wastes air on a single soul", () => {
+    const vm = new QuestVM(lifeSupportScript, 1);
+    vm.execute("air_medbay"); // oxygen 8, roll randomised
+    vm.setParam("roll", 0); // patch tears loose
+    advanceAuto(vm); // medbay_fail → medbay_blown → allocate2
+    expect(vm.currentLocation().id).toBe("allocate2");
+    expect(vm.getParam("saved")).toBe(1);
+    expect(vm.getParam("oxygen")).toBe(6); // -2 attempt, -2 vent
+  });
+
+  it("(A) the medbay roll router always fires exactly one branch", () => {
+    const medbay = lifeSupportScript.locations.find(
+      (l) => l.id === "medbay_check",
+    )!;
+    // A conditional branch plus an unconditioned fallback — mirrors the scrubber
+    // gate, so a roll can never strand the player at a choiceless screen.
+    expect(medbay.transitions.some((t) => t.condition === "roll >= 5")).toBe(
+      true,
+    );
+    expect(medbay.transitions.some((t) => !t.condition)).toBe(true);
+  });
+
+  // Task 25 — (D) the scrubber roll is no longer silent: success and failure
+  // route through distinct narrative beats before final_seal.
+  it("(D) a lucky scrubber restart shows a distinct 'restored' beat", () => {
+    const vm = new QuestVM(lifeSupportScript, 1);
+    vm.execute("air_hold"); // oxygen 4, saved 6
+    vm.execute("fix_scrubber"); // oxygen 3, roll randomised
+    vm.setParam("roll", 7);
+    expect(vm.availableTransitions()[0].id).toBe("scrub_ok");
+    vm.execute("scrub_ok");
+    expect(vm.currentLocation().id).toBe("scrubber_restored");
+    advanceAuto(vm); // beat auto-advances on to final_seal
+    expect(vm.currentLocation().id).toBe("final_seal");
+  });
+
+  it("(D) a failed scrubber restart shows a distinct 'dead' beat", () => {
+    const vm = new QuestVM(lifeSupportScript, 1);
+    vm.execute("air_bridge"); // oxygen 7
+    vm.execute("fix_scrubber"); // oxygen 6, roll randomised
+    vm.setParam("roll", 1);
+    expect(vm.availableTransitions()[0].id).toBe("scrub_fail");
+    vm.execute("scrub_fail");
+    expect(vm.currentLocation().id).toBe("scrubber_dead");
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("final_seal");
+  });
+
+  it("(D) the scrubber-outcome beats carry real prose, not a '...' placeholder", () => {
+    for (const id of ["scrubber_restored", "scrubber_dead"]) {
+      const loc = lifeSupportScript.locations.find((l) => l.id === id)!;
+      const text = loc.text as string;
+      expect(text).not.toBe("...");
+      expect(text.length).toBeGreaterThan(20);
+    }
+  });
+
+  // Task 25 — (G) the fix_scrubber label discloses the -2 failure penalty, not
+  // just the -1 purge cost and +5 upside.
+  it("(G) the scrubber-restart label discloses the failure penalty", () => {
+    const alloc = lifeSupportScript.locations.find(
+      (l) => l.id === "allocate2",
+    )!;
+    const fix = alloc.transitions.find((t) => t.id === "fix_scrubber")!;
+    expect(fix.label).toContain("−2"); // failure sting is now stated
+    expect(fix.label).toContain("+5");
+    expect(fix.label).toContain("−1");
+  });
+
+  // Task 25 — (B) the collapsed low-saved range is split: 4-5 gets its own
+  // ending distinct from the <4 handful.
+  it("(B) saving a fair handful (4-5) reaches a distinct 'few_more' ending", () => {
+    const vm = new QuestVM(lifeSupportScript, 1);
+    vm.execute("air_medbay");
+    vm.setParam("roll", 9); // patch holds → saved 4
+    advanceAuto(vm); // → allocate2
+    expect(vm.getParam("saved")).toBe(4);
+    vm.execute("skip_repair");
+    vm.execute("seal_last"); // saved stays 4
+    advanceAuto(vm); // tally_some → ending_few_more
+    expect(vm.currentLocation().id).toBe("ending_few_more");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("saved")).toBe(4);
+  });
+
+  it("(B) the 4-5 ending prose differs from the <4 handful ending", () => {
+    const fewMore = lifeSupportScript.locations.find(
+      (l) => l.id === "ending_few_more",
+    )!.text as string;
+    const few = lifeSupportScript.locations.find((l) => l.id === "ending_few")!
+      .text as string;
+    expect(fewMore).not.toBe(few);
+  });
 });
 
 describe("Boarding-standoff negotiation quest", () => {
