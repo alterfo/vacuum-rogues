@@ -114,6 +114,116 @@ describe("Signal-decode quest (cryptanalysis)", () => {
       expect(a.getParam("clarity")).toBe(b.getParam("clarity"));
     }
   });
+
+  // --- Task 32: method-branched endings (B), narrated overclock (D), stakes (H)
+
+  const sigNode = (id: string) =>
+    signalDecodeScript.locations.find((l) => l.id === id)!;
+  const sigText = (id: string) => {
+    const t = sigNode(id).text;
+    return typeof t === "string" ? t : t.join(" ");
+  };
+
+  it("records which first-pass method was used (method param)", () => {
+    const d = new QuestVM(signalDecodeScript, 1);
+    expect(d.getParam("method")).toBe(0);
+    d.execute("analyze_pattern");
+    expect(d.getParam("method")).toBe(1);
+
+    const b = new QuestVM(signalDecodeScript, 1);
+    b.execute("brute_force");
+    expect(b.getParam("method")).toBe(2);
+
+    const c = new QuestVM(signalDecodeScript, 1);
+    c.execute("cross_ref");
+    expect(c.getParam("method")).toBe(3);
+  });
+
+  it("brute-forcing a full decode lands the brute-flavoured ending (B)", () => {
+    const vm = new QuestVM(signalDecodeScript, 1);
+    vm.execute("brute_force"); // power 3, clarity 5, method 2
+    vm.execute("clean_filter"); // power 1, clarity 9
+    advanceAuto(vm); // read_full -> decoded_gate -> dg_brute
+    expect(vm.currentLocation().id).toBe("ending_decoded_brute");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(3000); // reward unchanged by branch
+    expect(vm.getParam("rating")).toBe(120);
+  });
+
+  it("catalogue-matching a full decode lands the catalogue ending (B)", () => {
+    const vm = new QuestVM(signalDecodeScript, 1);
+    vm.execute("cross_ref"); // power 5, clarity 3, method 3
+    vm.execute("overclock"); // power 4, roll randomised
+    vm.setParam("roll", 9); // clean lock: +5 clarity -> 8
+    advanceAuto(vm); // oc_good -> locked -> read_full -> dg_catalog
+    expect(vm.currentLocation().id).toBe("ending_decoded_catalog");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(3000);
+  });
+
+  it("the deduction full decode keeps the original ending id (B)", () => {
+    const vm = new QuestVM(signalDecodeScript, 1);
+    vm.execute("analyze_pattern"); // method 1
+    vm.execute("clean_filter");
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("ending_decoded");
+  });
+
+  it("partial decodes also branch by method (B)", () => {
+    const brute = new QuestVM(signalDecodeScript, 1);
+    brute.execute("brute_force"); // clarity 5, method 2
+    brute.execute("quick_lock");
+    advanceAuto(brute); // read_part -> partial_gate -> pg_brute
+    expect(brute.currentLocation().id).toBe("ending_partial_brute");
+    expect(brute.isSuccess()).toBe(true);
+    expect(brute.getParam("credits")).toBe(1200);
+
+    const cat = new QuestVM(signalDecodeScript, 1);
+    cat.execute("cross_ref"); // clarity 3, method 3
+    cat.execute("clean_filter"); // clarity 7
+    advanceAuto(cat); // read_part -> partial_gate -> pg_catalog
+    expect(cat.currentLocation().id).toBe("ending_partial_catalog");
+    expect(cat.isSuccess()).toBe(true);
+  });
+
+  it("the three full-decode endings tell genuinely different stories (B)", () => {
+    const texts = [
+      sigText("ending_decoded"),
+      sigText("ending_decoded_brute"),
+      sigText("ending_decoded_catalog"),
+    ];
+    expect(new Set(texts).size).toBe(3);
+  });
+
+  it("a lucky overclock narrates its own clean-lock beat (D)", () => {
+    const vm = new QuestVM(signalDecodeScript, 1);
+    vm.execute("analyze_pattern"); // power 6, clarity 4
+    vm.execute("overclock"); // power 5
+    vm.setParam("roll", 9);
+    vm.execute("oc_good"); // -> narrated beat, not straight to interpret
+    expect(vm.currentLocation().id).toBe("overclock_locked");
+    expect(sigText("overclock_locked")).not.toBe("...");
+    expect(sigText("overclock_locked").length).toBeGreaterThan(20);
+    advanceAuto(vm); // ocl_read -> interpret -> ... -> decoded
+    expect(vm.isSuccess()).toBe(true);
+  });
+
+  it("a fried overclock narrates its own overheat beat (D)", () => {
+    const vm = new QuestVM(signalDecodeScript, 1);
+    vm.execute("analyze_pattern"); // power 6, clarity 4
+    vm.execute("overclock"); // power 5
+    vm.setParam("roll", 0);
+    vm.execute("oc_bad"); // clarity 5, power 3 -> no crit -> beat
+    expect(vm.currentLocation().id).toBe("overclock_fried");
+    expect(sigText("overclock_fried")).not.toBe("...");
+    expect(sigText("overclock_fried").length).toBeGreaterThan(20);
+  });
+
+  it("the overclock outcome labels are no longer bare placeholders (D)", () => {
+    for (const t of sigNode("overclock_check").transitions) {
+      expect(t.label).not.toBe("...");
+    }
+  });
 });
 
 describe("Orbital-escape quest (burn scheduling)", () => {

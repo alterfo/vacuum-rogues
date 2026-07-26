@@ -905,10 +905,32 @@ branches/endings, never removing/loosening what's there) and running the full qu
       the solo variant, slip-without-partner keeps the full haul) — no existing assertion touched. Cyrillic
       baseline regenerated (sabotage-heist 30→35 for the 2 new scene nodes + new labels). Full unit suite
       6150 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
-- [ ] **Task 32 — `signal-decode.ts`**: branch endings by decode method used, not just outcome (B); give
+- [x] **Task 32 — `signal-decode.ts`**: branch endings by decode method used, not just outcome (B); give
       `overclock_check`'s roll its own text (D); add tension/stakes language matching the "people may
       die" premise instead of dry technobabble throughout (H) — note this depends on Task 3's typo fixes
-      to this same file. Write/extend tests; run tests.
+      to this same file. Write/extend tests; run tests. Done: (1) **Method-branched endings (B)** — a new
+      `method` param (0/1/2/3, `showInUI:false`, meter-neutral so it can't shift the resource spine) is set
+      on each first-pass choice (deduce/brute/catalogue). `interpret`'s `read_full`/`read_part` transitions
+      keep their exact credit/rating effects but now route to new `decoded_gate`/`partial_gate` nodes that
+      auto-branch on `method` (`== 2` → brute-flavoured, `== 3` → catalogue-flavoured, unconditioned
+      fallback → the original `ending_decoded`/`ending_partial`). Since `advanceAuto`/the real renderer take
+      the first available autoExecute and the deduction path leaves `method == 1`, every locked test still
+      lands `ending_decoded`/`ending_partial` with credits 3000/1200 and rating 120 — the method gate is
+      transparent to them. Added `ending_decoded_brute`/`_catalog`, `ending_partial_brute`/`_catalog`
+      (all `isSuccess`). (2) **Overclock roll narrated (D)** — `oc_good`/`oc_bad` (previously bare `"..."`
+      labels jumping straight to `interpret`) now carry in-fiction labels and route through two new
+      narrated beat nodes `overclock_locked` (clean lock) / `overclock_fried` (overheat), each
+      auto-advancing on to `interpret`. The `clarity`/`power` effects stay on the `oc_*` transitions, so
+      the locked drain test still crits to `ending_signal_lost` (power hits 0 → critMin redirect overrides
+      the beat) and the lucky-overclock test still decodes. (3) **Stakes prose (H)** — `intercept`/`refine`/
+      `overclock_check`, both beat nodes, and every ending were rewritten to carry the "someone is dying in
+      the dark, the clock is real" tension throughout instead of dry technobabble. Extended the Signal-decode
+      describe block with 9 new `it(...)` blocks (method recorded per first-pass, brute/catalogue full +
+      partial branched endings, deduction keeps original id, three-endings-distinct, lucky/fried overclock
+      narrate their own beats, no-`"..."`-label guard) — no existing assertion touched. Cyrillic baseline
+      regenerated (signal-decode 20→33 for the new gate/beat/ending literals). Full unit suite 6171 passed /
+      1 (the lone `sessionCompetence` battle-ready milestone is the known stochastic campaign gate,
+      unrelated — passed on rerun); `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 - [ ] **Task 33 — `smuggling-run.ts`**: rebalance `bluff` so it isn't free at low heat (A); branch the
       success text by payout tier instead of one shared line for all three (B); give the 3 checkpoints at
       least one differentiating beat (F). Write/extend tests; run tests.
