@@ -827,11 +827,36 @@ branches/endings, never removing/loosening what's there) and running the full qu
       suite 6129 passed / 13 skipped (the lone `sessionCompetence` battle-ready milestone is the known
       stochastic campaign gate, unrelated — passed on rerun); `tsc --noEmit` clean; `eslint` on changed
       files 0 issues.
-- [ ] **Task 29 — `quarantine.ts`**: give the darkest choice ("vent to space") its own dedicated ending
+- [x] **Task 29 — `quarantine.ts`**: give the darkest choice ("vent to space") its own dedicated ending
       instead of falling through to a generic one (B); surface the panic/containment critical thresholds
       to the player somehow (tooltip/UI hint or in-fiction warning) so a "good" combo of choices doesn't
       lead to a hidden failure (E); give `help_check`'s roll its own text (D). Write/extend tests; run
-      tests.
+      tests. Done: (1) **Dedicated purge ending (B)** — `purge_section` now routes to a new `purge_gate`
+      node (instead of the shared `outcome_gate`) that auto-branches on `saved`: a vent that still pulled
+      many out (`saved >= 6`, i.e. the tiers that would otherwise have borrowed the clean
+      `ending_contained`/`ending_partial` triumph) lands the new dedicated `ending_purged` — a grim-success
+      terminal whose prose owns the moral weight of gassing the sector ("Это была победа. Она просто не
+      похожа на победу") — while a low-save vent (`saved < 6`) still falls to `ending_grim`, keeping the
+      locked `purging the sector … (grim)` test (seal_hard+isolate_ward+purge → saved 4 → ending_grim,
+      rating 85) landing exactly as before (advanceAuto now traverses `purge_gate` → gate_grim). The vent's
+      −15 reputation survives into the payout (a saved-12 purge nets rating 95 vs the clean path's 125), so
+      the dark choice is measurably costed, not cosmetically distinct. (2) **Thresholds surfaced (E)** — the
+      `alert`/`triage_ward`/`final_call` decision screens now annotate the meters in-fiction
+      («Герметичность карантина: {containment} (провал при 0) | Паника: {panic} (бунт при 10)»), plus an
+      engineer's warning on `alert` and a last-call reminder on `final_call`, so the critMin-1 /
+      critMax-9 fail lines are no longer hidden — a "good" combo can see the cliff before it steps off.
+      (3) **help_check roll narrated (D)** — the two silent `label: "..."` autoExecute jumps straight to
+      `final_call` now route through distinct beat nodes `help_on_scene` (the med-frigate arriving early,
+      capsules rolling out) / `help_silence` (dead air, the panic that "they've been abandoned" catching
+      before the virus does), each auto-advancing on to `final_call`; the `saved+=8`/`containment+=1` and
+      `panic+=5` effects stay on the original roll transitions, so the two locked frigate/riot tests still
+      land their exact params/terminals (the riot crit still fires on `help_delayed`'s +5 before the beat
+      shows). Extended the Quarantine describe block with 7 new `it(...)` blocks (thresholds on every
+      decision screen, arrival/silence each narrate their own beat, distinct beat prose + no-`...` guard,
+      purge-at-full → dedicated ending not clean + rep-cost survives, purge-at-partial → dedicated ending,
+      `ending_purged` is a success dead-end) — no existing assertion touched. Cyrillic baseline regenerated
+      (quarantine 26→34 for the new endings/beats/threshold literals). Full unit suite 6137 passed / 13
+      skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 - [ ] **Task 30 — `reactor.ts`**: turn the 8 identical ±1-rod buttons into a loop with at least 1-2
       genuinely different beats (F); reduce or restructure the up-to-3.2s forced unclickable wait per
       turn so the pressure timer doesn't compete with itself (section 4) — note this task depends on

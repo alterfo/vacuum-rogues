@@ -448,6 +448,101 @@ describe("Quarantine quest (containment dilemma)", () => {
     expect(vm.currentLocation().id).toBe("ending_partial");
     expect(vm.isSuccess()).toBe(true);
   });
+
+  // Task 29 — (E) surface the critical thresholds in-fiction on decision screens
+  it("surfaces the containment/panic fail thresholds on every decision screen", () => {
+    const vm = new QuestVM(quarantineScript, 1);
+    // alert
+    expect(vm.currentLocationText()).toContain("провал при 0");
+    expect(vm.currentLocationText()).toContain("бунт при 10");
+    vm.execute("calm_broadcast"); // -> triage_ward
+    expect(vm.currentLocationText()).toContain("провал при 0");
+    expect(vm.currentLocationText()).toContain("бунт при 10");
+    vm.execute("isolate_ward"); // -> final_call
+    expect(vm.currentLocationText()).toContain("провал при 0");
+    expect(vm.currentLocationText()).toContain("бунт при 10");
+  });
+
+  // Task 29 — (D) the med-frigate roll narrates its own arrival/silence beat
+  it("a med-frigate arrival narrates its own beat before the final call", () => {
+    const vm = new QuestVM(quarantineScript, 1);
+    vm.execute("calm_broadcast"); // panic 1
+    vm.execute("request_help");
+    vm.setParam("roll", 9); // arrives
+    const avail = vm.availableTransitions();
+    vm.execute(avail[0].id); // help_arrives (roll >= 4)
+    expect(vm.currentLocation().id).toBe("help_on_scene");
+    expect(vm.currentLocationText().length).toBeGreaterThan(0);
+    advanceAuto(vm); // beat auto-advances on to the final call
+    expect(vm.currentLocation().id).toBe("final_call");
+    expect(vm.getParam("saved")).toBe(8);
+  });
+
+  it("a silent med-channel narrates its own beat before the final call", () => {
+    const vm = new QuestVM(quarantineScript, 1);
+    vm.execute("calm_broadcast"); // panic 1
+    vm.execute("request_help");
+    vm.setParam("roll", 0); // no answer
+    const avail = vm.availableTransitions();
+    vm.execute(avail[0].id); // help_delayed (roll < 4)
+    expect(vm.currentLocation().id).toBe("help_silence"); // panic 6, no riot
+    expect(vm.currentLocationText().length).toBeGreaterThan(0);
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("final_call");
+  });
+
+  it("the arrival and silence beats read differently (no shared roll text)", () => {
+    const arrive = quarantineScript.locations.find(
+      (l) => l.id === "help_on_scene",
+    );
+    const silence = quarantineScript.locations.find(
+      (l) => l.id === "help_silence",
+    );
+    expect(arrive).toBeDefined();
+    expect(silence).toBeDefined();
+    expect(arrive!.text).not.toBe(silence!.text);
+    // neither is the old mute placeholder
+    expect(arrive!.text).not.toBe("...");
+    expect(silence!.text).not.toBe("...");
+  });
+
+  // Task 29 — (B) venting the sector routes to its own dedicated ending when
+  // many were pulled out first, instead of borrowing the clean contained/partial
+  // ending; the reputation hit for the dark choice survives into the payout.
+  it("venting after saving most reaches a dedicated ending, not the clean one", () => {
+    const vm = new QuestVM(quarantineScript, 1);
+    vm.execute("screen_all"); // containment 6, saved 6
+    vm.execute("treat_infected"); // containment 3, saved 12, panic 4
+    vm.execute("purge_section"); // containment 8, rating 85 -> purge_gate
+    advanceAuto(vm); // saved 12 -> purge_full -> ending_purged
+    expect(vm.currentLocation().id).toBe("ending_purged");
+    expect(vm.currentLocation().id).not.toBe("ending_contained");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("saved")).toBe(12);
+    expect(vm.getParam("credits")).toBe(3000);
+    expect(vm.getParam("rating")).toBe(95); // 100 - 15 (vent) + 10; below the clean 125
+  });
+
+  it("venting at the partial tier still lands the dedicated purge ending", () => {
+    const vm = new QuestVM(quarantineScript, 1);
+    vm.execute("screen_all"); // containment 6, saved 6
+    vm.execute("isolate_ward"); // containment 8, saved 8
+    vm.execute("purge_section"); // containment 13, rating 85 -> purge_gate
+    advanceAuto(vm); // saved 8 -> purge_partial -> ending_purged
+    expect(vm.currentLocation().id).toBe("ending_purged");
+    expect(vm.currentLocation().id).not.toBe("ending_partial");
+    expect(vm.getParam("credits")).toBe(1200);
+    expect(vm.getParam("rating")).toBe(90); // 100 - 15 + 5
+  });
+
+  it("the dedicated purge ending is a success terminal that dead-ends", () => {
+    const purged = quarantineScript.locations.find(
+      (l) => l.id === "ending_purged",
+    );
+    expect(purged).toBeDefined();
+    expect(purged!.isSuccess).toBe(true);
+    expect(purged!.transitions).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -16,14 +16,22 @@ import type { QuestScript } from "../QuestScript";
 //   2. Triage ward — send medics in (saves lives, breaks the seal a little),
 //      isolate and treat remotely (safe, few saved), or call a med-frigate
 //      (roll: it arrives, or the wait spikes panic).
-//   3. Final call — vent the infected section (guarantees containment, grim),
+//   3. Final call — vent the infected section (guarantees containment, its own
+//      grim ending when many were pulled out first — you gassed the rest),
 //      reinforce the seals (safe hold), or throw the doors for a last evac
 //      (saves many, strains containment).
-//   4. Outcome — an auto gate on `saved`, reached only if the seal held.
-// Outcomes (by `saved`, unless containment or panic broke first):
+//   4. Outcome — an auto gate on `saved`, reached only if the seal held. Venting
+//      routes to its own gate (`purge_gate`) so the dark choice never borrows the
+//      clean "санитарный контроль doverяet you" ending.
+// The critical thresholds are surfaced in-fiction on every decision screen
+// (the seal tears at 0 герметичности → ending_outbreak; the mob breaks it open
+// at 10 паники → ending_riot) so a "good" combo can't walk into a hidden fail.
+// The med-frigate roll narrates its own arrival/silence beat instead of a mute
+// jump. Outcomes (by `saved`, unless containment or panic broke first):
 //   - ending_contained (saved >= 12 — sealed and most pulled out)  SUCCESS
 //   - ending_partial   (saved >= 6  — sealed, a hard toll)         SUCCESS
 //   - ending_grim      (saved < 6   — sealed, but few made it)     SUCCESS
+//   - ending_purged    (vented the sector after pulling many out)  SUCCESS
 //   - ending_outbreak  (seal breached — station-wide spread)       FAILURE
 //   - ending_riot      (panic broke the quarantine open)           FAILURE
 export const quarantineScript: QuestScript = {
@@ -87,7 +95,7 @@ export const quarantineScript: QuestScript = {
   locations: [
     {
       id: "alert",
-      text: "Красный вызов с колониальной станции: в седьмом секторе — вспышка. Неизвестный вирус, инкубация в часы, а не в сутки. На вас — карантинный протокол, и от первого решения зависит, удержите ли вы заразу за переборками или выпустите её на весь жилой обод.\nГерметичность карантина: {containment} | Паника: {panic}",
+      text: "Красный вызов с колониальной станции: в седьмом секторе — вспышка. Неизвестный вирус, инкубация в часы, а не в сутки. На вас — карантинный протокол, и от первого решения зависит, удержите ли вы заразу за переборками или выпустите её на весь жилой обод.\nИнженер предупреждает: контур рвётся, если герметичность упадёт до 0, а толпа сносит посты, если паника дойдёт до 10.\nГерметичность карантина: {containment} (провал при 0) | Паника: {panic} (бунт при 10)",
       transitions: [
         {
           id: "seal_hard",
@@ -114,7 +122,7 @@ export const quarantineScript: QuestScript = {
     },
     {
       id: "triage_ward",
-      text: "В заражённом крыле — те, кто ещё жив. Медотсек на связи и ждёт вашего слова: идти внутрь к людям или держать оборону снаружи.\nГерметичность карантина: {containment} | Паника: {panic} | Спасено людей: {saved}",
+      text: "В заражённом крыле — те, кто ещё жив. Медотсек на связи и ждёт вашего слова: идти внутрь к людям или держать оборону снаружи.\nГерметичность карантина: {containment} (провал при 0) | Паника: {panic} (бунт при 10) | Спасено людей: {saved}",
       transitions: [
         {
           id: "treat_infected",
@@ -145,30 +153,56 @@ export const quarantineScript: QuestScript = {
       transitions: [
         {
           id: "help_arrives",
-          label: "...",
-          toLocation: "final_call",
+          label: "Фрегат отвечает на вызов",
+          toLocation: "help_on_scene",
           condition: "roll >= 4",
           effects: ["saved += 8", "containment += 1"],
           autoExecute: true,
         },
         {
           id: "help_delayed",
-          label: "...",
-          toLocation: "final_call",
+          label: "Эфир молчит",
+          toLocation: "help_silence",
           effects: ["panic += 5"],
           autoExecute: true,
         },
       ],
     },
     {
+      id: "help_on_scene",
+      text: "Эфир вздрагивает: медицинский фрегат ложится на швартовку раньше срока. Из шлюзов выкатываются капсулы жизнеобеспечения, и людей из седьмого сектора начинают выносить десятками. Врачи в защитных костюмах перекрывают ваш контур ещё одним рубежом — герметичность держится крепче, чем вы смели надеяться.",
+      transitions: [
+        {
+          id: "help_arrives_next",
+          label: "К последнему решению",
+          toLocation: "final_call",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "help_silence",
+      text: "Вы вслушиваетесь в помехи минуту, другую — фрегат не отвечает. За переборками это слышат тоже: раз помощь не идёт, значит бросили. Крик, ещё крик, глухие удары в створки — паника вспыхивает быстрее, чем распространяется зараза.",
+      transitions: [
+        {
+          id: "help_delayed_next",
+          label: "К последнему решению",
+          toLocation: "final_call",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
       id: "final_call",
-      text: "Вирус подобрался к самым стыкам карантинного контура. Датчики герметичности мигают, толпа за прозрачной переборкой давит на створки. Последнее решение — и назад дороги не будет.\nГерметичность карантина: {containment} | Паника: {panic} | Спасено людей: {saved}",
+      text: "Вирус подобрался к самым стыкам карантинного контура. Датчики герметичности мигают, толпа за прозрачной переборкой давит на створки. Последнее решение — и назад дороги не будет. Помните: на нуле герметичности контур вскроется сам, а на десятке паники толпа не станет ждать вас.\nГерметичность карантина: {containment} (провал при 0) | Паника: {panic} (бунт при 10) | Спасено людей: {saved}",
       transitions: [
         {
           id: "purge_section",
           label:
             "Стравить заражённый сектор в космос — гарантия герметичности ценой оставшихся там (+5 герметичности, −15 репутации)",
-          toLocation: "outcome_gate",
+          toLocation: "purge_gate",
           effects: ["containment += 5", "rating -= 15"],
         },
         {
@@ -217,6 +251,35 @@ export const quarantineScript: QuestScript = {
       ],
     },
     {
+      id: "purge_gate",
+      text: "Клапаны седьмого сектора отходят с тяжёлым лязгом, и вакуум делает то, что должны были сделать вы. Контур запечатан намертво — а теперь считают тех, кого успели вывести до того, как вы открыли створки в пустоту.\nСпасено людей: {saved}",
+      transitions: [
+        {
+          id: "purge_full",
+          label: "...",
+          toLocation: "ending_purged",
+          condition: "saved >= 12",
+          effects: ["credits += 3000", "rating += 10"],
+          autoExecute: true,
+        },
+        {
+          id: "purge_partial",
+          label: "...",
+          toLocation: "ending_purged",
+          condition: "saved >= 6",
+          effects: ["credits += 1200", "rating += 5"],
+          autoExecute: true,
+        },
+        {
+          id: "purge_grim",
+          label: "...",
+          toLocation: "ending_grim",
+          effects: ["credits += 400"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
       id: "ending_contained",
       text: "Печати выдержали, и вирус остался за переборками — а из седьмого сектора вы вытащили почти всех. Колониальный медцентр рапортует: вспышка локализована, ни одного нового заражения на ободе. Люди, которых вы вывели, ещё не понимают, как близко прошла смерть; вы понимаете. Санитарный контроль сектора заносит ваш позывной в список тех, кому доверяют красный вызов.\nКредиты: {credits} | Репутация: {rating}",
       isSuccess: true,
@@ -231,6 +294,12 @@ export const quarantineScript: QuestScript = {
     {
       id: "ending_grim",
       text: "Контур вы удержали — вирус не вырвался. Но за печатями осталось слишком много тех, до кого вы не дотянулись. Горстка выживших молча грузится в шлюз, не глядя на запечатанный сектор. Вы сделали жестокий выбор и спасли станцию — но цена этой победы будет сниться вам ещё не одну ночь.\nСпасено людей: {saved}",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
+      id: "ending_purged",
+      text: "Вы стравили заражённый сектор в космос — и станция осталась жить. Тех, кого успели вывести до того, как открылись клапаны, набралось немало; их вы спасли. Но красный отсвет пустого седьмого сектора будет стоять у вас перед глазами дольше, чем благодарность выживших. Санитарный контроль закрывает вспышку и молча заносит цену в протокол — а вместе с ней и то, что заплатили за неё не только вы. Это была победа. Она просто не похожа на победу.\nСпасено людей: {saved} | Кредиты: {credits} | Репутация: {rating}",
       isSuccess: true,
       transitions: [],
     },
