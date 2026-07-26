@@ -300,16 +300,32 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 9: Surface population/economy/politics/attitude in PlanetInfoPanel
-- [ ] `PlanetInfoPanel.ts` (~lines 52-72) / `PlanetScene.ts` `addInfoPanel()` (~1396-1497): the domain
+- [x] `PlanetInfoPanel.ts` (~lines 52-72) / `PlanetScene.ts` `addInfoPanel()` (~1396-1497): the domain
       already has population, economy type, political system, and player attitude (customs logic already
       reads `politicalSystem`) — SOURCE-OF-TRUTH §11.1 requires showing all four on the info panel and
-      none currently render. Add them.
-- [ ] While touching this file: migrate to `scaledText` (currently ignores font-scale setting, per
+      none currently render. Add them. Done: new shared pure module `src/presentation/ui/planetProfile.ts`
+      (`ECONOMY_RU`/`POLITICAL_RU` labels, `deterministicPopulation`/`resolvePopulation`/`formatPopulation`)
+      — the single source `GovernmentScene` was refactored onto (deleting its private copies) and both info
+      surfaces now consume. `PlanetInfoPanel` gained «Население/Экономика/Строй/Отношение» lines (economy/
+      politics/reputation threaded in through 3 new optional ctor params, wired from `PlanetManager` off the
+      current `StarSystem` + `player.getReputation`); `PlanetScene.addInfoPanel` gained a compact
+      «Население · Экономика · Строй» line (attitude was already its Отношение line) with `statY` bumped
+      +20 to make room.
+- [x] While touching this file: migrate to `scaledText` (currently ignores font-scale setting, per
       `src/presentation/CLAUDE.md`'s migration list) and add `wordWrap` to the planet-name label
-      (currently can overflow its fixed 220px panel)
-- [ ] write a test asserting the panel renders population/economy/politicalSystem/attitude text for a
-      representative planet fixture
-- [ ] run tests — must pass before Task 10
+      (currently can overflow its fixed 220px panel). Done: every `PlanetInfoPanel` line now builds via
+      `scaledText`; the title uses `wordWrap`/`breakWords` at `PANEL_WIDTH - 20`, and the background rect is
+      sized to the (now taller, habitable-vs-drone-variable) content stack instead of a fixed 200px.
+- [x] write a test asserting the panel renders population/economy/politicalSystem/attitude text for a
+      representative planet fixture. Done: `src/tests/presentation/planetInfoPanelProfile.test.ts` (fake-pixi,
+      mirrors the existing faction test) — asserts the four lines render, live-population override
+      (`2.4 млн`), graceful «—» fallback for unknown economy/politics, and that drone planets omit the
+      social lines.
+- [x] run tests — must pass before Task 10. Done: full unit suite 6008 passed / 13 skipped / 0 failed;
+      `tsc --noEmit` clean; `eslint` on changed files 0 issues (repo-wide `npm run lint` fails identically on
+      HEAD — pre-existing `no-explicit-any` test-file backlog, unrelated); Cyrillic ratchet regenerated for
+      the intentional new UI labels (PlanetInfoPanel 15→16, PlanetScene 74→75, new planetProfile 10;
+      GovernmentScene 36→28 as its literals moved to the shared module).
 
 ### Task 10: Robot-assistant voice at repair/refuel/diagnostic
 - [ ] SOURCE-OF-TRUTH §11.4: hangar interactions should show a "System check: … Ship ready for launch"

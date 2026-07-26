@@ -35,6 +35,12 @@ import { Faction } from "@/types/faction";
 import { factionDisplayLabel } from "@/config/factionConfig";
 import { mountSceneHelp, helpButtonRect } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
+import {
+  economyLabel,
+  politicalLabel,
+  resolvePopulation,
+  formatPopulation,
+} from "./ui/planetProfile";
 import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
 import { hullStatus } from "@/systems/equipment/hullStatus";
 import { launchDenialReason } from "@/systems/equipment/launchDenial";
@@ -1135,7 +1141,7 @@ export class PlanetScene extends GameScene {
     const nameY = planetCY + PLANET_VISUAL_RADIUS + 16;
     const subtitleY = nameY + 24;
     const infoY = nameY + 46;
-    const statY = infoY + 64;
+    const statY = infoY + 84;
 
     // Planet name header: larger font in the controlling faction's colour.
     const title = new Text({
@@ -1477,6 +1483,30 @@ export class PlanetScene extends GameScene {
       ui.addChild(repText);
     }
 
+    // Line 2b: population · economy · political system (inhabited planets only)
+    // — SOURCE-OF-TRUTH §11.1 wants all four social attributes on the card
+    // (attitude is the reputation line above).
+    const profileYOffset = this.planet.isHabitable ? 20 : 0;
+    if (this.planet.isHabitable) {
+      const pop = resolvePopulation(this.planet.population, this.planet.id);
+      const profileText = new Text({
+        text: `Население: ${formatPopulation(pop)}  •  ${economyLabel(
+          system?.economyType,
+        )}  •  ${politicalLabel(system?.politicalSystem)}`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: scaledFont(12),
+          fill: 0x7799bb,
+          align: "center",
+        },
+      });
+      profileText.eventMode = "none";
+      profileText.anchor.set(0.5, 0);
+      profileText.x = w / 2;
+      profileText.y = topY + 20 + repYOffset;
+      ui.addChild(profileText);
+    }
+
     // Line 3: market goods (or inhabitation status)
     const goodsLine = this.planet.isHabitable
       ? `Рынок: ${goods || "нет данных"}`
@@ -1493,7 +1523,7 @@ export class PlanetScene extends GameScene {
     goodsText.eventMode = "none";
     goodsText.anchor.set(0.5, 0);
     goodsText.x = w / 2;
-    goodsText.y = topY + 20 + repYOffset;
+    goodsText.y = topY + 20 + repYOffset + profileYOffset;
     ui.addChild(goodsText);
   }
 

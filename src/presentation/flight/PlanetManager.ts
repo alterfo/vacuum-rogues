@@ -555,13 +555,22 @@ export class PlanetManager implements FlightModule {
     const currentSystem = this.gameEngine?.galaxy?.systems.find(
       (s) => s.id === currentSystemId,
     );
+    const ownerFaction = currentSystem?.ownerFaction;
+    const player = this.gameEngine?.player;
+    const reputation =
+      ownerFaction != null && typeof player?.getReputation === "function"
+        ? player.getReputation(ownerFaction)
+        : undefined;
     this.planetInfoPanel = new PlanetInfoPanel(
       planet,
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
       flightDays,
       shipAtPlanet ? () => this.onPlanetLanding?.(planet.id) : undefined,
-      currentSystem?.ownerFaction,
+      ownerFaction,
+      currentSystem?.economyType,
+      currentSystem?.politicalSystem,
+      reputation,
     );
     this.uiLayer.addChild(this.planetInfoPanel.container);
   }

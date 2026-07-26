@@ -1,7 +1,19 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import type { Planet } from "@/domain/Planet";
 import { Faction } from "@/types/faction";
 import { factionDisplayLabel } from "@/config/factionConfig";
+import { scaledText } from "./ui/scaledText";
+import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
+import {
+  economyLabel,
+  politicalLabel,
+  resolvePopulation,
+  formatPopulation,
+} from "./ui/planetProfile";
+
+const PANEL_WIDTH = 220;
+/** Vertical step between stacked info lines. */
+const LINE_STEP = 20;
 
 export class PlanetInfoPanel {
   public readonly container: Container;
@@ -9,6 +21,9 @@ export class PlanetInfoPanel {
   private readonly planet: Planet;
   private readonly onLand?: () => void;
   private readonly ownerFaction?: string;
+  private readonly economyType?: string;
+  private readonly politicalSystem?: string;
+  private readonly reputation?: number;
 
   constructor(
     planet: Planet,
@@ -17,11 +32,17 @@ export class PlanetInfoPanel {
     flightDays: number,
     onLand?: () => void,
     ownerFaction?: string,
+    economyType?: string,
+    politicalSystem?: string,
+    reputation?: number,
   ) {
     this.planet = planet;
     this.flightDays = flightDays;
     this.onLand = onLand;
     this.ownerFaction = ownerFaction;
+    this.economyType = economyType;
+    this.politicalSystem = politicalSystem;
+    this.reputation = reputation;
     this.container = new Container();
     this.container.x = screenWidth - 240;
     this.container.y = 80;
@@ -29,70 +50,84 @@ export class PlanetInfoPanel {
   }
 
   render(): void {
+    // Title can wrap to two lines; the info stack + land button follow it, and
+    // the background rect is sized to the resulting content height.
+    const title = scaledText(this.planet.name, 14, 0x00ffff, {
+      fontWeight: "bold",
+      wordWrap: true,
+      wordWrapWidth: PANEL_WIDTH - 20,
+      breakWords: true,
+    });
+    title.x = 10;
+    title.y = 10;
+
+    const titleHeight = Number.isFinite(title.height)
+      ? title.height
+      : LINE_STEP;
+    const contentTop = title.y + Math.max(LINE_STEP + 5, titleHeight + 6);
+
+    // Info line count is known up front, so the background can be sized and
+    // mounted (behind everything) before the lines — avoids reordering the
+    // scene graph after the fact.
+    const infoLineCount = this.planet.isHabitable ? 7 : 3;
+    const panelHeight = contentTop + infoLineCount * LINE_STEP + LINE_STEP + 12;
+
     const bg = new Graphics();
-    bg.rect(0, 0, 220, 200);
+    bg.rect(0, 0, PANEL_WIDTH, panelHeight);
     bg.fill({ color: 0x000000, alpha: 0.8 });
     bg.stroke({ color: 0x00ffff, width: 2 });
     bg.eventMode = "static";
     this.container.addChild(bg);
-
-    const title = new Text({
-      text: this.planet.name,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-      },
-    });
-    title.x = 10;
-    title.y = 10;
     this.container.addChild(title);
 
-    const type = new Text({
-      text: `Тип: ${this.getType(this.planet.type)}`,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xaaaaaa },
-    });
-    type.x = 10;
-    type.y = 35;
-    this.container.addChild(type);
+    let y = contentTop;
+    const addLine = (text: string, color: number, rawColor = false): void => {
+      const line = scaledText(text, 11, color, { rawColor });
+      line.x = 10;
+      line.y = y;
+      line.eventMode = "none";
+      this.container.addChild(line);
+      y += LINE_STEP;
+    };
 
-    // Unowned/unset systems are the project's "Независимая" (independent), not
-    // "Окраинники" (the OUTLANDERS faction) — the former hardcoded fallback
-    // silently mislabelled every ownerless planet as an Outlander world.
-    const factionName = factionDisplayLabel(
-      this.ownerFaction ?? Faction.INDEPENDENT,
-    );
-    const habitability = new Text({
-      text: this.planet.isHabitable
-        ? `Фракция: ${factionName}`
-        : `Дроны: ${this.planet.drones}`,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x88ccff },
-    });
-    habitability.x = 10;
-    habitability.y = 55;
-    this.container.addChild(habitability);
+    addLine(`Тип: ${this.getType(this.planet.type)}`, 0xaaaaaa);
 
-    const flight = new Text({
-      text: `Перелёт: ${this.flightDays} дн.`,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xffaa00 },
-    });
-    flight.x = 10;
-    flight.y = 80;
-    this.container.addChild(flight);
+    if (this.planet.isHabitable) {
+      // Unowned/unset systems are the project's "Независимая" (independent), not
+      // "Окраинники" (the OUTLANDERS faction) — the former hardcoded fallback
+      // silently mislabelled every ownerless planet as an Outlander world.
+      const factionName = factionDisplayLabel(
+        this.ownerFaction ?? Faction.INDEPENDENT,
+      );
+      addLine(`Фракция: ${factionName}`, 0x88ccff);
+
+      const pop = resolvePopulation(
+        this.planet.population,
+        this.planet.id ?? this.planet.name ?? "",
+      );
+      addLine(`Население: ${formatPopulation(pop)}`, 0x88ccff);
+      addLine(`Экономика: ${economyLabel(this.economyType)}`, 0x88ccff);
+      addLine(`Строй: ${politicalLabel(this.politicalSystem)}`, 0x88ccff);
+
+      const rep = this.reputation ?? 0;
+      addLine(
+        `Отношение: ${getRepLabel(rep)}`,
+        getRepColor(rep),
+        /* rawColor */ true,
+      );
+    } else {
+      addLine(`Дроны: ${this.planet.drones}`, 0x88ccff);
+    }
+
+    addLine(`Перелёт: ${this.flightDays} дн.`, 0xffaa00);
 
     if (this.onLand) {
-      const land = new Text({
-        text: "[Приземлиться]",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: 0x00ff00,
-          fontWeight: "bold",
-        },
+      const land = scaledText("[Приземлиться]", 12, 0x00ff00, {
+        fontWeight: "bold",
+        rawColor: true,
       });
       land.x = 10;
-      land.y = 110;
+      land.y = y + 4;
       land.eventMode = "static";
       land.cursor = "pointer";
       land.on("pointerdown", (e) => {
@@ -106,13 +141,15 @@ export class PlanetInfoPanel {
         land.alpha = 1;
       });
       this.container.addChild(land);
+      y = land.y + LINE_STEP;
     } else {
-      const hint = new Text({
-        text: "Подлетите ближе,\nчтобы приземлиться",
-        style: { fontFamily: "Courier New", fontSize: 10, fill: 0xb4b4b4 },
-      });
+      const hint = scaledText(
+        "Подлетите ближе,\nчтобы приземлиться",
+        10,
+        0xb4b4b4,
+      );
       hint.x = 10;
-      hint.y = 110;
+      hint.y = y + 4;
       hint.eventMode = "none";
       this.container.addChild(hint);
     }

@@ -16,6 +16,11 @@ import {
   type GeneratedQuest,
 } from "@/systems/quests/QuestGenerator";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
+import {
+  ECONOMY_RU,
+  POLITICAL_RU,
+  deterministicPopulation,
+} from "./ui/planetProfile";
 
 interface GovernmentContext {
   gameEngine?: GameEngine;
@@ -56,28 +61,6 @@ const DIALOGUE_LINES: Record<RepTier, string[]> = {
 
 export function getDialogueLines(tier: RepTier): string[] {
   return DIALOGUE_LINES[tier];
-}
-
-const ECONOMY_RU: Record<string, string> = {
-  AGRICULTURAL: "Аграрная",
-  INDUSTRIAL: "Промышленная",
-  MIXED: "Смешанная",
-};
-
-const POLITICAL_RU: Record<string, string> = {
-  ANARCHY: "Анархия",
-  DICTATORSHIP: "Диктатура",
-  MONARCHY: "Монархия",
-  REPUBLIC: "Республика",
-  DEMOCRACY: "Демократия",
-};
-
-function deterministicPopulation(planetId: string): number {
-  let hash = 0;
-  for (let i = 0; i < planetId.length; i++) {
-    hash = (hash * 31 + planetId.charCodeAt(i)) >>> 0;
-  }
-  return 100_000 + (hash % 9_900_000);
 }
 
 export class GovernmentScene extends GameScene {
