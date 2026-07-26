@@ -55,6 +55,7 @@ import {
   sellUninstalledGear,
 } from "@/systems/equipment/sellGear";
 import { hullStatus, repairCost } from "@/systems/equipment/hullStatus";
+import { diagnosticVoiceLine } from "@/systems/equipment/serviceVoice";
 import {
   adjustPlayerCredits,
   GL_COUNTERPARTY,
@@ -1846,7 +1847,9 @@ export class HangarPanel {
       );
       ship.repair();
       this.sfx("buy");
-      this.ctx!.showToast(`Корпус восстановлен за ${cost} ₡`, 0x44ff88);
+      // Robot-assistant diagnostic voice (canon §11.4) instead of a bare
+      // mechanical confirmation.
+      this.ctx!.showToast(diagnosticVoiceLine(cost), 0x44ff88);
       this.ctx!.rerender();
     });
     container.addChild(repairBtn);

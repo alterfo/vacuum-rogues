@@ -11,6 +11,10 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Station } from "@/domain/Station";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { launchDenialReason } from "@/systems/equipment/launchDenial";
+import {
+  repairVoiceLine,
+  refuelVoiceLine,
+} from "@/systems/equipment/serviceVoice";
 import { SceneType, StationType, QuestType, type MicroModule } from "@/types";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
@@ -762,8 +766,11 @@ export class StationScene extends GameScene {
       "Ремонт корпуса",
     );
     ship.hullHP = ship.maxHull;
-    this.showToast(`Корпус восстановлен за ${cost} ₡`, 0x44ff88);
+    // Re-render FIRST — render() nulls `this.toast` and remounts a fresh empty
+    // slot, so a toast set beforehand would be wiped and never paint. The
+    // robot-assistant voice line (canon §11.4) then survives the re-render.
     this.render();
+    this.showToast(repairVoiceLine(cost), 0x44ff88);
   }
 
   private doRefuel(): void {
@@ -789,8 +796,10 @@ export class StationScene extends GameScene {
       "Заправка",
     );
     ship.energy = ship.maxEnergy;
-    this.showToast(`Топливо пополнено за ${cost} ₡`, 0x44aaff);
+    // Render before the toast for the same reason as doRepair (the fresh slot
+    // would otherwise clear the message).
     this.render();
+    this.showToast(refuelVoiceLine(cost), 0x44aaff);
   }
 
   private doRankPromotion(): void {

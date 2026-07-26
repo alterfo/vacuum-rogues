@@ -328,12 +328,25 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
       GovernmentScene 36→28 as its literals moved to the shared module).
 
 ### Task 10: Robot-assistant voice at repair/refuel/diagnostic
-- [ ] SOURCE-OF-TRUTH §11.4: hangar interactions should show a "System check: … Ship ready for launch"
+- [x] SOURCE-OF-TRUTH §11.4: hangar interactions should show a "System check: … Ship ready for launch"
       style robot-assistant voice — currently `StationScene.doRepair()`/`doRefuel()` (~741-793) and
       `HangarPanel.renderServiceCenter` (~1728-1807) are silent mechanical toasts only. Add short
-      Russian robot-voice lines for repair, refuel, and hull-diagnostic actions.
-- [ ] write tests asserting the new voice-line text appears on each of the three actions
-- [ ] run tests — must pass before Task 11
+      Russian robot-voice lines for repair, refuel, and hull-diagnostic actions. Done: new pure module
+      `src/systems/equipment/serviceVoice.ts` (`repairVoiceLine`/`refuelVoiceLine`/`diagnosticVoiceLine`,
+      shared «⚙ Сервис-бот» speaker tag, each keeping the real ₡ cost inside the bot framing). Wired:
+      `StationScene.doRepair`/`doRefuel` now speak the repair/refuel lines, and the hangar СЕРВИСНЫЙ
+      ЦЕНТР repair button speaks the diagnostic line. Also fixed a latent order bug — `doRepair`/`doRefuel`
+      set the toast BEFORE `render()`, which nulls+remounts the slot and wiped the message; reordered to
+      render-first (mirrors Task 7's fix) so the voice line actually paints. Cyrillic ratchet regenerated
+      (StationScene 62→60 and HangarPanel 66→65 as their inline toast literals moved into the shared
+      module; serviceVoice.ts +4).
+- [x] write tests asserting the new voice-line text appears on each of the three actions. Done:
+      `src/tests/presentation/serviceVoice.test.ts` — pure-builder assertions plus real-scene drives:
+      `StationScene.doRepair`/`doRefuel` (voice line lands on a live toast, alpha 1, survives the
+      re-render) and the real `HangarPanel` service-center repair button (`showToast` called with the
+      diagnostic line).
+- [x] run tests — must pass before Task 11. Done: new suite 7 passed; full unit suite 6028 passed / 0
+      failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Task 11: Fix landing-denied button still clickable
 - [ ] `PlanetInfoPanel.ts` (~82-99) computes `landingDenial()` for the hover tooltip but the click
