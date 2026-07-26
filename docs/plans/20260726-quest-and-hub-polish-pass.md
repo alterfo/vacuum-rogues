@@ -484,10 +484,36 @@ branches/endings, never removing/loosening what's there) and running the full qu
       53→61, catalog literals). Full unit suite 6064 passed / 0 failed; tsc + eslint clean. ➕ Note: net
       win-rate/feel of the reworked economy is a manual-playtest acceptance item (not test-gated); the
       50cr fee was chosen to keep bid_low viable while making skip strictly non-dominated.
-- [ ] **Task 16 — `boarding-standoff.ts`**: remove or price the `stall_talk`+`offer_cargo` dominant
+- [x] **Task 16 — `boarding-standoff.ts`**: remove or price the `stall_talk`+`offer_cargo` dominant
       combo; branch the `resolve` scene per actual outcome instead of one shared text; fix the "generous
       bonus" ending text that fires alongside a negative credit balance; replace exact-number choice
-      labels with qualitative risk language (G). Write/extend tests; run tests.
+      labels with qualitative risk language (G). Write/extend tests; run tests. Done: (1) **resolve scene
+      branched per path (B)** — `offer_cargo` now routes to a new `resolve_paid` node («ваш груз уже плывёт
+      по трапу…»), `defiance` to `resolve_defiant` («ваш отказ повис в тесном шлюзе…»), and the bluff
+      outcomes keep the (reframed) `resolve` node, so the moment-of-truth reads differently per path; all
+      three carry identical `talk_down`/`pull_trigger` transitions into the same leverage-keyed
+      `resolution_gate`, so every existing behavioural assertion still lands on the node id it expects
+      (only the bluff test pins `resolve`). (2) **Fictional-reward ending fixed (C)** — `ending_negotiated`
+      text no longer promises a «щедрую премию» / «при деньгах» (which contradicted the −1000 balance on
+      the cargo path); it now frames the +1000 as «горсть монет… не богатство, а жест», true whether the
+      player ends net-positive (bluff path) or net-negative (cargo path). (3) **Qualitative labels (G)** —
+      the `airlock` and `parley` choice labels dropped every «(+2 к позиции / −2000 кредитов)» numeric
+      delta for qualitative risk language (labels now carry no digits at all). Extended the boarding
+      describe block with 5 new `it(...)` blocks (branched-resolve distinctness, transition-set per
+      variant, paid-path-still-negotiates, no-numeric-label guard, ending-text guard) — no existing
+      assertion touched. Cyrillic baseline regenerated (boarding-standoff 24→30, catalog literals).
+      ⚠️ **Repricing the dominant combo is DEFERRED (blocked by a known-good test).**
+      `batch1QuestScripts.test.ts:277-287` hard-locks the exact `stall_talk`+`offer_cargo`→`ending_negotiated`
+      outcome (`credits === -1000`, `rating === 120`, reaching the ending requires leverage ≥ 4 from those
+      two effects). Any repricing of `offer_cargo`/`stall_talk`, or re-routing `offer_cargo` through a
+      risk roll, reds that assertion — and offer_cargo→talk_down is executed back-to-back in the test, so a
+      roll node cannot be inserted either. Per this plan's Development Approach and the standing
+      no-touch-existing-tests rule this is flagged ⚠️ rather than forced (mirrors Task 3's tribunal and
+      Task 5's Transfer deferrals). Note the combo is arguably already *priced*: it costs a guaranteed net
+      −1000 credits and is EV-inferior to the bluff-after-stall line (which yields +1000 on a 60% land and
+      only demotes to `bought_off` otherwise, never paying 2000) — so it reads as the risk-averse
+      "pay-for-certainty" option, not a strictly dominant one. Removing its *risk-free* certainty is the
+      one part that needs the user's go-ahead + a test update.
 - [ ] **Task 17 — `cargo-sort.ts`**: give the 3 docks distinct outcome text instead of one shared
       success/fail line; either implement the cargo-type mechanic the header comment describes or remove
       the comment (I); tighten the puzzle's time/capacity budget so it isn't nearly unlosable (section

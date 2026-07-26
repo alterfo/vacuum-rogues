@@ -15,7 +15,10 @@ import type { QuestScript } from "../QuestScript";
 //   2. The captain's demand — buy them off (credits, +leverage, cools it),
 //      bluff a patrol (roll: lands for +leverage or backfires into +tension),
 //      or flat refusal (+tension, +leverage).
-//   3. The resolution — talk it down, or pull the trigger first.
+//   3. The resolution — talk it down, or pull the trigger first. The resolve
+//      scene branches by how you got here (paid off / defiant / bluffed) so the
+//      "moment of truth" reads differently per path, though all three funnel
+//      into the same leverage-keyed resolution_gate.
 // Outcomes (by `leverage` at the talk-down):
 //   - ending_negotiated (>=4 — a fair deal, they leave paid off)        SUCCESS
 //   - ending_bought_off (>=2 — grudging retreat, no reward)             SUCCESS
@@ -77,21 +80,21 @@ export const boardingStandoffScript: QuestScript = {
       transitions: [
         {
           id: "hands_up",
-          label:
-            "Поднять руки, говорить ровно и тихо — сбить накал (−1 напряжение)",
+          label: "Поднять руки, говорить ровно и тихо — сбить накал",
           toLocation: "parley",
           effects: ["tension -= 1"],
         },
         {
           id: "stall_talk",
           label:
-            "Тянуть время, заговаривать зубы — узнать, чего они хотят (+1 напряжение, +2 к позиции)",
+            "Тянуть время, заговаривать зубы — прощупать, чего они хотят (рискованно, но многое проясняет)",
           toLocation: "parley",
           effects: ["tension += 1", "leverage += 2"],
         },
         {
           id: "draw_weapon",
-          label: "Дёрнуться к оружию на поясе (+4 напряжения)",
+          label:
+            "Дёрнуться к оружию на поясе — отчаянный, почти самоубийственный жест",
           toLocation: "parley",
           effects: ["tension += 4"],
         },
@@ -104,22 +107,22 @@ export const boardingStandoffScript: QuestScript = {
         {
           id: "offer_cargo",
           label:
-            "Отдать груз без боя — дорого, но живым (−2000 кредитов, −2 напряжения, +2 к позиции)",
-          toLocation: "resolve",
+            "Отдать груз без боя — разорительно, зато без стрельбы: их напор спадёт",
+          toLocation: "resolve_paid",
           effects: ["credits -= 2000", "tension -= 2", "leverage += 2"],
         },
         {
           id: "bluff_backup",
           label:
-            "Блефовать: якобы патруль уже на подходе к системе (риск, бросок)",
+            "Блефовать: якобы патруль уже на подходе к системе — как повезёт",
           toLocation: "bluff_check",
           effects: ["roll = random(0,9)"],
         },
         {
           id: "defiance",
           label:
-            "Отказать наотрез — пусть видят характер (+3 напряжения, +1 к позиции)",
-          toLocation: "resolve",
+            "Отказать наотрез — пусть видят характер: рискованно, но покажет силу",
+          toLocation: "resolve_defiant",
           effects: ["tension += 3", "leverage += 1"],
         },
       ],
@@ -146,8 +149,50 @@ export const boardingStandoffScript: QuestScript = {
       ],
     },
     {
+      // Bluff path: the captain is still weighing whether your patrol story was
+      // real. Each resolve variant reflects HOW the standoff got here so the
+      // "moment of truth" no longer reads identically after a payoff, a
+      // stand-off of defiance, or a bluff.
       id: "resolve",
-      text: "Момент истины. Капитан переводит взгляд с вас на своих людей и обратно, прикидывая, стоите ли вы драки.\nНапряжение: {tension} | Позиция: {leverage}",
+      text: "Капитан ещё вслушивается в эфир, не разобрав до конца, блеф это был или чистая правда. Стволы замерли на полпути — и в этой заминке решится всё.\nНапряжение: {tension} | Позиция: {leverage}",
+      transitions: [
+        {
+          id: "talk_down",
+          label: "Предложить сделку и разойтись миром",
+          toLocation: "resolution_gate",
+          effects: [],
+        },
+        {
+          id: "pull_trigger",
+          label: "Ударить первым, пока есть хоть малый шанс",
+          toLocation: "ending_bloodbath",
+          effects: ["rating -= 20"],
+        },
+      ],
+    },
+    {
+      // Payoff path: your cargo is already crossing the airlock into their hold.
+      id: "resolve_paid",
+      text: "Ваш груз уже плывёт по трапу в чужой трюм. Капитан провожает контейнеры взглядом, прикидывая — довольно ли этого, или содрать с вас вдобавок и шкуру.\nНапряжение: {tension} | Позиция: {leverage}",
+      transitions: [
+        {
+          id: "talk_down",
+          label: "Предложить сделку и разойтись миром",
+          toLocation: "resolution_gate",
+          effects: [],
+        },
+        {
+          id: "pull_trigger",
+          label: "Ударить первым, пока есть хоть малый шанс",
+          toLocation: "ending_bloodbath",
+          effects: ["rating -= 20"],
+        },
+      ],
+    },
+    {
+      // Defiance path: your flat refusal is hanging in the cramped airlock.
+      id: "resolve_defiant",
+      text: "Ваш отказ повис в тесном шлюзе. Капитан медленно ведёт взглядом с вас на своих людей и обратно: проглотить дерзость — или сделать из вас урок остальным.\nНапряжение: {tension} | Позиция: {leverage}",
       transitions: [
         {
           id: "talk_down",
@@ -194,7 +239,7 @@ export const boardingStandoffScript: QuestScript = {
     },
     {
       id: "ending_negotiated",
-      text: "Капитан хмыкает, опускает ствол — и его люди следом. «А ты не так прост». Вы ударили по рукам: они уходят с малой долей, а вам оставляют не только корабль, но и щедрую «премию за понятливость» из чужого хабара, чтобы не держали зла. Трап отстыковывается. Вы живы, при деньгах и с историей, которую не стыдно рассказать.\nКредиты: {credits} | Репутация: {rating}",
+      text: "Капитан хмыкает, опускает ствол — и его люди следом. «А ты не так прост». Ударили по рукам: они уходят с малой долей, а вам, чтобы не держали зла, отслюнявливают горсть монет с того же воза — не богатство, а жест, чтобы разойтись ровно. Трап отстыковывается. Вы живы, при корабле, и с историей, которую не стыдно рассказать.\nКредиты: {credits} | Репутация: {rating}",
       isSuccess: true,
       transitions: [],
     },

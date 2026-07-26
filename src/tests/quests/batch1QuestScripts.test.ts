@@ -345,6 +345,79 @@ describe("Boarding-standoff negotiation quest", () => {
       expect(a.getParam("leverage")).toBe(b.getParam("leverage"));
     }
   });
+
+  // --- Task 16: branched resolve scene + qualitative labels + fixed ending ---
+
+  it("the resolve scene branches by how the standoff got there (Task 16, B)", () => {
+    // Paying cargo, defiance, and a bluff each land on a DISTINCT resolve node
+    // instead of one shared "moment of truth" text.
+    const paid = new QuestVM(boardingStandoffScript, 1);
+    paid.execute("hands_up");
+    paid.execute("offer_cargo");
+    expect(paid.currentLocation().id).toBe("resolve_paid");
+
+    const defiant = new QuestVM(boardingStandoffScript, 1);
+    defiant.execute("hands_up");
+    defiant.execute("defiance");
+    expect(defiant.currentLocation().id).toBe("resolve_defiant");
+
+    const bluffed = new QuestVM(boardingStandoffScript, 1);
+    bluffed.execute("hands_up");
+    bluffed.execute("bluff_backup");
+    bluffed.setParam("roll", 8);
+    advanceAuto(bluffed); // bluff_lands → resolve
+    expect(bluffed.currentLocation().id).toBe("resolve");
+
+    const texts = [
+      paid.currentLocation().text,
+      defiant.currentLocation().text,
+      bluffed.currentLocation().text,
+    ] as string[];
+    // All three moment-of-truth scenes read differently.
+    expect(new Set(texts).size).toBe(3);
+  });
+
+  it("each branched resolve node still offers talk_down and pull_trigger (Task 16)", () => {
+    for (const id of ["resolve", "resolve_paid", "resolve_defiant"]) {
+      const loc = boardingStandoffScript.locations.find((l) => l.id === id)!;
+      const ids = loc.transitions.map((t) => t.id).sort();
+      expect(ids).toEqual(["pull_trigger", "talk_down"]);
+    }
+  });
+
+  it("the paid-off resolve path still reaches a negotiated deal (Task 16)", () => {
+    const vm = new QuestVM(boardingStandoffScript, 1);
+    vm.execute("stall_talk"); // leverage 2
+    vm.execute("offer_cargo"); // leverage 4 → resolve_paid
+    expect(vm.currentLocation().id).toBe("resolve_paid");
+    vm.execute("talk_down");
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("ending_negotiated");
+    expect(vm.isSuccess()).toBe(true);
+  });
+
+  it("choice labels use qualitative risk language, not exact numeric deltas (Task 16, G)", () => {
+    // The two player-facing choice screens must no longer print "+2 к позиции"
+    // style deltas — labels carry no digits at all.
+    for (const id of ["airlock", "parley"]) {
+      const loc = boardingStandoffScript.locations.find((l) => l.id === id)!;
+      for (const t of loc.transitions) {
+        expect(
+          t.label,
+          `${id}/${t.id} label still prints a number`,
+        ).not.toMatch(/\d/);
+      }
+    }
+  });
+
+  it("the negotiated ending no longer promises wealth at a negative balance (Task 16, C)", () => {
+    const end = boardingStandoffScript.locations.find(
+      (l) => l.id === "ending_negotiated",
+    )!;
+    const text = end.text as string;
+    expect(text).not.toContain("щедрую");
+    expect(text).not.toContain("при деньгах");
+  });
 });
 
 // ---------------------------------------------------------------------------
