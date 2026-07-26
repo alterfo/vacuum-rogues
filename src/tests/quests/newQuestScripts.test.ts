@@ -758,6 +758,85 @@ describe("First Contact quest", () => {
       expect(vm1.getParam("trust")).toBe(vm2.getParam("trust"));
     }
   });
+
+  // Task 21 (A): scan is no longer strictly worse than broadcast — a curious
+  // roll yields sellable xeno-intel (+credits) instead of a diplomatic edge.
+  it("a curious scan yields a material intel windfall (+credits) but no trust", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("scan");
+    vm.setParam("roll", 9); // curious
+    advanceAuto(vm); // scan_reaction → scan_intel → greeting
+    expect(vm.currentLocation().id).toBe("greeting");
+    expect(vm.getParam("trust")).toBe(0); // no diplomatic edge, unlike broadcast's +2
+    expect(vm.getParam("credits")).toBe(800); // intel is worth real credits
+  });
+
+  it("scan trades the ceiling: broadcast reaches alliance, curious scan only a trade pact", () => {
+    const broad = new QuestVM(firstContactScript, 1);
+    broad.execute("broadcast"); // +2
+    broad.execute("reciprocate"); // +4 = 6 → alliance
+    advanceAuto(broad);
+    expect(broad.currentLocation().id).toBe("ending_alliance");
+
+    const scanned = new QuestVM(firstContactScript, 1);
+    scanned.execute("scan");
+    scanned.setParam("roll", 9); // curious, +800 credits, +0 trust
+    advanceAuto(scanned);
+    scanned.execute("reciprocate"); // +4 = 4 (< 6, no alliance ceiling)
+    advanceAuto(scanned);
+    expect(scanned.currentLocation().id).toBe("ending_trade_pact");
+    expect(scanned.getParam("trust")).toBe(4);
+    expect(scanned.getParam("credits")).toBe(800 + 1500);
+  });
+
+  // Task 21 (B): the exchange scene branches per how the player got there.
+  it("the exchange scene has a distinct beat per generosity/taking/extortion/de-escalation", () => {
+    const texts = new Set<unknown>();
+    const cases: Array<{ pre: string[]; choice: string; node: string }> = [
+      { pre: ["broadcast"], choice: "reciprocate", node: "exchange_gift" },
+      { pre: ["broadcast"], choice: "accept_wary", node: "exchange_take" },
+      { pre: ["broadcast"], choice: "demand_tech", node: "exchange_demand" },
+      {
+        pre: ["raise_shields"],
+        choice: "stand_down",
+        node: "exchange_standdown",
+      },
+    ];
+    for (const c of cases) {
+      const vm = new QuestVM(firstContactScript, 1);
+      for (const step of c.pre) vm.execute(step);
+      vm.execute(c.choice);
+      expect(vm.currentLocation().id).toBe(c.node);
+      texts.add(vm.currentLocation().text);
+    }
+    expect(texts.size).toBe(4); // four genuinely distinct exchange beats
+  });
+
+  it("every branched exchange still funnels into the same trust-keyed resolution", () => {
+    for (const choice of ["reciprocate", "accept_wary", "demand_tech"]) {
+      const vm = new QuestVM(firstContactScript, 1);
+      vm.execute("broadcast");
+      vm.execute(choice);
+      advanceAuto(vm); // exchange_* → resolution_gate → an ending
+      expect(vm.isFinished()).toBe(true);
+      expect(vm.isSuccess()).toBe(true);
+    }
+  });
+
+  // Task 21 (C): the alliance ending grounds its reward in the real payout.
+  it("the alliance ending ties its reward to the credited payout, not an untracked trophy", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("broadcast");
+    vm.execute("reciprocate");
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("ending_alliance");
+    const text = vm.currentLocation().text as string;
+    expect(text).toContain("на вашем счету");
+    // no longer promises star-maps "no human expedition ever knew" as a separate item
+    expect(text).not.toContain(
+      "которых не знала ни одна человеческая экспедиция",
+    );
+  });
 });
 
 describe("Plague Crisis quest", () => {

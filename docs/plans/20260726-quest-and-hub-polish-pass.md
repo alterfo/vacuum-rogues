@@ -607,10 +607,29 @@ branches/endings, never removing/loosening what's there) and running the full qu
       existing assertion touched. Cyrillic baseline regenerated (evacuation 22→34 for the 3 new dock
       scenes + 2 new route outcome scenes). Full unit suite 6089 passed / 0 failed; `tsc --noEmit` clean;
       `eslint` on changed files 0 issues.
-- [ ] **Task 21 — `first-contact.ts`**: fix `scan` being strictly worse than `broadcast` — give it a
+- [x] **Task 21 — `first-contact.ts`**: fix `scan` being strictly worse than `broadcast` — give it a
       real (if different) upside (A); branch the shared "exchange" scene per generosity/extortion/
       capitulation outcome (B); either grant the star-maps/trophies `ending_alliance` promises, or
-      rewrite the text (C). Write/extend tests; run tests.
+      rewrite the text (C). Write/extend tests; run tests. Done: (1) **Scan upside (A)** — a curious scan
+      (`roll >= 5`) now grants `credits += 800` (sellable xeno-intel) and routes through a new
+      `scan_intel` narrative beat before `greeting`, instead of the old bare no-op jump. It gives **no**
+      trust (existing test still pins trust 0 on the curious path), so broadcast keeps the better
+      diplomatic ceiling (broadcast+reciprocate → alliance; curious-scan+reciprocate only → trade_pact)
+      while scan trades that ceiling for material intel at the real risk of the alarmed roll → standoff —
+      a genuine tradeoff, not a strict downgrade. (2) **Branched exchange (B)** — the single shared
+      `exchange` node is replaced by four distinct beats keyed to how the player arrived: `exchange_gift`
+      (generous reciprocation), `exchange_take` (one-sided taking), `exchange_demand` (extortion under
+      posturing), `exchange_standdown` (tense de-escalation from aimed guns); all four auto-execute
+      `resolve_peace` into the same trust-keyed `resolution_gate`, so every existing behavioural
+      assertion still lands on its original ending id/effect. (3) **Alliance-reward honesty (C)** —
+      `ending_alliance` text no longer promises star-charts "no human expedition ever knew" + trophies as
+      a separate untracked hold item; it now frames the star-map fragments and artifacts as **appraised
+      into the +3000-credit payout already on the player's account** — grounding the fiction in the real
+      mechanic. Extended the First Contact describe block with 5 new `it(...)` blocks (curious-scan
+      intel windfall, scan-vs-broadcast ceiling tradeoff, four-distinct-exchange-beats, every-branch
+      still resolves to a success ending, alliance-reward-grounded-in-payout) — no existing assertion
+      touched. Cyrillic baseline regenerated (first-contact 26→30 for the new catalog literals). Full
+      unit suite 6094 passed / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 - [ ] **Task 22 — `gravity-slalom.ts`**: fix the header comment's false claim of seed-dependent routing
       — either make the route actually vary by seed, or correct the comment (A, section 4); turn at
       least some of the single-button "press continue" cells into real choices (section 4); give the
