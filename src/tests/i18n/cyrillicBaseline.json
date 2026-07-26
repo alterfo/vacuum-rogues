@@ -66,7 +66,7 @@
   "src/systems/quests/scripts/boarding-standoff.ts": 30,
   "src/systems/quests/scripts/cargo-sort.ts": 71,
   "src/systems/quests/scripts/customs.ts": 26,
-  "src/systems/quests/scripts/derelict-salvage.ts": 38,
+  "src/systems/quests/scripts/derelict-salvage.ts": 42,
   "src/systems/quests/scripts/evacuation.ts": 22,
   "src/systems/quests/scripts/first-contact.ts": 26,
   "src/systems/quests/scripts/gravity-slalom.ts": 38,

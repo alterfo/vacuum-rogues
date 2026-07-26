@@ -1,16 +1,21 @@
 import type { QuestScript } from "../QuestScript";
 
 // Design: Salvage mystery aboard the drifting freighter «Морвен».
-// Two meaningful choice points:
-//   1. How to board — dock carefully (full cargo) vs force a breach (damaged cargo).
-//   2. What to do in the hold — seal the dangerous bio-container vs extract the
-//      bio-sample for extra credits but at the risk of an outbreak.
+// Three meaningful choice points, all of which surface in the endings:
+//   1. How to board — dock carefully (full cargo) vs force a breach (damaged
+//      cargo). The breach is called out in the reported-clean ending.
+//   2. What to do in the hold — seal the dangerous bio-container (`sealed`) vs
+//      extract the bio-sample (`sample`) for extra credits but at outbreak risk.
+//      Sealing is no longer a dead flag: an intact, sealed class-IV container
+//      fetches a fat black-market premium (at a steep reputation cost).
 //   3. Final disposition — report to authorities vs sell on the black market.
 // Outcomes:
-//   - ending_report          (clean report, +rep, official bounty)        SUCCESS
-//   - ending_sample_seized   (reported with the sample → confiscated+fine) SUCCESS
-//   - ending_blackmarket     (sold the haul, more credits, −rep)          SUCCESS
-//   - ending_outbreak        (sold the bio-sample → spores escape)        FAILURE
+//   - ending_report            (clean report, +rep, official bounty)         SUCCESS
+//   - ending_report_forced     (clean report after a scorched breach)        SUCCESS
+//   - ending_sample_seized     (reported with the sample → confiscated+fine)  SUCCESS
+//   - ending_blackmarket       (sold the haul, more credits, −rep)           SUCCESS
+//   - ending_blackmarket_sealed(fenced the intact sealed container, −−rep)    SUCCESS
+//   - ending_outbreak          (sold the bio-sample → spores escape + ruin)   FAILURE
 export const derelictSalvageScript: QuestScript = {
   id: "derelict-salvage",
   title: "Дрейфующий сухогруз",
@@ -207,6 +212,14 @@ export const derelictSalvageScript: QuestScript = {
           autoExecute: true,
         },
         {
+          id: "rg_clean_forced",
+          label: "Досмотр чист, но борт вскрыт резаком",
+          toLocation: "ending_report_forced",
+          condition: "forced == 1",
+          effects: ["credits += 1000", "rating += 40"],
+          autoExecute: true,
+        },
+        {
           id: "rg_clean",
           label: "Досмотр чист",
           toLocation: "ending_report",
@@ -224,7 +237,15 @@ export const derelictSalvageScript: QuestScript = {
           label: "Контейнер не выдержал",
           toLocation: "ending_outbreak",
           condition: "sample == 1",
-          effects: ["rating -= 60"],
+          effects: ["rating -= 60", "credits -= 3000"],
+          autoExecute: true,
+        },
+        {
+          id: "bg_sold_sealed",
+          label: "Целый контейнер уходит с наценкой",
+          toLocation: "ending_blackmarket_sealed",
+          condition: "sealed == 1",
+          effects: ["credits += 3500", "rating -= 45"],
           autoExecute: true,
         },
         {
@@ -243,6 +264,12 @@ export const derelictSalvageScript: QuestScript = {
       transitions: [],
     },
     {
+      id: "ending_report_forced",
+      text: "Флотский досмотр не находит заразы — вы вынесли с «Морвена» только груз, всё чисто. Но офицер долго водит сканером по оплавленным краям прожжённой вами переборки и хмурится: на борт вы вошли не через шлюз, а резаком, и часть груза за это поплатилась. Премию платят — за честность и находку, — но взгляд у командира куда холоднее, чем к тем, кто стыкуется как положено.\nКредиты: {credits} | Репутация: {rating}",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
       id: "ending_sample_seized",
       text: "Сканеры на трапе взвыли на первой же секунде: вы вынесли с «Морвена» вскрытый биообразец. Карантинная служба в защитных костюмах изымает пробирку и выписывает крупный штраф за перевозку заразы класса IV. Вас отчитывают, но признают, что вы всё же явились сами — дело закрывают.\nКредиты: {credits} | Репутация: {rating}",
       isSuccess: true,
@@ -255,8 +282,14 @@ export const derelictSalvageScript: QuestScript = {
       transitions: [],
     },
     {
+      id: "ending_blackmarket_sealed",
+      text: "Вы даже не вскрывали контейнер — и скупщик это ценит: целую, опечатанную капсулу класса IV можно перепродать втридорога тем, кто не побрезгует. Он отсыпает вам щедрую пачку сверх обычного, любовно поглаживая жёлтые наклейки. Груз «Морвена» и смертельный сосуд растворяются в тени. Вот только слух, что вы теперь барыжите целыми биоконтейнерами, а не простой рудой, липнет к вашему имени намертво — от таких шарахаются даже в тёмных доках.\nКредиты: {credits} | Репутация: {rating}",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
       id: "ending_outbreak",
-      text: "Скупщик тянется к пробирке — и в тот же миг понимает то же, что и вы: трещина не держит. Стекло лопается, споры вырываются облаком прямо посреди тёмного дока. Улыбка сползает с его лица навсегда. К утру весь сектор станции задыхается в карантинных мигалках, док выжигают дотла, а ваше имя первым строкой идёт в розыск. Именно этого экипаж «Морвена» и пытался не допустить ценой жизни.\nКатастрофа. Репутация: {rating}",
+      text: "Скупщик тянется к пробирке — и в тот же миг понимает то же, что и вы: трещина не держит. Стекло лопается, споры вырываются облаком прямо посреди тёмного дока. Улыбка сползает с его лица навсегда. К утру весь сектор станции задыхается в карантинных мигалках, док выжигают дотла — вместе со всей вашей добычей, брошенной у трапа, — а ваше имя первой строкой идёт в розыск. Карантинная служба вешает на вас счёт за дезактивацию, какого не покрыть и десятью такими рейсами. Именно этого экипаж «Морвена» и пытался не допустить ценой жизни.\nКатастрофа. Кредиты: {credits} | Репутация: {rating}",
       isFailure: true,
       transitions: [],
     },

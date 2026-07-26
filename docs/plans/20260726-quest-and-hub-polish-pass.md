@@ -565,9 +565,29 @@ branches/endings, never removing/loosening what's there) and running the full qu
       treasury-not-payout win text) — no existing assertion touched. Cyrillic baseline regenerated
       (customs 22→26). Full unit suite 6070 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint`
       on changed files 0 issues.
-- [ ] **Task 19 — `derelict-salvage.ts`**: make the boarding method (stealth/force/etc.) show up in at
+- [x] **Task 19 — `derelict-salvage.ts`**: make the boarding method (stealth/force/etc.) show up in at
       least one of the 4 endings (B); add a credit penalty to the catastrophic ending (C); either wire
-      the `sealed` param into an actual branch or remove it (I). Write/extend tests; run tests.
+      the `sealed` param into an actual branch or remove it (I). Write/extend tests; run tests. Done:
+      (1) **Boarding method surfaced (B)** — `report_gate` now branches its clean path on `forced`: a
+      forced-breach boarding that still reports clean routes to a new `ending_report_forced` node whose
+      text explicitly calls out the scorched, res-cut переборка and the colder officer reception, while
+      careful dockers keep the original `ending_report` (rg_clean stays the fallback, so the locked
+      seal+report test still lands 4000/140 on `ending_report`). (2) **Credit penalty on catastrophe (C)**
+      — `bg_outbreak` now also fires `credits -= 3000` (a carantine dezact bill on top of the −60 rating)
+      and the `ending_outbreak` prose was rewritten to say the whole haul burned with the dock; the
+      existing outbreak test only pinned rating 40, so it stays green, and a new test pins credits 1000.
+      (3) **`sealed` wired (I)** — the dead flag is now read: `blackmarket_gate` gained
+      `bg_sold_sealed` (condition `sealed == 1`) → new `ending_blackmarket_sealed`, where an intact,
+      unopened class-IV container fetches a fat +3500 premium at a steep −45 reputation cost (vs base
+      +2500/−30). Sealing is no longer strictly worthless — it forks into the clean high-rep report or the
+      dirty high-cash fence. `seal_it`/`take_sample` are mutually exclusive so the outbreak (sample) and
+      sealed branches never collide; auto-execute ordering (outbreak → sealed → base) keeps every
+      pre-existing behavioural assertion on its original node. Extended the Derelict Salvage describe
+      block with 4 new `it(...)` blocks (outbreak credit penalty, forced-breach distinct ending + text,
+      careful-report keeps original ending, sealed-fence premium) — no existing assertion touched.
+      Cyrillic baseline regenerated (derelict-salvage 38→42 for the 2 new endings + 2 new labels). Full
+      unit suite 6074 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0
+      issues.
 - [ ] **Task 20 — `evacuation.ts`**: branch `second_run` per dock instead of one shared text (B); give
       `route_check`'s silent roll its own success/fail narrative line (D). Write/extend tests; run
       tests.

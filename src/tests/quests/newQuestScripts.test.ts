@@ -187,6 +187,66 @@ describe("Derelict Salvage quest", () => {
     const text = vm.interpolate("Кредиты: {credits}");
     expect(text).toContain("3000");
   });
+
+  // Task 19 — defect C: the catastrophic ending now carries a real credit penalty.
+  it("outbreak catastrophe now docks credits, not just reputation", () => {
+    const vm = new QuestVM(derelictSalvageScript, 1);
+    vm.execute("dock_careful");
+    vm.execute("explore_hold_b");
+    vm.execute("take_sample"); // +1000
+    advanceAuto(vm);
+    vm.execute("load_full"); // +3000 → 4000
+    vm.execute("blackmarket");
+    advanceAuto(vm); // bg_outbreak: rating -= 60, credits -= 3000
+    expect(vm.currentLocation().id).toBe("ending_outbreak");
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.getParam("credits")).toBe(1000); // 4000 - 3000 dezact bill
+  });
+
+  // Task 19 — defect B: the boarding method (breach) surfaces in a distinct ending.
+  it("forced entry + clean report reaches a breach-specific ending", () => {
+    const vm = new QuestVM(derelictSalvageScript, 1);
+    vm.execute("force_entry"); // forced = 1
+    vm.execute("go_cargo_c"); // no sample
+    advanceAuto(vm); // → cargo_damaged
+    vm.execute("load_damaged"); // +2000
+    vm.execute("report");
+    advanceAuto(vm); // report_gate → ending_report_forced (forced == 1)
+    expect(vm.currentLocation().id).toBe("ending_report_forced");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(3000); // 2000 + 1000 bounty
+    expect(vm.getParam("rating")).toBe(140);
+    // The ending text must actually acknowledge how we boarded.
+    expect(vm.currentLocationText()).toContain("резак");
+  });
+
+  it("careful entry + clean report keeps the original (non-breach) ending", () => {
+    const vm = new QuestVM(derelictSalvageScript, 1);
+    vm.execute("dock_careful"); // forced = 0
+    vm.execute("go_cargo_b");
+    advanceAuto(vm); // → cargo_full
+    vm.execute("load_full");
+    vm.execute("report");
+    advanceAuto(vm); // report_gate → ending_report (forced == 0)
+    expect(vm.currentLocation().id).toBe("ending_report");
+  });
+
+  // Task 19 — defect I: `sealed` is now read — sealing then fencing the intact
+  // container is a distinct, higher-payout (but reputation-wrecking) branch.
+  it("sealed container on the black market fetches a premium (sealed flag is read)", () => {
+    const vm = new QuestVM(derelictSalvageScript, 1);
+    vm.execute("dock_careful");
+    vm.execute("explore_hold_b");
+    vm.execute("seal_it"); // sealed = 1, no sample
+    advanceAuto(vm); // → cargo_full
+    vm.execute("load_full"); // +3000
+    vm.execute("blackmarket");
+    advanceAuto(vm); // bg_sold_sealed (sealed == 1): +3500, -45
+    expect(vm.currentLocation().id).toBe("ending_blackmarket_sealed");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(6500); // 3000 + 3500 premium
+    expect(vm.getParam("rating")).toBe(55); // 100 - 45
+  });
 });
 
 describe("Smuggling Run quest", () => {
