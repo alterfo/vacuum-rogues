@@ -748,9 +748,28 @@ branches/endings, never removing/loosening what's there) and running the full qu
       changed files 0 issues. ➕ Note: net win-rate/feel of the medbay gamble's numbers is a manual-playtest
       acceptance item (not test-gated); +4-for-2-air on a win is intentionally juicy but genuinely risked by
       the 1-soul-for-4-air loss, so it reads as a bet, not a strictly dominant free lunch.
-- [ ] **Task 26 — `locked-room.ts`**: give `press_check` and `verdict_gate` — the quest's two key
+- [x] **Task 26 — `locked-room.ts`**: give `press_check` and `verdict_gate` — the quest's two key
       dramatic beats — their own success/fail narrative text instead of a silent roll (D); give each
-      suspect more than one adjective of characterization (H). Write/extend tests; run tests.
+      suspect more than one adjective of characterization (H). Write/extend tests; run tests. Done:
+      (1) **press_check narrated (D)** — the two silent `"..."` autoExecute jumps straight to
+      `accusation` now route through distinct beat nodes: `press_crack` → new `press_cracked` (the medic
+      breaks and half-confesses — pays off the +2 clue gain in fiction) and `press_stonewall` → new
+      `press_stonewalled` (the ровная-маска dead end, wasted minutes), each auto-advancing on to
+      `accusation`. The `clues += 2` stays on the crack transition, so the locked airtight-conviction
+      test still reaches `accusation` with clues 5 (advanceAuto traverses the new auto beat). (2)
+      **verdict_gate narrated (D)** — `convicted` → new `verdict_broken` («...Как вы узнали про код
+      доступа?» — the tell that seals it) and `insufficient` → new `verdict_smirk` (the guessing-not-proof
+      usмешка), each auto-advancing to its epilogue ending (`ending_solved`/`ending_walks`). The
+      credits/rating effects stay on the gate transitions, so both locked verdict tests still land their
+      exact numbers on the same terminal (advanceAuto runs through the new beat). (3) **Suspect
+      characterization (H)** — `interrogation` text expanded so each of the three has 2+ traits: the
+      грузный engineer with мозолистые руки and white-knuckled fingers, the худая/бледная comms officer
+      teребящая нашивку and flinching at the airlock, the medic sitting ровно with a слишком-спокойный
+      composure. Extended the Locked-room describe block with 4 new `it(...)` blocks (crack confession
+      beat, stonewall distinct dead-end, verdict success/fail distinct beats, per-suspect 2-trait guard)
+      — no existing assertion touched. Cyrillic baseline regenerated (locked-room 26→30 for the 4 new
+      beat-node texts). Full unit suite 6128 passed / 0 failed; `tsc --noEmit` clean; `eslint` on changed
+      files 0 issues.
 - [ ] **Task 27 — `orbital-escape.ts`**: rebalance so `trim_burn` isn't strictly dominant with the other
       options reduced to decoration (A); give `dump_check`'s roll its own narrative text (D); add at
       least one more line of NPC presence across the quest (H). Write/extend tests; run tests.

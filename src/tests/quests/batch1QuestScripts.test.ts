@@ -257,6 +257,86 @@ describe("Locked-room whodunit quest", () => {
       expect(a.getParam("clues")).toBe(b.getParam("clues"));
     }
   });
+
+  it("cracking the medic shows its own confession beat before the accusation (D)", () => {
+    const vm = new QuestVM(lockedRoomScript, 1);
+    vm.execute("sweep_lab");
+    vm.execute("go_interrogate");
+    vm.execute("press_suspect");
+    vm.setParam("roll", 9); // roll >= 4 → crack
+    const first = vm.availableTransitions()[0];
+    expect(first.autoExecute).toBe(true);
+    vm.execute(first.id); // one step reveals the distinct cracked scene
+    expect(vm.currentLocation().id).toBe("press_cracked");
+    expect(vm.currentLocationText()).toContain("ломается");
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("accusation");
+  });
+
+  it("stonewalling shows a distinct dead-end beat, not the same crack text (D)", () => {
+    const vm = new QuestVM(lockedRoomScript, 1);
+    vm.execute("sweep_lab");
+    vm.execute("go_interrogate");
+    vm.execute("press_suspect");
+    vm.setParam("roll", 0); // roll < 4 → stonewall
+    const first = vm.availableTransitions()[0];
+    vm.execute(first.id);
+    expect(vm.currentLocation().id).toBe("press_stonewalled");
+    const stonewallText = vm.currentLocationText();
+    expect(stonewallText).toContain("нечего вам сказать");
+
+    const cracked = new QuestVM(lockedRoomScript, 1);
+    cracked.execute("sweep_lab");
+    cracked.execute("go_interrogate");
+    cracked.execute("press_suspect");
+    cracked.setParam("roll", 9);
+    cracked.execute(cracked.availableTransitions()[0].id);
+    expect(cracked.currentLocationText()).not.toBe(stonewallText);
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("accusation");
+  });
+
+  it("the verdict resolves through distinct success/fail beats (D)", () => {
+    const win = new QuestVM(lockedRoomScript, 1);
+    win.execute("sweep_lab");
+    win.execute("go_interrogate");
+    win.execute("press_suspect");
+    win.setParam("roll", 9);
+    advanceAuto(win); // → accusation, clues 5
+    win.execute("accuse_medic");
+    win.execute(win.availableTransitions()[0].id); // convicted → verdict_broken
+    expect(win.currentLocation().id).toBe("verdict_broken");
+    const brokenText = win.currentLocationText();
+    advanceAuto(win);
+    expect(win.currentLocation().id).toBe("ending_solved");
+
+    const lose = new QuestVM(lockedRoomScript, 1);
+    lose.execute("examine_body"); // clues 2 < 5
+    lose.execute("go_interrogate");
+    lose.execute("go_accuse");
+    lose.execute("accuse_medic");
+    lose.execute(lose.availableTransitions()[0].id); // insufficient → verdict_smirk
+    expect(lose.currentLocation().id).toBe("verdict_smirk");
+    expect(lose.currentLocationText()).not.toBe(brokenText);
+    advanceAuto(lose);
+    expect(lose.currentLocation().id).toBe("ending_walks");
+  });
+
+  it("gives each suspect more than one trait of characterization (H)", () => {
+    const vm = new QuestVM(lockedRoomScript, 1);
+    vm.execute("examine_body");
+    vm.execute("go_interrogate");
+    const text = vm.currentLocationText();
+    // engineer: build + a gesture
+    expect(text).toContain("Инженер");
+    expect(text).toContain("мозолистыми");
+    // comms officer: build + a nervous tell
+    expect(text).toContain("Связистка");
+    expect(text).toContain("вздрагивает");
+    // medic: posture + the "too calm" tell
+    expect(text).toContain("Медик");
+    expect(text).toContain("слишком спокойный");
+  });
 });
 
 describe("Life-support resource-allocation quest", () => {

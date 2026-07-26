@@ -73,7 +73,7 @@
   "src/systems/quests/scripts/hostage-rescue.ts": 37,
   "src/systems/quests/scripts/investigation.ts": 87,
   "src/systems/quests/scripts/life-support.ts": 37,
-  "src/systems/quests/scripts/locked-room.ts": 26,
+  "src/systems/quests/scripts/locked-room.ts": 30,
   "src/systems/quests/scripts/orbital-escape.ts": 20,
   "src/systems/quests/scripts/plague-crisis.ts": 18,
   "src/systems/quests/scripts/quarantine.ts": 26,

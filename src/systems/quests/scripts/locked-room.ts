@@ -116,7 +116,7 @@ export const lockedRoomScript: QuestScript = {
     },
     {
       id: "interrogation",
-      text: "Трое сидят напротив. Инженер сцепил руки, связистка бледна, медик спокоен — слишком спокоен. Кто-то из них лжёт.\nУлики: {clues}\n\nМожно ещё раз надавить — или назвать имя.",
+      text: "Трое сидят напротив. Инженер — грузный, с мозолистыми руками — сцепил пальцы так, что побелели костяшки, и упрямо смотрит в стол. Связистка, худая и бледная, теребит нашивку и вздрагивает от каждого гудка шлюза. Медик сидит ровно, руки на коленях, взгляд спокойный и внимательный — слишком спокойный для того, кто ночевал в двух переборках от трупа. Кто-то из них лжёт.\nУлики: {clues}\n\nМожно ещё раз надавить — или назвать имя.",
       transitions: [
         {
           id: "press_suspect",
@@ -140,13 +140,39 @@ export const lockedRoomScript: QuestScript = {
         {
           id: "press_crack",
           label: "...",
-          toLocation: "accusation",
+          toLocation: "press_cracked",
           condition: "roll >= 4",
           effects: ["clues += 2"],
           autoExecute: true,
         },
         {
           id: "press_stonewall",
+          label: "...",
+          toLocation: "press_stonewalled",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "press_cracked",
+      text: "Медик держится ещё удар сердца — и ломается. «Он собирался меня сдать... я не хотел, оно само.» Он осекается, поняв, что сказал вслух. Поздно: теперь у вас не только улики, но и его собственные слова.\nУлики: {clues}",
+      transitions: [
+        {
+          id: "cracked_to_accusation",
+          label: "...",
+          toLocation: "accusation",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "press_stonewalled",
+      text: "Медик выдыхает и откидывается на спинку кресла. «Мне нечего вам сказать, следователь.» Голос ровный, лицо — гладкая маска. Вы потратили драгоценные минуты и не сдвинулись ни на шаг — придётся идти к обвинению с тем, что есть.\nУлики: {clues}",
+      transitions: [
+        {
+          id: "stonewalled_to_accusation",
           label: "...",
           toLocation: "accusation",
           effects: [],
@@ -186,7 +212,7 @@ export const lockedRoomScript: QuestScript = {
         {
           id: "convicted",
           label: "...",
-          toLocation: "ending_solved",
+          toLocation: "verdict_broken",
           condition: "clues >= 5",
           effects: ["credits += 3000", "rating += 30"],
           autoExecute: true,
@@ -194,8 +220,34 @@ export const lockedRoomScript: QuestScript = {
         {
           id: "insufficient",
           label: "...",
-          toLocation: "ending_walks",
+          toLocation: "verdict_smirk",
           effects: ["rating -= 10"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "verdict_broken",
+      text: "«...Как вы узнали про код доступа?» — вырывается у медика прежде, чем он успевает прикусить язык. Этого вопроса достаточно. Он и сам это понимает — и наконец опускает голову.",
+      transitions: [
+        {
+          id: "broken_to_ending",
+          label: "...",
+          toLocation: "ending_solved",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "verdict_smirk",
+      text: "Медик обводит взглядом ваши руки — в них лишь догадки, а не доказательства. Уголок его рта дёргается в усмешке. «И это всё, что у вас есть?»",
+      transitions: [
+        {
+          id: "smirk_to_ending",
+          label: "...",
+          toLocation: "ending_walks",
+          effects: [],
           autoExecute: true,
         },
       ],
