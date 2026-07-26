@@ -1,20 +1,28 @@
 import type { QuestScript } from "../QuestScript";
 
 // Design: Pirates hold 4 hostages on station «Терновник». Pick an approach:
-//   - pay_ransom : pay 2000 cr, then trust the pirates (a roll decides honor)
+//   - pay_ransom : pay 2000 cr, then either simply trust the pirates (a roll
+//                  decides honor) OR mark the ransom — a higher-variance gamble
+//                  that recovers the money and pays a bounty on a win, but turns
+//                  the exchange into a bloodbath on a loss.
 //   - stealth    : sneak in (roll-based) or work methodically (slow but sure)
-//   - assault    : storm the station; outcome scales with the guard count.
-//                  Sniping first removes 2 guards, guaranteeing a clean assault.
+//   - assault    : storm the station; outcome scales with the guard count. The
+//                  player SEES {guards} before choosing. Sniping first removes 2
+//                  guards for a guaranteed-clean assault, but at a real price
+//                  (lost bounty + standing) — so it is only worth it when the
+//                  raw breach would be costly/fatal, not a free risk-eraser.
 // `guards` is randomised 2–4, so the raw assault outcome varies by seed.
 // Outcomes (credits = bounty, rating = reputation, hostages = survivors):
-//   - ending_ransom_good        all freed, money gone, small rep      SUCCESS
-//   - ending_ransom_betrayed    pirates renege, hostages die          FAILURE
-//   - ending_stealth_clean      all freed quietly, big bounty + rep   SUCCESS
-//   - ending_stealth_partial    spotted, grabbed 2, modest reward     SUCCESS
-//   - ending_stealth_methodical all freed slowly, solid reward        SUCCESS
-//   - ending_assault_clean      all freed, big bounty + rep           SUCCESS
-//   - ending_assault_costly     2 lost, some bounty, rep hit          SUCCESS
-//   - ending_assault_fail       assault collapses, hostages die       FAILURE
+//   - ending_ransom_good          all freed, money gone, small rep      SUCCESS
+//   - ending_ransom_betrayed      pirates renege, hostages die          FAILURE
+//   - ending_ransom_marked_good   marked ransom pays off, big net gain  SUCCESS
+//   - ending_ransom_marked_botched tag detected, exchange turns bloody  FAILURE
+//   - ending_stealth_clean        all freed quietly, big bounty + rep   SUCCESS
+//   - ending_stealth_partial      spotted, grabbed 2, modest reward     SUCCESS
+//   - ending_stealth_methodical   all freed slowly, solid reward        SUCCESS
+//   - ending_assault_clean        all freed, big bounty + rep           SUCCESS
+//   - ending_assault_costly       2 lost, some bounty, rep hit          SUCCESS
+//   - ending_assault_fail         assault collapses, hostages die       FAILURE
 export const hostageRescueScript: QuestScript = {
   id: "hostage-rescue",
   title: "Спасение заложников",
@@ -97,6 +105,46 @@ export const hostageRescueScript: QuestScript = {
           toLocation: "ransom_outcome",
           effects: ["roll = random(0,9)"],
         },
+        {
+          id: "mark_ransom",
+          label:
+            "Пометить кредиты маячком и повесить на кошелёк тихого «червя»",
+          toLocation: "ransom_marked",
+          effects: [],
+        },
+      ],
+    },
+    {
+      id: "ransom_marked",
+      text: "Пока переводился выкуп, ваш «червь» прополз следом за монетами — маячок в потоке кредитов, слепок пиратской сети в придачу. Если пройдёт незамеченным, флот выкупит эти данные дороже самого выкупа, а деньги вернутся с процентами. Если пираты нащупают тег — они поймут, что их водят за нос, и злоба выместится на тех четверых.\nВ эфире снова главарь, уже без усмешки: «Что-то ты притих, рейнджер. Люблю тишину. Не люблю сюрпризы».",
+      transitions: [
+        {
+          id: "spring_trap",
+          label: "Ждать — маячок либо сработает, либо вас раскусят",
+          toLocation: "ransom_marked_outcome",
+          effects: ["roll = random(0,9)"],
+        },
+      ],
+    },
+    {
+      id: "ransom_marked_outcome",
+      text: "Шлюз «Терновника» дёргается. Секунда тишины — и по вашему тактическому визору бежит первая строка данных с маячка...",
+      transitions: [
+        {
+          id: "marked_paid",
+          label: "...",
+          toLocation: "ending_ransom_marked_good",
+          condition: "roll >= 5",
+          effects: ["credits += 4000", "rating += 25"],
+          autoExecute: true,
+        },
+        {
+          id: "marked_burned",
+          label: "...",
+          toLocation: "ending_ransom_marked_botched",
+          effects: ["hostages -= 4", "rating -= 15"],
+          autoExecute: true,
+        },
       ],
     },
     {
@@ -165,7 +213,7 @@ export const hostageRescueScript: QuestScript = {
     // ── ASSAULT ────────────────────────────────────────────────────────────
     {
       id: "assault_prep",
-      text: "Сканер термооптики размечает станцию красными метками: часовых на борту — {guards}, каждый при тяжёлом стволе, и все между вами и заложниками. Чем больше стволов, тем выше шанс, что в горячке боя пуля достанется не пирату. Это будет кроваво.",
+      text: "Сканер термооптики размечает станцию красными метками: часовых на борту — {guards}, каждый при тяжёлом стволе, и все между вами и заложниками. Чем больше стволов, тем выше шанс, что в горячке боя пуля достанется не пирату. Это будет кроваво.\nГлаварь ловит ваш подход на радаре и выходит в эфир: «Слышу, как ты греешь движки, рейнджер. Ну давай, врывайся. Посмотрим, кто первым ляжет — ты или те четверо».",
       transitions: [
         {
           id: "breach_loud",
@@ -175,15 +223,16 @@ export const hostageRescueScript: QuestScript = {
         },
         {
           id: "snipe_first",
-          label: "Сперва снять двоих бесшумным снайпером и уравнять шансы",
+          label:
+            "Сперва снять двоих бесшумным снайпером — надёжно, но долго и дорого",
           toLocation: "assault_snipe",
-          effects: ["guards -= 2"],
+          effects: ["guards -= 2", "credits -= 2500", "rating -= 20"],
         },
       ],
     },
     {
       id: "assault_snipe",
-      text: "Два коротких хлопка гасителя — и две красные метки на сканере гаснут одна за другой, оседая в тёмных углах коридора. Оставшихся часовых: {guards}. Теперь силы почти равны.",
+      text: "Два коротких хлопка гасителя — и две красные метки на сканере гаснут одна за другой, оседая в тёмных углах коридора. Оставшихся часовых: {guards}. Но час, потраченный на снайперскую позицию, пираты не потратили впустую: они успели выпотрошить кассу станции и разбросать по отсекам «подарки». А флот за тихую работу «по-палачески», без честного боя, платит скупо и морщится. Зато теперь силы почти равны.",
       transitions: [
         {
           id: "now_breach",
@@ -232,6 +281,18 @@ export const hostageRescueScript: QuestScript = {
     {
       id: "ending_ransom_betrayed",
       text: "Шлюз распахивается — и в тот же миг станцию сотрясает взрыв. Пираты забрали выкуп и подорвали отсек с камерами, заметая следы. Все четверо погибли. Вы остались без денег, без заложников и с горьким уроком: пирату верить нельзя.\nЗаложники: {hostages} | Репутация: {rating}",
+      isFailure: true,
+      transitions: [],
+    },
+    {
+      id: "ending_ransom_marked_good",
+      text: "Маячок прошёл чисто. Пираты выпустили всех четверых — целыми, живыми — и растворились в темноте, уверенные, что переиграли рейнджера. А ваш «червь» тем временем срисовал их кошельки, явки и перевалочные схроны. Флот выкупил эти данные так дорого, что выкуп вернулся с лихвой, а по наводке уже вышли патрули. Иногда честь пирата можно и не проверять — достаточно проследить за его деньгами.\nЗаложники: {hostages} | Кредиты: {credits} | Репутация: {rating}",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
+      id: "ending_ransom_marked_botched",
+      text: "Маячок мигнул на пиратском сканере на долю секунды — но им хватило. «А ты не так прост, рейнджер, — прохрипел главарь. — Жаль». Эфир захлебнулся выстрелами, шлюз заклинило намертво, и когда вы всё-таки вскрыли отсек, спасать было уже некого. Хитрость обошлась в четыре жизни, а флот занёс безрассудную игру с заложниками себе на заметку.\nЗаложники: {hostages} | Репутация: {rating}",
       isFailure: true,
       transitions: [],
     },

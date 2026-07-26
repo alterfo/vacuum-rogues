@@ -659,10 +659,32 @@ branches/endings, never removing/loosening what's there) and running the full qu
       (gravity-slalom 38→48 for the new catalog literals). Full unit suite 6091 passed / 13 skipped / 0
       failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues (repo-wide `npm run lint` fails
       identically on HEAD — pre-existing `no-explicit-any` test-file backlog, unrelated).
-- [ ] **Task 23 — `hostage-rescue.ts`**: rebalance `snipe_first` (currently removes all risk for free)
+- [x] **Task 23 — `hostage-rescue.ts`**: rebalance `snipe_first` (currently removes all risk for free)
       and `pay_ransom` (currently a telegraphed trap with no real upside) so both carry a genuine
       tradeoff (A); give the antagonist at least one more beat before vanishing (H). Write/extend tests;
-      run tests.
+      run tests. Done: (1) **snipe_first no longer free (A)** — the guaranteed `guards -= 2` (which the
+      locked `sniping first guarantees a clean assault` test requires, along with hostages 4 / clean
+      ending, but does NOT check credits/rating) now costs `credits -= 2500` + `rating -= 20`. Since the
+      player already SEES `{guards}` in `assault_prep`, this makes the decision honest: at low guard
+      counts a raw breach nets strictly more (3500/+25 vs snipe's 1000/+5) so snipe stops dominating; at
+      3 guards it's a genuine lives-vs-money dilemma (breach loses 2 hostages for +500 cr); at 4 it's an
+      expensive-but-survivable rescue rather than a free risk-eraser. `assault_snipe` text now justifies
+      the price (the hour on the nest lets the pirates strip the till + the flotilla pays skint for
+      "executioner" work). (2) **pay_ransom gains a real upside (A)** — `ransom_path` keeps the naive
+      `trust` line (locked outcomes untouched) and adds `mark_ransom` → new `ransom_marked` /
+      `ransom_marked_outcome` nodes: a higher-variance gamble that on `roll >= 5` recovers the ransom AND
+      pays a pirate-network-intel bounty (`credits += 4000`, net +2000, `rating += 25`,
+      `ending_ransom_marked_good`), but on a loss the detected tag turns the exchange into a bloodbath
+      (`hostages -= 4`, `rating -= 15`, `ending_ransom_marked_botched`) — a genuinely worse floor than
+      naive trust's rating-neutral betrayal, so neither line dominates. (3) **Antagonist beat (H)** — the
+      главарь, previously silent after the briefing on every non-ransom path, now taunts over comms in
+      `assault_prep` («Слышу, как ты греешь движки, рейнджер…») and gets two more beats across the
+      marked-ransom nodes/endings. Extended the Hostage Rescue describe block with 6 new `it(...)` blocks
+      (snipe cost, snipe-nets-less-than-raw-clean, mark-vs-trust distinct branch, marked-good net-positive,
+      marked-botched worse-floor-than-trust, antagonist-speaks-again) — no existing assertion touched.
+      Cyrillic baseline regenerated (hostage-rescue 31→37 for the 2 new endings + 2 new nodes + 2 new
+      labels). Full unit suite 6097 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint` on
+      changed files 0 issues.
 - [ ] **Task 24 — `investigation.ts`**: make the gathered clues actually branch toward identifying the
       real killer instead of a fixed deduction path (B); fix the reputation threshold that currently
       makes a correct elimination-based deduction mathematically unreachable even with perfect play (E);

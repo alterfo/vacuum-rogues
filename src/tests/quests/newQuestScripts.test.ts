@@ -518,6 +518,100 @@ describe("Hostage Rescue quest", () => {
       expect(vm1.isSuccess()).toBe(vm2.isSuccess());
     }
   });
+
+  // ── Task 23: sniping is no longer a free risk-eraser ──────────────────────
+  it("sniping first now carries a real cost (lost bounty + standing)", () => {
+    const vm = new QuestVM(hostageRescueScript, 1);
+    vm.execute("assault");
+    vm.setParam("guards", 4);
+    vm.execute("snipe_first");
+    // guaranteed -2 guards still holds (locked elsewhere), but it is now paid for
+    expect(vm.getParam("guards")).toBe(2);
+    expect(vm.getParam("credits")).toBe(-2500);
+    expect(vm.getParam("rating")).toBe(80);
+  });
+
+  it("snipe→clean nets LESS than a raw clean breach — snipe no longer dominates at low guard counts", () => {
+    // Raw breach against 2 guards: full 3500 bounty, +25 rep, all saved.
+    const raw = new QuestVM(hostageRescueScript, 1);
+    raw.execute("assault");
+    raw.setParam("guards", 2);
+    raw.execute("breach_loud");
+    advanceAuto(raw);
+    expect(raw.currentLocation().id).toBe("ending_assault_clean");
+    expect(raw.getParam("credits")).toBe(3500);
+    expect(raw.getParam("rating")).toBe(125);
+
+    // Snipe→clean against the same 2 guards: same ending, but strictly worse
+    // credits and rating because sniping was paid for — so a player who sees a
+    // low guard count has a real reason to breach instead of snipe.
+    const snipe = new QuestVM(hostageRescueScript, 1);
+    snipe.execute("assault");
+    snipe.setParam("guards", 2);
+    snipe.execute("snipe_first"); // -2500 cr, -20 rep, guards clamped
+    snipe.execute("now_breach");
+    advanceAuto(snipe);
+    expect(snipe.currentLocation().id).toBe("ending_assault_clean");
+    expect(snipe.getParam("credits")).toBeLessThan(raw.getParam("credits"));
+    expect(snipe.getParam("rating")).toBeLessThan(raw.getParam("rating"));
+    expect(snipe.getParam("hostages")).toBe(4); // still a guaranteed rescue
+  });
+
+  // ── Task 23: pay_ransom gains a real, higher-variance upside ───────────────
+  it("marking the ransom offers a distinct branch from simply trusting", () => {
+    const vm = new QuestVM(hostageRescueScript, 1);
+    vm.execute("pay_ransom");
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("trust");
+    expect(ids).toContain("mark_ransom");
+    vm.execute("mark_ransom");
+    expect(vm.currentLocation().id).toBe("ransom_marked");
+  });
+
+  it("a marked ransom that goes unnoticed recovers the money AND pays a bounty (net positive)", () => {
+    const vm = new QuestVM(hostageRescueScript, 1);
+    vm.execute("pay_ransom"); // -2000
+    vm.execute("mark_ransom");
+    vm.execute("spring_trap"); // roll randomised
+    vm.setParam("roll", 9); // >= 5 → paid off
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("ending_ransom_marked_good");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("hostages")).toBe(4);
+    expect(vm.getParam("credits")).toBe(2000); // -2000 ransom + 4000 recovered
+    expect(vm.getParam("rating")).toBe(125);
+  });
+
+  it("a detected tag turns the exchange bloody — a worse floor than a plain betrayal", () => {
+    const marked = new QuestVM(hostageRescueScript, 1);
+    marked.execute("pay_ransom");
+    marked.execute("mark_ransom");
+    marked.execute("spring_trap");
+    marked.setParam("roll", 0); // < 5 → burned
+    advanceAuto(marked);
+    expect(marked.currentLocation().id).toBe("ending_ransom_marked_botched");
+    expect(marked.isSuccess()).toBe(false);
+    expect(marked.getParam("hostages")).toBe(0);
+
+    // Plain betrayal leaves rating untouched; the botched tag also costs standing,
+    // so the clever line genuinely has a worse floor than naive trust.
+    const plain = new QuestVM(hostageRescueScript, 1);
+    plain.execute("pay_ransom");
+    plain.execute("trust");
+    plain.setParam("roll", 0);
+    advanceAuto(plain);
+    expect(marked.getParam("rating")).toBeLessThan(plain.getParam("rating"));
+  });
+
+  // ── Task 23: antagonist gets more than one line before vanishing ───────────
+  it("the pirate leader speaks again on the marked-ransom and assault paths", () => {
+    const byId = new Map(hostageRescueScript.locations.map((l) => [l.id, l]));
+    const marked = byId.get("ransom_marked")!.text as string;
+    const prep = byId.get("assault_prep")!.text as string;
+    expect(marked).toContain("главарь");
+    expect(prep).toContain("Главарь");
+    expect(prep).toContain("рейнджер");
+  });
 });
 
 describe("Sabotage Heist quest", () => {
