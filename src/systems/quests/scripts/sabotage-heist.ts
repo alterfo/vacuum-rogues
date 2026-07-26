@@ -2,13 +2,16 @@ import type { QuestScript } from "../QuestScript";
 
 // Design: A vault heist on the Hyperion corporate station, with a betrayal branch.
 // Two+ meaningful choice points:
-//   1. How to get in — bribe an inside contact (costs cr, gains a partner),
-//      hack the security grid (roll: clean or loud), or force the airlock (loud).
+//   1. How to get in — bribe your inside contact Векслер (costs cr, gains a
+//      partner), hack the security grid (roll: clean or loud — each with its own
+//      narrated beat), or force the airlock (loud).
 //   2. What to grab — the full haul (more loot, but louder/slower) vs the data
 //      core only (lighter, quieter).
-//   3. The exit — meet the partner to split the loot (they may BETRAY you on a
-//      roll), double-cross the partner (keep everything, lose reputation), or just
-//      slip out. A high alarm level gets you caught regardless.
+//   3. The exit — meet Векслер to split the loot (he may BETRAY you on a roll),
+//      double-cross him (keep everything, lose reputation), or slip out. Slipping
+//      out WITH a partner is not free: he keeps the cases he was carrying, so you
+//      lose part of the haul (bringing a partner genuinely changes this exit).
+//      A high alarm level gets you caught regardless.
 // Outcomes:
 //   - ending_clean         (escaped with the loot)                       SUCCESS
 //   - ending_double_cross  (ditched the partner: more loot, −rep)        SUCCESS
@@ -84,7 +87,7 @@ export const sabotageHeistScript: QuestScript = {
         {
           id: "bribe_contact",
           label:
-            "Подкупить своего человека внутри — он проведёт вас (−500 кр, останется напарником)",
+            "Подкупить своего человека — техника Векслера с внутренней смены (−500 кр, пойдёт с вами в долю)",
           toLocation: "inside",
           effects: ["credits -= 500", "partner = 1"],
         },
@@ -109,7 +112,7 @@ export const sabotageHeistScript: QuestScript = {
         {
           id: "hack_clean",
           label: "...",
-          toLocation: "inside",
+          toLocation: "hacked_clean",
           condition: "roll >= 4",
           effects: [],
           autoExecute: true,
@@ -117,8 +120,34 @@ export const sabotageHeistScript: QuestScript = {
         {
           id: "hack_loud",
           label: "...",
-          toLocation: "inside",
+          toLocation: "hacked_loud",
           effects: ["alarm += 5"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "hacked_clean",
+      text: "Последний контур сдаётся беззвучно. На пульте охраны — ровные зелёные строки, ваш взлом лёг поверх штатного лога так, что и не отличишь. Датчики честно докладывают: всё спокойно. Замки хранилища мягко расходятся перед вами.",
+      transitions: [
+        {
+          id: "clean_to_inside",
+          label: "Внутрь",
+          toLocation: "inside",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "hacked_loud",
+      text: "Одна подпись не сошлась — и сеть огрызается. Где-то по переборкам прокатывается короткий сигнал тревоги, на пультах вспыхивает янтарь. Замки всё же поддаются, но теперь станция знает, что в неё влезли чужие.\nТревога: {alarm}",
+      transitions: [
+        {
+          id: "loud_to_inside",
+          label: "Внутрь, пока не поздно",
+          toLocation: "inside",
+          effects: [],
           autoExecute: true,
         },
       ],
@@ -160,20 +189,29 @@ export const sabotageHeistScript: QuestScript = {
           effects: ["crossed = 1", "rating -= 20"],
         },
         {
+          id: "slip_out_partner",
+          label:
+            "Уйти в одиночку тем же путём — не искать Векслера (он оставит себе кейсы, что нёс)",
+          toLocation: "escape_gate",
+          condition: "partner == 1",
+          effects: ["loot -= 2"],
+        },
+        {
           id: "slip_out",
           label: "Тихо ускользнуть тем же путём, что и вошли",
           toLocation: "escape_gate",
+          condition: "partner == 0",
           effects: [],
         },
       ],
     },
     {
       id: "partner_meet",
-      text: "Напарник ждёт у грузового челнока, двигатель уже прогрет и мелко дрожит. Он встречает вас улыбкой — той самой, которой не стоит верить. «Всё чисто? Давай сюда, поделим по-братски».",
+      text: "Векслер ждёт у грузового челнока, двигатель уже прогрет и мелко дрожит. За смену он успел рассказать вам про больную мать на Окраине и про долг, из-за которого и пошёл на это дело, — а теперь встречает вас той самой улыбкой, которой не стоит верить. «Всё чисто? Давай сюда, поделим по-братски, как договаривались».",
       transitions: [
         {
           id: "trust_partner",
-          label: "Отдать кейсы ему на делёж",
+          label: "Отдать кейсы Векслеру на делёж",
           toLocation: "trust_check",
           effects: ["roll = random(0,9)"],
         },
@@ -181,7 +219,7 @@ export const sabotageHeistScript: QuestScript = {
     },
     {
       id: "trust_check",
-      text: "Он принимает кейсы, взвешивает их в руках — и медленно поворачивается к люку. Одно мгновение решает всё...",
+      text: "Векслер принимает кейсы, взвешивает их в руках — и медленно поворачивается к люку челнока. За секунду в его глазах успевает мелькнуть и долг, и мать, и то, сколько всего можно купить на вашу долю. Одно мгновение решает всё...",
       transitions: [
         {
           id: "betrayed",

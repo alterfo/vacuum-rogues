@@ -739,6 +739,90 @@ describe("Sabotage Heist quest", () => {
       expect(vm1.isSuccess()).toBe(vm2.isSuccess());
     }
   });
+
+  // Task 31: give the hack roll its own text (D), name the partner (H), and make
+  // slip_out with a partner actually differ from going alone (I).
+  it("hacking clean routes through its own narrated beat before entering (D)", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("hack_grid");
+    vm.setParam("roll", 9); // clean
+    const first = vm.availableTransitions()[0];
+    expect(first.autoExecute).toBe(true);
+    vm.execute(first.id);
+    expect(vm.currentLocation().id).toBe("hacked_clean");
+    advanceAuto(vm); // hacked_clean → inside
+    expect(vm.currentLocation().id).toBe("inside");
+    expect(vm.getParam("alarm")).toBe(0);
+  });
+
+  it("hacking loud routes through its own narrated beat and raises the alarm (D)", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("hack_grid");
+    vm.setParam("roll", 0); // loud
+    const first = vm.availableTransitions()[0];
+    vm.execute(first.id); // hack_loud
+    expect(vm.currentLocation().id).toBe("hacked_loud");
+    expect(vm.getParam("alarm")).toBe(5);
+    advanceAuto(vm); // hacked_loud → inside
+    expect(vm.currentLocation().id).toBe("inside");
+  });
+
+  it("the two hack outcomes narrate differently (silent roll gets its own text)", () => {
+    const clean = sabotageHeistScript.locations.find(
+      (l) => l.id === "hacked_clean",
+    );
+    const loud = sabotageHeistScript.locations.find(
+      (l) => l.id === "hacked_loud",
+    );
+    expect(clean).toBeTruthy();
+    expect(loud).toBeTruthy();
+    expect(clean!.text).not.toBe(loud!.text);
+  });
+
+  it("names the partner (Векслер) with presence before the betrayal roll (H)", () => {
+    const meet = sabotageHeistScript.locations.find(
+      (l) => l.id === "partner_meet",
+    )!;
+    const check = sabotageHeistScript.locations.find(
+      (l) => l.id === "trust_check",
+    )!;
+    const meetText =
+      typeof meet.text === "string" ? meet.text : meet.text.join(" ");
+    const checkText =
+      typeof check.text === "string" ? check.text : check.text.join(" ");
+    expect(meetText).toContain("Векслер");
+    expect(checkText).toContain("Векслер");
+    const bribe = sabotageHeistScript.locations
+      .find((l) => l.id === "approach")!
+      .transitions.find((t) => t.id === "bribe_contact")!;
+    expect(bribe.label).toContain("Векслер");
+  });
+
+  it("slipping out WITH a partner loses part of the haul (bringing a partner changes it) (I)", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("bribe_contact"); // partner = 1, -500
+    vm.execute("grab_all"); // loot 5, alarm 3
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("slip_out_partner");
+    expect(ids).not.toContain("slip_out"); // no-partner variant hidden with a partner
+    vm.execute("slip_out_partner"); // loot -= 2
+    expect(vm.getParam("loot")).toBe(3);
+    advanceAuto(vm); // escape_gate (alarm 3 < 6) → pay_mid (+2500) → ending_clean
+    expect(vm.currentLocation().id).toBe("ending_clean");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(2000); // -500 bribe + 2500
+  });
+
+  it("slipping out WITHOUT a partner keeps the full haul", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("force_airlock"); // alarm 4, no partner
+    vm.execute("grab_core"); // loot 3
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("slip_out");
+    expect(ids).not.toContain("slip_out_partner");
+    vm.execute("slip_out"); // no loot change
+    expect(vm.getParam("loot")).toBe(3);
+  });
 });
 
 describe("First Contact quest", () => {

@@ -884,10 +884,27 @@ branches/endings, never removing/loosening what's there) and running the full qu
       suite 6157 passed / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues. ➕ Note: the
       exact vent economy (+15 s vs the D-scramble risk, 2 charges) is a manual-playtest feel item, not
       test-gated — chosen so the vent reads as a desperation tool, never a free time farm.
-- [ ] **Task 31 — `sabotage-heist.ts`**: give `hack_check`'s roll its own text (D); give the partner a
+- [x] **Task 31 — `sabotage-heist.ts`**: give `hack_check`'s roll its own text (D); give the partner a
       name and more presence before the betrayal roll (H); fix `slip_out` so bringing the partner
       actually changes the outcome (currently identical to going without one, wasting the 500₡ team cost)
-      (I). Write/extend tests; run tests.
+      (I). Write/extend tests; run tests. Done: (1) **hack roll own text (D)** — `hack_check`'s
+      `hack_clean`/`hack_loud` autoExecute transitions now route to two new narrated scene nodes
+      `hacked_clean` (silent breach, logs spoofed) / `hacked_loud` (the amber-alarm slip), each
+      auto-flowing into `inside` (mirrors evacuation's `route_clear_scene`/`route_hit_scene` pattern);
+      `alarm += 5` stays on the `hack_loud` transition so every existing hack test still lands on `inside`
+      with the same alarm. (2) **Partner named + fleshed out (H)** — the inside contact is now «Векслер»,
+      introduced by name in the `bribe_contact` label and given a backstory (sick mother, a debt) across
+      `partner_meet`/`trust_check` so he has presence before the betrayal roll. (3) **slip_out fixed (I)**
+      — the always-available `slip_out` is split: with a partner (`condition partner == 1`) a new
+      `slip_out_partner` transition fires `loot -= 2` (Векслер keeps the cases he was carrying), so
+      bringing a partner and ghosting him is no longer identical to going solo — it also de-dominates
+      `double_cross` (which now uniquely keeps the full haul at −20 rep). The no-partner `slip_out`
+      (`condition partner == 0`) is unchanged, keeping the "partner-only options hidden" test green.
+      Extended the Sabotage Heist describe block with 6 new `it(...)` blocks (clean/loud hack route through
+      distinct beats, distinct-text guard, partner-name presence, slip-with-partner loses 2 loot + hides
+      the solo variant, slip-without-partner keeps the full haul) — no existing assertion touched. Cyrillic
+      baseline regenerated (sabotage-heist 30→35 for the 2 new scene nodes + new labels). Full unit suite
+      6150 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 - [ ] **Task 32 — `signal-decode.ts`**: branch endings by decode method used, not just outcome (B); give
       `overclock_check`'s roll its own text (D); add tension/stakes language matching the "people may
       die" premise instead of dry technobabble throughout (H) — note this depends on Task 3's typo fixes
