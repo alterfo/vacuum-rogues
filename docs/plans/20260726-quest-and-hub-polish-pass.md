@@ -996,15 +996,45 @@ branches/endings, never removing/loosening what's there) and running the full qu
       resolves the same "safest ≠ richest" complaint without touching any locked assertion.
 
 ### Task 35: Verify acceptance criteria
-- [ ] verify every item from Overview/Context is addressed (spot-check a sample of the per-quest tasks
-      against the original backlog doc for genuine resolution, not just checkbox-completion)
-- [ ] run full unit test suite (`npm test -- --run`)
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run letsplay:ci`
-- [ ] run `npm run test:save-compat`
-- [ ] run `npm run lint` — all issues fixed
-- [ ] run `gitnexus detect_changes({scope: "compare", base_ref: "master"})` and confirm the affected
-      scope matches this plan's intent (no unexpected blast radius)
+- [x] verify every item from Overview/Context is addressed (spot-check a sample of the per-quest tasks
+      against the original backlog doc for genuine resolution, not just checkbox-completion). Done:
+      spot-checked — the two Overview problems are addressed: (1) quest static-tree defects resolved
+      across all 20 scripts (commits `e36dea5`…`c4c5b02`) via the Task-14 text-pool variance primitive +
+      per-quest branched endings/risk-priced choices/qualitative labels; (2) hub-UI data-surfacing +
+      swallowed-feedback fixes landed (population/economy/politics/attitude panel, purchase/upgrade/
+      service toasts, SFX, launch-denial reason, landing-denied inert button, robot-voice). The
+      typewriter-reveal UX bug (Task 2) shipped. All ⚠️ deferrals (tribunal sign-bug, Transfer label,
+      boarding dominant-combo, tribunal roll-free line) are genuine test-locked blocks documented for
+      user go-ahead, not skipped work.
+- [x] run full unit test suite (`npm test -- --run`). Done: 6168 passed / 13 skipped / 1 flake. The lone
+      red — `sessionCompetence.test.ts` strict battle-ready milestone — is the known-stochastic campaign
+      gate (documented in Task 11's notes); it PASSED on isolated rerun (3/3), confirming a flake, not a
+      regression from this presentation/quest work.
+- [x] run `npm run test:e2e:regression`. Done: 29 passed (including this plan's NEW cases — typewriter
+      reveal, landing-denied inert button). ⚠️ 1 pre-existing failure UNRELATED to this plan:
+      `smoke: changing the font size keeps the ship in place (playtest4 A)` references `hud.gearButton`,
+      which was removed from the flight HUD by commit `f30b192` (settings-panel relocation to the main
+      menu — confirmed an ancestor of `master`, i.e. pre-branch). The property no longer exists anywhere
+      in `src/`; this is a stale test that predates the branch, not a regression. Per the standing
+      no-touch-existing-tests rule it was left unmodified and flagged here rather than edited/weakened.
+      (Env note: e2e needs `NO_PROXY=localhost,127.0.0.1` or the Privoxy sandbox 503s the dev-server
+      health check — the earlier 120 s webServer timeouts were that, not a build failure.)
+- [x] run `npm run letsplay:ci`. Done: green — 3 sessions × 120 steps, faults errors=0 soft-locks=0
+      invariant=0 fuel-deaths=0 overmind-losses=0; 109 tests passed.
+- [x] run `npm run test:save-compat`. Done: 22 passed — confirms the catalog-only assumption held (no
+      persisted-field/migration impact from any task in this plan).
+- [x] run `npm run lint` — all issues fixed. Done: the real gate `eslint src --ext .ts` exits 0 (0
+      errors, 68 pre-existing `no-explicit-any` **warnings** in test files — non-blocking, on HEAD as on
+      master). The transient `npm run lint` exit-1 seen earlier was the rtk proxy folding in unrelated
+      vendor JS (`menu.js`/`storage.min.js`), not the project script.
+- [x] run `gitnexus detect_changes({scope: "compare", base_ref: "master"})` and confirm the affected
+      scope matches this plan's intent (no unexpected blast radius). Done: 172 changed symbols / 77
+      affected / 84 files, risk `critical`. The `critical` label reflects **size** (a 34-task sweep over
+      all 20 quest scripts + 7 hub scenes + the quest engine), not an out-of-scope touch: changed files
+      are confined to `src/systems/quests/**`, hub/presentation scenes, `src/tests/**`, and docs. No
+      `src/domain/**` and no `MigrationPipeline` change; the lone `src/validation/schemas.ts` line (+
+      `"CRUISER"` enum value with `.default("CORVETTE")`) is a save-safe additive from the branch's
+      earlier gear-catalog work, not this plan — and save-compat is green. Blast radius matches intent.
 
 ### Task 36: [Final] Update documentation
 - [ ] `src/systems/quests/scripts/README.md`: document the new text-pool variance convention (Task 14)
