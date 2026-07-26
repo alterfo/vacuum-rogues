@@ -71,7 +71,7 @@
   "src/systems/quests/scripts/first-contact.ts": 30,
   "src/systems/quests/scripts/gravity-slalom.ts": 48,
   "src/systems/quests/scripts/hostage-rescue.ts": 37,
-  "src/systems/quests/scripts/investigation.ts": 74,
+  "src/systems/quests/scripts/investigation.ts": 87,
   "src/systems/quests/scripts/life-support.ts": 22,
   "src/systems/quests/scripts/locked-room.ts": 26,
   "src/systems/quests/scripts/orbital-escape.ts": 20,

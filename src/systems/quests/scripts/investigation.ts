@@ -6,6 +6,14 @@ import type { QuestScript } from "../QuestScript";
 // Clues 0-4 are real physical evidence; clues 5-7 are planted to frame the mechanic.
 // Player must interview all 4 suspects + examine >=5 clues before accusing.
 // Wrong accusation costs 200 reputation; 3 wrong accusations = failure.
+//
+// Deduction is NOT decorative: the voice-log clue (Улика 5) can be run through
+// biometric analysis (`voice_analysis`), which branches on the real `murderer`
+// and names the killer — so perfect play deduces the answer and needs zero wrong
+// guesses (the 3-strike rating budget only punishes careless elimination). The
+// guard's own key-confession from his interview also becomes actionable: once the
+// arsenal-key clue (Улика 7) is examined, the interrogation offers a confront
+// beat that neutralises that planted clue with his prior testimony.
 export const investigationScript: QuestScript = {
   id: "investigation",
   title: "Следствие",
@@ -283,10 +291,29 @@ export const investigationScript: QuestScript = {
       text: "Охранник Ортега Сааведра, 51 год. Старый служака, отвечает не сразу — взвешивает каждое слово.\n«Обходил посты по маршруту, как каждую ночь. В 02:15 вырубил камеру у Б-7 — та мигала, я решил, сбой питания. Занести в журнал забыл, каюсь, устал под утро. Ключ от арсенала? Так я же сам его в каюту механика отнёс, неделю назад, Карл просил — ему инструмент из оружейки нужен был. А что, всплыл где-то этот ключ?»",
       transitions: [
         {
+          id: "confront_key",
+          label: "Предъявить Ортеге всплывший ключ от арсенала",
+          toLocation: "guard_key_admission",
+          condition: "examined_6 == 1",
+          effects: [],
+        },
+        {
           id: "done_guard",
           label: "Занести показания в дело",
           toLocation: "warehouse",
           effects: ["interviewed_3 = 1", "interviews_done += 1"],
+        },
+      ],
+    },
+    {
+      id: "guard_key_admission",
+      text: "Вы кладёте перед Ортегой протокол: ключ от арсенала найден в каюте Карла — та самая «улика», что кричит о вине механика. Старик даже не меняется в лице.\n«Так я ж вам сразу сказал — сам отнёс, неделю назад, при свидетелях. Полсмены видело, спросите кого угодно. Кто-то знал про это и подложил ключ как приманку — расчёт был, что вы клюнете на Карла и дальше копать не станете. Моё слово — вот оно, в вашем деле. Пользуйтесь.»\nПрежнее признание охранника теперь работает на вас: подброшенная улика №7 обезврежена его же показаниями, и рамка вокруг механика трещит.",
+      transitions: [
+        {
+          id: "guard_back_to_interview",
+          label: "Вернуться к допросу",
+          toLocation: "interview_guard",
+          effects: [],
         },
       ],
     },
@@ -342,11 +369,106 @@ export const investigationScript: QuestScript = {
     },
     {
       id: "examine_evidence_4",
-      text: "Улика 5 — Журнал переговоров.\nВ 02:00 Льерна принял голосовой вызов с внутреннего канала станции. Абонент скрыт, содержание зашифровано его личным ключом. Разговор длился восемь минут и оборвался в 02:08 — сразу после этого Льерна пошёл к шлюзу Б-7, где его и убили. Кто-то выманил его туда. Кто-то, кому он доверял настолько, чтобы прийти на встречу в глухой ночной час.",
+      text: "Улика 5 — Журнал переговоров.\nВ 02:00 Льерна принял голосовой вызов с внутреннего канала станции. Абонент скрыт, содержание зашифровано его личным ключом. Разговор длился восемь минут и оборвался в 02:08 — сразу после этого Льерна пошёл к шлюзу Б-7, где его и убили. Кто-то выманил его туда. Кто-то, кому он доверял настолько, чтобы прийти на встречу в глухой ночной час.\nЗапись зашифрована, но сам голос — нет. Его можно прогнать через голосовые слепки экипажа.",
       transitions: [
+        {
+          id: "deduce_voice",
+          label: "Прогнать голос через биометрию экипажа",
+          toLocation: "voice_analysis",
+          effects: [],
+        },
         {
           id: "back_from_e4",
           label: "Занести в досье",
+          toLocation: "warehouse",
+          effects: ["examined_4 = 1", "clues_examined += 1"],
+        },
+      ],
+    },
+    // ── VOICE-LOG DEDUCTION (branches on the real murderer) ─────────────────
+    // Running the 02:00 call through the crew's voiceprints is the one clue that
+    // points at the actual killer. `voice_analysis` auto-selects the matching
+    // suspect from `murderer`; each `voice_match_N` names them and logs the clue.
+    {
+      id: "voice_analysis",
+      text: "Станционный ИИ раскладывает восьмиминутную запись на форманты и прогоняет через голосовые слепки четверых. Это единственный человек, кого Льерна впустил к шлюзу Б-7 в свой последний час, — тот, кому он доверял. Полоса совпадения ползёт вверх...",
+      transitions: [
+        {
+          id: "voice_is_mechanic",
+          label: "...",
+          toLocation: "voice_match_0",
+          condition: "murderer == 0",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "voice_is_pilot",
+          label: "...",
+          toLocation: "voice_match_1",
+          condition: "murderer == 1",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "voice_is_trader2",
+          label: "...",
+          toLocation: "voice_match_2",
+          condition: "murderer == 2",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "voice_is_guard",
+          label: "...",
+          toLocation: "voice_match_3",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "voice_match_0",
+      text: "Совпадение — 97%. Голос принадлежит механику Карлу Хенце. Это он звонком выманил Льерну к шлюзу и там же оборвал разговор — и жизнь. Подброшенные улики тыкали в Карла слишком услужливо, и в этом был его расчёт: чтобы вы приняли правду за подставу и оправдали настоящего убийцу. На сей раз клевета совпала с виновным.",
+      transitions: [
+        {
+          id: "voice_logged_0",
+          label: "Занести вывод в досье",
+          toLocation: "warehouse",
+          effects: ["examined_4 = 1", "clues_examined += 1"],
+        },
+      ],
+    },
+    {
+      id: "voice_match_1",
+      text: "Совпадение — 96%. Голос принадлежит пилоту Вэй Жанхуэй. Тот же синтаксис, что в анонимке, тыкавшей в механика; та же маленькая кисть, что оставила перчатки размера S. Она выманила Льерну на встречу, убила и аккуратно навела следствие на Карла. «Лицензия и репутация» оказались лучшей маской.",
+      transitions: [
+        {
+          id: "voice_logged_1",
+          label: "Занести вывод в досье",
+          toLocation: "warehouse",
+          effects: ["examined_4 = 1", "clues_examined += 1"],
+        },
+      ],
+    },
+    {
+      id: "voice_match_2",
+      text: "Совпадение — 95%. Голос принадлежит торговцу Рине Коваль. Её «железный протокол» алиби — восьмиминутная петля, пущенная в эфир дока, пока сама она была у Б-7; маленькая кисть под перчатки размера S совпадает. Контракт на руду стоил Льерне жизни, а ей — почти идеального прикрытия.",
+      transitions: [
+        {
+          id: "voice_logged_2",
+          label: "Занести вывод в досье",
+          toLocation: "warehouse",
+          effects: ["examined_4 = 1", "clues_examined += 1"],
+        },
+      ],
+    },
+    {
+      id: "voice_match_3",
+      text: "Совпадение — 98%. Голос принадлежит охраннику Ортеге Сааведре. Только он мог погасить камеру у Б-7 командой с охранного терминала — и сделал это вручную, не сбоем. Ключ он «случайно» оставил у Карла заранее, камеру списал на питание. Обход по маршруту был безупречным прикрытием для того, кто знает станцию до последнего люка.",
+      transitions: [
+        {
+          id: "voice_logged_3",
+          label: "Занести вывод в досье",
           toLocation: "warehouse",
           effects: ["examined_4 = 1", "clues_examined += 1"],
         },

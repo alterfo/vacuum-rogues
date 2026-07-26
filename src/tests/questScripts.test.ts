@@ -829,6 +829,133 @@ describe("Investigation quest", () => {
     expect(vm1.isSuccess()).toBe(vm2.isSuccess());
     expect(vm1.getParam("murderer")).toBe(vm2.getParam("murderer"));
   });
+
+  // ── Task 24: real deduction (voice-log branches on the actual murderer) ──
+  // Surnames appear verbatim (nominative) in every voice_match node.
+  const suspectName = ["Хенце", "Жанхуэй", "Коваль", "Сааведр"];
+
+  it("voice-log deduction branches on the real murderer and names them", () => {
+    for (let m = 0; m <= 3; m++) {
+      const vm = new QuestVM(investigationScript, 1);
+      vm.setParam("murderer", m);
+      vm.execute("examine_clue_4");
+      expect(vm.currentLocation().id).toBe("examine_evidence_4");
+      // The examine screen offers the biometric analysis path, not just a log.
+      expect(vm.availableTransitions().map((t) => t.id)).toContain(
+        "deduce_voice",
+      );
+      vm.execute("deduce_voice");
+      advanceAutoInvestigation(vm); // voice_analysis auto-selects the match
+      expect(vm.currentLocation().id).toBe(`voice_match_${m}`);
+      expect(vm.currentLocation().text).toContain(suspectName[m]);
+    }
+  });
+
+  it("the voice deduction logs the clue exactly once", () => {
+    const vm = new QuestVM(investigationScript, 3);
+    vm.setParam("murderer", 2);
+    vm.execute("examine_clue_4");
+    vm.execute("deduce_voice");
+    advanceAutoInvestigation(vm);
+    expect(vm.currentLocation().id).toBe("voice_match_2");
+    vm.execute("voice_logged_2");
+    expect(vm.currentLocation().id).toBe("warehouse");
+    expect(vm.getParam("examined_4")).toBe(1);
+    expect(vm.getParam("clues_examined")).toBe(1);
+    // The clue button is gone, so it can never be double-counted.
+    expect(vm.availableTransitions().map((t) => t.id)).not.toContain(
+      "examine_clue_4",
+    );
+  });
+
+  // Fix for defect E: with the deduction real, perfect play identifies the
+  // killer from the clues and accuses correctly on the FIRST attempt — no wrong
+  // guesses, so rating never drops. Elimination-by-guessing is no longer forced.
+  it("deducing via the voice log yields a first-try win with zero rating loss", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm = new QuestVM(investigationScript, seed);
+      // Interview all 4 suspects.
+      const interviewBtns = [
+        "go_interview_mechanic",
+        "go_interview_pilot",
+        "go_interview_trader2",
+        "go_interview_guard",
+      ];
+      const doneBtns = [
+        "done_mechanic",
+        "done_pilot",
+        "done_trader2",
+        "done_guard",
+      ];
+      for (let i = 0; i < 4; i++) {
+        vm.execute(interviewBtns[i]);
+        vm.execute(doneBtns[i]);
+      }
+      // Examine 4 physical clues normally.
+      for (let i = 0; i < 4; i++) {
+        vm.execute(`examine_clue_${i}`);
+        vm.execute(`back_from_e${i}`);
+      }
+      // Run the voice log through biometrics — this is the deduction and logs
+      // the 5th clue. Learn the killer's identity from the branch we land on.
+      vm.execute("examine_clue_4");
+      vm.execute("deduce_voice");
+      advanceAutoInvestigation(vm);
+      const matchId = vm.currentLocation().id; // voice_match_N
+      const deduced = Number(matchId.slice("voice_match_".length));
+      vm.execute(`voice_logged_${deduced}`);
+      // Accuse the deduced suspect (not read from the murderer param directly).
+      vm.execute("go_accuse");
+      advanceAutoInvestigation(vm);
+      const accuseBtns = [
+        "accuse_mechanic",
+        "accuse_pilot",
+        "accuse_trader2",
+        "accuse_guard",
+      ];
+      vm.execute(accuseBtns[deduced]);
+      advanceAutoInvestigation(vm);
+      expect(vm.isSuccess()).toBe(true);
+      expect(vm.getParam("rating")).toBe(500); // no wrong guess, no penalty
+    }
+  });
+
+  // ── Task 24: guard's key confession usable in the interrogation ──
+  it("guard confront is offered only after the arsenal-key clue is examined", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    // Before examining the key clue, the confront option is hidden.
+    vm.execute("go_interview_guard");
+    expect(vm.availableTransitions().map((t) => t.id)).not.toContain(
+      "confront_key",
+    );
+    vm.execute("done_guard");
+    // Fresh run: examine the key clue (Улика 7) first, then interview the guard.
+    const vm2 = new QuestVM(investigationScript, 1);
+    vm2.execute("examine_clue_6");
+    vm2.execute("back_from_e6");
+    vm2.execute("go_interview_guard");
+    expect(vm2.availableTransitions().map((t) => t.id)).toContain(
+      "confront_key",
+    );
+  });
+
+  it("confronting the guard surfaces his prior confession without ending the interview", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.execute("examine_clue_6");
+    vm.execute("back_from_e6");
+    vm.execute("go_interview_guard");
+    vm.execute("confront_key");
+    expect(vm.currentLocation().id).toBe("guard_key_admission");
+    expect(vm.currentLocation().text).toContain("приманк");
+    // The confront does NOT finalise the interview…
+    expect(vm.getParam("interviewed_3")).toBe(0);
+    vm.execute("guard_back_to_interview");
+    expect(vm.currentLocation().id).toBe("interview_guard");
+    // …the player still records the statement to complete it.
+    vm.execute("done_guard");
+    expect(vm.getParam("interviewed_3")).toBe(1);
+    expect(vm.getParam("interviews_done")).toBe(1);
+  });
 });
 
 // Greedy dock assignment: always pick the dock with the lowest current load

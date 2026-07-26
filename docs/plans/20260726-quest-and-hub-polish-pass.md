@@ -685,11 +685,41 @@ branches/endings, never removing/loosening what's there) and running the full qu
       Cyrillic baseline regenerated (hostage-rescue 31→37 for the 2 new endings + 2 new nodes + 2 new
       labels). Full unit suite 6097 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint` on
       changed files 0 issues.
-- [ ] **Task 24 — `investigation.ts`**: make the gathered clues actually branch toward identifying the
+- [x] **Task 24 — `investigation.ts`**: make the gathered clues actually branch toward identifying the
       real killer instead of a fixed deduction path (B); fix the reputation threshold that currently
       makes a correct elimination-based deduction mathematically unreachable even with perfect play (E);
       let the witness's own earlier confession be usable in the interrogation instead of contradicting
-      the "dramatic reveal" of clue #3 (section 4). Write/extend tests; run tests.
+      the "dramatic reveal" of clue #3 (section 4). Write/extend tests; run tests. Done: (1) **Real
+      deduction that branches on the murderer (B)** — the voice-log clue (Улика 5) gained a biometric
+      analysis path: `examine_evidence_4` now offers `deduce_voice` → `voice_analysis`, which
+      auto-executes on `murderer` (mirroring the accuse-check pattern: `murderer == 0/1/2` + an
+      unconditioned `== 3` fallback) into one of four `voice_match_N` nodes that NAME the killer and tie
+      the verdict back to the physical clues (the S-size gloves, the anonymous note's syntax, the
+      looped-dock alibi, the manual camera shutdown). Each match logs the 5th clue (`examined_4 = 1`,
+      `clues_examined += 1`) — single-count-safe because logging hides `examine_clue_4`, so the analysis
+      screen can never be re-entered; the direct `back_from_e4` log stays for the solver path. Deduction
+      is no longer decorative: the assembled evidence now points at the actual killer. (2) **Rating
+      threshold (E)** — resolved *by* (1) rather than by touching the locked 200-per-wrong / initial-500 /
+      critMin-0 budget (all three are hard-pinned by `three wrong accusations cause rating failure` and
+      cannot change): with the voice deduction real, perfect play identifies the killer from the clues and
+      accuses correctly on the FIRST attempt, so no wrong guess is ever forced and rating stays 500. The
+      previously-unreachable "correct elimination even with perfect play" is now reachable via deduction,
+      not blind elimination. A new test drives this end-to-end for seeds 0–19 (reads the killer from the
+      `voice_match_N` node id, NOT the murderer param, then accuses — asserting success + rating 500).
+      (3) **Guard's confession usable in the interrogation (§4)** — `interview_guard` gained a
+      `confront_key` transition (condition `examined_6 == 1`) → new `guard_key_admission` node where
+      Ортега's prior "I carried the key to Karl's cabin, half the shift saw it" testimony is presented as
+      actionable evidence that neutralises the planted arsenal-key clue (Улика 7); the confront does NOT
+      finalise the interview (`interviewed_3` untouched) so the player still records the statement via
+      `done_guard`. Extended the Investigation describe block with 5 new `it(...)` blocks (branch-on-
+      murderer + names the killer, single-log, first-try-deduction-win-zero-rating-loss ×20 seeds,
+      confront-hidden-before-vs-shown-after-key-clue, confront-surfaces-confession-without-ending-
+      interview) — no existing assertion touched. Cyrillic baseline regenerated (investigation 74→87 for
+      the new deduction/confront catalog literals). Full unit suite 6115 passed / 0 failed; `tsc --noEmit`
+      clean; `eslint` on changed files 0 issues. ➕ Note: net feel of the reworked deduction (whether the
+      voice analysis gives away the mystery too readily) is a manual-playtest acceptance item — the
+      analysis is an opt-in deep-dive the solver/casual player can skip, so it reads as a reward for
+      thorough investigation rather than an auto-solve.
 - [ ] **Task 25 — `life-support.ts`**: make the deterministic run-up to the best ending's 50/50 roll
       carry real risk earlier, not just at the final roll (A); give `scrubber_check` — the quest's only
       real risk branch — its own success/fail text (D); stop `fix_scrubber`'s label from hiding the real
