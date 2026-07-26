@@ -770,9 +770,36 @@ branches/endings, never removing/loosening what's there) and running the full qu
       — no existing assertion touched. Cyrillic baseline regenerated (locked-room 26→30 for the 4 new
       beat-node texts). Full unit suite 6128 passed / 0 failed; `tsc --noEmit` clean; `eslint` on changed
       files 0 issues.
-- [ ] **Task 27 — `orbital-escape.ts`**: rebalance so `trim_burn` isn't strictly dominant with the other
+- [x] **Task 27 — `orbital-escape.ts`**: rebalance so `trim_burn` isn't strictly dominant with the other
       options reduced to decoration (A); give `dump_check`'s roll its own narrative text (D); add at
-      least one more line of NPC presence across the quest (H). Write/extend tests; run tests.
+      least one more line of NPC presence across the quest (H). Write/extend tests; run tests. Done:
+      (1) **trim_burn de-dominated (A)** — its always-on `fuel >= 3` gate is raised to `fuel >= 5`, a
+      *conserved fuel reserve*, so the efficient `burn_periapsis` line (leaves fuel 6) keeps the precise
+      trim on the table while the wasteful `burn_now` line (leaves fuel 4) **locks it out** — turning the
+      three "flavours of first burn" into a real branch (efficiency earns the Oberth trim; waste forces the
+      messy fuel-free endgame) instead of decoration. trim's frozen +4/−3 numbers are untouched (locked by
+      `an efficient periapsis burn + a trim burn breaks clean`, which runs at fuel 6 ≥ 5), and no locked
+      test does `burn_now → trim_burn`. To give trim a genuine competitor on the fuel-poor line (where its
+      frozen numbers otherwise can't be risked), added a new fuel-free **plasma-vent gamble** to `coast`
+      (`plasma_vent` → `vent_check`, `roll = random(0,9)`): a held coil (`roll >= 5`) shoves +5 altitude
+      free, a shorted coil knocks −3 back toward the storms — so the stranded player weighs a paid, safer
+      ballast dump against a free high-variance vent. (2) **dump roll narrated (D)** — the two silent
+      `label: "..."` autoExecute jumps straight to `escape_gate` now route through distinct beat nodes
+      `dump_freed` (containers tear free, ship interviews) / `dump_jammed` (створка clinks half-open, weak
+      shove), each auto-advancing on to `escape_gate`; the vent gamble likewise narrates `vent_surge` /
+      `vent_misfire`. All effects stay on the original transitions, so `advanceAuto` still lands the two
+      locked dump tests (`a good ballast dump…`, `is deterministic … ballast path`) on their exact
+      terminal/altitude/credits — `advanceAuto` simply traverses the new auto beat. (3) **NPC presence (H)**
+      — the orbital-control dispatcher (previously only heard at `ending_escaped`) now hails the player mid-
+      quest on the `coast` screen and barks at a shorted vent, so the desperate stretch isn't run in
+      silence. Extended the Orbital-escape describe block with 6 new `it(...)` blocks (fuel-gated trim
+      availability + fuel-free options remain, distinct dump success/fail beats, clean-vent fuel-free
+      escape, shorted-vent downside, dispatcher-on-comms, deterministic plasma path) — no existing
+      assertion touched. Cyrillic baseline regenerated (orbital-escape 20→30 for the new beat/gamble
+      catalog literals). Full unit suite 6121 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint`
+      on changed files 0 issues. ➕ Note: trim staying optimal *after* the efficient burn is intended — it's
+      the earned Oberth payoff for fuel discipline, gated behind a real prerequisite, not a flat free
+      choice; net feel of the reworked economy is a manual-playtest acceptance item (not test-gated).
 - [ ] **Task 28 — `plague-crisis.ts`**: rebalance `fast_route` vs `safe_route` so the fast path isn't
       strictly dominant (A); give `fast_check`'s "precise maneuver" an actual player decision point
       instead of a silent auto-roll (D). Leave the plague/quarantine premise overlap alone per the

@@ -190,6 +190,103 @@ describe("Orbital-escape quest (burn scheduling)", () => {
       expect(a.getParam("altitude")).toBe(b.getParam("altitude"));
     }
   });
+
+  // Task 27 — trim_burn was strictly dominant (always available, free, best).
+  // It is now gated on a conserved fuel reserve, so the wasteful first burn
+  // locks it out and forces the fuel-free endgame.
+  it("the trim burn is gated on a conserved fuel reserve, not a free universal button (A)", () => {
+    const efficient = new QuestVM(orbitalEscapeScript, 1);
+    efficient.execute("burn_periapsis"); // fuel 6 — reserve intact
+    expect(efficient.availableTransitions().map((t) => t.id)).toContain(
+      "trim_burn",
+    );
+
+    const wasteful = new QuestVM(orbitalEscapeScript, 1);
+    wasteful.execute("burn_now"); // fuel 4 — reserve spent
+    const ids = wasteful.availableTransitions().map((t) => t.id);
+    expect(ids).not.toContain("trim_burn");
+    // the fuel-starved line is never a dead end: the fuel-free options remain
+    expect(ids).toEqual(
+      expect.arrayContaining(["plasma_vent", "dump_ballast", "hold_coast"]),
+    );
+  });
+
+  it("a clean ballast dump and a jammed hatch narrate distinct outcomes (D)", () => {
+    const good = new QuestVM(orbitalEscapeScript, 1);
+    good.execute("burn_now");
+    good.execute("dump_ballast");
+    good.setParam("roll", 9); // clean jettison
+    good.execute("dump_good");
+    expect(good.currentLocation().id).toBe("dump_freed");
+
+    const bad = new QuestVM(orbitalEscapeScript, 1);
+    bad.execute("burn_now");
+    bad.execute("dump_ballast");
+    bad.setParam("roll", 0); // jammed hatch
+    bad.execute("dump_bad");
+    expect(bad.currentLocation().id).toBe("dump_jammed");
+
+    // the roll now has its own success/fail narrative, not a silent "..." jump
+    expect(good.currentLocation().text).not.toBe(bad.currentLocation().text);
+    expect(good.currentLocation().text).not.toBe("...");
+    expect(bad.currentLocation().text).not.toBe("...");
+
+    // both funnel back through the escape gate to a real terminal
+    advanceAuto(good);
+    advanceAuto(bad);
+    expect(good.isFinished()).toBe(true);
+    expect(bad.isFinished()).toBe(true);
+  });
+
+  it("a clean plasma vent gives a fuel-free shove to a clean escape (A/D)", () => {
+    const vm = new QuestVM(orbitalEscapeScript, 1);
+    vm.execute("burn_now"); // altitude 8, fuel 4
+    const fuelBefore = vm.getParam("fuel");
+    vm.execute("plasma_vent");
+    vm.setParam("roll", 9); // coil holds: +5 altitude
+    vm.execute("vent_ok");
+    expect(vm.currentLocation().id).toBe("vent_surge");
+    expect(vm.getParam("fuel")).toBe(fuelBefore); // vent burns no fuel
+    advanceAuto(vm); // -> escape_gate -> gate_clean (altitude 13)
+    expect(vm.currentLocation().id).toBe("ending_escaped");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("altitude")).toBe(13);
+  });
+
+  it("a shorted plasma vent knocks the ship back down (the gamble's real downside) (A/D)", () => {
+    const vm = new QuestVM(orbitalEscapeScript, 1);
+    vm.execute("burn_now"); // altitude 8
+    vm.execute("plasma_vent");
+    vm.setParam("roll", 0); // coil shorts: -3 altitude
+    vm.execute("vent_bad");
+    expect(vm.currentLocation().id).toBe("vent_misfire");
+    expect(vm.getParam("altitude")).toBe(5);
+    advanceAuto(vm); // -> escape_gate -> gate_low (altitude 5 < 7)
+    expect(vm.currentLocation().id).toBe("ending_stranded");
+    expect(vm.isSuccess()).toBe(false);
+  });
+
+  it("orbital control is on comms through the coast, not only at the ending (H)", () => {
+    const coast = orbitalEscapeScript.locations.find((l) => l.id === "coast")!;
+    const text =
+      typeof coast.text === "string" ? coast.text : coast.text.join(" ");
+    expect(text).toContain("диспетчер");
+  });
+
+  it("is deterministic for the same seed (plasma vent path)", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const a = new QuestVM(orbitalEscapeScript, seed);
+      const b = new QuestVM(orbitalEscapeScript, seed);
+      a.execute("burn_now");
+      a.execute("plasma_vent");
+      advanceAuto(a);
+      b.execute("burn_now");
+      b.execute("plasma_vent");
+      advanceAuto(b);
+      expect(a.currentLocation().id).toBe(b.currentLocation().id);
+      expect(a.getParam("altitude")).toBe(b.getParam("altitude"));
+    }
+  });
 });
 
 describe("Tribunal quest (courtroom defense)", () => {

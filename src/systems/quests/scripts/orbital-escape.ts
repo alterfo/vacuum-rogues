@@ -9,11 +9,22 @@ import type { QuestScript } from "../QuestScript";
 // (periapsis) buys far more altitude per unit of fuel than a panicked
 // full-throttle now — and stopping to think costs precious altitude to decay.
 // Choice points:
-//   1. First burn — wait for periapsis (efficient), full-throttle now
-//      (wasteful), or scan first and lose altitude to decay while you compute.
-//   2. Coast — a trimmed periapsis burn (needs fuel >= 3), dump cargo ballast
-//      (roll: a good jettison or a jammed hatch), or ride it out (more decay).
+//   1. First burn — wait for periapsis (efficient, keeps a fuel reserve),
+//      full-throttle now (wasteful — spends the reserve), or scan first and
+//      lose altitude to decay while you compute.
+//   2. Coast — the precise trim burn is NOT a free universal button: it needs a
+//      conserved fuel reserve (fuel >= 5), so only the disciplined first burn
+//      keeps it on the table. The wasteful full-throttle line burns past the
+//      reserve and locks the trim out, forcing the messy fuel-free endgame:
+//      dump cargo ballast (roll: a clean jettison or a jammed hatch, costs
+//      credits) or vent reactor plasma (a fuel-free gamble: a big shove, or a
+//      shorted coil that knocks you back down) or ride it out (more decay).
 //   3. Escape gate — an auto check on `altitude` decides the outcome.
+// The Oberth reward is thus gated behind fuel discipline rather than handed out
+// free: trim is the payoff for burning efficiently, not a risk-free default, and
+// the fuel-starved player faces a genuine dump-vs-vent-vs-hold dilemma instead.
+// Orbital control (the dispatcher heard at ending_escaped) is now on comms
+// through the coast, so the desperate stretch isn't run in silence.
 // Outcomes (by `altitude` at the escape gate, unless it decayed to burn-up):
 //   - ending_escaped  (altitude >= 10 — clean break, stable trajectory)  SUCCESS
 //   - ending_grazing  (altitude >= 7  — you scrape free, hull scorched)   SUCCESS
@@ -97,15 +108,22 @@ export const orbitalEscapeScript: QuestScript = {
     },
     {
       id: "coast",
-      text: "Корабль по инерции ползёт к апогею. Вы выиграли высоту, но газовый гигант не отпускает — тяга атмосферы уже щупает корму. Ещё один манёвр решит всё.\nВысота орбиты: {altitude} | Топливо: {fuel}",
+      text: "Корабль по инерции ползёт к апогею. Вы выиграли высоту, но газовый гигант не отпускает — тяга атмосферы уже щупает корму. В эфире прорезается ровный голос орбитального диспетчера: «Вижу вас на радаре, пилот. Одна ошибка — и я вычёркиваю борт из журнала. Не тяните с манёвром». Ещё один импульс решит всё.\nВысота орбиты: {altitude} | Топливо: {fuel}",
       transitions: [
         {
           id: "trim_burn",
           label:
-            "Точный доводочный импульс в перигее (нужно топлива ≥3; −3 топлива, +4 высоты)",
+            "Точный доводочный импульс в перигее (нужен запас топлива ≥5; −3 топлива, +4 высоты)",
           toLocation: "escape_gate",
-          condition: "fuel >= 3",
+          condition: "fuel >= 5",
           effects: ["altitude += 4", "fuel -= 3"],
+        },
+        {
+          id: "plasma_vent",
+          label:
+            "Стравить плазму реактора в маршевые дюзы — рывок без топлива, но контур может закоротить (бросок)",
+          toLocation: "vent_check",
+          effects: ["roll = random(0,9)"],
         },
         {
           id: "dump_ballast",
@@ -125,21 +143,94 @@ export const orbitalEscapeScript: QuestScript = {
     },
     {
       id: "dump_check",
-      text: "Грузовой люк примерзает от перепада, сервоприводы визжат — контейнеры один за другим срываются в бездну...",
+      text: "Вы бьёте по аварийному сбросу. Грузовой люк примерзает от перепада, сервоприводы визжат — механизм борется с петлями...",
       transitions: [
         {
           id: "dump_good",
-          label: "...",
-          toLocation: "escape_gate",
+          label: "Люк раскрывается",
+          toLocation: "dump_freed",
           condition: "roll >= 4",
           effects: ["altitude += 3", "credits -= 800"],
           autoExecute: true,
         },
         {
           id: "dump_bad",
+          label: "Люк клинит",
+          toLocation: "dump_jammed",
+          effects: ["altitude += 1", "credits -= 400"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "dump_freed",
+      text: "Люк раскрывается настежь, и контейнеры один за другим срываются в бездну. Корабль ощутимо взмывает, разом сбросив тонны балласта — груз потерян, но высота есть.\nВысота орбиты: {altitude}",
+      transitions: [
+        {
+          id: "dump_freed_go",
           label: "...",
           toLocation: "escape_gate",
-          effects: ["altitude += 1", "credits -= 400"],
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "dump_jammed",
+      text: "Створка клинит на середине — за борт успевает уйти едва половина груза, прежде чем механизм намертво встаёт с визгом сорванного привода. Толчок вышел слабым, но хоть что-то.\nВысота орбиты: {altitude}",
+      transitions: [
+        {
+          id: "dump_jammed_go",
+          label: "...",
+          toLocation: "escape_gate",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "vent_check",
+      text: "Вы перенаправляете плазму реактора в маршевые дюзы в обход штатного контура. Датчики температуры наливаются красным, обшивка гудит на низкой ноте — сработает ровно или закоротит?",
+      transitions: [
+        {
+          id: "vent_ok",
+          label: "Контур держит",
+          toLocation: "vent_surge",
+          condition: "roll >= 5",
+          effects: ["altitude += 5"],
+          autoExecute: true,
+        },
+        {
+          id: "vent_bad",
+          label: "Контур коротит",
+          toLocation: "vent_misfire",
+          effects: ["altitude -= 3"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "vent_surge",
+      text: "Плазма ударила ровно и мощно — корабль подбросило вверх сильнее любого штатного импульса. Дюзы дымятся, изоляция кое-где потекла, но высоту вы взяли даром, не тронув топливо.\nВысота орбиты: {altitude}",
+      transitions: [
+        {
+          id: "vent_surge_go",
+          label: "...",
+          toLocation: "escape_gate",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "vent_misfire",
+      text: "Контур закоротил в первую же секунду — дюзы плюнули искрами и заглохли. Хуже того: отдача качнула корабль вниз, к бурям, и альтиметр пополз назад. «Что там у вас рвануло?!» — рявкает диспетчер.\nВысота орбиты: {altitude}",
+      transitions: [
+        {
+          id: "vent_misfire_go",
+          label: "...",
+          toLocation: "escape_gate",
+          effects: [],
           autoExecute: true,
         },
       ],
