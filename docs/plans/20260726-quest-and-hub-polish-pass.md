@@ -1037,12 +1037,23 @@ branches/endings, never removing/loosening what's there) and running the full qu
       earlier gear-catalog work, not this plan — and save-compat is green. Blast radius matches intent.
 
 ### Task 36: [Final] Update documentation
-- [ ] `src/systems/quests/scripts/README.md`: document the new text-pool variance convention (Task 14)
-      alongside the existing "prose quality bar" section
-- [ ] append a short note to `docs/playtests/20260725-jaded-player-critical-sweep.md` (or a new dated
-      follow-up note) marking which findings this plan resolved vs. deferred
-- [ ] update `.claude/docs/systems/` subsystem docs if this plan's changes touch documented conventions
-      (e.g. hub UX, quest engine)
+- [x] `src/systems/quests/scripts/README.md`: document the new text-pool variance convention (Task 14)
+      alongside the existing "prose quality bar" section. Done: new "Text-pool variance (replayability)"
+      section — documents the `string | string[]` shape, the deterministic `(seed, locationId)` resolver
+      that never consumes `SeededRNG`, per-playthrough (not per-visit) semantics, the extended
+      placeholder invariant, and that pools stay pure catalog data (no schema/migration).
+- [x] append a short note to `docs/playtests/20260725-jaded-player-critical-sweep.md` (or a new dated
+      follow-up note) marking which findings this plan resolved vs. deferred. Done: appended a
+      "Follow-up: what the 2026-07-26 polish pass resolved" section — maps both structural levers
+      (variance primitive across all 20 scripts; data-to-hub surfacing) to their resolving tasks and
+      lists the four test-locked deferrals (tribunal sign-bug, Transfer label, boarding dominant-combo,
+      tribunal roll-free line) with the exact locking assertion for each.
+- [x] update `.claude/docs/systems/` subsystem docs if this plan's changes touch documented conventions
+      (e.g. hub UX, quest engine). Done: `accessibility.md`'s reduced-motion seam section now documents
+      the `TextQuestScene` typewriter reveal (Task 2) as a content-reveal consumer of `isReducedMotionSet()`
+      with its skip-catcher affordance. (No dedicated quest-engine/hub subsystem doc exists under
+      `.claude/docs/systems/`; the quest-engine variance convention is documented in the quest scripts
+      README per the first item — the canonical home for `QuestScript`/`QuestVM` authoring conventions.)
 
 *Note: ralphex automatically moves this plan to `docs/plans/completed/` once all tasks are checked.*
 

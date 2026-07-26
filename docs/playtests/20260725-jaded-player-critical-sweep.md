@@ -140,3 +140,21 @@ Trigger: user felt the game is "cosmetically annoying in a thousand small ways" 
 ---
 
 Also caught in the auction.ts review but worth flagging separately: the `TextQuestScene` restart button reuses `this.vmSeed` (`TextQuestScene.ts:79,270`), so a failed run replays with full foreknowledge and can be beaten by brute-force retry with zero mechanical penalty. This is a `TextQuestScene` engine bug (not per-quest), likely affects all 20 scripts, not just auction — worth checking before starting on Lever #1.
+
+---
+
+## Follow-up: what the 2026-07-26 polish pass resolved
+
+`docs/plans/20260726-quest-and-hub-polish-pass.md` (36 tasks) worked this backlog end to end. Status of the findings above:
+
+**Structural lever #1 (variance) — resolved.** The Task-14 text-pool primitive (`QuestLocation.text: string | string[]`, resolved deterministically per `(seed, locationId)` without consuming the RNG stream) is the lower-cost partial substitute for the removed ONNX narrator. Applied across all 20 scripts (Tasks 15–34): branched per-path endings (pattern **B**), risk-priced or qualitatively-labelled choices (**A**/**G**), narrated rolls (**D**), captain/partner personality (**H**), and dead flags either wired into a real branch or removed (**I**). The `TextQuestScene` restart seed-reuse exploit (last section above) is fixed (Task 1 — fresh attempt-derived seed).
+
+**Structural lever #2 (data-to-hub) — resolved.** `PlanetInfoPanel` now shows population/economy/politicalSystem/attitude (§11.1, Task 9); the robot-assistant service voice (§11.4) lands on repair/refuel/diagnostic (Task 10). Plus the swallowed-feedback loops: purchase/upgrade/service toasts (Tasks 7, 10), missing SFX (Tasks 4, 8), the misleading launch-denial reason (Task 6), the still-clickable denied-landing button (Task 11), and the dead «ЗАХВАЧЕНА» banner path (Task 12). The user-spotted quest-text flash-by is fixed by the reduced-motion-gated typewriter reveal (Task 2).
+
+**Deferred (test-locked — need explicit user go-ahead + a test update, not skipped work):**
+- `tribunal.ts` credit-sign bug on the lenient/fine path — `batch2QuestScripts.test.ts:430` locks `credits === 500` (the buggy `+500`). (Task 3)
+- `bankSceneView.ts` untranslated "Transfer" bus-log label — `bankSceneView.test.ts:195` locks the English string. (Task 5)
+- `boarding-standoff.ts` `stall_talk`+`offer_cargo` dominant combo repricing — `batch1QuestScripts.test.ts:277-287` locks its exact `-1000/rating 120` outcome. (Task 16)
+- `tribunal.ts` roll-free aggressive line repricing — `batch2QuestScripts.test.ts:410-420` locks the acquittal outcome; also depends on the deferred sign fix. An additive vindication tier (Task 34) resolves the same "safest ≠ richest" complaint without touching the locked assertion.
+
+Each is a genuine known-good-test block (per the plan's Development Approach and the standing no-touch-existing-tests rule), documented here so a future pass can pick them up with the assertion update the user signs off on.

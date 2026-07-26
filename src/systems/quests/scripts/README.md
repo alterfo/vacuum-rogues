@@ -18,6 +18,32 @@ choice labels that surface the numeric tradeoff (fuel cost, current load,
 meter delta) so the optimal path requires reasoning, not guessing, while a
 survivable non-optimal path stays open.
 
+## Text-pool variance (replayability)
+
+`QuestLocation.text` is `string | string[]`. A plain `string` renders
+verbatim; a **`string[]` is a variance pool** — the quest reads differently
+across playthroughs without touching mechanics. `QuestVM.currentLocationText()`
+(via the pure `resolveLocationText`, `../QuestVM.ts`) picks one variant
+**deterministically from `(seed, locationId)`** using an RNG-free stable hash
+(`questTextHash`). It intentionally does **not** consume the VM's `SeededRNG`
+stream, so adding or removing a variant never silently shifts an
+already-shipped quest's `random(min,max)` rolls (those depend on call order
+into `this.rng`). Within a single run the same location always resolves to the
+same variant; a different seed (a new board quest, or a `TextQuestScene`
+restart's fresh attempt seed) can surface a different one.
+
+Convention (introduced by `docs/plans/20260726-quest-and-hub-polish-pass.md`
+Task 14, applied per-quest in Tasks 15–34):
+- Reach for a pool where **replay variety is the actual fix** (a recurring
+  screen that reads identically every run — e.g. `customs.ts`'s per-shift
+  captain vignettes). It gives *per-playthrough* variety keyed on the run seed,
+  **not** per-visit variety within one run (the resolver is stable per run).
+- Every variant in a pool must keep the same `{param}` interpolation
+  placeholders; the `questScriptGraph.test.ts` "placeholder resolves to a
+  declared param" invariant now checks **every** string in a `text` array.
+- Pools are still pure catalog data — no schema, migration, or save-bump
+  (`resolveLocationText` derives everything at render time).
+
 ## Catalogue
 
 A script is live the moment it is listed in `ALL_QUEST_SCRIPTS`
