@@ -3,12 +3,21 @@ import type { QuestScript } from "../QuestScript";
 // Design: Maelon scrap auction. 8 lots, budget 800cr.
 // Each lot has a class (2–4, random). Value = class × 100. Class 1 excluded —
 // premium Maelon scrap only; a class-1 win at bid_low yields zero profit.
-// Player: skip | bid_low (100cr, risky) | bid_high (250cr, guaranteed win).
+// The lot's true value is HIDDEN under mesh-cloth until the hammer falls in your
+// favour — the reveal happens on the pw_bid_c* screens, NOT on lot_screen, so a
+// bid_high is a genuine blind gamble (−50 on class 2 … +150 on class 4).
+// Player per lot: skip | bid_low (100cr) | bid_high (250cr, guaranteed win).
 // Bot responses after bid_low:
 //   - Aggressive bot (budget 600cr, bids +100): outbids until broke (3 lots max).
 //   - Random bot (roll 0/1 per lot): 50% chance outbids bid_low.
+// A LOST bid_low forfeits a 50cr auction fee (profit -= 50): the stake is
+// refunded but the paddle deposit is not — so skip is genuinely non-dominated
+// (skipping a lot the solvent aggressive bot will surely take avoids a −50).
+// Lot 5 is a different decision shape: a rival offers a 150cr bribe to stand
+// down (guaranteed profit, no risk) vs. bidding for a possibly-bigger haul.
 // Win condition: profit >= 500 after all 8 lots.
-// Strategy: let aggressive bot exhaust itself on early lots, then bid_low on the rest.
+// Strategy: pay to drain the aggressive bot on a few early lots, then reap the
+// cheap late ones — or buy outright with blind bid_high.
 export const auctionScript: QuestScript = {
   id: "auction",
   title: "Аукцион",
@@ -224,7 +233,7 @@ export const auctionScript: QuestScript = {
         {
           id: "init_lot_5",
           label: "...",
-          toLocation: "lot_screen",
+          toLocation: "rival_approach",
           autoExecute: true,
           effects: [
             "lot_class_current = lot_5_class + 0",
@@ -286,32 +295,79 @@ export const auctionScript: QuestScript = {
       ],
     },
 
-    // --- Main auction screen (shared for all 8 lots) ---
+    // --- Lot 5 variant: a rival's bribe (a different decision shape, F-fix) ---
+    // Reached from prepare_lot_5 instead of lot_screen: the choice here is
+    // "guaranteed 150cr for standing down" vs. "bid for a possibly-bigger haul"
+    // vs. "walk with nothing" — not the usual low/high/skip bid war.
+    {
+      id: "rival_approach",
+      text:
+        "Пока служители меняют лот, богач-спорщик наклоняется к твоему уху:\n" +
+        "«Этот лот я хочу себе. Уступи его — и вот тебе 150 кр отступных, без торга и сбора.»\n" +
+        "За его плечом маячит шальной покупатель — он тоже не прочь вступить в игру.",
+      transitions: [
+        {
+          id: "take_bribe",
+          label: "Взять 150 кр и уступить лот богачу",
+          toLocation: "rival_bribe_taken",
+          effects: ["profit += 150", "bid_result = 0"],
+        },
+        {
+          id: "refuse_bid",
+          label: "Отказать и всё же побороться за лот",
+          toLocation: "lot_screen",
+          effects: [],
+        },
+        {
+          id: "skip_lot",
+          label: "Молча уйти — ни ставки, ни денег богача",
+          toLocation: "next_lot_dispatch",
+          effects: ["bid_result = 0"],
+        },
+      ],
+    },
+    {
+      id: "rival_bribe_taken",
+      text: "Богач сдержанно кивает и суёт тебе пачку купюр. Лот уходит ему — а твой барыш подрос без единого риска.",
+      transitions: [
+        {
+          id: "rb_next",
+          label: "...",
+          toLocation: "next_lot_dispatch",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+
+    // --- Main auction screen (shared for the other 7 lots) ---
     {
       id: "lot_screen",
       text:
         "Наследственный аукцион Мэлоков. Под прожекторами — лот {current_lot} из 8.\n" +
-        "Класс груза: {lot_class_current} — при перепродаже это верных {lot_class_current}00 кр.\n" +
+        "Груз укрыт мешковиной — истинную цену узнаешь, лишь когда молоток ударит в твою пользу.\n" +
         "В кошельке осталось {budget} кр, за ночь наторговано {profit} кр прибыли.\n" +
         "Слева хрипло дышит богатый спорщик, где-то в тени притаился шальной покупатель.\n" +
         "Аукционист поднимает молоток — твоё слово:",
       transitions: [
         {
           id: "skip_lot",
-          label: "Молчать. Пусть уходит другому",
+          label: "Молчать — не рисковать сбором на заведомо чужом лоте",
           toLocation: "next_lot_dispatch",
           effects: ["bid_result = 0"],
         },
         {
           id: "bid_low",
-          label: "Кинуть 100 кр — дёшево, но соперники не дремлют",
+          label:
+            "Кинуть 100 кр — дёшево, но проигранная ставка съест 50 кр сбора",
           toLocation: "bot_response",
           condition: "budget >= 100",
           effects: ["budget -= 100", "bid_result = 1"],
         },
         {
           id: "bid_high",
-          label: "Бахнуть 250 кр — дорого, зато лот твой наверняка",
+          label:
+            "Бахнуть 250 кр — лот твой наверняка, но цену под тряпьём не видать",
           toLocation: "player_wins",
           condition: "budget >= 250",
           effects: ["budget -= 250", "bid_result = 2"],
@@ -345,13 +401,13 @@ export const auctionScript: QuestScript = {
     // Aggressive bot wins: refund player bid, deduct bot budget
     {
       id: "bot_agg_bids",
-      text: "«Двести!» — рявкает толстосум слева, не дав тебе и вздохнуть. Молоток падает: лот ушёл ему, твои 100 кр возвращают.",
+      text: "«Двести!» — рявкает толстосум слева, не дав тебе и вздохнуть. Молоток падает: лот ушёл ему. Ставку в 100 кр возвращают, но 50 кр аукционного сбора за пустой торг дом удержит.",
       transitions: [
         {
           id: "bot_agg_wins",
           label: "Забрать назад свою ставку",
           toLocation: "next_lot_dispatch",
-          effects: ["budget += 100", "bot_agg_budget -= 200"],
+          effects: ["budget += 100", "bot_agg_budget -= 200", "profit -= 50"],
           autoExecute: true,
         },
       ],
@@ -381,13 +437,13 @@ export const auctionScript: QuestScript = {
     // Random bot wins: refund player
     {
       id: "random_bot_bids",
-      text: "Шальной покупатель вдруг вскидывает табличку и перебивает тебя! Молоток бьёт — лот не твой, ставку возвращают.",
+      text: "Шальной покупатель вдруг вскидывает табличку и перебивает тебя! Молоток бьёт — лот не твой. Ставку возвращают, а 50 кр сбора за пустой торг тебе уже не вернуть.",
       transitions: [
         {
           id: "random_bot_claim",
           label: "Забрать назад свою ставку",
           toLocation: "next_lot_dispatch",
-          effects: ["budget += 100"],
+          effects: ["budget += 100", "profit -= 50"],
           autoExecute: true,
         },
       ],
@@ -639,7 +695,8 @@ export const auctionScript: QuestScript = {
       id: "quest_success",
       text:
         "Ты читал зал как открытую книгу — дал богачу выдохнуться и снимал сливки по дешёвке.\n" +
-        "Барыш {profit} кр хватит на славный апгрейд корабля.\n" +
+        "Гильдия сверяет твою книгу торгов: барыш {profit} кр — ты уложился в норму, и обещанную за вечер плату получишь сполна.\n" +
+        "(Сам барыш остаётся в кассе аукциона — тебе причитается лишь оговорённый гонорар.)\n" +
         "Взято лотов: {lots_won}/8 | В кошельке ещё звенит: {budget} кр",
       isSuccess: true,
       transitions: [],
@@ -648,7 +705,7 @@ export const auctionScript: QuestScript = {
       id: "quest_failure_profit",
       text:
         "Ты либо палил дорогими ставками, либо дрожал над каждой монетой — и упустил ночь.\n" +
-        "Барыш всего {profit} кр, а требовалось не меньше 500. Перекупщик разводит руками.\n" +
+        "Барыш всего {profit} кр, а гильдия ждала не меньше 500. Уговор сорван — гонорар за вечер ты не увидишь.\n" +
         "Взято лотов: {lots_won}/8 | Осталось на дне кошелька: {budget} кр",
       isFailure: true,
       transitions: [],

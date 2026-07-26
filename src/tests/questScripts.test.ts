@@ -1365,4 +1365,129 @@ describe("Auction quest", () => {
     expect(text).toContain("650");
     expect(text).toContain("200");
   });
+
+  // --- Task 15 rebalance coverage -------------------------------------------
+
+  const locText = (id: string): string => {
+    const loc = auctionScript.locations.find((l) => l.id === id)!;
+    return typeof loc.text === "string" ? loc.text : loc.text.join("\n");
+  };
+
+  it("lot_screen no longer reveals the exact resale value before bidding", () => {
+    // The pre-bid screen must not leak the value — bidding is a real gamble now.
+    const text = locText("lot_screen");
+    expect(text).not.toContain("перепродаже");
+    expect(text).toContain("мешковиной");
+  });
+
+  it("the resale value is revealed only on the post-win screens", () => {
+    // Decoupled reveal: the class value first appears when the player wins.
+    expect(locText("pw_bid_c2")).toContain("200");
+    expect(locText("pw_bid_c3")).toContain("300");
+    expect(locText("pw_bid_c4")).toContain("400");
+  });
+
+  it("losing bid_low to the aggressive bot forfeits a 50cr fee (profit -= 50)", () => {
+    const vm = new QuestVM(auctionScript, 1);
+    advanceAutoAuction(vm);
+    // agg bot starts at 600 >= 200 → it outbids; player loses the lot.
+    vm.execute("bid_low");
+    advanceAutoAuction(vm);
+    expect(vm.getParam("lots_won")).toBe(0);
+    expect(vm.getParam("budget")).toBe(800); // stake refunded (unchanged)
+    expect(vm.getParam("profit")).toBe(-50); // paddle fee forfeited
+  });
+
+  it("losing bid_low to the random bot also forfeits the 50cr fee", () => {
+    const vm = new QuestVM(auctionScript, 1);
+    advanceAutoAuction(vm);
+    vm.setParam("bot_agg_budget", 0);
+    vm.setParam("random_bot_roll", 1);
+    vm.execute("bid_low");
+    advanceAutoAuction(vm);
+    expect(vm.getParam("lots_won")).toBe(0);
+    expect(vm.getParam("profit")).toBe(-50);
+  });
+
+  it("winning bid_low charges no fee", () => {
+    const vm = new QuestVM(auctionScript, 1);
+    advanceAutoAuction(vm);
+    vm.setParam("lot_class_current", 3);
+    vm.setParam("bot_agg_budget", 0);
+    vm.setParam("random_bot_roll", 0); // both bots pass → player wins
+    vm.execute("bid_low");
+    advanceAutoAuction(vm);
+    expect(vm.getParam("lots_won")).toBe(1);
+    expect(vm.getParam("profit")).toBe(200); // class-3 gain, no fee deducted
+  });
+
+  it("skip_lot is non-dominated: skipping beats bid_low while the aggressive bot is solvent", () => {
+    // Skip yields 0; bidding low against a solvent aggressive bot is a
+    // guaranteed −50. So skip strictly dominates bid_low in this regime.
+    const skipVm = new QuestVM(auctionScript, 1);
+    advanceAutoAuction(skipVm);
+    skipVm.execute("skip_lot");
+    advanceAutoAuction(skipVm);
+    expect(skipVm.getParam("profit")).toBe(0);
+
+    const bidVm = new QuestVM(auctionScript, 1);
+    advanceAutoAuction(bidVm);
+    bidVm.execute("bid_low"); // agg bot solvent → loses
+    advanceAutoAuction(bidVm);
+    expect(bidVm.getParam("profit")).toBe(-50);
+    expect(skipVm.getParam("profit")).toBeGreaterThan(bidVm.getParam("profit"));
+  });
+
+  it("lot 5 is a different decision shape: a rival's bribe, not a bid war", () => {
+    const vm = new QuestVM(auctionScript, 1);
+    for (let i = 1; i <= 4; i++) {
+      advanceAutoAuction(vm);
+      vm.execute("skip_lot");
+      advanceAutoAuction(vm);
+    }
+    expect(vm.currentLocation().id).toBe("rival_approach");
+    expect(vm.getParam("current_lot")).toBe(5);
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("take_bribe");
+    expect(ids).toContain("refuse_bid");
+    expect(ids).toContain("skip_lot");
+  });
+
+  it("take_bribe grants +150 profit and moves on without a bid", () => {
+    const vm = new QuestVM(auctionScript, 1);
+    for (let i = 1; i <= 4; i++) {
+      advanceAutoAuction(vm);
+      vm.execute("skip_lot");
+      advanceAutoAuction(vm);
+    }
+    expect(vm.currentLocation().id).toBe("rival_approach");
+    vm.execute("take_bribe");
+    advanceAutoAuction(vm);
+    expect(vm.getParam("profit")).toBe(150);
+    expect(vm.getParam("lots_won")).toBe(0);
+    expect(vm.getParam("current_lot")).toBe(6);
+  });
+
+  it("refuse_bid on lot 5 drops into the normal lot_screen bid", () => {
+    const vm = new QuestVM(auctionScript, 1);
+    for (let i = 1; i <= 4; i++) {
+      advanceAutoAuction(vm);
+      vm.execute("skip_lot");
+      advanceAutoAuction(vm);
+    }
+    vm.execute("refuse_bid");
+    expect(vm.currentLocation().id).toBe("lot_screen");
+    expect(vm.getParam("current_lot")).toBe(5);
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("bid_low");
+    expect(ids).toContain("bid_high");
+  });
+
+  it("success text no longer promises the barysh as a payout", () => {
+    // C-fix: the fixed guild fee is the reward; the barysh is a scorecard.
+    const success = locText("quest_success");
+    expect(success).not.toContain("хватит на славный апгрейд");
+    expect(success).toContain("{profit}");
+    expect(success).toContain("гонорар");
+  });
 });

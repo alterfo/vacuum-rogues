@@ -462,13 +462,28 @@ fix) — do not invent new engine mechanics per-quest. Every task ends with exte
 existing coverage in `newQuestScripts.test.ts`/`questScriptGraph.test.ts` (new assertions for the new
 branches/endings, never removing/loosening what's there) and running the full quest test suite.
 
-- [ ] **Task 15 — `auction.ts`**: fix `skip_lot` (give it a real reason to exist, or remove it and keep
+- [x] **Task 15 — `auction.ts`**: fix `skip_lot` (give it a real reason to exist, or remove it and keep
       the low/high dilemma meaningful — G's "skip_lot" is genuinely dominated by `bid_low` today);
       de-couple the post-win "reveal" text from lot_screen already showing the exact value (either hide
       the value pre-bid, or drop the reveal framing); make the fictional "барыш" total actually
       influence something real, or rewrite the ending text so it stops promising a payout the mechanic
       doesn't grant; give at least 1-2 of the 8 lots a genuinely different decision shape (F). Write/
-      extend tests; run tests.
+      extend tests; run tests. Done: (1) skip_lot un-dominated by adding a 50cr **non-refundable auction
+      fee** (`profit -= 50`) to both lost-bid_low branches (`bot_agg_bids`/`random_bot_bids`) — the stake
+      is still fully refunded (existing budget-refund assertions untouched), but a bid_low against a
+      solvent aggressive bot is now a guaranteed −50, so skip (0) strictly dominates it in that regime
+      while bid_low stays the "pay to drain the bot" investment. (2) Reveal decoupled: `lot_screen` now
+      hides the resale value under mesh-cloth («мешковиной») — the value first appears on the `pw_bid_c*`
+      win screens, so bid_high is a genuine blind gamble (−50 class-2 … +150 class-4). (3) Ending text
+      rewritten so the fixed **гонорар** is the reward and the барыш is an explicit scorecard held in the
+      auction's till — no longer promises the profit total as pocketed cash. (4) Lot 5 given a different
+      decision shape: a rival's **bribe** (`rival_approach`) — guaranteed +150 for standing down vs.
+      bidding for a bigger haul vs. walking. Extended the Auction describe block with 10 new `it(...)`
+      assertions (fee on each loss, no-fee on win, skip-non-domination, hidden-value / decoupled-reveal,
+      lot-5 bribe shape, take_bribe/refuse_bid, ending-text). Cyrillic baseline regenerated (auction.ts
+      53→61, catalog literals). Full unit suite 6064 passed / 0 failed; tsc + eslint clean. ➕ Note: net
+      win-rate/feel of the reworked economy is a manual-playtest acceptance item (not test-gated); the
+      50cr fee was chosen to keep bid_low viable while making skip strictly non-dominated.
 - [ ] **Task 16 — `boarding-standoff.ts`**: remove or price the `stall_talk`+`offer_cargo` dominant
       combo; branch the `resolve` scene per actual outcome instead of one shared text; fix the "generous
       bonus" ending text that fires alongside a negative credit balance; replace exact-number choice
