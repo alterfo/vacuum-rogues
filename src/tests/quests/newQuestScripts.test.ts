@@ -373,6 +373,118 @@ describe("Smuggling Run quest", () => {
     expect(vm1.isSuccess()).toBe(vm2.isSuccess());
     expect(vm1.getParam("credits")).toBe(vm2.getParam("credits"));
   });
+
+  // --- Task 33: bluff de-domination (A), tier-branched success (B), a
+  // differentiating checkpoint-2 beat (F). New coverage only. ---
+
+  it("a low-heat bluff on the worst roll (roll 0) still gets you caught (A)", () => {
+    const vm = new QuestVM(smugglingRunScript, 1);
+    vm.setParam("heat", 0);
+    vm.execute("bluff"); // roll randomised
+    vm.setParam("roll", 0); // force the worst beat
+    // bluff_nervous (roll <= 0) fires before bluff_safe → caught
+    expect(vm.availableTransitions()[0].id).toBe("bluff_nervous");
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("quest_failure_caught");
+    expect(vm.isSuccess()).toBe(false);
+  });
+
+  it("a low-heat bluff on any non-zero roll still passes safely (A gradient)", () => {
+    const vm = new QuestVM(smugglingRunScript, 1);
+    vm.setParam("heat", 0);
+    vm.execute("bluff");
+    vm.setParam("roll", 1); // just above the catch threshold
+    expect(vm.availableTransitions()[0].id).toBe("bluff_safe");
+    vm.execute("bluff_safe");
+    expect(vm.currentLocation().id).toBe("after_checkpoint");
+    expect(vm.getParam("heat")).toBe(2);
+  });
+
+  it("the corrupt-officer deal exists only at checkpoint 2 and wipes heat (F)", () => {
+    const vm = new QuestVM(smugglingRunScript, 1);
+    // Checkpoint 1: no officer option.
+    expect(vm.availableTransitions().map((t) => t.id)).not.toContain(
+      "officer_deal",
+    );
+    // Advance to checkpoint 2 by bribing once.
+    vm.execute("bribe");
+    advanceAuto(vm);
+    expect(vm.getParam("checkpoint")).toBe(2);
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("officer_deal");
+  });
+
+  it("taking the officer deal costs 400, resets heat to 0, and passes clean (F)", () => {
+    const vm = new QuestVM(smugglingRunScript, 1);
+    vm.execute("bribe"); // -150, → checkpoint 2
+    advanceAuto(vm);
+    vm.setParam("heat", 5); // ran hot up to here
+    vm.execute("officer_deal"); // -400, heat = 0
+    expect(vm.getParam("heat")).toBe(0);
+    expect(vm.getParam("credits")).toBe(-550); // -150 bribe - 400 deal
+    // The narrated beat then auto-advances to the next checkpoint.
+    advanceAuto(vm);
+    expect(vm.getParam("checkpoint")).toBe(3);
+    expect(vm.currentLocation().id).toBe("checkpoint_decision");
+  });
+
+  it("the three payout tiers route through distinct, differently-worded beats (B)", () => {
+    const byId = new Map(smugglingRunScript.locations.map((l) => [l.id, l]));
+    const full = byId.get("payout_full");
+    const high = byId.get("payout_high");
+    const mid = byId.get("payout_mid");
+    expect(full && high && mid).toBeTruthy();
+    const texts = [full!.text, high!.text, mid!.text];
+    // All three are scalar strings, and all three differ from one another.
+    for (const t of texts) expect(typeof t).toBe("string");
+    expect(new Set(texts as string[]).size).toBe(3);
+    // Each beat auto-executes into the shared success coda.
+    for (const beat of [full!, high!, mid!]) {
+      expect(beat.transitions).toHaveLength(1);
+      expect(beat.transitions[0].autoExecute).toBe(true);
+      expect(beat.transitions[0].toLocation).toBe("quest_success");
+    }
+  });
+
+  it("a mid-tier delivery reads its own beat before the shared coda (B)", () => {
+    const vm = new QuestVM(smugglingRunScript, 1);
+    vm.execute("dump"); // cargo 4
+    advanceAuto(vm);
+    vm.execute("dump"); // cargo 2
+    advanceAuto(vm);
+    // Bribe the last checkpoint, then step to the payout gate manually so we can
+    // observe the tier beat before it auto-advances into quest_success.
+    vm.execute("bribe");
+    // Walk the auto-chain up to (but not through) the payout beat.
+    while (
+      !vm.isFinished() &&
+      vm.availableTransitions()[0]?.autoExecute &&
+      vm.currentLocation().id !== "payout_mid"
+    ) {
+      vm.execute(vm.availableTransitions()[0].id);
+    }
+    expect(vm.currentLocation().id).toBe("payout_mid");
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("quest_success");
+    expect(vm.getParam("credits")).toBe(850); // -150 bribe + 1000 mid payout
+  });
+
+  it("the encounter framing is a per-seed variance pool (F)", () => {
+    const start = smugglingRunScript.locations.find(
+      (l) => l.id === "checkpoint_decision",
+    )!;
+    expect(Array.isArray(start.text)).toBe(true);
+    expect((start.text as string[]).length).toBeGreaterThanOrEqual(2);
+    // Different seeds can surface different framings while staying deterministic
+    // per seed (the resolver keys on (seed, locationId), not the RNG stream).
+    const a1 = new QuestVM(smugglingRunScript, 1).currentLocationText();
+    const a2 = new QuestVM(smugglingRunScript, 1).currentLocationText();
+    expect(a1).toBe(a2);
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8].map((s) =>
+      new QuestVM(smugglingRunScript, s).currentLocationText(),
+    );
+    expect(new Set(seeds).size).toBeGreaterThan(1);
+  });
 });
 
 describe("Hostage Rescue quest", () => {

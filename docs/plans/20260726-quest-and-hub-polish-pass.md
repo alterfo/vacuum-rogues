@@ -931,9 +931,34 @@ branches/endings, never removing/loosening what's there) and running the full qu
       regenerated (signal-decode 20→33 for the new gate/beat/ending literals). Full unit suite 6171 passed /
       1 (the lone `sessionCompetence` battle-ready milestone is the known stochastic campaign gate,
       unrelated — passed on rerun); `tsc --noEmit` clean; `eslint` on changed files 0 issues.
-- [ ] **Task 33 — `smuggling-run.ts`**: rebalance `bluff` so it isn't free at low heat (A); branch the
+- [x] **Task 33 — `smuggling-run.ts`**: rebalance `bluff` so it isn't free at low heat (A); branch the
       success text by payout tier instead of one shared line for all three (B); give the 3 checkpoints at
-      least one differentiating beat (F). Write/extend tests; run tests.
+      least one differentiating beat (F). Write/extend tests; run tests. Done: (1) **bluff de-dominated
+      (A)** — a new `bluff_nervous` transition (`condition roll <= 0`, declared between `bluff_risky` and
+      the unconditional `bluff_safe`) means even a calm low-heat bluff now carries a ~10% catch, so it's
+      no longer strictly-better-than-bribe: a clean monotonic risk gradient (low 10% → medium 30% → heat
+      ≥ 6 certain). The threshold is `roll <= 0` specifically because seed-1's first roll is 1 — so the
+      locked `bluffing at low heat passes but raises heat` test (heat 0, roll becomes 1 → `bluff_safe` is
+      `availableTransitions()[0]`, +2 heat) stays green; `roll <= 1` would have red'd it. Across a full
+      run the two early bluffs at 10% each plus the medium-band third make full-bluff EV-inferior to
+      full-bribe (~1710 vs 2550). (2) **Tier-branched success (B)** — `payout_gate`'s pay_full/high/mid
+      transitions (credit effects unchanged) now route to three distinct narrated beat nodes
+      `payout_full`/`payout_high`/`payout_mid` (full haul = buyer delighted, partial = docks but pays
+      honest, thin = grumbling scraps), each `autoExecute` into a trimmed tier-neutral `quest_success`
+      coda — so the delivery reads differently per tier while `advanceAuto` still lands the locked full-
+      and mid-tier tests on `quest_success` with credits 2550/850. (3) **Differentiating beat (F)** — a
+      `checkpoint == 2`-gated `officer_deal` option (a corrupt captain who scrubs your ship from the whole
+      blockade net for 400 cr, `heat = 0`) gives the middle checkpoint a genuinely different decision
+      shape — a heat-management recovery play useful only after running hot, priced so it never dominates
+      the 150-cr bribe. Also made `checkpoint_decision.text` a 3-variant per-seed pool (Task 14 resolver)
+      for per-playthrough patrol variety (per-checkpoint-within-run distinct nodes remain blocked by the
+      locked loop tests — same limitation Task 18 documented). Extended the Smuggling Run describe block
+      with 7 new `it(...)` blocks (worst-roll low bluff caught, non-zero low bluff safe, officer-only-at-cp2
+      + wipes heat, officer costs 400/resets/passes, three distinct tier beats → shared coda, mid-tier
+      reads its own beat, per-seed encounter pool) — no existing assertion touched. Cyrillic baseline
+      regenerated (smuggling-run 19→26 for the new pool/officer/tier-beat literals). Full unit suite 6165
+      passed (the lone `sessionCompetence` battle-ready milestone is the known stochastic campaign gate,
+      unrelated — passed on rerun); `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 - [ ] **Task 34 — `tribunal.ts`**: rebalance the maximally-aggressive path so it isn't simultaneously the
       safest and the highest-reward option (A); replace exact-numeric choice labels with qualitative
       language (G) — note this depends on Task 3's sign-bug fix to this same file. Write/extend tests;
