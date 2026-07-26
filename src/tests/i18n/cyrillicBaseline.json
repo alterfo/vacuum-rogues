@@ -81,6 +81,6 @@
   "src/systems/quests/scripts/sabotage-heist.ts": 35,
   "src/systems/quests/scripts/signal-decode.ts": 33,
   "src/systems/quests/scripts/smuggling-run.ts": 26,
-  "src/systems/quests/scripts/tribunal.ts": 25,
+  "src/systems/quests/scripts/tribunal.ts": 26,
   "src/systems/saves/saveSlots.ts": 3
 }

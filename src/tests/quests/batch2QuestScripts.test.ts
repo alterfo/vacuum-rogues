@@ -477,6 +477,54 @@ describe("Tribunal quest (courtroom defense)", () => {
       expect(a.getParam("hostility")).toBe(b.getParam("hostility"));
     }
   });
+
+  // --- Task 34: risk-gated top reward + qualitative labels ---
+
+  it("landing both rolls clears defense 12 for total vindication — a richer prize than a plain acquittal (Task 34, A)", () => {
+    const vm = new QuestVM(tribunalScript, 1);
+    vm.execute("plea_defiant"); // defense 3, hostility 7
+    vm.execute("discredit_witness"); // roll randomised
+    vm.setParam("roll", 6); // lands: +4 defense -1 hostility -> defense 7, hostility 6
+    advanceAuto(vm); // discredit_ok -> summation
+    expect(vm.currentLocation().id).toBe("summation");
+    vm.execute("grandstand"); // roll randomised
+    vm.setParam("roll", 9); // lands: +5 defense -> defense 12
+    advanceAuto(vm); // grand_ok -> verdict_vindicated (defense >= 12)
+    expect(vm.currentLocation().id).toBe("ending_vindicated");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(5000); // strictly more than acquittal's 3000
+    expect(vm.getParam("rating")).toBe(140); // strictly more than acquittal's 125
+    expect(vm.getParam("hostility")).toBeLessThan(9); // never tipped into contempt
+  });
+
+  it("the safe roll-free line cannot reach vindication — deterministic defense caps at acquittal (Task 34, A)", () => {
+    // The maximally-aggressive *deterministic* line (no discredit/grandstand
+    // roll) tops out at defense 8, which is verdict_acquit, NOT vindication.
+    // So the safest strategy is no longer also the highest-reward one — the top
+    // tier demands accepting the two coin-flips.
+    const vm = new QuestVM(tribunalScript, 1);
+    vm.execute("plea_defiant"); // defense 3
+    vm.execute("table_manifest"); // defense 6
+    vm.execute("closing_appeal"); // defense 8 — the roll-free ceiling
+    expect(vm.getParam("defense")).toBe(8);
+    expect(vm.getParam("defense")).toBeLessThan(12); // short of the vindication gate
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("ending_acquitted");
+  });
+
+  it("choice labels use qualitative risk language, not exact numeric deltas (Task 34, G)", () => {
+    // The three player-facing choice screens must no longer print "+3 к защите"
+    // style deltas — labels carry no digits at all.
+    for (const id of ["arraignment", "cross_exam", "summation"]) {
+      const loc = tribunalScript.locations.find((l) => l.id === id)!;
+      for (const t of loc.transitions) {
+        expect(
+          t.label,
+          `${id}/${t.id} label still prints a number`,
+        ).not.toMatch(/\d/);
+      }
+    }
+  });
 });
 
 describe("Quarantine quest (containment dilemma)", () => {

@@ -959,10 +959,41 @@ branches/endings, never removing/loosening what's there) and running the full qu
       regenerated (smuggling-run 19→26 for the new pool/officer/tier-beat literals). Full unit suite 6165
       passed (the lone `sessionCompetence` battle-ready milestone is the known stochastic campaign gate,
       unrelated — passed on rerun); `tsc --noEmit` clean; `eslint` on changed files 0 issues.
-- [ ] **Task 34 — `tribunal.ts`**: rebalance the maximally-aggressive path so it isn't simultaneously the
+- [x] **Task 34 — `tribunal.ts`**: rebalance the maximally-aggressive path so it isn't simultaneously the
       safest and the highest-reward option (A); replace exact-numeric choice labels with qualitative
       language (G) — note this depends on Task 3's sign-bug fix to this same file. Write/extend tests;
-      run tests.
+      run tests. Done: (1) **Pattern A — risk-gated top reward (`ending_vindicated`)**. The core problem was
+      that a *deterministic, roll-free* line (`plea_defiant` +3 → `table_manifest` +3 → `closing_appeal` +2)
+      hits defense 8 = the top verdict (acquittal) at hostility 8, one below contempt — so the safest line
+      was also the richest. Rather than break that line (it is hard-locked by
+      `batch2QuestScripts.test.ts:410-420` which pins `plea_defiant`→`table_manifest`→`closing_appeal`→
+      `ending_acquitted`/3000/125), I *added a strictly-higher tier above it*: `verdict_vindicated`
+      (condition `defense >= 12`, credits += 5000, rating += 40) prepended to `verdict_gate`, → new
+      `ending_vindicated` (isSuccess). The deterministic defense ceiling is exactly 8 — clearing 12
+      **requires both risky rolls to land** (`discredit_ok` +4 AND `grand_ok` +5) while riding the judge's
+      hostility, so the top reward now demands accepting the two coin-flips and the safe line caps at a
+      plain acquittal. Both locked acquittal tests (defense 8 and defense 10) stay `< 12`, so they still
+      route to `ending_acquitted` unchanged. (2) **Pattern G — qualitative labels**: the six numeric-delta
+      labels on `arraignment`/`cross_exam`/`summation` (`+3 к защите`, `−2 гнева`, …) were rewritten to
+      carry no digits at all (the two roll-option labels were already qualitative). (3) Extended the
+      Tribunal describe block with 3 new `it(...)` blocks (two-roll vindication pays 5000/140 and never
+      crits; the roll-free line caps at defense 8 `< 12` → acquittal not vindication; no-numeric-label
+      guard) — no existing assertion touched. Cyrillic baseline regenerated (tribunal 25→26 for the one
+      new `ending_vindicated` literal). Full unit suite 6169 passed / 13 skipped / 0 failed; `tsc --noEmit`
+      clean; `eslint` on changed files 0 issues.
+      ⚠️ **The direct "make the roll-free aggressive line itself risky/sub-optimal" rebalance is DEFERRED
+      (blocked by a known-good test + an already-deferred dependency).** `batch2QuestScripts.test.ts:410-420`
+      hard-locks the exact `plea_defiant`+`table_manifest`+`closing_appeal`→`ending_acquitted` outcome
+      (credits 3000, rating 125) — any change that makes that specific deterministic line fail to reach
+      acquittal, or that alters its credits/rating, reds it (defense-threshold, effect-delta, and
+      hostility-cost levers are all pinned by that assertion). The task note also flags this depends on
+      Task 3's sign-bug fix, which is itself ⚠️-deferred (blocked by `batch2QuestScripts.test.ts:430`'s
+      `credits === 500` lenient-path lock). Per this plan's Development Approach ("if a content change makes
+      an existing assertion fail… stop and flag it (⚠️) rather than editing the test") and the standing
+      no-touch-existing-tests rule, the in-place rebalance of the locked line + the coupled sign fix need
+      the user's explicit go-ahead and a test update — left for a follow-up (mirrors Task 3's tribunal,
+      Task 5's Transfer, and Task 16's dominant-combo deferrals). The additive vindication tier above
+      resolves the same "safest ≠ richest" complaint without touching any locked assertion.
 
 ### Task 35: Verify acceptance criteria
 - [ ] verify every item from Overview/Context is addressed (spot-check a sample of the per-quest tasks

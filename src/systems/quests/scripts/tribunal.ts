@@ -17,10 +17,16 @@ import type { QuestScript } from "../QuestScript";
 //      theatrical grandstand (roll: brilliant or a contempt-baiting disaster).
 //   4. Verdict — an auto gate on `defense`.
 // Outcomes (by `defense` at verdict, unless held in contempt first):
-//   - ending_acquitted (defense >= 8 — full acquittal, name cleared)   SUCCESS
-//   - ending_lenient   (defense >= 4 — reduced to a fine)              SUCCESS
-//   - ending_guilty    (defense < 4  — convicted, record stained)      FAILURE
-//   - ending_contempt  (judge's patience broke — jailed for contempt)  FAILURE
+//   - ending_vindicated (defense >= 12 — total vindication, damages)   SUCCESS
+//   - ending_acquitted  (defense >= 8  — full acquittal, name cleared) SUCCESS
+//   - ending_lenient    (defense >= 4  — reduced to a fine)            SUCCESS
+//   - ending_guilty     (defense < 4   — convicted, record stained)    FAILURE
+//   - ending_contempt   (judge's patience broke — jailed for contempt) FAILURE
+// Pattern-A note: the top tier (vindication) is deliberately out of reach of
+// the safe, roll-free line — the deterministic defense ceiling is exactly 8
+// (plea_defiant +3, table_manifest +3, closing_appeal +2). Clearing 12 forces
+// BOTH risky rolls to land (discredit +4 and grandstand +5) while riding the
+// judge's hostility, so the safest strategy is no longer also the richest one.
 export const tribunalScript: QuestScript = {
   id: "tribunal",
   title: "Трибунал",
@@ -77,21 +83,21 @@ export const tribunalScript: QuestScript = {
         {
           id: "plea_contrite",
           label:
-            "Смиренно признать мелкие огрехи — сбить накал (−2 гнева, +1 к защите)",
+            "Смиренно признать мелкие огрехи — остудить бенч, но дело от этого едва окрепнет",
           toLocation: "cross_exam",
           effects: ["hostility -= 2", "defense += 1"],
         },
         {
           id: "plea_defiant",
           label:
-            "Атаковать законность самого обвинения — сильно, но дерзко (+3 к защите, +3 гнева)",
+            "Атаковать законность самого обвинения — мощный довод, но судья вспыхнет",
           toLocation: "cross_exam",
           effects: ["defense += 3", "hostility += 3"],
         },
         {
           id: "plea_evidence",
           label:
-            "Сразу выложить бортовые журналы — сухие факты без вызова (+2 к защите)",
+            "Сразу выложить бортовые журналы — сухие факты без вызова, ровный ход",
           toLocation: "cross_exam",
           effects: ["defense += 2"],
         },
@@ -111,14 +117,14 @@ export const tribunalScript: QuestScript = {
         {
           id: "concede_point",
           label:
-            "Уступить спорный пункт с достоинством — не злить бенч (−1 гнева)",
+            "Уступить спорный пункт с достоинством — не злить бенч, но и дело не усилить",
           toLocation: "summation",
           effects: ["hostility -= 1"],
         },
         {
           id: "table_manifest",
           label:
-            "Приобщить к делу грузовой манифест — весомо, но прокурор взовьётся (+3 к защите, +1 гнева)",
+            "Приобщить к делу грузовой манифест — веский довод, только прокурор взовьётся",
           toLocation: "summation",
           effects: ["defense += 3", "hostility += 1"],
         },
@@ -151,13 +157,14 @@ export const tribunalScript: QuestScript = {
       transitions: [
         {
           id: "closing_appeal",
-          label: "Спокойная апелляция к фактам и записям (+2 к защите)",
+          label:
+            "Спокойная апелляция к фактам и записям — надёжно нарастить защиту",
           toLocation: "verdict_gate",
           effects: ["defense += 2"],
         },
         {
           id: "closing_mercy",
-          label: "Воззвать к милости суда — склонить голову (−2 гнева)",
+          label: "Воззвать к милости суда — склонить голову и остудить гнев",
           toLocation: "verdict_gate",
           effects: ["hostility -= 2"],
         },
@@ -196,6 +203,14 @@ export const tribunalScript: QuestScript = {
       text: "Судья удаляется на совещание — минута тянется как час — и возвращается с вердиктом.\nСила защиты: {defense}",
       transitions: [
         {
+          id: "verdict_vindicated",
+          label: "...",
+          toLocation: "ending_vindicated",
+          condition: "defense >= 12",
+          effects: ["credits += 5000", "rating += 40"],
+          autoExecute: true,
+        },
+        {
           id: "verdict_acquit",
           label: "...",
           toLocation: "ending_acquitted",
@@ -219,6 +234,12 @@ export const tribunalScript: QuestScript = {
           autoExecute: true,
         },
       ],
+    },
+    {
+      id: "ending_vindicated",
+      text: "«Оправдан — и суд выражает защите своё уважение». Такого зал не помнит: вы не просто отбились, вы разобрали обвинение по винтику прямо на глазах у бенча. Судья особым определением присуждает вам компенсацию за клевету и потерянное время — сумму, от которой у прокурора вытягивается лицо. Вы уходите не оправданным подсудимым, а человеком, чьё имя теперь чище, чем было до процесса. Но чтобы забраться так высоко, пришлось дважды поставить всё на кон.\nКредиты: {credits} | Репутация: {rating}",
+      isSuccess: true,
+      transitions: [],
     },
     {
       id: "ending_acquitted",
