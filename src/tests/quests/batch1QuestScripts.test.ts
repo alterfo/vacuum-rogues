@@ -120,6 +120,67 @@ describe("Evacuation quest (logistics routing)", () => {
       expect(a.getParam("time")).toBe(b.getParam("time"));
     }
   });
+
+  // Task 20 (B): the second-run scene is no longer path-blind — each dock leads
+  // to its own second_run node with dock-specific prose.
+  it("branches the second-run scene per dock chosen", () => {
+    const med = new QuestVM(evacuationScript, 1);
+    med.execute("dock_medward");
+    const hab = new QuestVM(evacuationScript, 1);
+    hab.execute("dock_habblock");
+    const vip = new QuestVM(evacuationScript, 1);
+    vip.execute("dock_vipdock");
+
+    expect(med.currentLocation().id).toBe("second_run_med");
+    expect(hab.currentLocation().id).toBe("second_run_hab");
+    expect(vip.currentLocation().id).toBe("second_run_vip");
+
+    const medText = med.currentLocationText();
+    const habText = hab.currentLocationText();
+    const vipText = vip.currentLocationText();
+    // Three distinct scenes, not one shared line.
+    expect(new Set([medText, habText, vipText]).size).toBe(3);
+    // Each still exposes the same second-run choices with matching effects.
+    for (const vm of [med, hab, vip]) {
+      const ids = vm.availableTransitions().map((t) => t.id);
+      expect(ids).toContain("grab_more");
+      expect(ids).toContain("bug_out");
+    }
+  });
+
+  // Task 20 (D): the debris-route roll now resolves into its own narrated
+  // outcome node (clear vs hit) instead of a silent jump straight to lift-off.
+  it("narrates the fast-route roll with distinct clear/hit outcome scenes", () => {
+    const clear = new QuestVM(evacuationScript, 1);
+    clear.execute("dock_habblock"); // time 10, saved 14
+    clear.execute("grab_more"); // time 7, saved 22
+    clear.execute("route_fast"); // time 6, roll randomised
+    clear.setParam("roll", 9); // clean run
+    clear.execute("route_clear");
+    expect(clear.currentLocation().id).toBe("route_clear_scene");
+    const clearText = clear.currentLocationText();
+
+    const hit = new QuestVM(evacuationScript, 1);
+    hit.execute("dock_habblock"); // time 10, saved 14
+    hit.execute("grab_more"); // time 7, saved 22
+    hit.execute("route_fast"); // time 6, roll randomised
+    hit.setParam("roll", 0); // snagged run (time 6 -> 2, no collapse)
+    hit.execute("route_hit");
+    expect(hit.currentLocation().id).toBe("route_hit_scene");
+    expect(hit.getParam("time")).toBe(2);
+    const hitText = hit.currentLocationText();
+
+    // Two different narratives, each non-empty.
+    expect(clearText.length).toBeGreaterThan(0);
+    expect(hitText.length).toBeGreaterThan(0);
+    expect(clearText).not.toBe(hitText);
+
+    // Both outcome scenes still funnel back to lift-off and reach an ending.
+    advanceAuto(clear);
+    expect(clear.isSuccess()).toBe(true);
+    advanceAuto(hit);
+    expect(hit.isFinished()).toBe(true);
+  });
 });
 
 describe("Locked-room whodunit quest", () => {

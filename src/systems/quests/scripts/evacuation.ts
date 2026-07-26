@@ -73,21 +73,21 @@ export const evacuationScript: QuestScript = {
           id: "dock_medward",
           label:
             "Госпитальное кольцо — лежачих грузят на носилках медленно (−4 часа), но иначе им конец",
-          toLocation: "second_run",
+          toLocation: "second_run_med",
           effects: ["time -= 4", "saved += 8", "rating += 10"],
         },
         {
           id: "dock_habblock",
           label:
             "Жилой блок — толпа сама бежит по трапам (−2 часа), поднимете разом больше всех",
-          toLocation: "second_run",
+          toLocation: "second_run_hab",
           effects: ["time -= 2", "saved += 14"],
         },
         {
           id: "dock_vipdock",
           label:
             "Частный причал корпорации — платёжеспособные пассажиры, быстрая швартовка (−1 час), но остальные подождут",
-          toLocation: "second_run",
+          toLocation: "second_run_vip",
           effects: [
             "time -= 1",
             "saved += 4",
@@ -98,8 +98,46 @@ export const evacuationScript: QuestScript = {
       ],
     },
     {
-      id: "second_run",
-      text: "Первый челнок отвалил, набитый до предела. Станцию уже потряхивает, переборки стонут.\nДо взрыва реактора: {time} | Спасено людей: {saved}\n\nУспеете ли на ещё один заход — или пора уходить, пока цел трюм?",
+      id: "second_run_med",
+      text: "Госпитальный челнок отвалил, набитый носилками; реаниматологи держат капельницы прямо в проходах. Станцию потряхивает, переборки стонут.\nДо взрыва реактора: {time} | Спасено людей: {saved}\n\nВ жилых секциях ещё бьётся живая толпа. Успеете на ещё один заход — или пора уходить, пока цел трюм?",
+      transitions: [
+        {
+          id: "grab_more",
+          label:
+            "Ещё один заход за оставшимися — станцию рвёт на части (−3 часа, +8 человек)",
+          toLocation: "route_back",
+          effects: ["time -= 3", "saved += 8"],
+        },
+        {
+          id: "bug_out",
+          label: "Хватит — отчаливать немедленно и уходить к точке прыжка",
+          toLocation: "liftoff",
+          effects: [],
+        },
+      ],
+    },
+    {
+      id: "second_run_hab",
+      text: "Жилой блок опустел за минуты — трап был забит бегущими телами, челнок ушёл под завязку. Станцию потряхивает, переборки стонут.\nДо взрыва реактора: {time} | Спасено людей: {saved}\n\nНа госпитальном кольце остались те, кто сам не добежит. Успеете на ещё один заход — или пора уходить, пока цел трюм?",
+      transitions: [
+        {
+          id: "grab_more",
+          label:
+            "Ещё один заход за оставшимися — станцию рвёт на части (−3 часа, +8 человек)",
+          toLocation: "route_back",
+          effects: ["time -= 3", "saved += 8"],
+        },
+        {
+          id: "bug_out",
+          label: "Хватит — отчаливать немедленно и уходить к точке прыжка",
+          toLocation: "liftoff",
+          effects: [],
+        },
+      ],
+    },
+    {
+      id: "second_run_vip",
+      text: "Частный причал вычищен, платёжеспособные пристёгнуты в мягких креслах и уже требуют кофе. А на общих кольцах ещё колотится в переборки живая масса. Станцию потряхивает, переборки стонут.\nДо взрыва реактора: {time} | Спасено людей: {saved}\n\nСовесть или трюм — успеете на ещё один заход за остальными, или уходить сейчас?",
       transitions: [
         {
           id: "grab_more",
@@ -141,17 +179,43 @@ export const evacuationScript: QuestScript = {
       transitions: [
         {
           id: "route_clear",
-          label: "...",
-          toLocation: "liftoff",
+          label: "Нить в обломках",
+          toLocation: "route_clear_scene",
           condition: "roll >= 3",
           effects: [],
           autoExecute: true,
         },
         {
           id: "route_hit",
-          label: "...",
-          toLocation: "liftoff",
+          label: "Удар по борту",
+          toLocation: "route_hit_scene",
           effects: ["time -= 4"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "route_clear_scene",
+      text: "Руки сами ведут корабль по единственной чистой нити сквозь облако — глыбы проносятся в метре от обшивки, и вот перед носом раскрывается открытый космос. Ни царапины. Люди за спиной выдыхают разом.",
+      transitions: [
+        {
+          id: "clear_to_lift",
+          label: "К точке прыжка",
+          toLocation: "liftoff",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "route_hit_scene",
+      text: "Не увернулись: сорванная секция фермы с лязгом вспарывает борт. Корабль встряхивает, гаснет свет, аварийные заслонки бьют по отсекам. На латание пробоины и пересчёт курса уходят драгоценные минуты — время утекает быстрее, чем хотелось бы.",
+      transitions: [
+        {
+          id: "hit_to_lift",
+          label: "К точке прыжка",
+          toLocation: "liftoff",
+          effects: [],
           autoExecute: true,
         },
       ],

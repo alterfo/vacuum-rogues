@@ -588,9 +588,25 @@ branches/endings, never removing/loosening what's there) and running the full qu
       Cyrillic baseline regenerated (derelict-salvage 38→42 for the 2 new endings + 2 new labels). Full
       unit suite 6074 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0
       issues.
-- [ ] **Task 20 — `evacuation.ts`**: branch `second_run` per dock instead of one shared text (B); give
+- [x] **Task 20 — `evacuation.ts`**: branch `second_run` per dock instead of one shared text (B); give
       `route_check`'s silent roll its own success/fail narrative line (D). Write/extend tests; run
-      tests.
+      tests. Done: (1) **second_run branched per dock (B)** — the single shared `second_run` node is
+      replaced by `second_run_med`/`second_run_hab`/`second_run_vip`, each with dock-specific prose (the
+      med run leaves the hab crowd behind, the hab run leaves the stretcher cases, the VIP run leaves the
+      common rings pounding on the bulkheads). Every dock transition retargets to its own node; each node
+      keeps the identical `grab_more`(→route_back, −3h/+8) and `bug_out`(→liftoff) transitions, so every
+      existing behavioural assertion still lands on the same transition ids/effects. (2) **route_check roll
+      narrated (D)** — the two silent `"..."` autoExecute jumps straight to `liftoff` are replaced by
+      distinct outcome scenes: `route_clear` → new `route_clear_scene` («ни царапины…») and `route_hit`
+      → new `route_hit_scene` («сорванная секция вспарывает борт…»), each auto-advancing on to `liftoff`.
+      The `time -= 4` stays on the `route_hit` transition, so a lethal hit still drops `time` to 0 and the
+      `critMin` redirect fires `ending_collapse` before the scene shows (the collapse test is untouched);
+      a non-lethal hit now reads its own beat. Extended the Evacuation describe block with 2 new `it(...)`
+      blocks (per-dock second_run distinctness + choices intact; distinct clear/hit narrated outcomes,
+      non-lethal hit routes through `route_hit_scene` at time 2, both funnel back to an ending) — no
+      existing assertion touched. Cyrillic baseline regenerated (evacuation 22→34 for the 3 new dock
+      scenes + 2 new route outcome scenes). Full unit suite 6089 passed / 0 failed; `tsc --noEmit` clean;
+      `eslint` on changed files 0 issues.
 - [ ] **Task 21 — `first-contact.ts`**: fix `scan` being strictly worse than `broadcast` — give it a
       real (if different) upside (A); branch the shared "exchange" scene per generosity/extortion/
       capitulation outcome (B); either grant the star-maps/trophies `ending_alliance` promises, or
