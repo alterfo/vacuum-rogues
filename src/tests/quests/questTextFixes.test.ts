@@ -15,7 +15,9 @@ import { derelictSalvageScript } from "@/systems/quests/scripts/derelict-salvage
 function allStrings(script: QuestScript): string[] {
   const out: string[] = [];
   for (const loc of script.locations) {
-    out.push(loc.text);
+    // `text` may be a variance pool (Task 14) — flatten every variant.
+    if (typeof loc.text === "string") out.push(loc.text);
+    else out.push(...loc.text);
     for (const t of loc.transitions) out.push(t.label);
   }
   return out;

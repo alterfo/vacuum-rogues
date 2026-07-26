@@ -6,16 +6,51 @@ import type {
   QuestTransition,
 } from "./QuestScript";
 
+/**
+ * Stable, RNG-free string hash (Math.imul FNV-style, same family as
+ * `SeededRNG.hashSeed`). Used to pick a text-pool variant deterministically
+ * from `(seed, locationId)` WITHOUT touching the VM's `SeededRNG` stream — so
+ * adding/removing text variants never shifts an already-shipped quest's
+ * `random(min,max)` rolls (which depend on call order into `this.rng`).
+ */
+export function questTextHash(key: string): number {
+  let h = 2166136261 ^ key.length;
+  for (let i = 0; i < key.length; i++) {
+    h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/**
+ * Resolve a location's `text` (scalar or variance pool) to a single string,
+ * given the run's `seed`. Pure — exported for direct testing. An empty pool
+ * resolves to "".
+ */
+export function resolveLocationText(
+  text: string | string[],
+  seed: string,
+  locationId: string,
+): string {
+  if (typeof text === "string") return text;
+  if (text.length === 0) return "";
+  return text[questTextHash(`${seed}:${locationId}`) % text.length];
+}
+
 export class QuestVM {
   private params: Map<string, number>;
   private currentLocationId: string;
   private rng: SeededRNG;
+  private readonly seed: string;
 
   constructor(
     private script: QuestScript,
     seed: string | number,
   ) {
-    this.rng = new SeededRNG(String(seed));
+    this.seed = String(seed);
+    this.rng = new SeededRNG(this.seed);
     this.params = new Map();
 
     for (const param of script.params) {
@@ -35,6 +70,16 @@ export class QuestVM {
     );
     if (!loc) throw new Error(`Location not found: ${this.currentLocationId}`);
     return loc;
+  }
+
+  /**
+   * The current location's narration text with a variance pool resolved to one
+   * deterministic variant. Renderers should call this (then `interpolate`)
+   * rather than reading `loc.text` directly, which may be a `string[]`.
+   */
+  currentLocationText(): string {
+    const loc = this.currentLocation();
+    return resolveLocationText(loc.text, this.seed, loc.id);
   }
 
   availableTransitions(): QuestTransition[] {
@@ -162,8 +207,14 @@ export class QuestVM {
     }
   }
 
-  interpolate(text: string): string {
-    return text.replace(/\{(\w+)\}/g, (_, name) => {
+  interpolate(text: string | string[]): string {
+    // Tolerate a variance pool for callers that pass `loc.text` verbatim; the
+    // pool is resolved against the current location (which owns that array).
+    const src =
+      typeof text === "string"
+        ? text
+        : resolveLocationText(text, this.seed, this.currentLocationId);
+    return src.replace(/\{(\w+)\}/g, (_, name) => {
       const v = this.params.get(name);
       return v !== undefined ? String(v) : `{${name}}`;
     });

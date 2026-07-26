@@ -571,8 +571,7 @@ export class TextQuestScene extends GameScene {
   private renderVmLocation(): void {
     if (!this.vm || !this.vmNarrationText || !this.vmChoiceContainer) return;
 
-    const loc = this.vm.currentLocation();
-    const fullText = this.vm.interpolate(loc.text);
+    const fullText = this.vm.interpolate(this.vm.currentLocationText());
     this.refreshVmParamPanel();
 
     // Clear old buttons

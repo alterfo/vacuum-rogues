@@ -30,12 +30,23 @@ function reachableLocationIds(script: QuestScript): Set<string> {
   return seen;
 }
 
+// Every narration string a location can render: a scalar `text` is itself; a
+// variance pool (Task 14) contributes each of its variants.
+function locationTexts(loc: QuestScript["locations"][number]): string[] {
+  return typeof loc.text === "string" ? [loc.text] : loc.text;
+}
+
 // Extract every {token} used across all of a script's location texts + labels.
+// A `text` variance pool is checked variant-by-variant, so every string that
+// can ever reach the renderer is held to the placeholder invariant.
 function referencedPlaceholders(script: QuestScript): string[] {
   const out: string[] = [];
   const re = /\{([a-zA-Z0-9_]+)\}/g;
   for (const loc of script.locations) {
-    for (const src of [loc.text, ...loc.transitions.map((t) => t.label)]) {
+    for (const src of [
+      ...locationTexts(loc),
+      ...loc.transitions.map((t) => t.label),
+    ]) {
       let m: RegExpExecArray | null;
       while ((m = re.exec(src)) !== null) out.push(m[1]);
     }

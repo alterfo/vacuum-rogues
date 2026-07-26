@@ -21,7 +21,14 @@ export interface QuestTransition {
 
 export interface QuestLocation {
   id: string;
-  text: string;
+  /**
+   * Narration prose for this location. A plain `string` renders verbatim; a
+   * `string[]` is a variance *pool* — `QuestVM.currentLocationText()` picks one
+   * variant deterministically from `(seed, locationId)` so a location reads
+   * differently across playthroughs without desyncing numeric `random(...)`
+   * rolls. See `src/systems/quests/scripts/README.md`.
+   */
+  text: string | string[];
   transitions: QuestTransition[];
   isSuccess?: boolean;
   isFailure?: boolean;

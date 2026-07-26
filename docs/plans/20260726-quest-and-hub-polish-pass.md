@@ -417,21 +417,36 @@ the plan. Tasks are ordered so smaller, independent fixes land first and the que
 
 ### Task 14: Variance primitive for QuestScript locations
 This is the foundation the 20 per-quest tasks below build on — get it right once.
-- [ ] `QuestScript.ts`: widen `QuestLocation.text` to `string | string[]`.
-- [ ] `QuestVM.ts`: add a resolver (e.g. `currentLocationText()`) that, when `text` is an array, picks
+- [x] `QuestScript.ts`: widen `QuestLocation.text` to `string | string[]`. Done: union type + doc comment
+      explaining the variance-pool semantics.
+- [x] `QuestVM.ts`: add a resolver (e.g. `currentLocationText()`) that, when `text` is an array, picks
       one variant **deterministically from `(seed, locationId)`** — not by consuming `this.rng`'s
       sequential stream, since that would desync every downstream `random(min,max)` roll that depends on
       call order. A simple stable hash of `` `${seed}:${locationId}` `` mod array length is sufficient.
-- [ ] `TextQuestScene.ts`: switch `renderVmLocation` to call the new resolver instead of reading
-      `loc.text` directly.
-- [ ] Extend `questScriptGraph.test.ts`'s "every interpolation placeholder resolves to a declared param"
+      Done: added pure exported `questTextHash(key)` (Math.imul FNV-family, RNG-free) + pure
+      `resolveLocationText(text, seed, locationId)`; VM stores `this.seed` and exposes
+      `currentLocationText()`. `interpolate` widened to `string | string[]` (resolving a pool against the
+      current location) so the existing `vm.interpolate(vm.currentLocation().text)` call sites keep
+      compiling unchanged — the resolver never touches `this.rng`, verified by a pool-vs-scalar identical-
+      roll test.
+- [x] `TextQuestScene.ts`: switch `renderVmLocation` to call the new resolver instead of reading
+      `loc.text` directly. Done: now `this.vm.interpolate(this.vm.currentLocationText())`.
+- [x] Extend `questScriptGraph.test.ts`'s "every interpolation placeholder resolves to a declared param"
       invariant to check **every** string in a `text` array, not just a scalar — this is a required
       extension of an existing test loop, not a new file (see the "never weaken existing tests" rule —
-      this only adds coverage).
-- [ ] write a unit test for the deterministic-per-seed / varies-across-seeds resolver behavior
-- [ ] run `npm run test:save-compat` once here to confirm the catalog-only assumption holds (no new
-      persisted field introduced)
-- [ ] run tests — must pass before Task 15
+      this only adds coverage). Done: added a `locationTexts(loc)` flattener consumed by
+      `referencedPlaceholders`, so the existing invariant now iterates every pool variant (no assertion
+      changed). `questTextFixes.test.ts`'s `allStrings` helper flattens pools too (coverage-broadening,
+      forced by the union type).
+- [x] write a unit test for the deterministic-per-seed / varies-across-seeds resolver behavior. Done:
+      `src/tests/quests/questTextVariance.test.ts` — pure resolver (scalar verbatim, member-of-pool,
+      deterministic per (seed,id), varies across seeds AND across location ids, empty/single pool),
+      `questTextHash` determinism, and VM-level determinism + RNG-non-consumption (pool vs scalar roll
+      identically).
+- [x] run `npm run test:save-compat` once here to confirm the catalog-only assumption holds (no new
+      persisted field introduced). Done: 22 passed — catalog-only, no migration needed.
+- [x] run tests — must pass before Task 15. Done: quest suites 767 passed; full unit suite 6041 passed /
+      13 skipped / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
 
 ### Tasks 15–34: Per-quest variance and rebalance pass (one task per script)
 For each quest below: open the relevant entries in
