@@ -800,11 +800,33 @@ branches/endings, never removing/loosening what's there) and running the full qu
       on changed files 0 issues. ➕ Note: trim staying optimal *after* the efficient burn is intended — it's
       the earned Oberth payoff for fuel discipline, gated behind a real prerequisite, not a flat free
       choice; net feel of the reworked economy is a manual-playtest acceptance item (not test-gated).
-- [ ] **Task 28 — `plague-crisis.ts`**: rebalance `fast_route` vs `safe_route` so the fast path isn't
+- [x] **Task 28 — `plague-crisis.ts`**: rebalance `fast_route` vs `safe_route` so the fast path isn't
       strictly dominant (A); give `fast_check`'s "precise maneuver" an actual player decision point
       instead of a silent auto-roll (D). Leave the plague/quarantine premise overlap alone per the
       existing README caveat — this task is about this quest's own internal balance, not merging it with
-      `quarantine.ts`. Write/extend tests; run tests.
+      `quarantine.ts`. Write/extend tests; run tests. Done: (1) **fast de-dominated (A)** — the fast
+      shortcut's bad roll now costs a **repair bill** (`fast_hit`: `credits -= 600`, `rating -= 5`) that
+      the safe route never pays, so `safe_route` becomes the risk-averse floor with a genuine niche
+      instead of a strictly-dominated option. The locked `fast_hit`/`fast_clear` **time** numbers (time 3
+      / time 7) are untouched — the two locked tests (fast-clear-treat-all, costly-detour-too-late) assert
+      only time/ending, never credits/rating, so the added cost lands under them. (2) **genuine player
+      decision (D)** — instead of "fast vs safe" collapsing into one hidden coin flip, the briefing now
+      offers a **third, deliberately higher-variance route** the player chooses: `fast_route_reckless`
+      (full burn, `time -= 1`) → `fast_check_reckless` (clear on `roll >= 5` → best time in the game,
+      treat_all with margin; hit → `time -= 5` + a heavy `credits -= 1200`/`rating -= 12` bill == safe's
+      time PLUS a cost, so even the reckless downside doesn't dominate safe). The player now picks their
+      risk appetite (steady / reckless / safe) rather than getting a silent roll. (3) **roll narrated** —
+      the four silent `label: "..."` autoExecute jumps straight to `arrival` are replaced by distinct
+      beat nodes (`fast_clear_beat`/`fast_hit_beat`, `reckless_clear_beat`/`reckless_hit_beat`), each
+      auto-advancing on to `arrival` — so `advanceAuto` still lands the two locked tests on their exact
+      terminal/time (it simply traverses the new beats). Extended the Plague Crisis describe block with 8
+      new `it(...)` blocks (steady clean = no bill, steady clipped = bill, safe = no bill, three-distinct-
+      routes, reckless clean = most time + treat_all margin, reckless hit = safe-time + heavy bill,
+      reckless-hit-strictly-worse-than-safe, distinct steady/reckless narration beats) — no existing
+      assertion touched. Cyrillic baseline regenerated (plague-crisis 18→32, catalog literals). Full unit
+      suite 6129 passed / 13 skipped (the lone `sessionCompetence` battle-ready milestone is the known
+      stochastic campaign gate, unrelated — passed on rerun); `tsc --noEmit` clean; `eslint` on changed
+      files 0 issues.
 - [ ] **Task 29 — `quarantine.ts`**: give the darkest choice ("vent to space") its own dedicated ending
       instead of falling through to a generic one (B); surface the panic/containment critical thresholds
       to the player somehow (tooltip/UI hint or in-fiction warning) so a "good" combo of choices doesn't

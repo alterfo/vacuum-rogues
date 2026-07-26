@@ -1010,6 +1010,119 @@ describe("Plague Crisis quest", () => {
       expect(vm1.getParam("time")).toBe(vm2.getParam("time"));
     }
   });
+
+  // Task 28 (A): the fast shortcut is a genuine gamble, not strictly dominant —
+  // a bad field crossing now costs a repair bill (credits/rating) the safe route
+  // never pays, so the slow way is the risk-averse floor with a real niche.
+  it("a clean steady crossing pays no repair bill", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("fast_route");
+    vm.setParam("roll", 8); // clear
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("arrival");
+    expect(vm.getParam("time")).toBe(7);
+    expect(vm.getParam("credits")).toBe(0);
+    expect(vm.getParam("rating")).toBe(100);
+  });
+
+  it("a clipped steady crossing costs a repair bill and reputation", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("fast_route");
+    vm.setParam("roll", 0); // hit
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("arrival");
+    expect(vm.getParam("time")).toBe(3);
+    expect(vm.getParam("credits")).toBe(-600);
+    expect(vm.getParam("rating")).toBe(95);
+  });
+
+  it("the safe route pays no repair bill (its risk-averse niche)", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("safe_route");
+    expect(vm.currentLocation().id).toBe("arrival");
+    expect(vm.getParam("time")).toBe(4);
+    expect(vm.getParam("credits")).toBe(0);
+    expect(vm.getParam("rating")).toBe(100);
+  });
+
+  // Task 28 (D): the reckless full-burn is a genuine player decision — a third,
+  // higher-variance route the player picks, not a hidden coin flip.
+  it("the briefing offers three genuinely distinct routes", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("fast_route");
+    expect(ids).toContain("fast_route_reckless");
+    expect(ids).toContain("safe_route");
+  });
+
+  it("a reckless clean crossing wins the most time in the game (treat_all with margin)", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("fast_route_reckless"); // time 9
+    vm.setParam("roll", 9); // clear (roll >= 5)
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("arrival");
+    expect(vm.getParam("time")).toBe(9);
+    expect(vm.getParam("credits")).toBe(0);
+    vm.execute("treat_all"); // time 4
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("ending_treat_all");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("time")).toBe(4);
+  });
+
+  it("a reckless hit costs a heavy repair bill and leaves only safe-route time", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("fast_route_reckless"); // time 9
+    vm.setParam("roll", 0); // hit (roll < 5)
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("arrival");
+    expect(vm.getParam("time")).toBe(4); // same time as the safe route...
+    expect(vm.getParam("credits")).toBe(-1200); // ...but with a heavy bill safe never pays
+    expect(vm.getParam("rating")).toBe(88);
+  });
+
+  it("a reckless hit is strictly worse than the safe route (safe is not dominated)", () => {
+    const reckless = new QuestVM(plagueCrisisScript, 1);
+    reckless.execute("fast_route_reckless");
+    reckless.setParam("roll", 0);
+    advanceAuto(reckless);
+    const safe = new QuestVM(plagueCrisisScript, 1);
+    safe.execute("safe_route");
+    // Same arrival time, but the gamble's downside carries a cost the safe road avoids.
+    expect(reckless.getParam("time")).toBe(safe.getParam("time"));
+    expect(reckless.getParam("credits")).toBeLessThan(safe.getParam("credits"));
+    expect(reckless.getParam("rating")).toBeLessThan(safe.getParam("rating"));
+  });
+
+  // Task 28 (D): each field crossing narrates its roll through a distinct beat
+  // node rather than a silent auto-jump straight to arrival.
+  it("the steady crossing routes through distinct clear/hit narration beats", () => {
+    const clear = new QuestVM(plagueCrisisScript, 1);
+    clear.execute("fast_route");
+    clear.setParam("roll", 8);
+    clear.execute(clear.availableTransitions()[0].id); // one auto step
+    expect(clear.currentLocation().id).toBe("fast_clear_beat");
+
+    const hit = new QuestVM(plagueCrisisScript, 1);
+    hit.execute("fast_route");
+    hit.setParam("roll", 0);
+    hit.execute(hit.availableTransitions()[0].id);
+    expect(hit.currentLocation().id).toBe("fast_hit_beat");
+  });
+
+  it("the reckless crossing routes through distinct clear/hit narration beats", () => {
+    const clear = new QuestVM(plagueCrisisScript, 1);
+    clear.execute("fast_route_reckless");
+    clear.setParam("roll", 9);
+    clear.execute(clear.availableTransitions()[0].id);
+    expect(clear.currentLocation().id).toBe("reckless_clear_beat");
+
+    const hit = new QuestVM(plagueCrisisScript, 1);
+    hit.execute("fast_route_reckless");
+    hit.setParam("roll", 0);
+    hit.execute(hit.availableTransitions()[0].id);
+    expect(hit.currentLocation().id).toBe("reckless_hit_beat");
+  });
 });
 
 describe("Quest script registry", () => {

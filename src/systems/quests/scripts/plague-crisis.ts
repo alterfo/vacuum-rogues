@@ -4,8 +4,19 @@ import type { QuestScript } from "../QuestScript";
 // A `time` budget drains with every choice; if it hits zero the colony is lost
 // (a `critMin` redirect to ending_too_late — the time-pressure spine).
 // Choice points:
-//   1. The route — the fast asteroid-field shortcut (roll: clean or a costly
-//      detour) vs the safe but slow long way around.
+//   1. The route — a genuine risk decision, three distinct shapes, not a hidden
+//      coin flip:
+//        - fast_route (steady hands): the careful shortcut. 70% clean → most
+//          time; 30% a clipped hull → costly detour (time + a repair bill).
+//        - fast_route_reckless (full burn): the player deliberately doubles the
+//          stake. 50% a stunning run (the most time in the game, treat_all with
+//          margin); 50% a hard hit (safe-route time PLUS a heavy repair bill).
+//        - safe_route (long way): guaranteed, cheap, no repair bill — but never
+//          enough time for treat_all. The risk-averse floor that keeps the fast
+//          gambles honest instead of strictly dominant.
+//      Each field crossing narrates its roll through a distinct beat node
+//      (fast_clear_beat/fast_hit_beat, reckless_clear_beat/reckless_hit_beat)
+//      rather than a silent auto-jump.
 //   2. The distribution — triage the salvageable fast, treat EVERYONE (slow,
 //      only viable if you arrived early), or hold back doses to profiteer.
 // Outcomes:
@@ -61,14 +72,21 @@ export const plagueCrisisScript: QuestScript = {
         {
           id: "fast_route",
           label:
-            "Напрямик через астероидное поле — минус два часа годности, но поле может выкинуть фокус",
+            "Через астероидное поле ровным ходом, держась чистых прогалов — минус два часа годности; поле всё равно может выкинуть фокус",
           toLocation: "fast_check",
           effects: ["roll = random(0,9)", "time -= 2"],
         },
         {
+          id: "fast_route_reckless",
+          label:
+            "На форсаже, ва-банк сквозь самую гущу — минус всего час годности, но и секунды на реакцию нет: пройдёте чисто — выиграете уйму времени, ошибётесь — потеряете и часы, и корпус",
+          toLocation: "fast_check_reckless",
+          effects: ["roll = random(0,9)", "time -= 1"],
+        },
+        {
           id: "safe_route",
           label:
-            "В обход, чистым коридором — надёжно, но сожжёт шесть часов годности",
+            "В обход, чистым коридором — надёжно и без единой царапины, но сожжёт шесть часов годности",
           toLocation: "arrival",
           effects: ["time -= 6"],
         },
@@ -76,21 +94,94 @@ export const plagueCrisisScript: QuestScript = {
     },
     {
       id: "fast_check",
-      text: "Глыбы льда и камня несутся навстречу, задевая щиты. Один точный манёвр — и вы выиграете драгоценное время. Одна ошибка — и придётся петлять в обломках, теряя час за часом...",
+      text: "Глыбы льда и камня несутся навстречу, задевая щиты. Вы ведёте корабль ровно, читая поток и держась прогалов. Один точный манёвр — и вы выиграете драгоценное время. Одна ошибка — и придётся петлять в обломках, теряя час за часом...",
       transitions: [
         {
           id: "fast_clear",
-          label: "...",
-          toLocation: "arrival",
+          label: "Чистый проход",
+          toLocation: "fast_clear_beat",
           condition: "roll >= 3",
           effects: ["time -= 1"],
           autoExecute: true,
         },
         {
           id: "fast_hit",
-          label: "...",
+          label: "Задели глыбу",
+          toLocation: "fast_hit_beat",
+          effects: ["time -= 5", "credits -= 600", "rating -= 5"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "fast_clear_beat",
+      text: "Вы читаете поток камней как открытую книгу — короткий импульс двигателя, и «окно» в поле проскакивает мимо борта. Ни царапины, ни лишней минуты потеряно. Госпиталь уже на радаре.",
+      transitions: [
+        {
+          id: "fast_clear_done",
+          label: "К шлюзу госпиталя",
           toLocation: "arrival",
-          effects: ["time -= 5"],
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "fast_hit_beat",
+      text: "Глыба выныривает из тени слишком поздно. Удар вспарывает обшивку по касательной, щиты воют, и вам приходится петлять в обломках, теряя час за часом. Корабль дотянет, но ремонт после такого влетит в копейку.",
+      transitions: [
+        {
+          id: "fast_hit_done",
+          label: "Кое-как — к госпиталю",
+          toLocation: "arrival",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "fast_check_reckless",
+      text: "Вы вжимаете рычаг тяги до упора и ныряете в самую гущу — на этой скорости поле либо расступится, либо разотрёт вас в труху. Права на ошибку нет, зато если проскочите — выиграете не часы, а сутки.",
+      transitions: [
+        {
+          id: "reckless_clear",
+          label: "Проскочили",
+          toLocation: "reckless_clear_beat",
+          condition: "roll >= 5",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "reckless_hit",
+          label: "Влетели боком",
+          toLocation: "reckless_hit_beat",
+          effects: ["time -= 5", "credits -= 1200", "rating -= 12"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "reckless_clear_beat",
+      text: "Безумие оправдалось: вы проносите корабль сквозь поле на форсаже, обходя глыбы на волосок. Двигатели пели, обшивка держалась — и вы выигрываете столько времени, сколько не даст ни один осторожный курс. Медики не поверят своим глазам.",
+      transitions: [
+        {
+          id: "reckless_clear_done",
+          label: "На всех парах — к госпиталю",
+          toLocation: "arrival",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "reckless_hit_beat",
+      text: "Скорость не прощает. Корабль влетает боком в каменную реку, обшивку рвёт лоскутами, что-то взрывается в кормовом отсеке. Вы кое-как выправляете курс, но и время, и корпус теперь в клочья — ва-банк не сыграл.",
+      transitions: [
+        {
+          id: "reckless_hit_done",
+          label: "На честном слове — к госпиталю",
+          toLocation: "arrival",
+          effects: [],
           autoExecute: true,
         },
       ],

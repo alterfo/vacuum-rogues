@@ -75,7 +75,7 @@
   "src/systems/quests/scripts/life-support.ts": 37,
   "src/systems/quests/scripts/locked-room.ts": 30,
   "src/systems/quests/scripts/orbital-escape.ts": 30,
-  "src/systems/quests/scripts/plague-crisis.ts": 18,
+  "src/systems/quests/scripts/plague-crisis.ts": 32,
   "src/systems/quests/scripts/quarantine.ts": 26,
   "src/systems/quests/scripts/reactor.ts": 23,
   "src/systems/quests/scripts/sabotage-heist.ts": 30,
