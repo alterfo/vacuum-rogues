@@ -440,6 +440,137 @@ describe("Gravity Slalom quest", () => {
     const text = vm.interpolate(vm.currentLocation().text);
     expect(text).toContain("74");
   });
+
+  // --- Task 22: funnel-cell coast gambles + honest seed-variance ---
+
+  it("hidden coast rolls exist, start at 0 and are not shown in the UI", () => {
+    const vm = new QuestVM(gravitySlalomScript, 7);
+    expect(vm.getParam("coast_a3")).toBe(0);
+    expect(vm.getParam("coast_c2")).toBe(0);
+    const coastParams = gravitySlalomScript.params.filter((p) =>
+      p.id.startsWith("coast_"),
+    );
+    expect(coastParams).toHaveLength(2);
+    for (const p of coastParams) expect(p.showInUI).toBeFalsy();
+  });
+
+  it("the coast rolls do not consume the constructor RNG (window rolls unchanged)", () => {
+    // Same seed, read the seed-determined windows — adding coast_* params with
+    // initial:0 must not shift the four window_* rolls off their old values.
+    for (const seed of [1, 7, 42]) {
+      const vm = new QuestVM(gravitySlalomScript, seed);
+      // Windows are still a clean 0/1 config (regression: coast params inert).
+      for (let i = 1; i <= 4; i++) {
+        const w = vm.getParam(`window_${i}`);
+        expect(w === 0 || w === 1).toBe(true);
+      }
+    }
+  });
+
+  it("cell_a3 is now a real choice (ровная тяга vs инерционный заход)", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_a2");
+    vm.execute("a2_to_a3");
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("a3_to_b3");
+    expect(ids).toContain("a3_coast");
+    expect(ids.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("cell_c2 is now a real choice (ровная тяга vs инерционный заход)", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_b1");
+    vm.execute("b1_to_c1");
+    vm.execute("c1_to_c2");
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("c2_to_c3");
+    expect(ids).toContain("c2_coast");
+    expect(ids.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("a3 coast WIN (coast_a3=1) drifts to B3 for only 6 fuel", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_a2"); // 74
+    vm.execute("a2_to_a3"); // 48
+    vm.execute("a3_coast"); // rolls coast_a3, moves to gate
+    expect(vm.currentLocation().id).toBe("a3_coast_gate");
+    vm.setParam("coast_a3", 1); // force the favourable branch
+    const gate = vm.availableTransitions();
+    expect(gate).toHaveLength(1);
+    expect(gate[0].id).toBe("a3cg_win");
+    vm.execute("a3cg_win"); // 48 - 6 = 42
+    expect(vm.getParam("fuel")).toBe(42);
+    expect(vm.currentLocation().id).toBe("a3_coast_win");
+    vm.execute("a3cw_to_b3");
+    expect(vm.currentLocation().id).toBe("cell_b3");
+  });
+
+  it("a3 coast LOSE (coast_a3=0) overshoots for 40 fuel, its own beat", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_a2"); // 74
+    vm.execute("a2_to_a3"); // 48
+    vm.execute("a3_coast");
+    vm.setParam("coast_a3", 0); // force the overshoot branch
+    const gate = vm.availableTransitions();
+    expect(gate).toHaveLength(1);
+    expect(gate[0].id).toBe("a3cg_lose");
+    vm.execute("a3cg_lose"); // 48 - 40 = 8
+    expect(vm.getParam("fuel")).toBe(8);
+    expect(vm.currentLocation().id).toBe("a3_coast_lose");
+    vm.execute("a3cl_to_b3");
+    expect(vm.currentLocation().id).toBe("cell_b3");
+  });
+
+  it("a3 coast win and lose beats carry distinct narration", () => {
+    const winLoc = gravitySlalomScript.locations.find(
+      (l) => l.id === "a3_coast_win",
+    )!;
+    const loseLoc = gravitySlalomScript.locations.find(
+      (l) => l.id === "a3_coast_lose",
+    )!;
+    expect(winLoc.text).not.toEqual(loseLoc.text);
+  });
+
+  it("c2 coast WIN (coast_c2=1) reaches the finish nearly free", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_b1"); // 74
+    vm.execute("b1_to_c1"); // 48
+    vm.execute("c1_to_c2"); // 22
+    vm.execute("c2_coast");
+    expect(vm.currentLocation().id).toBe("c2_coast_gate");
+    vm.setParam("coast_c2", 1);
+    const gate = vm.availableTransitions();
+    expect(gate).toHaveLength(1);
+    expect(gate[0].id).toBe("c2cg_win");
+    vm.execute("c2cg_win"); // 22 - 4 = 18
+    expect(vm.getParam("fuel")).toBe(18);
+    expect(vm.currentLocation().id).toBe("c2_coast_win");
+    vm.execute("c2cw_to_c3");
+    expect(vm.currentLocation().id).toBe("cell_c3");
+    const arrival = vm.availableTransitions();
+    vm.execute(arrival[0].id);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("fuel")).toBe(18);
+  });
+
+  it("c2 coast LOSE (coast_c2=0) at low reserve busts the run", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_b1"); // 74
+    vm.execute("b1_to_c1"); // 48
+    vm.execute("c1_to_c2"); // 22
+    vm.execute("c2_coast");
+    vm.setParam("coast_c2", 0);
+    vm.execute("c2cg_lose"); // 22 - 40 = -18 → critMin fires
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.currentLocation().id).toBe("quest_failure_fuel");
+  });
+
+  it("Фэянин speaks in the middle stretch (comms lines on B-row cells)", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_b1");
+    expect(vm.interpolate(vm.currentLocation().text)).toContain("Фэянин");
+  });
 });
 
 // Helper: advance all auto-execute transitions until a manual choice or finished

@@ -630,11 +630,35 @@ branches/endings, never removing/loosening what's there) and running the full qu
       still resolves to a success ending, alliance-reward-grounded-in-payout) — no existing assertion
       touched. Cyrillic baseline regenerated (first-contact 26→30 for the new catalog literals). Full
       unit suite 6094 passed / 0 failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues.
-- [ ] **Task 22 — `gravity-slalom.ts`**: fix the header comment's false claim of seed-dependent routing
+- [x] **Task 22 — `gravity-slalom.ts`**: fix the header comment's false claim of seed-dependent routing
       — either make the route actually vary by seed, or correct the comment (A, section 4); turn at
       least some of the single-button "press continue" cells into real choices (section 4); give the
       silent scientist at least one line through the quest's middle stretch (H). Write/extend tests; run
-      tests.
+      tests. Done: (1) **Header comment corrected AND route made to genuinely vary (A)** — the false
+      «оптимальная стратегия зависит от seed» line was rewritten honestly: the four windows are
+      seed-random so a route's *fuel cost* varies per run, but the double-diagonal A1→B2→C3 always
+      reaches the finish (worst case 80 forsazh, remainder 20 ≥ 10 — this outcome is test-locked in
+      `questScripts.test.ts`, so the economy could not be rebalanced to make it fail). Real per-run
+      variance was instead added via the funnel-cell coast gambles below, and the comment now describes
+      the actual mechanics. (2) **Funnel cells → real choices (section 4)** — the single-button dead-end
+      cells `cell_a3` and `cell_c2` each gained a second option: an inertia-coast gamble (`a3_coast` /
+      `c2_coast`) that rolls a hidden `coast_a3`/`coast_c2` param (`= random(0,1)`, `initial:0` so it
+      does NOT consume the constructor RNG stream — the four window rolls keep their exact seed-determined
+      values, verified by a new regression test) at the moment of choice. Win → near-free drift
+      (a3 −6 / c2 −4), lose → costly overshoot (−40) vs the safe ровная тяга (−26): EV slightly favours
+      the gamble but the variance can bust the fuel reserve, so it is a genuine bet. Each outcome routes
+      to its own beat node (`a3_coast_win`/`_lose`, `c2_coast_win`/`_lose`) with distinct narration — no
+      more silent roll. (3) **Scientist voice in the middle stretch (H)** — «Фэянин по связи» comms lines
+      were woven into the mid cells `cell_a2`/`cell_b1`/`cell_b2`/`cell_b3`/`cell_c1` and into every
+      coast-outcome beat (relief on a clean drift, gritted teeth on an overshoot), so the previously
+      silent scientist is present throughout, not just intro + ending. Extended the Gravity Slalom
+      describe block in `questScripts.test.ts` with 10 new `it(...)` blocks (hidden coast params exist /
+      start 0 / not-shown, coast rolls don't consume constructor RNG, a3+c2 now offer ≥2 transitions,
+      a3 win/lose fuel + distinct-beat, c2 win-reaches-finish + c2 lose-busts-reserve, distinct-narration
+      guard, Фэянин-in-middle-stretch) — no existing assertion touched. Cyrillic baseline regenerated
+      (gravity-slalom 38→48 for the new catalog literals). Full unit suite 6091 passed / 13 skipped / 0
+      failed; `tsc --noEmit` clean; `eslint` on changed files 0 issues (repo-wide `npm run lint` fails
+      identically on HEAD — pre-existing `no-explicit-any` test-file backlog, unrelated).
 - [ ] **Task 23 — `hostage-rescue.ts`**: rebalance `snipe_first` (currently removes all risk for free)
       and `pay_ransom` (currently a telegraphed trap with no real upside) so both carry a genuine
       tradeoff (A); give the antagonist at least one more beat before vanishing (H). Write/extend tests;
