@@ -200,6 +200,86 @@ describe("Customs quest", () => {
     expect(text).toContain("1234");
     expect(text).toContain("75");
   });
+
+  // ── Task 18 (quest-and-hub-polish-pass) ─────────────────────────────────────
+
+  it("a caught smuggler is dispatched via the distinct next_ship_caught beat (B)", () => {
+    const vm = new QuestVM(customsScript, 1);
+    vm.setParam("suspicion", 9);
+    vm.execute("scan"); // → scan_check_high
+    vm.execute(vm.availableTransitions()[0].id); // high_confirmed → found_smuggler
+    expect(vm.currentLocation().id).toBe("found_smuggler");
+    vm.execute("collect_fine"); // money += 1000 → next_ship_caught
+    expect(vm.currentLocation().id).toBe("next_ship_caught");
+    expect(vm.getParam("money")).toBe(800); // -200 scan + 1000 fine
+  });
+
+  it("a waved-through ship is dispatched via the distinct next_ship_waved beat (B)", () => {
+    const vm = new QuestVM(customsScript, 1);
+    vm.execute("pass"); // → next_ship_waved
+    expect(vm.currentLocation().id).toBe("next_ship_waved");
+  });
+
+  it("the caught and waved next-ship beats read differently (branched per outcome)", () => {
+    const caught = customsScript.locations.find(
+      (l) => l.id === "next_ship_caught",
+    );
+    const waved = customsScript.locations.find(
+      (l) => l.id === "next_ship_waved",
+    );
+    expect(caught).toBeDefined();
+    expect(waved).toBeDefined();
+    expect(caught!.text).not.toBe(waved!.text);
+    // Both still advance the shift identically (shipNum += 1, suspicion re-roll).
+    for (const node of [caught!, waved!]) {
+      const adv = node.transitions[0];
+      expect(adv.autoExecute).toBe(true);
+      expect(adv.toLocation).toBe("inspect_decision");
+      expect(adv.effects).toContain("shipNum += 1");
+    }
+  });
+
+  it("a false inspection is honestly career-ending — no misleading «ещё пара» reprieve (E)", () => {
+    const clean = customsScript.locations.find((l) => l.id === "found_clean")!;
+    const text =
+      typeof clean.text === "string" ? clean.text : clean.text.join(" ");
+    // The old text promised «ещё пара таких досмотров» while a single false
+    // inspection actually ends the shift — that contradiction is now gone.
+    expect(text).not.toContain("Ещё пара");
+    expect(text).toMatch(/второго шанса не будет|одной такой ошибки/);
+    // ...and the data matches: the clean path routes straight to failure.
+    const scandal = clean.transitions.find((t) => t.id === "accept_scandal")!;
+    expect(scandal.toLocation).toBe("quest_failure_rating");
+  });
+
+  it("inspect_decision is a captain-vignette pool; every variant keeps the HUD placeholders (F/H)", () => {
+    const loc = customsScript.locations.find(
+      (l) => l.id === "inspect_decision",
+    )!;
+    expect(Array.isArray(loc.text)).toBe(true);
+    const variants = loc.text as string[];
+    expect(variants.length).toBeGreaterThanOrEqual(3);
+    for (const v of variants) {
+      for (const token of ["{shipNum}", "{suspicion}", "{money}", "{rating}"]) {
+        expect(v).toContain(token);
+      }
+    }
+  });
+
+  it("different seeds surface different captain vignettes at the ship arrival (replay variety)", () => {
+    const texts = new Set<string>();
+    for (let seed = 0; seed < 40; seed++) {
+      texts.add(new QuestVM(customsScript, seed).currentLocationText());
+    }
+    expect(texts.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("the win text frames collected fines as the treasury's quota, not the player's payout (C)", () => {
+    const win = customsScript.locations.find((l) => l.id === "quest_success")!;
+    const text = win.text as string;
+    expect(text).toContain("казну");
+    expect(text).toContain("не в ваш карман");
+  });
 });
 
 describe("Gravity Slalom quest", () => {

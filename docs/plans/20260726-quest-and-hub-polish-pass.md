@@ -538,10 +538,33 @@ branches/endings, never removing/loosening what's there) and running the full qu
       winnable brute-force, careless-dump-always-fails) — no existing assertion touched. Cyrillic baseline
       regenerated (cargo-sort 66→71 for the new terminal/margin literals). Full unit suite exit 0; `tsc
       --noEmit` clean; `eslint` on changed files 0 issues.
-- [ ] **Task 18 — `customs.ts`**: branch `next_ship` per actual outcome; make the "5000₡ goal" text
+- [x] **Task 18 — `customs.ts`**: branch `next_ship` per actual outcome; make the "5000₡ goal" text
       actually gate the real reward, or rewrite it; fix the "a couple more inspections" text that
       contradicts an instant-fail-on-first-mistake reality (E); give at least a few of the 20 ships
-      distinct captains/flavor (F, H). Write/extend tests; run tests.
+      distinct captains/flavor (F, H). Write/extend tests; run tests. Done: (1) **Branched next-ship (B)**
+      — the single shared `next_ship` node is replaced by `next_ship_caught` (a caught smuggler provoded
+      with a smug, law-won beat) and `next_ship_waved` (the uneasy "you'll never know what was in the
+      trunk" wave-through); `pass` → waved, `collect_fine` → caught, both auto-advance identically
+      (`shipNum += 1` → critMax fires `check_final` at ship 21; suspicion re-rolled), so every existing
+      behavioural assertion still lands on `inspect_decision`/`check_final` as before. (2) **Reward framing
+      (C)** — `quest_success` now states the collected штрафы go "в казну поста… не в ваш карман" and the
+      real reward is the kept post + a fixed premium (the quest-board reward), so the 5000 quota is no
+      longer implied to be pocketed cash. (3) **Instant-fail honesty (E)** — `found_clean` dropped the
+      misleading «Ещё пара таких досмотров» reprieve for "одной такой ошибки хватает… второго шанса не
+      будет", and `accept_scandal` now routes straight to `quest_failure_rating` (rating 100 − 500 always
+      < 0, so the crit would land there anyway) — data matches text. (4) **Captain flavor (F/H)** —
+      `inspect_decision.text` is now a 5-variant captain-vignette pool (nervous freighter work-man, silk
+      merchant prince, gruff ex-military, family hauler with a crying kid on comms, glossy corporate
+      courier), each keeping the `{shipNum}/{suspicion}/{money}/{rating}` HUD + 5000-quota framing. ➕
+      Engine note: the Task-14 resolver keys on `(seed, locationId)`, so a pool gives **per-playthrough**
+      captain variety (each shift a different captain voice), not per-ship-within-run — genuine per-ship
+      distinct nodes are blocked by the locked tests that assert the loop returns to `inspect_decision`;
+      per-seed replay variety is the sanctioned Task-14 approach (matches Tasks 15–17 precedent). Extended
+      the Customs describe block with 7 new `it(...)` blocks (caught/waved distinct beats + identical
+      advance, no-«ещё пара» instant-fail routing, pool-with-HUD-placeholders, per-seed vignette variety,
+      treasury-not-payout win text) — no existing assertion touched. Cyrillic baseline regenerated
+      (customs 22→26). Full unit suite 6070 passed / 13 skipped / 0 failed; `tsc --noEmit` clean; `eslint`
+      on changed files 0 issues.
 - [ ] **Task 19 — `derelict-salvage.ts`**: make the boarding method (stealth/force/etc.) show up in at
       least one of the 4 endings (B); add a credit penalty to the catastrophic ending (C); either wire
       the `sealed` param into an actual branch or remove it (I). Write/extend tests; run tests.
