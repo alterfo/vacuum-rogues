@@ -64,7 +64,7 @@
   "src/systems/quests/campaignChain.ts": 27,
   "src/systems/quests/scripts/auction.ts": 61,
   "src/systems/quests/scripts/boarding-standoff.ts": 30,
-  "src/systems/quests/scripts/cargo-sort.ts": 66,
+  "src/systems/quests/scripts/cargo-sort.ts": 71,
   "src/systems/quests/scripts/customs.ts": 22,
   "src/systems/quests/scripts/derelict-salvage.ts": 38,
   "src/systems/quests/scripts/evacuation.ts": 22,

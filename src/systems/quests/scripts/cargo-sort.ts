@@ -1,16 +1,26 @@
 import type { QuestScript } from "../QuestScript";
 
 // Дизайн: Диспетчер орбитального склада. 5 прибывающих транспортов (A-E),
-// 3 разгрузочных дока. Доки не могут смешивать типы. Время разгрузки транспорта
-// random(1,4) часов. Один транспорт ломается (+2 часа, определяется random(0,4)).
-// Распредели транспорты по докам так, чтобы ни один док не превысил 12 ч.
+// 3 разгрузочных дока. Время разгрузки транспорта random(1,4) часов. Один
+// транспорт ломается (+2 часа, определяется random(0,4)). Распредели транспорты
+// по докам так, чтобы ни один док не превысил 8 ч (порог смены).
 // Победа: все 5 назначены и overtime (сверхурочные доки) == 0.
+//
+// Баланс: суммарная работа 10-20 ч против ёмкости 3×8=24 ч — узкий бюджет,
+// требующий продуманной раскладки: небрежная свалка бортов в один док теперь
+// реально проваливает смену (жадная эвристика "в самый пустой док" срывается на
+// части сидов), но у каждого сида есть выигрышная раскладка.
+//
+// Финал ветвится по качеству исхода, а не одним общим текстом:
+//   overtime == 0 → quest_success (запас) либо quest_success_tight (док впритык),
+//   overtime == 1 → quest_failure_overtime (один сорванный док, поправимо),
+//   overtime >= 2 → quest_failure_severe (обвал смены).
 //
 // Технически: QuestVM не поддерживает param += param, поэтому:
 // 1. Инит: init_breakdown → один из break_ship==N → time_N += 2 → dispatch_hub
 // 2. Назначение: select_X → assign_X_dockN → assign_to_dockN (роутинг через
 //    pending_time = time_X + 0, затем 6 autoExecute по pending_time) → check_progress
-// 3. Финал: check_dock1/2/3 → overload_dockN (overtime++) → final_verdict
+// 3. Финал: check_dock1/2/3 → overload_dockN (overtime++) → final_verdict → margin_check
 export const cargoSortScript: QuestScript = {
   id: "cargo-sort",
   title: "Сортировка грузов",
@@ -108,7 +118,7 @@ export const cargoSortScript: QuestScript = {
       initial: 0,
       showInUI: true,
     },
-    // Overloaded dock count (> 12h)
+    // Overloaded dock count (> 8h)
     {
       id: "overtime",
       name: "Перегрузы",
@@ -213,9 +223,9 @@ export const cargoSortScript: QuestScript = {
     {
       id: "dispatch_hub",
       text:
-        "ДИСПЕТЧЕРСКАЯ. Клаксоны воют, табло мигает красным. Пять бортов висят на орбите и жгут топливо, три дока ждут груз. Порог дока — 12 часов: перевалишь — уходит в сверхурочные, а это сорванные рейсы, разъярённые клиенты и твоя голова на плахе. Распредели борта так, чтобы ни один док не лопнул.\n" +
+        "ДИСПЕТЧЕРСКАЯ. Клаксоны воют, табло мигает красным. Пять бортов висят на орбите и жгут топливо, три дока ждут груз. Порог дока — 8 часов: перевалишь — уходит в сверхурочные, а это сорванные рейсы, разъярённые клиенты и твоя голова на плахе. Бюджет тесный — свалишь два тяжёлых борта в один док, и он лопнет. Распредели борта с умом.\n" +
         "Борта на разгрузку — A: {time_A}ч | B: {time_B}ч | C: {time_C}ч | D: {time_D}ч | E: {time_E}ч\n" +
-        "Загрузка доков — Док 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 12ч)\n" +
+        "Загрузка доков — Док 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 8ч)\n" +
         "Пришвартовано: {assigned_count}/5. Бригадир орёт с эстакады: «Кого заводим?!»",
       transitions: [
         {
@@ -259,7 +269,7 @@ export const cargoSortScript: QuestScript = {
     // Step 3: Select dock for each transport
     {
       id: "select_A",
-      text: "Борт A тянет на швартовку — {time_A} ч под краном. Куда его, пока клиент не поседел? Считай остаток до порога в 12 ч.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
+      text: "Борт A тянет на швартовку — {time_A} ч под краном. Куда его, пока клиент не поседел? Считай остаток до порога в 8 ч.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_A_dock1",
@@ -301,7 +311,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "select_B",
-      text: "Борт B подан к причалу — {time_B} ч под краном. Бригадир тычет пальцем в табло: «Ну?!» Ищи док, где после B ещё останется место до 12 ч.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
+      text: "Борт B подан к причалу — {time_B} ч под краном. Бригадир тычет пальцем в табло: «Ну?!» Ищи док, где после B ещё останется место до 8 ч.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_B_dock1",
@@ -343,7 +353,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "select_C",
-      text: "Борт C заходит на стыковку — {time_C} ч работы захватам. Где ему хватит места, не пробив потолок в 12 ч?\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
+      text: "Борт C заходит на стыковку — {time_C} ч работы захватам. Где ему хватит места, не пробив потолок в 8 ч?\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_C_dock1",
@@ -427,7 +437,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "select_E",
-      text: "Последний борт, E, зависает над стыком — {time_E} ч разгрузки. Одно неверное назначение сейчас — и док лопнет за 12 ч. Прикинь остатки и решай.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
+      text: "Последний борт, E, зависает над стыком — {time_E} ч разгрузки. Одно неверное назначение сейчас — и док лопнет за 8 ч. Прикинь остатки и решай.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_E_dock1",
@@ -655,16 +665,16 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 6: Check each dock for overload (> 12h)
+    // Step 6: Check each dock for overload (> 8h)
     {
       id: "check_dock1",
-      text: "Табло Дока 1 гаснет в расчётах: уложились в 12 или ушли в красное?",
+      text: "Табло Дока 1 гаснет в расчётах: уложились в 8 или ушли в красное?",
       transitions: [
         {
           id: "dock1_ok",
           label: "...",
           toLocation: "check_dock2",
-          condition: "dock1_load <= 12",
+          condition: "dock1_load <= 8",
           effects: [],
           autoExecute: true,
         },
@@ -692,13 +702,13 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "check_dock2",
-      text: "Черёд Дока 2: стрелка нагрузки замерла у отметки 12...",
+      text: "Черёд Дока 2: стрелка нагрузки замерла у отметки 8...",
       transitions: [
         {
           id: "dock2_ok",
           label: "...",
           toLocation: "check_dock3",
-          condition: "dock2_load <= 12",
+          condition: "dock2_load <= 8",
           effects: [],
           autoExecute: true,
         },
@@ -732,7 +742,7 @@ export const cargoSortScript: QuestScript = {
           id: "dock3_ok",
           label: "...",
           toLocation: "final_verdict",
-          condition: "dock3_load <= 12",
+          condition: "dock3_load <= 8",
           effects: [],
           autoExecute: true,
         },
@@ -759,7 +769,10 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 7: Final verdict
+    // Step 7: Final verdict — branch by outcome quality, not one shared line.
+    // overtime == 0 → margin check (comfortable vs razor-thin win)
+    // overtime == 1 → one dock over (salvageable)
+    // overtime >= 2 → shift collapse
     {
       id: "final_verdict",
       text: "Клаксоны смолкают. Диспетчер выдыхает и смотрит на сводку смены — доков в перегрузе: {overtime}",
@@ -767,31 +780,117 @@ export const cargoSortScript: QuestScript = {
         {
           id: "verdict_success",
           label: "...",
-          toLocation: "quest_success",
+          toLocation: "margin_check1",
           condition: "overtime == 0",
           effects: [],
           autoExecute: true,
         },
         {
-          id: "verdict_failure",
+          id: "verdict_light",
           label: "...",
           toLocation: "quest_failure_overtime",
+          condition: "overtime == 1",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "verdict_severe",
+          label: "...",
+          toLocation: "quest_failure_severe",
           effects: [],
           autoExecute: true,
         },
       ],
     },
 
-    // Terminal locations
+    // Step 8: On a clean shift, was any dock at the very edge (== 8h)? If so it
+    // was a nail-biter, not a comfortable win — give it its own ending.
+    {
+      id: "margin_check1",
+      text: "Сводка чистая — но диспетчер щурится на самый нагруженный док...",
+      transitions: [
+        {
+          id: "m1_tight",
+          label: "...",
+          toLocation: "quest_success_tight",
+          condition: "dock1_load >= 8",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "m1_next",
+          label: "...",
+          toLocation: "margin_check2",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "margin_check2",
+      text: "...проверяет второй...",
+      transitions: [
+        {
+          id: "m2_tight",
+          label: "...",
+          toLocation: "quest_success_tight",
+          condition: "dock2_load >= 8",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "m2_next",
+          label: "...",
+          toLocation: "margin_check3",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "margin_check3",
+      text: "...и третий.",
+      transitions: [
+        {
+          id: "m3_tight",
+          label: "...",
+          toLocation: "quest_success_tight",
+          condition: "dock3_load >= 8",
+          effects: [],
+          autoExecute: true,
+        },
+        {
+          id: "m3_comfortable",
+          label: "...",
+          toLocation: "quest_success",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+
+    // Terminal locations — distinct text per outcome tier
     {
       id: "quest_success",
-      text: "Ни одного перегруза. Все пять бортов сели в срок, ни один рейс не сорван — бригадир хлопает тебя по плечу, клиенты снимают трубки. Смена спасена, диспетчер!\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 12ч)",
+      text: "Ни одного перегруза, и ни один док даже не подошёл к порогу — раскладка выверена, запас держится. Бригадир одобрительно кивает: «Чисто сработано, диспетчер». Клиенты снимают трубки довольные.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 8ч)",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
+      id: "quest_success_tight",
+      text: "Успел — но впритык: один из доков замер ровно на восьми часах, ещё бы борт — и красный свет. Бригадир вытирает лоб: «На волоске прошли, диспетчер». Смена спасена, хоть и на нервах.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 8ч)",
       isSuccess: true,
       transitions: [],
     },
     {
       id: "quest_failure_overtime",
-      text: "Узел встал. Доки ушли в сверхурочные, рейсы посыпались, диспетчерская тонет в звонках разъярённых клиентов. Контракт сорван — и твоя должность вместе с ним.\nДоков в перегрузе: {overtime}\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 12ч)",
+      text: "Один док ушёл в сверхурочные — рейс сорван, клиент на линии рвёт и мечет. Не катастрофа, но выговор обеспечен: собери раскладку аккуратнее в следующий раз.\nДоков в перегрузе: {overtime}\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 8ч)",
+      isFailure: true,
+      transitions: [],
+    },
+    {
+      id: "quest_failure_severe",
+      text: "Узел встал. Сразу несколько доков в красном, рейсы посыпались лавиной, диспетчерская тонет в звонках разъярённых клиентов. Контракт сорван — и твоя должность вместе с ним.\nДоков в перегрузе: {overtime}\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 8ч)",
       isFailure: true,
       transitions: [],
     },

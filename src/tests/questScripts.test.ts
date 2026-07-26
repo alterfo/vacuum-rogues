@@ -854,6 +854,131 @@ describe("Cargo Sort quest", () => {
     expect(text).toContain("3");
     expect(text).toContain("7");
   });
+
+  // Task 17: tightened budget (porog 12h → 8h) + distinct-outcome endings.
+  // Helper: fire breakdown, override the 5 transport times, then assign each
+  // ship to a chosen dock. Overriding times AFTER breakdown makes the dock
+  // loads fully deterministic regardless of seed.
+  function forceRun(vm: QuestVM, times: number[], docks: number[]): void {
+    advanceAutoCS(vm); // init_breakdown → dispatch_hub
+    const ships = ["A", "B", "C", "D", "E"];
+    ships.forEach((s, i) => vm.setParam(`time_${s}`, times[i]));
+    ships.forEach((s, i) => {
+      vm.execute(`go_select_${s}`);
+      vm.execute(`assign_${s}_dock${docks[i]}`);
+      advanceAutoCS(vm);
+    });
+  }
+
+  it("porog tightened to 8h: a dock at 9h now overloads (was safe under the old 12h)", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    // dock1 = A(4)+B(4)+C(1) = 9 > 8; dock2 = D(2); dock3 = E(2) → exactly 1 over.
+    forceRun(vm, [4, 4, 1, 2, 2], [1, 1, 1, 2, 3]);
+    expect(vm.getParam("dock1_load")).toBe(9);
+    expect(vm.getParam("overtime")).toBe(1);
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.currentLocation().id).toBe("quest_failure_overtime");
+  });
+
+  it("a comfortable clean shift (every dock below porog) ends at quest_success", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    // dock1 = A(3)+B(3) = 6, dock2 = C(2)+D(3) = 5, dock3 = E(4) = 4 — all < 8.
+    forceRun(vm, [3, 3, 2, 3, 4], [1, 1, 2, 2, 3]);
+    expect(vm.getParam("dock1_load")).toBe(6);
+    expect(vm.getParam("dock2_load")).toBe(5);
+    expect(vm.getParam("dock3_load")).toBe(4);
+    expect(vm.getParam("overtime")).toBe(0);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.currentLocation().id).toBe("quest_success");
+  });
+
+  it("a razor-thin clean shift (a dock at exactly 8h) ends at the distinct quest_success_tight", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    // dock1 = A(4)+B(4) = 8 (exactly at porog, not over), dock2/3 low → overtime 0.
+    forceRun(vm, [4, 4, 2, 2, 3], [1, 1, 2, 3, 3]);
+    expect(vm.getParam("dock1_load")).toBe(8);
+    expect(vm.getParam("overtime")).toBe(0);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.currentLocation().id).toBe("quest_success_tight");
+    expect(vm.currentLocation().isSuccess).toBe(true);
+  });
+
+  it("comfortable and razor-thin wins use different ending text", () => {
+    const comfy = new QuestVM(cargoSortScript, 1);
+    forceRun(comfy, [3, 3, 2, 3, 4], [1, 1, 2, 2, 3]);
+    const tight = new QuestVM(cargoSortScript, 1);
+    forceRun(tight, [4, 4, 2, 2, 3], [1, 1, 2, 3, 3]);
+    expect(comfy.currentLocation().id).toBe("quest_success");
+    expect(tight.currentLocation().id).toBe("quest_success_tight");
+    expect(comfy.interpolate(comfy.currentLocation().text)).not.toBe(
+      tight.interpolate(tight.currentLocation().text),
+    );
+  });
+
+  it("one overloaded dock is a light failure; two+ overloaded is the distinct severe terminal", () => {
+    const light = new QuestVM(cargoSortScript, 1);
+    // dock1 = 4+4+1 = 9 (>8); dock2/3 low → exactly 1 over.
+    forceRun(light, [4, 4, 1, 2, 2], [1, 1, 1, 2, 3]);
+    expect(light.getParam("overtime")).toBe(1);
+    expect(light.currentLocation().id).toBe("quest_failure_overtime");
+
+    const severe = new QuestVM(cargoSortScript, 1);
+    // dock1 = A(4)+B(4)+C(4) = 12 (>8); dock2 = D(4)+E(5) = 9 (>8) → 2 over.
+    forceRun(severe, [4, 4, 4, 4, 5], [1, 1, 1, 2, 2]);
+    expect(severe.getParam("dock1_load")).toBe(12);
+    expect(severe.getParam("dock2_load")).toBe(9);
+    expect(severe.getParam("overtime")).toBe(2);
+    expect(severe.isSuccess()).toBe(false);
+    expect(severe.currentLocation().id).toBe("quest_failure_severe");
+    // Light and severe failures read differently.
+    expect(light.interpolate(light.currentLocation().text)).not.toBe(
+      severe.interpolate(severe.currentLocation().text),
+    );
+  });
+
+  it("every seed 0-29 remains winnable with an optimal packing (never unlosable-only)", () => {
+    // Brute-force: for each seed there exists an assignment achieving overtime 0.
+    const minOvertime = (times: number[], thr: number): number => {
+      let best = 3;
+      const rec = (i: number, d: number[]): void => {
+        if (i === times.length) {
+          best = Math.min(best, d.filter((x) => x > thr).length);
+          return;
+        }
+        for (let k = 0; k < 3; k++) {
+          d[k] += times[i];
+          rec(i + 1, d);
+          d[k] -= times[i];
+        }
+      };
+      rec(0, [0, 0, 0]);
+      return best;
+    };
+    for (let seed = 0; seed < 30; seed++) {
+      const vm = new QuestVM(cargoSortScript, seed);
+      advanceAutoCS(vm);
+      const times = ["A", "B", "C", "D", "E"].map((s) =>
+        vm.getParam(`time_${s}`),
+      );
+      expect(minOvertime(times, 8)).toBe(0);
+    }
+  });
+
+  it("carelessly dumping every transport in one dock now fails (budget no longer trivial)", () => {
+    let failures = 0;
+    for (let seed = 0; seed < 30; seed++) {
+      const vm = new QuestVM(cargoSortScript, seed);
+      advanceAutoCS(vm);
+      for (const s of ["A", "B", "C", "D", "E"]) {
+        vm.execute(`go_select_${s}`);
+        vm.execute(`assign_${s}_dock1`);
+        advanceAutoCS(vm);
+      }
+      if (!vm.isSuccess()) failures++;
+    }
+    // Dumping all five in one dock (>= 5h min) always blows the 8h porog.
+    expect(failures).toBe(30);
+  });
 });
 
 // Advance through all autoExecute transitions (init + check chain) until reactor_control or finished

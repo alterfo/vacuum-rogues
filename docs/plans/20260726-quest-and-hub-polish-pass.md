@@ -514,10 +514,30 @@ branches/endings, never removing/loosening what's there) and running the full qu
       only demotes to `bought_off` otherwise, never paying 2000) — so it reads as the risk-averse
       "pay-for-certainty" option, not a strictly dominant one. Removing its *risk-free* certainty is the
       one part that needs the user's go-ahead + a test update.
-- [ ] **Task 17 — `cargo-sort.ts`**: give the 3 docks distinct outcome text instead of one shared
+- [x] **Task 17 — `cargo-sort.ts`**: give the 3 docks distinct outcome text instead of one shared
       success/fail line; either implement the cargo-type mechanic the header comment describes or remove
       the comment (I); tighten the puzzle's time/capacity budget so it isn't nearly unlosable (section
-      4). Write/extend tests; run tests.
+      4). Write/extend tests; run tests. Done: (1) **Distinct-outcome endings (B)** — the single
+      `quest_success`/`quest_failure_overtime` pair is replaced by a 4-way tier: `final_verdict` now
+      branches `overtime == 0 → margin_check1/2/3` (chained `dockN_load >= 8` auto-routers) → either
+      `quest_success` (comfortable — no dock near the porog) or the new `quest_success_tight` (a dock
+      sitting exactly at 8h — a nail-biter), `overtime == 1 → quest_failure_overtime` (one dock over,
+      salvageable), and `overtime >= 2 → quest_failure_severe` (shift collapse) — each terminal with its
+      own prose. The two test-locked terminal ids stay reachable for their exact scenarios (`overtime==0`
+      comfortable → `quest_success`; forced 1-dock overload → `quest_failure_overtime`). (2) **Cargo-type
+      comment (I)** — removed the header comment's false «Доки не могут смешивать типы» claim (a mechanic
+      that never existed in code); rewrote the comment to describe the real budget + the branched endings.
+      (3) **Tightened budget (section 4)** — dock overload porog lowered 12h → 8h (both the fiction text on
+      every screen and the three `check_dockN` conditions). Measured empirically: at 12h even a dumb
+      lowest-dock greedy heuristic wins every seed 0-29 (max greedy dock load was only 9); at 8h greedy
+      fails 2/30 seeds and any careless single-dock dump always fails, yet a brute-force optimal packing
+      still reaches `overtime==0` on every seed (unwinnable=0/30) — losable-by-carelessness, always
+      winnable-with-thought, and no locked test red'd (success test 7,7,4≤8; forced dock1=20>8→overtime;
+      greedy seed-1 max 6≤8). Extended the Cargo Sort describe block with 7 new `it(...)` blocks (porog-9h
+      overload, comfortable vs razor-thin distinct endings, light vs severe distinct failures, every-seed
+      winnable brute-force, careless-dump-always-fails) — no existing assertion touched. Cyrillic baseline
+      regenerated (cargo-sort 66→71 for the new terminal/margin literals). Full unit suite exit 0; `tsc
+      --noEmit` clean; `eslint` on changed files 0 issues.
 - [ ] **Task 18 — `customs.ts`**: branch `next_ship` per actual outcome; make the "5000₡ goal" text
       actually gate the real reward, or rewrite it; fix the "a couple more inspections" text that
       contradicts an instant-fail-on-first-mistake reality (E); give at least a few of the 20 ships
