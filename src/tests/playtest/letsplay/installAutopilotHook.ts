@@ -163,6 +163,7 @@ export function createLiveSceneController(
   let questJournalGraceGiven = false;
   let settingsPanelGraceGiven = false;
   let planetInfoGraceGiven = false;
+  let systemMenuGraceGiven = false;
 
   /**
    * Auto-dismiss the "always close on sight, no grace" blocking surfaces —
@@ -330,6 +331,8 @@ export function createLiveSceneController(
           isQuestJournalOpen?: () => boolean;
           isSettingsPanelOpen?: () => boolean;
           closeModals?: () => void;
+          isSystemModalOpen?: () => boolean;
+          closeSystemMenu?: () => void;
         };
         planetManager?: {
           hasInfoPanel?: boolean;
@@ -377,6 +380,28 @@ export function createLiveSceneController(
         return;
       }
       planetInfoGraceGiven = false;
+
+      // Mirror the same auto-dismiss for the in-flight system menu — a third,
+      // separate blocking-modal registry the live scene owns
+      // (`FlightHud.isSystemModalOpen()` / `closeSystemMenu()`). The real
+      // engine's `SpaceFlightScene.isBlockingModalOpen()` already treats an open
+      // «[МЕНЮ]» (and its load-confirm sub-panel) as blocking, so if it's ever
+      // open when the live autopilot ticks the agent would sit idle behind it
+      // forever. Use the same grace gate as the planet-info block above: a
+      // stale-leftover menu open on the very first tick closes immediately, a
+      // menu a human opens mid-session survives one tick before being closed.
+      // Close via the menu's own `closeSystemMenu()` (its own registry — the
+      // bulk `hud.closeModals()` never touches it, FlightHud.ts).
+      if (sceneForHud?.hud?.isSystemModalOpen?.()) {
+        if (tickCount <= 1 || systemMenuGraceGiven) {
+          sceneForHud.hud.closeSystemMenu?.();
+          systemMenuGraceGiven = false;
+          return;
+        }
+        systemMenuGraceGiven = true;
+        return;
+      }
+      systemMenuGraceGiven = false;
 
       // A pending warp plots the route but does NOT start movement — the player
       // must press Ход (Space / run-turn) to fly to the system edge. The live rAF

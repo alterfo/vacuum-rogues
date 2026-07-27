@@ -1270,6 +1270,56 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(closeInfoPanel).not.toHaveBeenCalled();
   });
 
+  it("tick() closes a stale-open in-flight system menu immediately on the first-ever tick (no grace)", () => {
+    // Mirrors the planet-info stale-leftover case: a system menu already open
+    // when the controller's very first tick runs (tickCount <= 1) is treated as
+    // a leftover the human didn't just open, so it closes with zero grace.
+    const closeSystemMenu = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isSystemModalOpen: () => true,
+          closeSystemMenu,
+        },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeSystemMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() gives a mid-session system menu one grace tick, then closes it on the next tick", () => {
+    // Mirrors the quest-journal grace shape: a menu that OPENS mid-session (not
+    // on the first tick) survives one tick so a human's own «[МЕНЮ]» click isn't
+    // stomped, then closes on the following tick if it's still open.
+    let menuOpen = false;
+    const closeSystemMenu = vi.fn(() => {
+      menuOpen = false;
+    });
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isSystemModalOpen: () => menuOpen,
+          closeSystemMenu,
+        },
+      },
+    });
+    const controller = createLiveSceneController(engine);
+
+    controller.tick(); // tick 1: nothing open — flushes the "first tick" state
+    expect(closeSystemMenu).not.toHaveBeenCalled();
+
+    menuOpen = true;
+    controller.tick(); // tick 2: menu opens mid-session — grace tick, no close
+    expect(closeSystemMenu).not.toHaveBeenCalled();
+    expect(menuOpen).toBe(true);
+
+    controller.tick(); // tick 3: grace spent, still open — close now
+    expect(closeSystemMenu).toHaveBeenCalledTimes(1);
+    expect(menuOpen).toBe(false);
+  });
+
   it("tick() starts a turn (e2eStartTurn) when the ship is genuinely idle in flight (F7)", () => {
     const e2eStartTurn = vi.fn();
     const engine = mockEngine({
