@@ -29,6 +29,9 @@ import {
   isBattleReady,
   OVERMIND_THREAT_HULL_FRACTION,
 } from "./MemoryHeuristicPolicy";
+import { LOW_HULL_FRACTION } from "./HeuristicPolicy";
+import type { NpcShip } from "@/domain/NpcShip";
+import type { CommsContext } from "@/systems/comms/commsOptions";
 import { isNeuralEnabled } from "@/systems/settings/gameSettings";
 import { GAME_BALANCE } from "@/config/balance";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
@@ -245,6 +248,13 @@ export function createLiveSceneController(
         ) => unknown;
         isOvermindPromptOpen?: boolean;
         spawnOvermindCoreCombatant?: () => void;
+        openContactNpc?: {
+          npc: NpcShip;
+          context: CommsContext | undefined;
+        } | null;
+        onPayTribute?: (npc: NpcShip) => void;
+        onFleeShakedown?: (npc: NpcShip) => void;
+        onAttackNpc?: (npc: NpcShip) => void;
       };
       pendingWarp?: unknown;
       plannedRoute?: { x: number; y: number } | null;
@@ -305,6 +315,49 @@ export function createLiveSceneController(
       // Not ready to win the fight — retreat exactly like the old blanket path.
       scene.npcManager.closeModals?.();
       return true;
+    }
+    // Pirate shakedown hail — «Кошелёк или жизнь!». The generic `hasOpenModal()`
+    // branch below also covers this contact-panel surface, and its blanket
+    // `closeModals()` closes it exactly like declining outright — so the
+    // autopilot never once paid tribute, fought, or fled a shakedown; it just
+    // silently forfeited every one (and the panel's `endTurn()` froze the turn
+    // until the generic re-arm below fired). Checked FIRST, ahead of the generic
+    // branch, so it gets a real pay/attack/flee decision reusing the same
+    // hull-fraction signals the rest of the policy already uses (no new threat
+    // math): fight when capability-battle-ready AND hull healthy (≥ the
+    // `OVERMIND_THREAT_HULL_FRACTION` the boss branch also uses), flee when
+    // genuinely hurt (`hull < LOW_HULL_FRACTION`, the flee-vs-fight cutoff the
+    // base ladder uses), else pay the pirate off and move on. Each real handler
+    // (`onPayTribute`/`onFleeShakedown`/`onAttackNpc`) closes the panel AND
+    // re-arms the frozen turn itself, so no `e2eStartTurn()` re-arm is needed
+    // here; a headless double lacking these methods falls through to the generic
+    // `closeModals()` + `e2eStartTurn()` re-arm path below unchanged.
+    const contact = scene?.npcManager?.openContactNpc;
+    if (contact?.context === "pirate-shakedown" && contact.npc) {
+      const npc = contact.npc;
+      const obs = observe(engine);
+      const hull = obs.player?.hullFraction ?? 1;
+      if (
+        isBattleReady(obs) &&
+        hull >= OVERMIND_THREAT_HULL_FRACTION &&
+        typeof scene?.npcManager?.onAttackNpc === "function"
+      ) {
+        scene.npcManager.onAttackNpc(npc);
+        return true;
+      }
+      if (
+        hull < LOW_HULL_FRACTION &&
+        typeof scene?.npcManager?.onFleeShakedown === "function"
+      ) {
+        scene.npcManager.onFleeShakedown(npc);
+        return true;
+      }
+      if (typeof scene?.npcManager?.onPayTribute === "function") {
+        scene.npcManager.onPayTribute(npc);
+        return true;
+      }
+      // No real handler available (headless double) — fall through to the
+      // generic closeModals() + e2eStartTurn() re-arm path below.
     }
     // Auto-dismiss any open contact-panel/OVERMIND overlay so the autopilot
     // keeps flying without a human pointer click. A click on the overlay's

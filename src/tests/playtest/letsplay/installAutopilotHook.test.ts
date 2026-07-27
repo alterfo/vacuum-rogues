@@ -946,6 +946,154 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(closeModals).toHaveBeenCalledTimes(1);
   });
 
+  it("dismissBlockingModal() ATTACKS a pirate shakedown hail when battle-ready with a healthy hull", () => {
+    // «Кошелёк или жизнь!». The blanket `closeModals()` used to close this
+    // exactly like declining — the autopilot never once fought. A
+    // capability-battle-ready ship with a healthy hull must call the real
+    // «Атаковать» handler, not blind-close.
+    const pirate = { id: "pirate-1", name: "Пират" };
+    const onAttackNpc = vi.fn();
+    const onFleeShakedown = vi.fn();
+    const onPayTribute = vi.fn();
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          openContactNpc: { npc: pirate, context: "pirate-shakedown" },
+          onAttackNpc,
+          onFleeShakedown,
+          onPayTribute,
+          closeModals,
+          // The generic surface is "open" too — the shakedown branch must win
+          // the race and be checked FIRST (it also matches `hasOpenModal`).
+          hasOpenModal: () => true,
+        },
+      },
+    });
+    vi.mocked(observe).mockReturnValueOnce({
+      player: { maxHull: 200, weaponDamage: 40, hullFraction: 0.95 },
+    } as unknown as Observation);
+
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(onAttackNpc).toHaveBeenCalledWith(pirate);
+    expect(onFleeShakedown).not.toHaveBeenCalled();
+    expect(onPayTribute).not.toHaveBeenCalled();
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() FLEES a pirate shakedown hail when the hull is genuinely hurt", () => {
+    // Below the flee-vs-fight cutoff (`LOW_HULL_FRACTION`) the ship runs rather
+    // than trade itself down — it calls the real «Бежать» handler.
+    const pirate = { id: "pirate-2", name: "Пират" };
+    const onAttackNpc = vi.fn();
+    const onFleeShakedown = vi.fn();
+    const onPayTribute = vi.fn();
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          openContactNpc: { npc: pirate, context: "pirate-shakedown" },
+          onAttackNpc,
+          onFleeShakedown,
+          onPayTribute,
+          closeModals,
+          hasOpenModal: () => true,
+        },
+      },
+    });
+    vi.mocked(observe).mockReturnValueOnce({
+      player: { maxHull: 200, weaponDamage: 40, hullFraction: 0.2 },
+    } as unknown as Observation);
+
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(onFleeShakedown).toHaveBeenCalledWith(pirate);
+    expect(onAttackNpc).not.toHaveBeenCalled();
+    expect(onPayTribute).not.toHaveBeenCalled();
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() PAYS a pirate shakedown hail when neither battle-ready nor badly hurt", () => {
+    // Mid-hull but not capability-battle-ready (weak gun): can't win the fight,
+    // isn't hurt enough to run — so buy the pirate off via the real «Откупиться»
+    // handler and move on, instead of blind-declining.
+    const pirate = { id: "pirate-3", name: "Пират" };
+    const onAttackNpc = vi.fn();
+    const onFleeShakedown = vi.fn();
+    const onPayTribute = vi.fn();
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          openContactNpc: { npc: pirate, context: "pirate-shakedown" },
+          onAttackNpc,
+          onFleeShakedown,
+          onPayTribute,
+          closeModals,
+          hasOpenModal: () => true,
+        },
+      },
+    });
+    // Healthy hull but a weak gun (below BATTLE_READY_WEAPON_DAMAGE) ⇒ not
+    // battle-ready; hull above LOW_HULL_FRACTION ⇒ not fleeing.
+    vi.mocked(observe).mockReturnValueOnce({
+      player: { maxHull: 200, weaponDamage: 14, hullFraction: 0.9 },
+    } as unknown as Observation);
+
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(onPayTribute).toHaveBeenCalledWith(pirate);
+    expect(onAttackNpc).not.toHaveBeenCalled();
+    expect(onFleeShakedown).not.toHaveBeenCalled();
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() falls through to closeModals()+e2eStartTurn() when a shakedown double lacks the real handlers", () => {
+    // A headless test double can expose the shakedown `openContactNpc` context
+    // without the real pay/attack/flee methods. The three branches must all
+    // no-op-skip and fall through to the existing generic re-arm path so the
+    // frozen-turn fix (`e2eStartTurn`) still fires — no regression.
+    const closeModals = vi.fn();
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          openContactNpc: {
+            npc: { id: "pirate-4" },
+            context: "pirate-shakedown",
+          },
+          hasOpenModal: () => true,
+          closeModals,
+        },
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: false },
+        e2eStartTurn,
+      },
+    });
+    // The shakedown branch runs `observe()` before deciding; the handlers are
+    // absent so the value is irrelevant, but observe must not touch the minimal
+    // mock engine's (absent) player state.
+    vi.mocked(observe).mockReturnValueOnce({
+      player: { hullFraction: 0.9 },
+    } as unknown as Observation);
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(closeModals).toHaveBeenCalledTimes(1);
+    expect(e2eStartTurn).toHaveBeenCalledTimes(1);
+  });
+
   it("dismissBlockingModal() does not touch the turn when the turn is already running", () => {
     const closeModals = vi.fn();
     const e2eStartTurn = vi.fn();

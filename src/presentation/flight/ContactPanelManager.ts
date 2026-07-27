@@ -16,6 +16,7 @@ export interface ContactPanelDeps {
 export class ContactPanelManager {
   private panel: NpcContactPanel | null = null;
   private _openNpcId: string | null = null;
+  private _context: CommsContext | undefined = undefined;
 
   constructor(private readonly deps: ContactPanelDeps) {}
 
@@ -25,6 +26,18 @@ export class ContactPanelManager {
 
   get openNpcId(): string | null {
     return this._openNpcId;
+  }
+
+  /**
+   * The comms context the open panel was opened in (`"pirate-shakedown"`,
+   * `"neutral"`, …), or `undefined` when none is open or the panel was opened
+   * without one. Additive getter exposing the `context` param already threaded
+   * through {@link open} — lets a non-clicking driver (the dev-only live
+   * autopilot) tell a shakedown hail apart from a regular contact panel and
+   * drive the real pay/attack/flee handler instead of blind-closing it.
+   */
+  get context(): CommsContext | undefined {
+    return this._context;
   }
 
   hasOpenModal(): boolean {
@@ -40,6 +53,7 @@ export class ContactPanelManager {
   ): void {
     this.close();
     this._openNpcId = npc.id;
+    this._context = context;
     const { width, height } = this.deps.getScreenSize();
     this.panel = new NpcContactPanel(
       npc,
@@ -57,6 +71,7 @@ export class ContactPanelManager {
     const panel = this.panel;
     this.panel = null;
     this._openNpcId = null;
+    this._context = undefined;
     // Defer teardown out of the current pointer-event dispatch so PixiJS's
     // event boundary is never mid-dispatch on a destroyed container.
     if (panel) queueMicrotask(() => panel.destroy());

@@ -89,12 +89,12 @@ covering.
 - [x] Run `npm run test:playtest` — must pass before Task 3
 
 ### Task 3: Pirate shakedown hail — real pay/attack/flee decision
-- [ ] Add a public context getter to `ContactPanelManager` (e.g. `get context(): CommsContext | undefined`, alongside the existing `openNpcId` getter, `ContactPanelManager.ts:26-28`) exposing the `context` param already threaded through `open()` (`:34-51`) — additive
-- [ ] Expose it + the NPC id through `NpcShipManager` (e.g. a public `get openContactNpc(): { npc: NpcShip; context: CommsContext | undefined } | null`, or thread the existing private `contactNpcId` getter public) so the autopilot can tell a shakedown hail apart from a regular contact panel
-- [ ] In `dismissBlockingModal()`, before the generic `hasOpenModal()` branch, add a check for `context === "pirate-shakedown"`: reuse the existing hull-fraction/threat signal (same one already driving flee-vs-fight elsewhere in `decideWithMemory`) to choose between `scene.npcManager.onAttackNpc(npc)` (healthy/battle-ready), `scene.npcManager.onFleeShakedown(npc)` (fast/damaged), or `scene.npcManager.onPayTribute(npc)` (affordable and neither of the above) — falls through to the existing `closeModals()` + `e2eStartTurn()` re-arm path only if none of the three apply (e.g. npc/context unavailable, headless double without these methods)
-- [ ] Write a regression test per branch (attack/flee/pay) asserting the correct handler is called with the right npc
-- [ ] Write a regression test confirming the pre-existing `e2eStartTurn()` re-arm still fires when the fallback path is taken (no regression on the existing frozen-turn fix)
-- [ ] Run `npm run test:playtest` — must pass before Task 4
+- [x] Add a public context getter to `ContactPanelManager` (e.g. `get context(): CommsContext | undefined`, alongside the existing `openNpcId` getter, `ContactPanelManager.ts:26-28`) exposing the `context` param already threaded through `open()` (`:34-51`) — additive
+- [x] Expose it + the NPC id through `NpcShipManager` (e.g. a public `get openContactNpc(): { npc: NpcShip; context: CommsContext | undefined } | null`, or thread the existing private `contactNpcId` getter public) so the autopilot can tell a shakedown hail apart from a regular contact panel
+- [x] In `dismissBlockingModal()`, before the generic `hasOpenModal()` branch, add a check for `context === "pirate-shakedown"`: reuse the existing hull-fraction/threat signal (same one already driving flee-vs-fight elsewhere in `decideWithMemory`) to choose between `scene.npcManager.onAttackNpc(npc)` (healthy/battle-ready), `scene.npcManager.onFleeShakedown(npc)` (fast/damaged), or `scene.npcManager.onPayTribute(npc)` (affordable and neither of the above) — falls through to the existing `closeModals()` + `e2eStartTurn()` re-arm path only if none of the three apply (e.g. npc/context unavailable, headless double without these methods)
+- [x] Write a regression test per branch (attack/flee/pay) asserting the correct handler is called with the right npc
+- [x] Write a regression test confirming the pre-existing `e2eStartTurn()` re-arm still fires when the fallback path is taken (no regression on the existing frozen-turn fix)
+- [x] Run `npm run test:playtest` — must pass before Task 4
 
 ### Task 4: Diagnose and fix the TRADE-scene loop bug, then route trade through the real UI
 - [ ] Write a **red** test first that reproduces today's gap: drive the live scene through `goTo(SceneType.TRADE, ...)` with `executeTrade()` as currently stubbed, and assert cargo/credits are unchanged after a `trade` action — proving the no-op (documents the bug before touching it)

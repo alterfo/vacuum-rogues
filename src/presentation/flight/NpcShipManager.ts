@@ -11,6 +11,7 @@ import { CombatPursuitController } from "./CombatPursuitController";
 import { EncounterController } from "./EncounterController";
 import { OvermindBossController } from "./OvermindBossController";
 import type { NpcShip } from "@/domain/NpcShip";
+import type { CommsContext } from "@/systems/comms/commsOptions";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
 import { isHostile, factionKindOf } from "@/systems/npc/factionHostility";
 import {
@@ -704,6 +705,26 @@ export class NpcShipManager implements FlightModule {
    */
   get isOvermindPromptOpen(): boolean {
     return this.overmind.isOpen;
+  }
+
+  /**
+   * The NPC + comms context of the open contact panel, or `null` when no
+   * contact panel is open (or its ship can no longer be resolved to a live
+   * sprite). Additive getter so a non-clicking driver (the dev-only live
+   * autopilot) can tell a pirate shakedown hail (`context ===
+   * "pirate-shakedown"`) apart from a regular contact panel and drive the real
+   * {@link onPayTribute}/{@link onFleeShakedown}/{@link onAttackNpc} handler
+   * instead of blind-closing it (which is equivalent to always declining).
+   */
+  get openContactNpc(): {
+    npc: NpcShip;
+    context: CommsContext | undefined;
+  } | null {
+    const id = this.panels.openNpcId;
+    if (id == null) return null;
+    const sprite = this.npcSprites.find((s) => s.npc.id === id);
+    if (!sprite) return null;
+    return { npc: sprite.npc, context: this.panels.context };
   }
 
   /** Close just the NPC contact panel (Escape handler / scene). */
