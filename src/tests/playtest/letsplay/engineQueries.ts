@@ -628,11 +628,43 @@ export function repairCost(engine: GameEngine): number | null {
 }
 
 /**
+ * Run a hangar/refit `mutate` between a visible open/close of the docked scene's
+ * real {@link import("@/presentation/StationScene").StationScene} hangar view
+ * when the current scene exposes the `e2eOpenHangar`/`e2eCloseHangar` seams
+ * (live autopilot at a station) — so a repair / gear buy / hull upgrade /
+ * micromodule purchase is watchable through the real `HangarPanel` exactly like
+ * a player tapping «Ангар», instead of a silent domain-only mutation (Task 5,
+ * docs/plans/20260727-autopilot-ui-parity-fixes.md). The refit DECISION + credit
+ * move stay here in the letsplay layer (single source of truth); the seam only
+ * makes them visible — mirroring `takeQuest`'s job-board `e2eOpenJobBoard`/
+ * `e2eCloseJobBoard` wrap. On a headless double / any scene without the seams it
+ * just runs `mutate` — the unchanged domain-only path every existing test drives.
+ */
+export function runInHangarPanel(engine: GameEngine, mutate: () => void): void {
+  const scene = engine.currentScene as {
+    e2eOpenHangar?: () => void;
+    e2eCloseHangar?: () => void;
+  } | null;
+  const usePanel =
+    typeof scene?.e2eOpenHangar === "function" &&
+    typeof scene.e2eCloseHangar === "function";
+  if (usePanel) scene!.e2eOpenHangar!();
+  try {
+    mutate();
+  } finally {
+    if (usePanel) scene!.e2eCloseHangar!();
+  }
+}
+
+/**
  * Restore the player's hull at the cheapest available rate (planet-Верфь pricing:
  * 2 cr/HP). Mirrors `PlanetScene.doHullRepair` without the UI: syncs the loadout
  * max, checks affordability, deducts credits via the banking bus, then calls
  * `ship.repair()`. Safe no-op when hull is already perfect or credits are
  * insufficient. Dev-only helper — shared by `PlayerAgent.repair` and tests.
+ *
+ * When docked at a scene exposing the hangar seams the deduct+repair runs inside
+ * a visible {@link runInHangarPanel} open/close so the refit is watchable live.
  */
 export function executeRepair(engine: GameEngine): void {
   const player = engine.player;
@@ -643,12 +675,14 @@ export function executeRepair(engine: GameEngine): void {
   const cost = repairCost(engine);
   if (cost == null) return;
   if (player.credits < cost) return;
-  adjustPlayerCredits(
-    engine.bank,
-    player,
-    -cost,
-    GL_COUNTERPARTY.SERVICES,
-    "Ремонт корпуса",
-  );
-  ship.repair();
+  runInHangarPanel(engine, () => {
+    adjustPlayerCredits(
+      engine.bank,
+      player,
+      -cost,
+      GL_COUNTERPARTY.SERVICES,
+      "Ремонт корпуса",
+    );
+    ship.repair();
+  });
 }

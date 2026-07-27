@@ -1475,6 +1475,20 @@ export class StationScene extends GameScene {
   }
 
   /**
+   * Return to the station's main service menu — the close half of the
+   * {@link e2eOpenHangar} navigation hook. Used by the live dev autopilot's
+   * refit executors (`installAutopilotHook.ts` → `equipmentQueries`/
+   * `engineQueries` via `runInHangarPanel`) so a repair / gear buy / hull
+   * upgrade / micromodule purchase is watchable through the real `HangarPanel`
+   * (opened, mutated, closed) instead of a silent domain-only mutation
+   * (Task 5, docs/plans/20260727-autopilot-ui-parity-fixes.md). Idempotent.
+   */
+  e2eCloseHangar(): void {
+    this.view = "main";
+    this.render();
+  }
+
+  /**
    * Why an install is blocked, or null when it would succeed — delegates to the
    * shared {@link explainInstallBlock} helper (one source of truth with the
    * hangar warehouse install path and the equipment-shop per-listing hint).

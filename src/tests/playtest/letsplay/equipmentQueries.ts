@@ -42,7 +42,7 @@ import {
   adjustPlayerCredits,
   GL_COUNTERPARTY,
 } from "@/systems/banking/economy";
-import { currentSystem } from "./engineQueries";
+import { currentSystem, runInHangarPanel } from "./engineQueries";
 import { generateSystemListings } from "./observeHelpers";
 
 /**
@@ -150,14 +150,16 @@ export function executeBuyBestGear(engine: GameEngine): void {
   if (!player) return;
   const listing = bestAffordableGear(engine);
   if (!listing) return;
-  adjustPlayerCredits(
-    engine.bank,
-    player,
-    -listing.price,
-    GL_COUNTERPARTY.EQUIPMENT,
-    `Покупка: ${listing.gear.name}`,
-  );
-  acquireUninstalledGear(player, listing.gear.id);
+  runInHangarPanel(engine, () => {
+    adjustPlayerCredits(
+      engine.bank,
+      player,
+      -listing.price,
+      GL_COUNTERPARTY.EQUIPMENT,
+      `Покупка: ${listing.gear.name}`,
+    );
+    acquireUninstalledGear(player, listing.gear.id);
+  });
 }
 
 /**
@@ -173,7 +175,9 @@ export function executeUpgradeHull(engine: GameEngine): void {
   if (!listing) return;
   const hull = listing.gear as HullSpec;
   if (hull.id === loadout.hull.id) return;
-  buyHullWithTradeIn(engine.bank, player, loadout, hull, listing.price);
+  runInHangarPanel(engine, () => {
+    buyHullWithTradeIn(engine.bank, player, loadout, hull, listing.price);
+  });
 }
 
 /**
@@ -185,7 +189,9 @@ export function executeBuyBestModule(engine: GameEngine): void {
   if (!player) return;
   const mm = cheapestMicromodule(engine);
   if (!mm) return;
-  buyMicromodule(engine.bank, player, mm);
+  runInHangarPanel(engine, () => {
+    buyMicromodule(engine.bank, player, mm);
+  });
 }
 
 /** Base damage of a gear id (0 for anything that isn't a weapon / unknown). */
