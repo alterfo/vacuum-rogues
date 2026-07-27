@@ -18,7 +18,7 @@
  * so the first human pointer/key after engaging hands control straight back.
  */
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType, QuestType } from "@/types";
+import { SceneType, QuestType, type ResourceType } from "@/types";
 import { logger } from "@/utils/logger";
 import { warpEdgePoint } from "@/utils/flightGeometry";
 import { observe, buildQuestSnapshots, marketSnapshotFor } from "./observe";
@@ -395,6 +395,77 @@ export function createLiveSceneController(
     }
     return false;
   }
+
+  // Drive the REAL TRADE scene's buy/sell seam, then leave back to
+  // SPACE_FLIGHT (Task 4, docs/plans/20260727-autopilot-ui-parity-fixes.md).
+  // Shared by `openTrade` (the live PLANET→TRADE→FLIGHT round trip) and the
+  // LiveApplier's scene-aware `executeTrade` fallback (already in TRADE). The
+  // buy/sell decision + reserve-cap math is identical to the old domain bypass
+  // — it just runs through `TradeScene`'s `e2eBuyItem`/`e2eSellItem` so it
+  // drives the real market UI. Leaving to SPACE_FLIGHT afterwards is essential:
+  // the policy's TRADE case pushes `trade` before `move`, so without leaving
+  // the agent re-picks `trade` every tick and re-sells the just-bought lot
+  // forever (a land↔trade spin the two-step must not create) — this mirrors the
+  // headless applier's `goTo(...)`-after-trade in PlayerAgent.ts.
+  const runLiveTrade = async (): Promise<void> => {
+    const scene = engine.currentScene as {
+      e2eBuyItem?: (r: ResourceType, qty: number) => boolean;
+      e2eSellItem?: (r: ResourceType, qty: number) => boolean;
+    } | null;
+    if (!scene?.e2eBuyItem || !scene.e2eSellItem) {
+      // Not in a live market (headless double / no TradeScene) — safe no-op,
+      // no scene transition (mock-engine callers stay put).
+      return;
+    }
+    const sys = currentSystem(engine);
+    const planet = landedPlanet(engine) ?? sys?.planets[0];
+    const player = engine.player;
+    if (!planet || !player) return;
+    // A carried DELIVERY quest's unmet cargo need wins first (never
+    // speculative — capped to the exact shortfall, only when profitable),
+    // otherwise the best known cross-planet margin's good, but ONLY when this
+    // planet is that margin's own cheap buy planet — else `null` (sell-only).
+    const quests = buildQuestSnapshots(engine, player);
+    const questCommittedGoods = new Set(
+      quests
+        .filter((q) => q.type === QuestType.DELIVERY && q.collectItem)
+        .map((q) => q.collectItem!.type),
+    );
+    const market = planet.market
+      ? marketSnapshotFor(planet, player, sys?.ownerFaction)
+      : undefined;
+    const questNeed = deliveryCargoNeed(quests, market);
+    const executor = {
+      buy: (good: ResourceType, qty: number) => {
+        scene.e2eBuyItem!(good, qty);
+      },
+      sell: (good: ResourceType, qty: number) => {
+        scene.e2eSellItem!(good, qty);
+      },
+    };
+    if (questNeed) {
+      executeMemoryAwareTrade(
+        engine,
+        planet,
+        questNeed.good,
+        questNeed.qty,
+        questCommittedGoods,
+        executor,
+      );
+    } else {
+      const margin = bestKnownMargin(getMemory());
+      const preferredGood = margin.buyPlanet === planet.id ? margin.good : null;
+      executeMemoryAwareTrade(
+        engine,
+        planet,
+        preferredGood,
+        undefined,
+        questCommittedGoods,
+        executor,
+      );
+    }
+    await goTo(SceneType.SPACE_FLIGHT);
+  };
 
   return {
     dismissBlockingModal,
@@ -802,60 +873,38 @@ export function createLiveSceneController(
       }
     },
     async openTrade(planetId) {
+      // Open the REAL market scene rather than trading through a domain bypass
+      // (Task 4, docs/plans/20260727-autopilot-ui-parity-fixes.md). The prior
+      // bypass existed because opening TRADE and then immediately leaving
+      // ("leave-market" without buying) never acquired cargo — that gap is now
+      // closed by the live `executeTrade()` below, which drives the real
+      // buy/sell on the next tick. This mirrors the headless two-step
+      // PLANET→TRADE→execute shape (MemoryHeuristicPolicy.ts:2086): the
+      // policy's TRADE-scene branch pushes `trade` (→ `executeTrade`) then
+      // `move` (→ back to SPACE_FLIGHT).
       const sys = currentSystem(engine);
       const planet =
         landedPlanet(engine) ??
         sys?.planets.find((p) => p.id === planetId) ??
         sys?.planets[0];
-      const player = engine.player;
-      if (planet && player) {
-        // Execute buy/sell directly via the real TradeSystem seam.
-        // Opening the TRADE scene causes PLANET→TRADE→FLIGHT→PLANET loop:
-        // the teacher always picks move="leave-market" in TRADE without buying,
-        // so no cargo is ever acquired and holdingForOtherSystem stays 0.
-        //
-        // Mirrors PlayerAgent's TRADE-scene branch: a carried DELIVERY quest's
-        // unmet cargo need wins first (never speculative — capped to the exact
-        // shortfall, only when profitable), otherwise the best known
-        // cross-planet margin's good, but ONLY when this planet is that
-        // margin's own cheap buy planet — else `null` (sell-only), so landing
-        // to realise a sell never immediately re-buys the same good here.
-        const quests = buildQuestSnapshots(engine, player);
-        const questCommittedGoods = new Set(
-          quests
-            .filter((q) => q.type === QuestType.DELIVERY && q.collectItem)
-            .map((q) => q.collectItem!.type),
-        );
-        const market = planet.market
-          ? marketSnapshotFor(planet, player, sys?.ownerFaction)
-          : undefined;
-        const questNeed = deliveryCargoNeed(quests, market);
-        if (questNeed) {
-          executeMemoryAwareTrade(
-            engine,
-            planet,
-            questNeed.good,
-            questNeed.qty,
-            questCommittedGoods,
-          );
-        } else {
-          const margin = bestKnownMargin(getMemory());
-          const preferredGood =
-            margin.buyPlanet === planet.id ? margin.good : null;
-          executeMemoryAwareTrade(
-            engine,
-            planet,
-            preferredGood,
-            undefined,
-            questCommittedGoods,
-          );
-        }
+      if (planet) {
+        await goTo(SceneType.TRADE, { planet });
+        // Realise the buy/sell through the just-opened real TRADE scene, then
+        // `runLiveTrade` leaves back to SPACE_FLIGHT. On a headless double /
+        // mock engine (no e2e seams) this is a safe no-op and the ship stays
+        // on the TRADE transition the applier asserted.
+        await runLiveTrade();
+        return;
       }
-      // Take off after trading; the next FLIGHT tick decides warp/land/etc.
+      // No resolvable planet (empty system / headless double) — don't strand on
+      // the planet; back out to flight so the next tick can re-decide.
       await goTo(SceneType.SPACE_FLIGHT);
     },
-    executeTrade() {
-      // No live market executor yet — safe no-op (mirrors the headless applier).
+    async executeTrade() {
+      // LiveApplier fallback: when the agent is observed already inside the
+      // TRADE scene, drive the same real buy/sell + leave that `openTrade`
+      // performs on the PLANET→TRADE→FLIGHT round trip (Task 4).
+      await runLiveTrade();
     },
     takeQuest() {
       // Drive the real job-board panel when it's reachable (live report,

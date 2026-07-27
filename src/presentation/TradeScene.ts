@@ -627,4 +627,12 @@ export class TradeScene extends GameScene {
     }
     return (this.gameEngine?.player?.credits ?? 0) >= 0;
   }
+
+  /** E2E helper: sell qty units of resource; returns true if the market was driven */
+  e2eSellItem(resource: ResourceType, qty: number): boolean {
+    for (let i = 0; i < qty; i++) {
+      this.trade(resource, false);
+    }
+    return (this.gameEngine?.player?.credits ?? 0) >= 0;
+  }
 }

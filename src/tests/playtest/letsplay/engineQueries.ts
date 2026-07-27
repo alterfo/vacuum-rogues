@@ -463,6 +463,7 @@ function sellAllCargo(
   engine: GameEngine,
   planet: Planet,
   protect: ReadonlySet<ResourceType> = new Set(),
+  executor?: TradeExecutor,
 ): void {
   const player = engine.player;
   if (!player) return;
@@ -470,16 +471,20 @@ function sellAllCargo(
   const planetFaction = currentSystem(engine)?.ownerFaction;
   for (const cargo of [...player.inventory.resources]) {
     if (cargo.amount <= 0 || protect.has(cargo.type)) continue;
-    ts.executeTrade(
-      player,
-      planet,
-      cargo.type,
-      cargo.amount,
-      false,
-      capacity,
-      engine.bank,
-      planetFaction,
-    );
+    if (executor) {
+      executor.sell(cargo.type, cargo.amount);
+    } else {
+      ts.executeTrade(
+        player,
+        planet,
+        cargo.type,
+        cargo.amount,
+        false,
+        capacity,
+        engine.bank,
+        planetFaction,
+      );
+    }
   }
 }
 
@@ -535,20 +540,33 @@ const TRADE_CREDIT_RESERVE_FRACTION = 0.3;
  *
  * `protectGoods` excludes those resource types from the sell-all-cargo step —
  * see {@link sellAllCargo}.
+ *
+ * `executor` (optional) redirects the actual buy/sell mutations to a supplied
+ * seam instead of the direct {@link TradeSystem} path — the live autopilot
+ * passes {@link TradeScene}'s `e2eBuyItem`/`e2eSellItem` so the SAME decision +
+ * reserve-cap math drives the *real* market UI (Task 4,
+ * docs/plans/20260727-autopilot-ui-parity-fixes.md). Absent ⇒ existing
+ * direct-domain behaviour (headless doubles / tests) is unchanged.
  */
+export interface TradeExecutor {
+  buy(good: ResourceType, qty: number): void;
+  sell(good: ResourceType, qty: number): void;
+}
+
 export function executeMemoryAwareTrade(
   engine: GameEngine,
   planet: Planet,
   preferredGood: ResourceType | null,
   maxQty?: number,
   protectGoods?: ReadonlySet<ResourceType>,
+  executor?: TradeExecutor,
 ): void {
   const player = engine.player;
   if (!player) return;
   const ts = new TradeSystem();
   const capacity = cargoCapacityOf(engine.playerLoadout);
 
-  sellAllCargo(ts, engine, planet, protectGoods);
+  sellAllCargo(ts, engine, planet, protectGoods, executor);
 
   if (preferredGood === null) return;
 
@@ -571,16 +589,20 @@ export function executeMemoryAwareTrade(
     maxQty ?? Infinity,
   );
   if (qty > 0) {
-    ts.executeTrade(
-      player,
-      planet,
-      preferredGood,
-      qty,
-      true,
-      capacity,
-      engine.bank,
-      planetFaction,
-    );
+    if (executor) {
+      executor.buy(preferredGood, qty);
+    } else {
+      ts.executeTrade(
+        player,
+        planet,
+        preferredGood,
+        qty,
+        true,
+        capacity,
+        engine.bank,
+        planetFaction,
+      );
+    }
   }
 }
 

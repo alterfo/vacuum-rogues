@@ -488,9 +488,10 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(engine.currentScene.performWarpJumpTo).toHaveBeenCalledWith("sys3");
   });
 
-  it("openTrade() executes trade directly and transitions to SPACE_FLIGHT", async () => {
-    // Mock engine must include player.inventory so executeTradeOnPlanet can
-    // iterate cargo before transitioning (no TRADE scene — that caused the cycle).
+  it("openTrade() opens the real TRADE scene with the resolved planet (Task 4: no more domain bypass)", async () => {
+    // Task 4 (docs/plans/20260727-autopilot-ui-parity-fixes.md): openTrade now
+    // routes through the real market UI instead of executing the trade inline;
+    // the actual buy/sell is realised by the next tick's `executeTrade()`.
     const engine = mockEngine({
       player: {
         currentSystemId: "sys1",
@@ -498,6 +499,21 @@ describe("createLiveSceneController — verb → live engine call", () => {
         inventory: { resources: [] },
       },
       playerLoadout: null,
+    });
+    await createLiveSceneController(engine).openTrade();
+    expect(engine.transitionTo).toHaveBeenCalledWith(
+      SceneType.TRADE,
+      expect.objectContaining({
+        gameEngine: engine,
+        planet: { id: "p1", availableQuests: [] },
+      }),
+    );
+  });
+
+  it("openTrade() backs out to SPACE_FLIGHT when no planet resolves", async () => {
+    const engine = mockEngine({
+      player: { currentSystemId: "nowhere", landedPlanetId: null },
+      galaxy: { systems: [] },
     });
     await createLiveSceneController(engine).openTrade();
     expect(engine.transitionTo).toHaveBeenCalledWith(
