@@ -13,6 +13,19 @@ import {
   isHelpPanelOpen,
   dismissHelpPanel,
 } from "@/presentation/ui/mountSceneHelp";
+
+// `observe` is wrapped in a call-through spy so the OVERMIND-core boss-prompt
+// tests below can hand `dismissBlockingModal()` a battle-ready / hull-hurt
+// observation without booting the full observe pipeline (galaxy front seeds,
+// npc scan, quest board, …). Every other test in this file keeps the REAL
+// `observe` (the spy calls through by default), so no existing behaviour moves.
+vi.mock("@/tests/playtest/letsplay/observe", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/tests/playtest/letsplay/observe")>();
+  return { ...actual, observe: vi.fn(actual.observe) };
+});
+import { observe } from "@/tests/playtest/letsplay/observe";
+import type { Observation } from "@/tests/playtest/letsplay/observe";
 import {
   installAutopilotHook,
   createLiveSceneController,
@@ -872,6 +885,65 @@ describe("createLiveSceneController — verb → live engine call", () => {
     });
     createLiveSceneController(engine).dismissBlockingModal!();
     expect(e2eStartTurn).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() ATTACKS the OVERMIND core when battle-ready with a healthy hull", () => {
+    // The win-condition fight. The blanket `closeModals()` retreat path used to
+    // fire for the boss prompt too — the autopilot never once pressed «Атаковать
+    // ядро». A capability-battle-ready ship with a healthy hull must spawn the
+    // core combatant instead of retreating.
+    const spawnOvermindCoreCombatant = vi.fn();
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          isOvermindPromptOpen: true,
+          spawnOvermindCoreCombatant,
+          closeModals,
+          // The generic surface is "open" too — the boss branch must win the
+          // race and be checked FIRST (it also matches `hasOpenModal`).
+          hasOpenModal: () => true,
+        },
+      },
+    });
+    vi.mocked(observe).mockReturnValueOnce({
+      player: { maxHull: 200, weaponDamage: 40, hullFraction: 0.95 },
+    } as unknown as Observation);
+
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(spawnOvermindCoreCombatant).toHaveBeenCalledTimes(1);
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("dismissBlockingModal() RETREATS from the OVERMIND core when the hull is hurt (locks the safe default)", () => {
+    // Battle-ready by capability but hull below the front-avoidance threshold —
+    // it must still retreat via the existing `closeModals()` path, never open
+    // the boss fight it can't survive.
+    const spawnOvermindCoreCombatant = vi.fn();
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: {
+          isOvermindPromptOpen: true,
+          spawnOvermindCoreCombatant,
+          closeModals,
+          hasOpenModal: () => true,
+        },
+      },
+    });
+    vi.mocked(observe).mockReturnValueOnce({
+      player: { maxHull: 200, weaponDamage: 40, hullFraction: 0.4 },
+    } as unknown as Observation);
+
+    const dismissed = createLiveSceneController(engine).dismissBlockingModal!();
+    expect(dismissed).toBe(true);
+    expect(spawnOvermindCoreCombatant).not.toHaveBeenCalled();
+    expect(closeModals).toHaveBeenCalledTimes(1);
   });
 
   it("dismissBlockingModal() does not touch the turn when the turn is already running", () => {

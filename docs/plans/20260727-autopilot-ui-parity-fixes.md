@@ -82,11 +82,11 @@ covering.
 - [x] Run `npm run test:playtest` — must pass before Task 2
 
 ### Task 2: OVERMIND-core boss prompt — real attack/retreat decision
-- [ ] Add a public `get isOvermindPromptOpen(): boolean { return this.overmind.isOpen; }` getter to `NpcShipManager` (sibling of the existing `isContactPanelOpen`/`isEncounterPromptOpen` getters, `:694`/`:679`) — additive, no existing signature touched
-- [ ] In `installAutopilotHook.ts`'s `dismissBlockingModal()`, split the current generic `hasOpenModal()` branch (`:283-304`): check `scene.npcManager.isOvermindPromptOpen` **first** (before the generic `hasOpenModal()` check, since `hasOpenModal()` also covers this surface), and instead of `closeModals()`, decide attack vs. retreat by reusing `MemoryHeuristicPolicy`'s existing battle-ready + hull-fraction signals (`isBattleReady(obs)` and the hull threshold already used by the OVERMIND-threat-avoidance branch in `decideWithMemory`) — call `scene.npcManager.spawnOvermindCoreCombatant()` when battle-ready and hull is healthy, else fall through to the existing `closeModals()` retreat path
-- [ ] Write a regression test: with a mocked `isOvermindPromptOpen: true` and battle-ready+healthy-hull observation, `dismissBlockingModal()` calls `spawnOvermindCoreCombatant()`, not `closeModals()`
-- [ ] Write a regression test: with the prompt open but NOT battle-ready (or hull hurt), it still retreats via `closeModals()` (locks the existing safe-default behavior)
-- [ ] Run `npm run test:playtest` — must pass before Task 3
+- [x] Add a public `get isOvermindPromptOpen(): boolean { return this.overmind.isOpen; }` getter to `NpcShipManager` (sibling of the existing `isContactPanelOpen`/`isEncounterPromptOpen` getters, `:694`/`:679`) — additive, no existing signature touched
+- [x] In `installAutopilotHook.ts`'s `dismissBlockingModal()`, split the current generic `hasOpenModal()` branch (`:283-304`): check `scene.npcManager.isOvermindPromptOpen` **first** (before the generic `hasOpenModal()` check, since `hasOpenModal()` also covers this surface), and instead of `closeModals()`, decide attack vs. retreat by reusing `MemoryHeuristicPolicy`'s existing battle-ready + hull-fraction signals (`isBattleReady(obs)` and the hull threshold already used by the OVERMIND-threat-avoidance branch in `decideWithMemory`) — call `scene.npcManager.spawnOvermindCoreCombatant()` when battle-ready and hull is healthy, else fall through to the existing `closeModals()` retreat path
+- [x] Write a regression test: with a mocked `isOvermindPromptOpen: true` and battle-ready+healthy-hull observation, `dismissBlockingModal()` calls `spawnOvermindCoreCombatant()`, not `closeModals()`
+- [x] Write a regression test: with the prompt open but NOT battle-ready (or hull hurt), it still retreats via `closeModals()` (locks the existing safe-default behavior)
+- [x] Run `npm run test:playtest` — must pass before Task 3
 
 ### Task 3: Pirate shakedown hail — real pay/attack/flee decision
 - [ ] Add a public context getter to `ContactPanelManager` (e.g. `get context(): CommsContext | undefined`, alongside the existing `openNpcId` getter, `ContactPanelManager.ts:26-28`) exposing the `context` param already threaded through `open()` (`:34-51`) — additive

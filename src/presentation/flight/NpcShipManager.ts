@@ -695,6 +695,17 @@ export class NpcShipManager implements FlightModule {
     return this.panels.isOpen;
   }
 
+  /**
+   * True while the OVERMIND-core boss prompt is open. Additive getter so a
+   * non-clicking driver (the dev-only live autopilot) can tell the win-condition
+   * boss prompt apart from the generic contact-panel/encounter surfaces
+   * {@link hasOpenModal} also covers, and decide attack-core vs. retreat instead
+   * of blind-closing it (which is equivalent to always clicking «Отступить»).
+   */
+  get isOvermindPromptOpen(): boolean {
+    return this.overmind.isOpen;
+  }
+
   /** Close just the NPC contact panel (Escape handler / scene). */
   closeContactPanel(): void {
     this.panels.close();

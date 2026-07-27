@@ -26,6 +26,8 @@ import { selectPlayerPolicy } from "./policyGate";
 import {
   MemoryHeuristicPolicy,
   warpWantsQuestBias,
+  isBattleReady,
+  OVERMIND_THREAT_HULL_FRACTION,
 } from "./MemoryHeuristicPolicy";
 import { isNeuralEnabled } from "@/systems/settings/gameSettings";
 import { GAME_BALANCE } from "@/config/balance";
@@ -241,6 +243,8 @@ export function createLiveSceneController(
           encounter: Encounter,
           choice: EncounterChoice,
         ) => unknown;
+        isOvermindPromptOpen?: boolean;
+        spawnOvermindCoreCombatant?: () => void;
       };
       pendingWarp?: unknown;
       plannedRoute?: { x: number; y: number } | null;
@@ -274,6 +278,32 @@ export function createLiveSceneController(
       const encounter = scene.npcManager.activeEncounter;
       scene.npcManager.closeEncounterPrompt?.();
       scene.npcManager.applyEncounterChoice?.(encounter, "engage");
+      return true;
+    }
+    // OVERMIND-core boss prompt — the real win-condition fight. `hasOpenModal()`
+    // below also covers this surface, and its blanket `closeModals()` closes it
+    // exactly like clicking «Отступить» (retreat) — so the autopilot never once
+    // pressed «Атаковать ядро» (`spawnOvermindCoreCombatant()`, the win fight).
+    // Checked FIRST, ahead of the generic branch, so the boss prompt gets a real
+    // attack-vs-retreat decision instead of an unconditional retreat. Reuses
+    // `MemoryHeuristicPolicy`'s existing battle-ready + hull-fraction signals (no
+    // new threat math): attack the core only when the ship is capability-battle-
+    // ready AND its hull is healthy (≥ the same `OVERMIND_THREAT_HULL_FRACTION`
+    // the front-avoidance branch flees under); otherwise fall through to the
+    // existing `closeModals()` retreat path — the safe default is unchanged.
+    if (scene?.npcManager?.isOvermindPromptOpen) {
+      const obs = observe(engine);
+      const hull = obs.player?.hullFraction ?? 1;
+      if (
+        isBattleReady(obs) &&
+        hull >= OVERMIND_THREAT_HULL_FRACTION &&
+        typeof scene.npcManager.spawnOvermindCoreCombatant === "function"
+      ) {
+        scene.npcManager.spawnOvermindCoreCombatant();
+        return true;
+      }
+      // Not ready to win the fight — retreat exactly like the old blanket path.
+      scene.npcManager.closeModals?.();
       return true;
     }
     // Auto-dismiss any open contact-panel/OVERMIND overlay so the autopilot
