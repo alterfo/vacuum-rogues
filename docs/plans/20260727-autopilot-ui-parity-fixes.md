@@ -126,8 +126,8 @@ covering.
 - [x] Run `npm run test:e2e:regression` — 29 passed, 1 failed. The single failure (`smoke: changing the font size keeps the ship in place`) is a PRE-EXISTING obsolete test unrelated to this plan: it references `hud['gearButton']`/`hud['settingsPanel']`, but the ⚙ font/settings panel was moved from `FlightHud` to `MainMenuScene` in earlier unrelated work (see `FlightHud.ts:43,93-94`). `gearButton` is absent from `FlightHud` on `master` too, so the test fails identically on master — this plan never touched `FlightHud`, font scaling, or the gear button. Left the test untouched per the "never modify existing tests" rule; the correct fix (re-point or retire the obsolete test) belongs to a separate settings-panel cleanup plan.
 
 ### Task 8: Update documentation
-- [ ] Update `.claude/docs/systems/letsplay.md`'s "Live controller" and `dismissBlockingModal` sections to describe the new system-menu mirror, the OVERMIND-core/shakedown real-decision branches, and the live trade executor
-- [ ] Note in the same doc that `TradeScene`/`HangarPanel`/`BankScene` are now exercised by the autopilot (updates the "economy heads bypass the UI" caveat if still present anywhere)
+- [x] Update `.claude/docs/systems/letsplay.md`'s "Live controller" and `dismissBlockingModal` sections to describe the new system-menu mirror, the OVERMIND-core/shakedown real-decision branches, and the live trade executor
+- [x] Note in the same doc that `TradeScene`/`HangarPanel`/`BankScene` are now exercised by the autopilot (updates the "economy heads bypass the UI" caveat if still present anywhere)
 
 ## Technical Details
 
