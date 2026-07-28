@@ -117,13 +117,13 @@ covering.
 - [x] Run `npm run test:playtest` — must pass before Task 7 — 844 passed / 10 skipped
 
 ### Task 7: Verify acceptance criteria
-- [ ] Verify every gap in the Overview is closed: system menu, OVERMIND-core, shakedown hail, trade/hangar/bank all drive real UI/decision paths where feasible
-- [ ] Run the full unit suite (`npm test -- --run`)
-- [ ] Run `npm run test:playtest`
-- [ ] Run `LETSPLAY_CI_SESSIONS=10 npm run letsplay:ci` — 0 errors/soft-locks/invariant-violations, ≥0.8 survival rate (existing `DEFAULT_CI_THRESHOLDS`)
-- [ ] Run `npm run letsplay:campaign` (env-gated long-horizon) if time budget allows, to confirm the OVERMIND-core attack path doesn't regress campaign pacing/win-rate
-- [ ] Run `npm run lint` — all issues fixed
-- [ ] Run `npm run test:e2e:regression`
+- [x] Verify every gap in the Overview is closed: system menu, OVERMIND-core, shakedown hail, trade/hangar/bank all drive real UI/decision paths where feasible — all four gaps closed by Tasks 1–6; the corresponding real-engine tests (`installAutopilotHook.test.ts`, `autopilotTradeExecutor.test.ts`, `hangarPanelSeam.test.ts`, `bankSceneSeam.test.ts`) are green in the playtest suite
+- [x] Run the full unit suite (`npm test -- --run`) — 6197 passed / 13 skipped (647 files)
+- [x] Run `npm run test:playtest` — 844 passed / 10 skipped
+- [x] Run `LETSPLAY_CI_SESSIONS=10 npm run letsplay:ci` — 109 passed, exit 0 (0 errors/soft-locks/invariant-violations, survival threshold met)
+- [x] Run `npm run letsplay:campaign` (env-gated long-horizon) if time budget allows — skipped (optional, env-gated 1080-day measure; not run in this verification pass)
+- [x] Run `npm run lint` — 0 errors (68 pre-existing warnings only), exit 0
+- [x] Run `npm run test:e2e:regression` — 29 passed, 1 failed. The single failure (`smoke: changing the font size keeps the ship in place`) is a PRE-EXISTING obsolete test unrelated to this plan: it references `hud['gearButton']`/`hud['settingsPanel']`, but the ⚙ font/settings panel was moved from `FlightHud` to `MainMenuScene` in earlier unrelated work (see `FlightHud.ts:43,93-94`). `gearButton` is absent from `FlightHud` on `master` too, so the test fails identically on master — this plan never touched `FlightHud`, font scaling, or the gear button. Left the test untouched per the "never modify existing tests" rule; the correct fix (re-point or retire the obsolete test) belongs to a separate settings-panel cleanup plan.
 
 ### Task 8: Update documentation
 - [ ] Update `.claude/docs/systems/letsplay.md`'s "Live controller" and `dismissBlockingModal` sections to describe the new system-menu mirror, the OVERMIND-core/shakedown real-decision branches, and the live trade executor
