@@ -21,6 +21,7 @@ import {
   encounterPlayerStateFor,
   encounterSystemView,
 } from "@/systems/encounters/encounterFlight";
+import { encounterOutcomeMessageRu } from "@/systems/encounters/encounterOutcomeText";
 
 /** Per-type copy + accent for the exploration-encounter prompt (Task 3). */
 const ENCOUNTER_PROMPT_COPY: Record<
@@ -248,26 +249,13 @@ export class EncounterController {
     return outcome;
   }
 
-  /** Russian toast for a resolved outcome (the resolver's `message` is English). */
+  /**
+   * Russian toast for a resolved outcome (the resolver's `message` is English).
+   * Delegates to the shared `encounterOutcomeMessageRu` so the toast and the
+   * bank-ledger reason stay in lockstep and neither leaks the raw enum kind.
+   */
   private encounterOutcomeMessage(outcome: EncounterOutcome): string {
-    const credits = outcome.credits ?? 0;
-    switch (outcome.kind) {
-      case "salvage":
-        return `Обломок обчищен: +${credits} кр.`;
-      case "trap":
-        return "Это была ловушка — враги открывают огонь!";
-      case "bonus":
-        return `Аномалия просканирована: +${credits} кр.`;
-      case "hazard":
-        return `Аномалия повредила системы: ${credits} кр.`;
-      case "rescue":
-        return `Экипаж спасён: +${credits} кр. и доброе имя.`;
-      case "ambush":
-        return "Сигнал SOS оказался засадой!";
-      case "ignored":
-      default:
-        return "Вы уходите, не вмешиваясь.";
-    }
+    return encounterOutcomeMessageRu(outcome);
   }
 
   /**

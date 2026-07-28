@@ -18,6 +18,9 @@ import {
   wholeCreditsToCurrent,
 } from "@/presentation/bankSceneView";
 import { loanTermsSummary } from "@/systems/banking/products";
+import { resourceLabelRu } from "@/domain/RouteRumor";
+import { encounterOutcomeMessageRu } from "@/systems/encounters/encounterOutcomeText";
+import { ResourceType } from "@/types";
 
 describe("formatCredits", () => {
   it("renders small amounts without grouping", () => {
@@ -180,6 +183,54 @@ describe("statementRows", () => {
       reason: "Ремонт корпуса",
       balanceAfter: 1300,
     });
+  });
+});
+
+// UX review finding #2: raw English enum tokens (a `ResourceType` or an
+// encounter `kind`) once leaked verbatim into player-visible ledger reasons.
+// A row rendered from a reason built by the localized producers must carry no
+// such token.
+describe("statementRows — localized reasons carry no raw enum token", () => {
+  /** Matches an all-caps ASCII enum token or a lowercase encounter kind. */
+  const RAW_ENUM =
+    /\b([A-Z][A-Z_]{2,}|salvage|trap|bonus|hazard|rescue|ambush|ignored)\b/;
+
+  it("a trade reason built via resourceLabelRu renders Russian-only", () => {
+    const entries: JournalEntry[] = [
+      journalEntry({
+        id: "sale",
+        date: 1,
+        reason: `Продажа: ${resourceLabelRu(ResourceType.DATA_CORES)}`,
+        postings: [
+          { accountId: "gl:market", amount: -500 },
+          { accountId: "cur:player", amount: 500 },
+        ],
+      }),
+    ];
+    const rows = statementRows(entries, "cur:player");
+    expect(rows[0]?.reason).toBe("Продажа: Ядра данных");
+    expect(rows[0]?.reason).not.toMatch(RAW_ENUM);
+  });
+
+  it("an encounter reason built via encounterOutcomeMessageRu renders Russian-only", () => {
+    const entries: JournalEntry[] = [
+      journalEntry({
+        id: "enc",
+        date: 1,
+        reason: `Исход встречи: ${encounterOutcomeMessageRu({
+          kind: "salvage",
+          credits: 120,
+          message: "",
+        })}`,
+        postings: [
+          { accountId: "gl:rewards", amount: -120 },
+          { accountId: "cur:player", amount: 120 },
+        ],
+      }),
+    ];
+    const rows = statementRows(entries, "cur:player");
+    expect(rows[0]?.reason).toBe("Исход встречи: Обломок обчищен: +120 кр.");
+    expect(rows[0]?.reason).not.toMatch(RAW_ENUM);
   });
 });
 

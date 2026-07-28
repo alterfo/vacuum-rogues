@@ -8,6 +8,7 @@ import type { Faction } from "@/types/faction";
 import type { Planet } from "@/domain/Planet";
 import type { Player } from "@/domain/Player";
 import { economyBaseline, applyMarketTradeImpact } from "@/domain/Market";
+import { resourceLabelRu } from "@/domain/RouteRumor";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
 import {
@@ -357,12 +358,16 @@ export class TradeSystem {
         };
       }
 
+      // `entry.reason` is baked into saved ledger history at transaction time,
+      // so this Russian label only affects rows written after this change — no
+      // schema/migration needed. `resourceLabelRu` keeps the raw `ResourceType`
+      // enum token out of the player-visible bank ledger.
       adjustPlayerCredits(
         bank,
         player,
         -totalPrice,
         GL_COUNTERPARTY.MARKET,
-        `Покупка: ${resource}`,
+        `Покупка: ${resourceLabelRu(resource)}`,
       );
       const stack = player.inventory.resources.find((r) => r.type === resource);
       if (stack) {
@@ -400,12 +405,14 @@ export class TradeSystem {
       }
 
       stack.amount -= amount;
+      // See the buy-branch note: `resourceLabelRu` keeps the raw enum out of the
+      // ledger; historical `entry.reason` rows are unaffected (no migration).
       adjustPlayerCredits(
         bank,
         player,
         totalPrice,
         GL_COUNTERPARTY.MARKET,
-        `Продажа: ${resource}`,
+        `Продажа: ${resourceLabelRu(resource)}`,
       );
 
       // Update planet demand

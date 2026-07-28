@@ -10,6 +10,7 @@ import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { PIRATE_FACTION_ID } from "@/systems/galaxy/landingAccess";
 import type { Encounter, EncounterSystemView, EncounterPlayerState } from "./encounterGenerator"; // prettier-ignore
 import type { EncounterOutcome } from "./encounterOutcome";
+import { encounterOutcomeMessageRu } from "./encounterOutcomeText";
 
 /**
  * Live-flight wiring for exploration encounters (Task 3) — the thin, **pure**
@@ -125,12 +126,16 @@ export function applyEncounterOutcome(
     if (delta !== 0) {
       const counterparty =
         delta >= 0 ? GL_COUNTERPARTY.REWARDS : GL_COUNTERPARTY.SERVICES;
+      // `entry.reason` is baked into saved ledger history at transaction time —
+      // this Russian label only affects reasons written after this change; no
+      // schema/migration is needed, historical entries are display-only text.
+      // Shared with the in-flight toast so neither leaks the raw enum kind.
       adjustPlayerCredits(
         bank,
         player,
         delta,
         counterparty,
-        `Исход встречи (${outcome.kind})`,
+        `Исход встречи: ${encounterOutcomeMessageRu(outcome)}`,
       );
     }
   }

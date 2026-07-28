@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { Inventory } from "@/domain/Inventory";
-import type { Player } from "@/domain/Player";
+import { Player } from "@/domain/Player";
 import { Faction } from "@/types/faction";
-import { ResourceType } from "@/types";
+import { ResourceType, FactionType } from "@/types";
+import type { QuestLog, Journal } from "@/types";
 import {
   applyEncounterOutcome,
   encounterPlayerStateFor,
@@ -13,6 +14,12 @@ import {
 } from "@/systems/encounters/encounterFlight";
 import type { Encounter } from "@/systems/encounters/encounterGenerator";
 import type { EncounterOutcome } from "@/systems/encounters/encounterOutcome";
+import { BankBus } from "@/systems/banking/bus";
+import { BankingService } from "@/systems/banking/BankingService";
+import { setupPlayerBanking } from "@/systems/banking/economy";
+import { statementRows } from "@/presentation/bankSceneView";
+import { PlayerShip } from "@/domain/PlayerShip";
+import { SkillTree } from "@/domain/SkillTree";
 
 /** A minimal galaxy view with the three systems the helper reads. */
 function fakeGalaxy(opts: {
@@ -224,5 +231,94 @@ describe("applyEncounterOutcome", () => {
       player.inventory.resources.find((r) => r.type === ResourceType.METALS)
         ?.amount,
     ).toBe(9);
+  });
+});
+
+/** A real, bank-wired Player so the booked ledger reason can be inspected. */
+function makeBankedPlayer(credits = 1000): {
+  player: Player;
+  service: BankingService;
+  bus: BankBus;
+} {
+  const player = new Player(
+    "banked",
+    "Pilot",
+    FactionType.PROGRESSORS,
+    0,
+    1,
+    new SkillTree([]),
+    {},
+    { activeQuests: [], completedQuests: [] } as QuestLog,
+    { entries: [] } as Journal,
+    credits,
+    new PlayerShip(
+      "ship1",
+      "Ship",
+      100,
+      100,
+      50,
+      50,
+      100,
+      100,
+      10,
+      5,
+      FactionType.PROGRESSORS,
+    ),
+    new Inventory(),
+  );
+  const bus = new BankBus();
+  const service = new BankingService(bus, { startDate: 1 });
+  setupPlayerBanking(bus, service, player);
+  return { player, service, bus };
+}
+
+describe("applyEncounterOutcome — bank-ledger reason localization", () => {
+  const galaxy = fakeGalaxy({
+    systems: [{ id: "s", ownerFaction: Faction.PROGRESSORS }],
+  });
+  const enc = makeEncounter("s");
+
+  it("books a fully-Russian reason with no raw enum kind for salvage", () => {
+    const { player, service, bus } = makeBankedPlayer(1000);
+    const outcome: EncounterOutcome = {
+      kind: "salvage",
+      credits: 300,
+      message: "",
+    };
+    applyEncounterOutcome(
+      { bank: { bus, service }, player, galaxy },
+      enc,
+      outcome,
+    );
+    const rows = statementRows(
+      service.getLedger().listEntries(),
+      player.currentAccountId,
+    );
+    const encounterRow = rows.find((r) => r.reason.startsWith("Исход встречи"));
+    expect(encounterRow?.reason).toBe(
+      "Исход встречи: Обломок обчищен: +300 кр.",
+    );
+    expect(encounterRow?.reason).not.toMatch(/salvage|hazard|rescue|ambush/);
+  });
+
+  it("localizes a hazard (negative) outcome reason too", () => {
+    const { player, service, bus } = makeBankedPlayer(1000);
+    const outcome: EncounterOutcome = {
+      kind: "hazard",
+      credits: -120,
+      message: "",
+    };
+    applyEncounterOutcome(
+      { bank: { bus, service }, player, galaxy },
+      enc,
+      outcome,
+    );
+    const rows = statementRows(
+      service.getLedger().listEntries(),
+      player.currentAccountId,
+    );
+    const encounterRow = rows.find((r) => r.reason.startsWith("Исход встречи"));
+    expect(encounterRow?.reason).toContain("Аномалия повредила системы");
+    expect(encounterRow?.reason).not.toContain("hazard");
   });
 });

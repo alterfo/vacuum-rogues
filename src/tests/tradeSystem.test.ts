@@ -9,6 +9,10 @@ import { SkillTree } from "@/domain/SkillTree";
 import { FactionType, PoliticalSystem, ResourceType } from "@/types";
 import type { QuestLog, Journal } from "@/types";
 import { Faction } from "@/types/faction";
+import { BankBus } from "@/systems/banking/bus";
+import { BankingService } from "@/systems/banking/BankingService";
+import { setupPlayerBanking } from "@/systems/banking/economy";
+import { statementRows } from "@/presentation/bankSceneView";
 
 function makePlayer(credits = 100_000): Player {
   return new Player(
@@ -106,6 +110,61 @@ describe("TradeSystem — buy/sell spread (Task 9)", () => {
     trade2.executeTrade(player, planet, ResourceType.CRYSTALS, 10, false);
 
     expect(player.credits).toBeLessThan(before);
+  });
+});
+
+// --- Ledger reason localization (UX review: raw enum leaks into bank ledger) ---
+describe("TradeSystem — bank-ledger reason is localized, no raw enum token", () => {
+  /** A real bank wired to the player so the booked reason can be read back. */
+  function wireBank(player: Player): {
+    bus: BankBus;
+    service: BankingService;
+  } {
+    const bus = new BankBus();
+    const service = new BankingService(bus, { startDate: 1 });
+    setupPlayerBanking(bus, service, player);
+    return { bus, service };
+  }
+
+  it("a sale books a fully-Russian reason with the resource label, not the enum", () => {
+    const trade = new TradeSystem();
+    const planet = makePlanet();
+    const player = makePlayer(100_000);
+    player.inventory.addResource(ResourceType.FUEL, 10);
+    const { bus, service } = wireBank(player);
+
+    trade.executeTrade(player, planet, ResourceType.FUEL, 5, false, Infinity, {
+      bus,
+      service,
+    });
+
+    const rows = statementRows(
+      service.getLedger().listEntries(),
+      player.currentAccountId,
+    );
+    const saleRow = rows.find((r) => r.reason.startsWith("Продажа"));
+    expect(saleRow?.reason).toBe("Продажа: Топливо");
+    expect(saleRow?.reason).not.toContain("FUEL");
+  });
+
+  it("a purchase books the localized resource label too", () => {
+    const trade = new TradeSystem();
+    const planet = makePlanet();
+    const player = makePlayer(100_000);
+    const { bus, service } = wireBank(player);
+
+    trade.executeTrade(player, planet, ResourceType.METALS, 3, true, Infinity, {
+      bus,
+      service,
+    });
+
+    const rows = statementRows(
+      service.getLedger().listEntries(),
+      player.currentAccountId,
+    );
+    const buyRow = rows.find((r) => r.reason.startsWith("Покупка"));
+    expect(buyRow?.reason).toBe("Покупка: Металлы");
+    expect(buyRow?.reason).not.toContain("METALS");
   });
 });
 

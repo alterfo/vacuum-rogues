@@ -124,26 +124,39 @@ panorama category exists.
       before starting Task 4/Task 10 — done (rows #1, #8, #13 marked REFUTED).
 
 ### Task 2: Localize bank ledger reason strings
-- [ ] Add a Russian resource label to the sale-reason string built in
+- [x] Add a Russian resource label to the sale-reason string built in
       `src/systems/TradeSystem.ts:408` (reuse `resourceLabelRu()` from
-      `src/domain/RouteRumor.ts:69`, not a new mapping).
-- [ ] Add a Russian encounter-outcome label to the reason string built in
+      `src/domain/RouteRumor.ts:69`, not a new mapping). Done — both the sell (`Продажа`)
+      **and** buy (`Покупка`) reasons now route the `ResourceType` through
+      `resourceLabelRu()`.
+- [x] Add a Russian encounter-outcome label to the reason string built in
       `src/systems/encounters/encounterFlight.ts:133` — extract the existing per-kind
       Russian switch from `encounterOutcomeMessage()`
       (`src/presentation/flight/EncounterController.ts:252-271`) into a small reusable
       pure function (e.g. in a shared location under `src/systems/`) and call it from
       both the toast and the ledger-reason builder, rather than duplicating the switch.
-- [ ] Note in a code comment (not a migration): `entry.reason` is baked into saved
+      Done — new `src/systems/encounters/encounterOutcomeText.ts`
+      (`encounterOutcomeMessageRu`); `EncounterController.encounterOutcomeMessage`
+      delegates to it, and the ledger reason is now `Исход встречи: <RU message>`.
+- [x] Note in a code comment (not a migration): `entry.reason` is baked into saved
       ledger history at transaction time — this fix only affects reasons written after
       the change; no schema/migration needed, historical entries are display-only text.
-- [ ] Write unit tests: `TradeSystem` sale-reason string is fully Russian for a sample
+      Done — comments added at both TradeSystem call sites and the encounterFlight one.
+- [x] Write unit tests: `TradeSystem` sale-reason string is fully Russian for a sample
       `ResourceType` (extend existing `TradeSystem` tests or add alongside
       `src/tests/banking/bankSceneView.test.ts`); `encounterFlight` outcome-reason
-      string is fully Russian for `salvage`/`rescue`/etc. kinds.
-- [ ] Write a regression test in `src/tests/banking/bankSceneView.test.ts` asserting a
+      string is fully Russian for `salvage`/`rescue`/etc. kinds. Done —
+      `tradeSystem.test.ts` (bank-wired sell/buy reason), new
+      `encounters/encounterOutcomeText.test.ts` (all kinds), and
+      `encounters/encounterFlight.test.ts` (bank-ledger reason integration).
+- [x] Write a regression test in `src/tests/banking/bankSceneView.test.ts` asserting a
       ledger row built from a `TradeSystem`/`encounterFlight`-produced `reason` renders
-      with no raw English enum token.
-- [ ] run tests — must pass before task 3.
+      with no raw English enum token. Done — new `statementRows` describe block asserting
+      the localized reasons carry no `RAW_ENUM` token.
+- [x] run tests — must pass before task 3. Done — target tests + `tsc --noEmit` + lint
+      green; full `npm test -- --run` green after regenerating the intentional
+      `cyrillicBaseline.json` ratchet (EncounterController 19→12, new file grandfathered
+      at 7 — literals moved, none added).
 
 ### Task 3: Deduplicate planet economy-type text
 - [ ] Read `PlanetScene.ts` around L1171-1174 (subtitle), L1410-1432 (`addInfoPanel`
