@@ -816,4 +816,17 @@ export class BankScene extends GameScene {
     if (!__DEBUG__) return;
     this.doTakeLoan();
   }
+
+  /**
+   * Drive the «Погасить» button — the real `doRepay()` handler (one `REPAY_STEP`
+   * of debt per call, exactly like a player press). Sibling of the existing
+   * {@link e2eTakeLoan} seam; used by the live dev autopilot's loan executor
+   * (`bankingQueries.executeRepayLoan`) so a `repay-loan` action is watchable
+   * through the real bank UI instead of a silent bank-bus mutation
+   * (Task 6, docs/plans/20260727-autopilot-ui-parity-fixes.md).
+   */
+  e2eRepayLoan(): void {
+    if (!__DEBUG__) return;
+    this.doRepay();
+  }
 }

@@ -48,14 +48,25 @@ export function standardLoanTerms(engine: GameEngine): LoanTerms | null {
 }
 
 /**
- * Take the standard loan, disbursed to the player's current account through the
- * canonical {@link takeLoan} seam. A no-op when a loan is already outstanding.
+ * Take the standard loan. When docked at a scene exposing the `e2eTakeLoan`
+ * seam (a live `BankScene`) it drives the real «Взять кредит» button so the
+ * disbursement is watchable through the real bank UI exactly like a player tap;
+ * otherwise it falls back to the canonical {@link takeLoan} bank-bus call (the
+ * unchanged path every headless test double drives) — mirroring `takeQuest`'s
+ * "seam when available, else domain call" shape (Task 6,
+ * docs/plans/20260727-autopilot-ui-parity-fixes.md). A no-op when a loan is
+ * already outstanding.
  */
 export function executeTakeLoan(engine: GameEngine): void {
   const player = engine.player;
   if (!player || !canTakeLoan(engine)) return;
   const terms = standardLoanTerms(engine);
   if (!terms) return;
+  const scene = engine.currentScene as { e2eTakeLoan?: () => void } | null;
+  if (typeof scene?.e2eTakeLoan === "function") {
+    scene.e2eTakeLoan();
+    return;
+  }
   takeLoan(
     engine.bankBus,
     engine.bankingService,
@@ -66,9 +77,14 @@ export function executeTakeLoan(engine: GameEngine): void {
 }
 
 /**
- * Repay as much of the outstanding loan as current credits allow (whole credits
- * only — the current account is integer-only) through the canonical
- * {@link repayLoan} seam. A no-op when there is no outstanding loan or no funds.
+ * Repay the outstanding loan. When docked at a scene exposing the `e2eRepayLoan`
+ * seam (a live `BankScene`) it drives the real «Погасить» button (one
+ * `REPAY_STEP` of debt per press, exactly like a player tap) so the repayment is
+ * watchable through the real bank UI; otherwise it falls back to repaying as
+ * much of the balance as current credits allow (whole credits only — the current
+ * account is integer-only) through the canonical {@link repayLoan} bank-bus call
+ * (the unchanged path every headless test double drives). A no-op when there is
+ * no outstanding loan or no funds.
  */
 export function executeRepayLoan(engine: GameEngine): void {
   const player = engine.player;
@@ -77,6 +93,11 @@ export function executeRepayLoan(engine: GameEngine): void {
   if (owed <= 0) return;
   const amount = Math.max(0, Math.floor(Math.min(owed, player.credits)));
   if (amount <= 0) return;
+  const scene = engine.currentScene as { e2eRepayLoan?: () => void } | null;
+  if (typeof scene?.e2eRepayLoan === "function") {
+    scene.e2eRepayLoan();
+    return;
+  }
   repayLoan(
     engine.bankBus,
     player.currentAccountId,

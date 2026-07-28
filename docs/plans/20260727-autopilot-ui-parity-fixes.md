@@ -111,10 +111,10 @@ covering.
 - [x] Run `npm run test:playtest` — must pass before Task 6 — 837 passed / 10 skipped
 
 ### Task 6: Route bank actions (take-loan/repay-loan) through the real BankScene
-- [ ] Add an e2e seam to `BankScene` for take-loan/repay-loan, same convention as above
-- [ ] Change `executeTakeLoan`/`executeRepayLoan` (`bankingQueries.ts:54-86`) to drive the real seam when available, falling back to the existing direct `takeLoan`/`repayLoan` bank-bus calls otherwise
-- [ ] Write regression tests confirming both the real-seam and fallback paths
-- [ ] Run `npm run test:playtest` — must pass before Task 7
+- [x] Add an e2e seam to `BankScene` for take-loan/repay-loan, same convention as above — reused the existing `e2eTakeLoan()` and added the sibling `e2eRepayLoan()` (one `REPAY_STEP` per press via the real `doRepay()` handler)
+- [x] Change `executeTakeLoan`/`executeRepayLoan` (`bankingQueries.ts:54-86`) to drive the real seam when available, falling back to the existing direct `takeLoan`/`repayLoan` bank-bus calls otherwise
+- [x] Write regression tests confirming both the real-seam and fallback paths — `bankSceneSeam.test.ts` (7 cases: seam-present drive per action, no-op-no-fire per action, seams-absent bank-bus fallback per action, real docked `BankScene` take-then-repay end-to-end)
+- [x] Run `npm run test:playtest` — must pass before Task 7 — 844 passed / 10 skipped
 
 ### Task 7: Verify acceptance criteria
 - [ ] Verify every gap in the Overview is closed: system menu, OVERMIND-core, shakedown hail, trade/hangar/bank all drive real UI/decision paths where feasible
