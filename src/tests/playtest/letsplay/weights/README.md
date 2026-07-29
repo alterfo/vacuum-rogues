@@ -86,6 +86,67 @@ python train_player.py \
 
 ## Result
 
+**2026-07-30 retrain** (fresh 100K-row dataset regenerated after the
+land↔take-off anti-loop fix landed in the teacher — `MemoryHeuristicPolicy`'s
+no-op-land cooldown + `AgentMemory.noopLandStreak`, see
+`.claude/docs/systems/letsplay.md` and `noopLandCooldown.test.ts`): converged
+and **early-stopped at epoch 461/500**, **val_acc 91.4%**, val_loss 0.248. No
+NaN loss at any point. `--parity-out` re-wrote `fixtures/player.io.json`,
+re-asserted by `shippedParity.test.ts` (≤ 1e-5). All neural guard gates green
+(`shippedWeights`/`weightsContract`/`neuralSession`/`neuralTargetResolution`/
+`neuralActionSpace`).
+
+**The teacher fix is visible in the dataset's action mix** (the whole reason to
+regenerate). Compared to the 07-18 dataset below, `land` collapsed
+**20.5% → 5.3%** while `dock` rose **8.6% → 25.4%** — a direct, measured
+consequence of the no-op-land cooldown: the barren earn-landing churn (the
+land↔take-off loop) is gone, so the base ladder falls through to `dock` (which
+also refuels but is productive) instead of re-landing the same quest-less
+planet. Full new mix: `move` 30.9%, `dock` 25.4%, `warp` 17.1%, `wait` 9.3%,
+`trade` 6.3%, `land` 5.3%, `flee` 2.0%, `take-quest` 1.3%, `attack` 1.1%,
+`repair` 0.5%, `arm-up` 253 rows, `buy-gear` 221 rows, `liberate` 30 rows,
+`upgrade-hull`/`buy-module` double-digit rows; `take-loan`/`repay-loan`/
+`sell-cargo` remain **dead heads** (the known, pre-existing headless-applier
+limitation, unchanged by this work). Exact-duplicate rows also eased
+**49.8% → 47.71%** — modestly fewer repeated/looping states, consistent with
+the fix, though still high (train/val leakage caveat below still applies).
+
+**Neural win-rate ceiling is UNMOVED — and this is expected, not a regression.**
+Measured **0% win-rate / 15 sessions** via `CAMPAIGN_POLICY=neural
+npm run letsplay:campaign` — all 15 wedged, but with `worst repeat-run=1` across
+every session (the prior net's collapse was a *repeat-action* argmax loop; this
+one is not) and several sessions now progressing further before stalling
+(one to day 14 with a quest taken, one to day 62 with 2 quests) vs the prior
+net's "most within ~300 steps of day 0." The 0% is **structural to
+`NeuralPolicy`, not the teacher's loop**: the net decides by pure argmax on a
+static observation with **no anti-stagnation fallback**, and — decisively — the
+new cooldown signal (`noopLandStreak`) lives in `AgentMemory` but is **not** in
+the 20-wide `memoryFeatures` projection the net is fed, so a static net
+literally cannot see it. BC clones the teacher's *outputs*; it cannot replicate
+a memory-driven escape the teacher performs by reading a counter the net never
+receives. Fixing this would need either an anti-stagnation fallback in
+`NeuralPolicy` or featurizing the cooldown (a width change ⇒ full retrain) —
+both out of scope here. The neural flag stays **off** in production (default
+false); the live autopilot runs the fixed teacher directly, where the anti-loop
+fix is fully in effect. See `.claude/docs/systems/letsplay.md`'s neural ceiling
+note and the `project-bc-player-net-ceiling` memory.
+
+**The teacher itself — what actually ships live — improved dramatically from the
+same fix.** `MemoryHeuristicPolicy` (unretrained, default policy) measured
+**33.3% win-rate / 12 sessions** (4 win / 8 loss / 0 died / 0 timeout, **0
+wedged**) via `npm run letsplay:campaign` — every session resolved the Overmind
+arc by ~day 360–460 with liberation firing, none ran out the step budget stuck.
+Compare the pre-fix baseline recorded below (**6.7% / 15, with 13% hitting a
+calendar-freeze wedge**): the no-op-land cooldown ~5×'d the live win-rate and
+**eliminated the wedges/timeouts entirely** — the land↔take-off loop that used
+to freeze the calendar is gone. The remaining 8 losses are the *known, open*
+Overmind spread-cadence balance gap (the front outruns the player at ~day 400,
+see root `CLAUDE.md`'s Overmind section), not a loop or a wedge. This is the
+real payoff of the exercise; the neural retrain above is a faithful but
+ceiling-bound clone of this now-healthier teacher.
+
+---
+
 **2026-07-18 retrain** (fresh 100K-row dataset, see note above): converged and
 **early-stopped at epoch 412/500**, **val_acc 90.5%**, val_loss 0.241. No NaN
 loss at any point. `--parity-out` also wrote `fixtures/player.io.json`,
