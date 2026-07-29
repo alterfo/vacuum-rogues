@@ -193,19 +193,26 @@ panorama category exists.
       both clean and this tree; zero coupling to a presentation-only text change).
 
 ### Task 4: Fix star map background (contingent on Task 1)
-- [ ] If Task 1 confirmed this is a real bug through real navigation: read
+- [x] If Task 1 confirmed this is a real bug through real navigation: read
       `StarMapScene.ts` L362-370 (`renderStarMap`) and `mountOvermindMoodBackdrop()`
       L319-360 end-to-end to find why the dark `Graphics` rect isn't visible/isn't
       painted in the reproduced case (init-order bug, a mood-backdrop sprite drawn over
-      it in white/opaque, a missing `addChild`, etc.) and fix the root cause.
-- [ ] If Task 1 refuted this (confirmed shortcut-only artifact): mark this task's boxes
+      it in white/opaque, a missing `addChild`, etc.) and fix the root cause. — not
+      applicable — confirmed non-issue in Task 1, no code change.
+- [x] If Task 1 refuted this (confirmed shortcut-only artifact): mark this task's boxes
       `[x]` with a note "not applicable — confirmed non-issue in Task 1, no code
-      change", and skip to Task 5.
-- [ ] (If fixing) Write a unit/real-engine test asserting `StarMapScene` mounts its dark
-      background before any foreground content, covering the exact repro path found.
-- [ ] (If fixing) Screenshot-verify the real dark background renders correctly, incl.
-      label contrast (light-cyan system names) against it.
-- [ ] run tests — must pass before task 5.
+      change", and skip to Task 5. Done — Task 1 REFUTED finding #1; re-verified live in
+      this iteration that `renderStarMap()` (L362-370) unconditionally paints the dark
+      `0x000510` `Graphics` rect at `gameLayer.addChildAt(bg, 0)` every render, with the
+      mood backdrop only an alpha-0.25 sprite at layer 1. No path leaves the map white.
+- [x] (If fixing) Write a unit/real-engine test asserting `StarMapScene` mounts its dark
+      background before any foreground content, covering the exact repro path found. — not
+      applicable — no code change (non-bug).
+- [x] (If fixing) Screenshot-verify the real dark background renders correctly, incl.
+      label contrast (light-cyan system names) against it. — not applicable — no code
+      change (non-bug).
+- [x] run tests — must pass before task 5. Done — full `npm test -- --run` green (6211
+      passed | 13 skipped); no code changed, confirming the tree is clean before Task 5.
 
 ### Task 5: Add a Station interior backdrop
 - [ ] Read `PlanetScene.ts`'s `resolvePlanetBackdropKey()` + its lazy-load mount
