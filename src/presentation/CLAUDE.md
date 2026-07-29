@@ -49,6 +49,21 @@ both paths. The matching ComfyUI prompt category is `station` in
 `tools/comfyui/asset_prompts.json` (mirrors `ships`); the art lands in a separate commit
 and lights up the sprite path automatically via the Vite glob manifest.
 
+**Station interior backdrop mirrors the planet backdrop resolver** (`flight/stationBackdrop.ts`,
+`docs/plans/20260729-ux-review-fixes.md` Task 5). `StationScene.renderMain()` used to paint a flat
+black rect behind its panel, so a docked station read as a bare panel on a void. It now mounts
+`buildStationBackdrop(w, h, type)` as the **first** child of `mainContainer` — a full-bleed 12-band
+vertical gradient (near-black top → dim accent-tinted floor) plus a dark vignette, `eventMode="static"`.
+The per-`StationType` accent (`STATION_BACKDROP_ACCENT`/`stationBackdropAccent`) mirrors the marker
+diamond's `TYPE_COLOR` coding so an interior reads the same hue as its flight-map marker. Structure
+is deliberately identical to `PlanetScene.resolvePlanetBackdropKey` + `skyGradientColors`:
+`resolveStationBackdropKey(type, id)` resolves a `pickVariantKey("station_interior", …)` art variant
+and **returns `null` today** (no `station_interior/` art category is committed), so the procedural
+gradient is the graceful fallback. Drop real interior-panorama art behind the same resolver and the
+sprite path lights up with no scene change — same convention as planet panoramas and station markers.
+The bands (`stationBackdropBands`) are pure + exported so a unit test asserts the tint tracks the
+station type without a renderer.
+
 **Military bases offer quests; other station types show the wrong-place message**
 (`StationScene` `"quests"` case, `20260625-station-label-and-military-quests-fix`). The action
 branches on `this.station.type`: at `MILITARY_BASE` it opens the shared `JobBoardPanel` —
@@ -235,6 +250,29 @@ class. **Known gap, not yet fixed:** `ScrollableList`'s shared `itemHeight` is s
 (non-variable) across its 6+ panel consumers — a long wrapped item (e.g. InfoCenter news rows) can
 still bleed into the next row at "L" scale; fixing it needs per-item variable-height support in that
 shared component, out of scope for a single-panel fix.
+
+**The star-map critical-threat line is a bordered banner chip, not stray red text**
+(`ui/starMapThreatBanner.ts`, `docs/plans/20260729-ux-review-fixes.md` Task 6). `StarMapScene`'s old
+`warningIndicator` was a raw `new Text({ fontSize: 12 })` at the routine stat-line size, so a
+`critical`/`warning` alert carried no visual weight. `buildThreatBanner(level, …)` now mounts a filled,
+bordered `Graphics` chip behind a **bold** `scaledText` label at `THREAT_BANNER_BASE_PX` (15) — strictly
+larger than the 12px РАЗУМ/ПИРАТЫ stat lines — with a hotter red accent for `critical` than `warning`,
+`eventMode="none"` so it never intercepts map clicks. Any animated emphasis (the subtle pulse) is gated
+on `shouldPulseThreatBanner(level, env)` = `critical` **and** `!reducedMotion(env)` per the accessibility
+seam — a reduced-motion player gets a static banner. This is the one StarMapScene line migrated to
+`scaledText` (the file is still on the not-yet-migrated list above; migrate only lines you touch).
+
+**Hover tooltips on icon-only HUD buttons reuse the star-map tooltip shape** (`FlightHud.mountIconTooltip`,
+`docs/plans/20260729-ux-review-fixes.md` Task 10). An icon-only glyph button (`[I]` inventory, the flight
+`[?]` help-overlay) reads as low-affordance next to a worded button (`[КВЕСТЫ]`). `mountIconTooltip(btn,
+label, color)` mirrors the existing `starMapTooltip` pattern: an `eventMode="none"` label hidden until
+hover, toggled on the button's `pointerover`/`pointerout` via a **second** listener so the button keeps
+its own alpha/hover-audio handlers. Labels go through `t(...)` (`flight.inventoryTooltip` "Инвентарь",
+`flight.helpTooltip` "Помощь"; keys in both `ru.ts`/`en.ts`). **Position the tooltip from the button's
+numeric x/y + a font-scaled glyph budget, NOT `btn.width`/`btn.height`** — PixiJS Text measurement
+throws in the jsdom harness (the `BOTTOM_LEFT_LANE_W` trap; see `flight/CLAUDE.md`). The shared
+`mountSceneHelp` "?" glyph is left untouched (self-explanatory on every scene); a full word like
+`[КВЕСТЫ]` needs no tooltip.
 
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks

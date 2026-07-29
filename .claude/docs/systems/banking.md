@@ -27,6 +27,15 @@ All in-game credits live in a **double-entry general ledger** (`src/domain/banki
 
 `BankingService` owns no reputation; when EOD trips a player loan into default it publishes a one-shot `LoanDefaulted` bus event, and `GameEngine` subscribes to apply the reputation hit (`BANK_FACTION_ID = BASTIONS`, −15, once per default crossing).
 
+## Ledger `reason` strings are Russian at build time (no migration)
+
+A ledger `entry.reason` is player-visible in the АБС statement (`BankScene`/`bankSceneView.ts`), so the code that **builds** the reason must not leak a raw English enum token:
+
+- **Trade reasons** (`TradeSystem.ts`): sell/buy reasons route the `ResourceType` through `resourceLabelRu()` (from `src/domain/RouteRumor.ts`) — `Продажа <товар>` / `Покупка <товар>`, not `Продажа IRON`.
+- **Encounter outcome reasons** (`encounters/encounterFlight.ts`): the per-kind Russian copy is the single pure `encounterOutcomeMessageRu(outcome)` in `src/systems/encounters/encounterOutcomeText.ts`, shared by both the in-flight toast (`EncounterController.encounterOutcomeMessage` delegates to it) and the ledger reason (`Исход встречи: <RU message>`). Do not duplicate the per-kind switch.
+
+**No schema/migration/save-version bump:** `entry.reason` is baked into saved ledger history at transaction time, so localizing the *builder* only affects reasons written **after** the change — historical entries stay byte-identical display-only text. (`docs/plans/20260729-ux-review-fixes.md` Task 2.)
+
 ## Persistence
 
 Ledger snapshot persists via `SaveState.banking` / `BankingSnapshotSchema`. The `loanDefaults` field is optional — old saves re-seed each outstanding loan lazily at the next EOD (no save-version bump). Old saves lacking `banking` entirely: `resetLedger()` is called first, then the player current account is re-seeded from `credits`.

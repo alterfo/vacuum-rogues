@@ -526,14 +526,24 @@ panorama category exists.
       power-ceiling` branch commits, NOT this plan — no unexpected plan-side symbol.
 
 ### Task 14: [Final] Update documentation
-- [ ] Update `src/presentation/CLAUDE.md` if this plan established a new reusable
+- [x] Update `src/presentation/CLAUDE.md` if this plan established a new reusable
       pattern worth documenting (e.g. the Station backdrop resolver mirroring
       `resolvePlanetBackdropKey`, the shared encounter/trade reason-localization
-      helper, the tooltip pattern extended beyond the star-map button).
-- [ ] Update `.claude/docs/systems/banking.md` if Task 2's ledger-reason localization
-      helper is a durable seam worth documenting there.
-- [ ] No `README.md` change expected (internal UX polish, not a user-facing feature
-      addition).
+      helper, the tooltip pattern extended beyond the star-map button). Done — added
+      three new convention paragraphs: "Station interior backdrop mirrors the planet
+      backdrop resolver" (Task 5: `flight/stationBackdrop.ts`, gradient fallback +
+      future-art resolver), "The star-map critical-threat line is a bordered banner chip"
+      (Task 6: `ui/starMapThreatBanner.ts`, `scaledText`/weight/reduced-motion pulse), and
+      "Hover tooltips on icon-only HUD buttons reuse the star-map tooltip shape" (Task 10:
+      `FlightHud.mountIconTooltip`, with the `btn.width` jsdom-measurement trap noted).
+- [x] Update `.claude/docs/systems/banking.md` if Task 2's ledger-reason localization
+      helper is a durable seam worth documenting there. Done — added a "Ledger `reason`
+      strings are Russian at build time (no migration)" section covering the `TradeSystem`
+      `resourceLabelRu()` routing, the shared `encounterOutcomeMessageRu()` seam
+      (`encounters/encounterOutcomeText.ts`) used by both the toast and the ledger reason,
+      and the no-schema/migration note (`reason` is baked at transaction time).
+- [x] No `README.md` change expected (internal UX polish, not a user-facing feature
+      addition). Confirmed — pure presentation-layer polish; no README change made.
 
 ## Technical Details
 
