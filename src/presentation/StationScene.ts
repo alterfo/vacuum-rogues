@@ -40,6 +40,10 @@ import { logger } from "@/utils/logger";
 import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
 import { ResearchUpgradePanel } from "./ResearchUpgradePanel";
 import { attachWheelScroll } from "./ui/WheelScroll";
+import {
+  stationBackdropAccent,
+  stationBackdropBands,
+} from "./flight/stationBackdrop";
 
 interface StationContext {
   gameEngine?: GameEngine;
@@ -108,6 +112,38 @@ const REPAIR_DISCOUNT: Record<StationType, number> = {
   [StationType.RESEARCH_LAB]: 1.1,
   [StationType.CRAFT_CENTER]: 1.0,
 };
+
+/**
+ * Build the full-bleed interior backdrop node for a station type (Task 5).
+ * A vertical near-black → accent-tinted gradient (via {@link stationBackdropBands})
+ * plus a soft dark vignette so the centred panel reads against a settled edge.
+ * `eventMode="static"` keeps it swallowing stray clicks like the old flat bg.
+ * Exported for the `StationScene.test.ts` backdrop-ordering + colour assertions.
+ */
+export function buildStationBackdrop(
+  width: number,
+  height: number,
+  type: StationType,
+): Graphics {
+  const accent = stationBackdropAccent(type);
+  const BANDS = 12;
+  const bands = stationBackdropBands(accent, BANDS);
+  const bandH = Math.ceil(height / BANDS);
+  const g = new Graphics();
+  for (let i = 0; i < BANDS; i++) {
+    g.rect(0, i * bandH, width, bandH + 1);
+    g.fill({ color: bands[i], alpha: 1 });
+  }
+  // Vignette: darken the outer frame so the panel floats on a settled centre.
+  g.rect(0, 0, width, height);
+  g.stroke({
+    color: 0x000000,
+    width: Math.max(width, height) * 0.18,
+    alpha: 0.5,
+  });
+  g.eventMode = "static";
+  return g;
+}
 
 // ── Scene ────────────────────────────────────────────────────────────────────
 
@@ -333,12 +369,17 @@ export class StationScene extends GameScene {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
 
-    // Backdrop
-    const bg = new Graphics();
-    bg.rect(0, 0, sw, sh);
-    bg.fill({ color: 0x000000, alpha: 0.9 });
-    bg.eventMode = "static";
-    this.mainContainer!.addChild(bg);
+    // Full-bleed interior backdrop (Task 5): the station used to read as a bare
+    // panel on a flat black void. We paint a procedural vertical gradient tinted
+    // by the station type, so the interior has a mood matching its flight-map
+    // marker. Structured to mirror the planet panorama: once a real
+    // `station_interior/` art asset exists, `resolveStationBackdropKey` returns a
+    // key and a Sprite mounts here instead — no other wiring change. Mounted
+    // first (layer 0) so the panel + all service rows sit above it.
+    const stationTypeForBg = this.station?.type ?? StationType.TRADE_POST;
+    this.mainContainer!.addChild(
+      buildStationBackdrop(sw, sh, stationTypeForBg),
+    );
 
     if (!this.station) {
       const errMsg = scaledText("Ошибка: станция недоступна", 18, 0xff4444, {

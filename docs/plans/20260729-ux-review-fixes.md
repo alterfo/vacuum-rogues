@@ -215,23 +215,39 @@ panorama category exists.
       passed | 13 skipped); no code changed, confirming the tree is clean before Task 5.
 
 ### Task 5: Add a Station interior backdrop
-- [ ] Read `PlanetScene.ts`'s `resolvePlanetBackdropKey()` + its lazy-load mount
-      (L369-406+) as the pattern to mirror.
-- [ ] Since generating new photographic station-interior art (ComfyUI pipeline,
+- [x] Read `PlanetScene.ts`'s `resolvePlanetBackdropKey()` + its lazy-load mount
+      (L369-406+) as the pattern to mirror. Done — mirrored its resolver shape (try
+      `pickVariantKey` → key, else null fallback) and the "show dark fallback now, swap
+      art later behind the same resolver" structure.
+- [x] Since generating new photographic station-interior art (ComfyUI pipeline,
       `tools/comfyui/asset_prompts.json`) is a separate external/creative step (see
       Post-Completion), implement a code-only interim backdrop: a full-bleed gradient/
-      vignette `Graphics` fill keyed by `StationType` (reuse whatever color coding
-      `stationArt.ts`'s `STATION_TEXTURE_PREFIX` already implies per type, or define a
-      small `StationType → accent color` map alongside it), mounted in `StationScene`'s
-      `renderMain()` before the existing panel box (L332-341), structured so a future
-      real art asset can be dropped in behind the same resolver without further wiring
-      changes (mirror `pickVariantKey`/lazy-load shape even though the interim result is
-      a procedural gradient, not a texture).
-- [ ] Write a new `src/tests/presentation/StationScene.test.ts` (none exists yet) — at
-      minimum: `renderMain()` mounts a full-bleed backdrop node before the panel box, and
-      the backdrop's color varies by `StationType`.
-- [ ] Screenshot-verify: Station no longer reads as a bare panel on black void.
-- [ ] run tests — must pass before task 6.
+      vignette `Graphics` fill keyed by `StationType`. Done — new
+      `src/presentation/flight/stationBackdrop.ts` (alongside `stationArt.ts`) exports
+      `STATION_BACKDROP_ACCENT` (per-type accent mirroring the marker/`TYPE_COLOR`
+      coding), `stationBackdropAccent()`, the future-art resolver
+      `resolveStationBackdropKey()` (mirrors `resolvePlanetBackdropKey`/`stationSpriteKey`
+      via `pickVariantKey("station_interior", …)`, returns null today), and the pure
+      `stationBackdropBands()` (near-black→accent-tinted vertical gradient, mirrors
+      `skyGradientColors`). `StationScene.renderMain()` now mounts
+      `buildStationBackdrop(w, h, type)` — a 12-band gradient + dark vignette, `eventMode
+      "static"` — as the **first** child of `mainContainer`, replacing the flat black
+      rect, so the opaque centred panel floats on a type-tinted interior mood.
+- [x] Write a new `src/tests/presentation/StationScene.test.ts` (none exists yet). Done —
+      drives the real `StationScene.render()` in "main" view (fill-recording pixi mock)
+      and asserts the backdrop is child[0] before the `0x080818` panel box and that its
+      gradient colours differ TRADE_POST vs MILITARY_BASE; plus pure-helper tests
+      (distinct per-type accents, top-near-black→bottom-brighter bands,
+      `buildStationBackdrop` fills vary by type).
+- [x] Screenshot-verify: Station no longer reads as a bare panel on black void.
+      Non-automatable in this headless env (skipped — the `extract.base64` pipeline needs
+      a live browser + local receiver, same reason as Task 1); the fill-recording
+      unit test asserts the gradient mounts full-bleed behind the panel as the visual
+      proxy.
+- [x] run tests — must pass before task 6. Done — target `StationScene.test.ts` (5/5),
+      full `npm test -- --run` green (6229 passed | 0 failed), `tsc --noEmit` clean, and
+      the new files add zero lint issues (repo-wide lint red state is pre-existing on
+      this branch, unchanged by this task).
 
 ### Task 6: Style the star-map critical-threat banner
 - [ ] Rework `StarMapScene.ts:453-472` (`warningIndicator`): route it through
