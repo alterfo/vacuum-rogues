@@ -463,16 +463,28 @@ panorama category exists.
       flake (passes in isolation; zero coupling to a pure planet-menu-layout change).
 
 ### Task 12: Fix main-menu "Новая игра" button color
-- [ ] In `MainMenuScene.ts`, pass an explicit color to the `createButton()` call for
+- [x] In `MainMenuScene.ts`, pass an explicit color to the `createButton()` call for
       "Новая игра" (L443-445) instead of relying on the `0x00ff00` default (L413) — pick
       a cyan consistent with the existing family (`0x88ddff`/`0x66ccff` used by
       Сохранения/Настройки/etc.), or a slightly brighter cyan if the primary action
-      should still read as visually distinct from secondary actions.
-- [ ] Write a unit test asserting the "Новая игра" button's fill color is in the cyan
+      should still read as visually distinct from secondary actions. Done — the call site
+      now passes `0x66ffff` (a bright cyan in-family with `0x88ddff`/`0x66ccff`), reading as
+      the strongest button while dropping the clashing green default. `createButton`'s
+      default is untouched (still `0x00ff00`) so no other call site changes.
+- [x] Write a unit test asserting the "Новая игра" button's fill color is in the cyan
       family, not green (extend `src/tests/presentation/mainMenuNewGame.test.ts` or
-      `mainMenuVisuals.test.ts`).
-- [ ] Screenshot-verify the main menu reads as one consistent accent family.
-- [ ] run tests — must pass before task 13.
+      `mainMenuVisuals.test.ts`). Done — new `src/tests/presentation/mainMenuButtonColor.test.ts`
+      (a fresh file, since `mainMenuVisuals`' Text mock discards `style`; this mock keeps
+      it) asserts the «Новая игра» Text fill is `!== 0x00ff00` and has a strong blue **and**
+      green channel (`>= 0x88` each) — i.e. cyan, not green and not pure blue.
+- [x] Screenshot-verify the main menu reads as one consistent accent family.
+      Non-automatable in this headless env (skipped — the `extract.base64` pipeline needs a
+      live browser + local receiver, same reason as Task 1); the fill-channel unit assertion
+      (cyan, not green) is the visual proxy.
+- [x] run tests — must pass before task 13. Done — target
+      `mainMenuButtonColor.test.ts` green, full `npm test -- --run` green (6250 passed | 0
+      failed), `tsc --noEmit` clean, and the touched files (`MainMenuScene.ts` + the new
+      test) are lint-clean.
 
 ### Task 13: Verify acceptance criteria
 - [ ] Re-verify finding #13 (decorative planet icons) is closed via Task 1's evidence —

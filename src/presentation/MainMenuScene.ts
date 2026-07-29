@@ -440,8 +440,15 @@ export class MainMenuScene extends GameScene {
       return buttonText;
     };
 
-    const newGameBtn = createButton(t("menu.newGame"), 0, () =>
-      this.handleNewGame(),
+    // Primary action: bright cyan so it reads as the strongest button while
+    // still belonging to the menu's cyan accent family (0x88ddff/0x66ccff on the
+    // secondary buttons below) — the old default 0x00ff00 green clashed with it.
+    const newGameBtn = createButton(
+      t("menu.newGame"),
+      0,
+      () => this.handleNewGame(),
+      20,
+      0x66ffff,
     );
     this.buttonsContainer.addChild(newGameBtn);
 
