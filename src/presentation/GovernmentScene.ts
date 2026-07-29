@@ -19,7 +19,7 @@ import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 import {
   ECONOMY_RU,
   POLITICAL_RU,
-  deterministicPopulation,
+  resolvePopulation,
 } from "./ui/planetProfile";
 
 interface GovernmentContext {
@@ -134,7 +134,7 @@ export class GovernmentScene extends GameScene {
     const economyLabel = ECONOMY_RU[system?.economyType ?? ""] ?? "—";
     const politicalLabel = POLITICAL_RU[system?.politicalSystem ?? ""] ?? "—";
     const population = this.planet
-      ? deterministicPopulation(this.planet.id)
+      ? resolvePopulation(this.planet.population, this.planet.id)
       : 0;
 
     const rep = this.gameEngine?.player?.getReputation(faction) ?? 0;

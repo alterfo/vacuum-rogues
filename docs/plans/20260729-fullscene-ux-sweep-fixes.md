@@ -149,10 +149,10 @@ in `StationScene` (prior pass, Task 7) — reuse it for the bank repay button
       was added
 
 ### Task 2: Fix Меридиан (and any planet) population mismatch between planet HUD and Government scene
-- [ ] `GovernmentScene.ts:136-138` — call `resolvePopulation(this.planet.population, this.planet.id)` (same helper `PlanetScene.ts` already uses) instead of `deterministicPopulation(this.planet.id)` directly
-- [ ] write a unit test asserting `GovernmentScene`'s displayed population equals `resolvePopulation(planet.population, planet.id)` for a planet with a seeded `population` value
-- [ ] write a unit test covering the fallback case (no seeded `population`) still resolves deterministically
-- [ ] run tests — must pass before next task
+- [x] `GovernmentScene.ts:136-138` — call `resolvePopulation(this.planet.population, this.planet.id)` (same helper `PlanetScene.ts` already uses) instead of `deterministicPopulation(this.planet.id)` directly
+- [x] write a unit test asserting `GovernmentScene`'s displayed population equals `resolvePopulation(planet.population, planet.id)` for a planet with a seeded `population` value
+- [x] write a unit test covering the fallback case (no seeded `population`) still resolves deterministically
+- [x] run tests — must pass before next task
 
 ### Task 3: Show player hull/shield status bar during combat PLANNING phase
 - [ ] run `gitnexus impact` on `combatExecution.ts`'s `update()`/`draw` gate before touching it — this freeze-gate has a documented history of subtle bugs (isPaused/isFrozen shadowing)
