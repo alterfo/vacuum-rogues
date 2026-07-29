@@ -359,21 +359,32 @@ panorama category exists.
       the touched files add zero lint issues.
 
 ### Task 9: Bank loan-terms preview (contingent on Task 1)
-- [ ] If Task 1 confirmed the loan-terms block is genuinely blank pre-loan through real
+- [x] If Task 1 confirmed the loan-terms block is genuinely blank pre-loan through real
       navigation: trace `BankScene.ts` mount timing (`renderLoanTerms()` L300-371, the
       `engine`/`player` null guard at L308, and `BankSceneHost.ts`'s mount sequence) to
       find why `loanTermsSummary()`'s output isn't reaching the panel in the reproduced
       case, and fix the root cause (likely a timing/null-guard issue, not a missing
-      calculation — the calc + its test coverage already exist and look correct).
-- [ ] If Task 1 refuted this (confirmed already-populated, matching existing
+      calculation — the calc + its test coverage already exist and look correct). — not
+      applicable — confirmed non-issue in Task 1, no code change.
+- [x] If Task 1 refuted this (confirmed already-populated, matching existing
       `loanTermsSummary`/`loanPanelLines` test coverage): mark this task's boxes `[x]`
       with a note "not applicable — confirmed non-issue in Task 1, no code change", and
-      skip to Task 10.
-- [ ] (If fixing) Write a regression test reproducing the exact blank-state path found
+      skip to Task 10. Done — re-verified live against current code:
+      `loanPanelLines(summary, 0)` (`bankSceneView.ts:315-325`) returns the full offer
+      block (Сумма кредита / Ставка / Срок / Платёж/день / К возврату) with zero
+      outstanding, and `BankScene.renderLoanTerms()` (`BankScene.ts:300-323`) calls it
+      unconditionally once the scene has an engine+player (the only guard, L308, fails
+      solely when there is no engine/player at all), rendering the "КРЕДИТ — условия"
+      header. No path leaves the panel blank on a mounted scene. Asserted green by the
+      existing `bankSceneView.test.ts:332` "shows the offer … when there is no debt".
+- [x] (If fixing) Write a regression test reproducing the exact blank-state path found
       (likely in `src/tests/banking/bankSceneView.test.ts` or a new BankScene mount
-      test) before fixing.
-- [ ] (If fixing) Screenshot-verify the terms populate correctly on first open.
-- [ ] run tests — must pass before task 10.
+      test) before fixing. — not applicable — no code change (non-bug); pre-loan offer
+      already covered by `bankSceneView.test.ts:332`.
+- [x] (If fixing) Screenshot-verify the terms populate correctly on first open. — not
+      applicable — no code change (non-bug).
+- [x] run tests — must pass before task 10. Done — `bankSceneView.test.ts` green (24
+      passed | 0 failed); no code changed, tree clean before Task 10.
 
 ### Task 10: HUD icon-button tooltips and label clarity
 - [ ] Extend the existing hover-tooltip pattern already used by the star-map icon
