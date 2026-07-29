@@ -40,3 +40,25 @@ export function tintFromSeed(seed: string, opts: TintOptions = {}): number {
 
   return (r << 16) | (g << 8) | b;
 }
+
+/**
+ * Tint for a planet's backdrop sprite (Task 4, terran-biome collision mitigation).
+ *
+ * Generated `surfaces/*` art ships only **four** variants per biome, so many
+ * planet ids hash to the *same* base image by pigeonhole — two TERRESTRIAL
+ * worlds (e.g. Резонанс/Спика) can land on `terran_02.webp` and read as
+ * identical. The default {@link tintFromSeed} band is deliberately tiny (subtle
+ * variety over already-distinct shared panoramas), too weak to disambiguate a
+ * shared base image. For surface art we widen the per-id band (lower floor +
+ * larger warm/cool spread) so two same-base worlds still read as distinct —
+ * code-only, no new art. Non-surface backdrops keep the original subtle tint.
+ */
+export function planetBackdropTint(
+  planetId: string,
+  backdropKey: string,
+): number {
+  if (backdropKey.startsWith("surfaces/")) {
+    return tintFromSeed(planetId, { floor: 0.6, warmth: 0.16 });
+  }
+  return tintFromSeed(planetId);
+}

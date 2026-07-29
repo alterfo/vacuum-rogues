@@ -162,9 +162,9 @@ in `StationScene` (prior pass, Task 7) — reuse it for the bank repay button
 - [x] run tests — must pass before next task — full unit suite green; `tsc --noEmit` clean; eslint clean on changed files
 
 ### Task 4: Reduce terran-biome planet art collisions
-- [ ] in `PlanetScene.ts`'s `resolvePlanetBackdropKey`/`textures.ts`'s `pickVariantKey` path, apply a small deterministic per-planet-id color-grade/tint overlay when a terran variant is selected, so two planets that hash to the same base image (`terran_0{1-4}.webp`) still read as visually distinct — code-only mitigation, no new art assets in this task
-- [ ] write a unit test asserting two planet ids that hash-collide to the same base variant receive different tint values
-- [ ] run tests — must pass before next task
+- [x] in `PlanetScene.ts`'s `resolvePlanetBackdropKey`/`textures.ts`'s `pickVariantKey` path, apply a small deterministic per-planet-id color-grade/tint overlay when a terran variant is selected, so two planets that hash to the same base image (`terran_0{1-4}.webp`) still read as visually distinct — code-only mitigation, no new art assets in this task — added `planetBackdropTint(planetId, backdropKey)` in `instanceTint.ts`: widens the per-id tint band (floor 0.6, warmth 0.16) for any `surfaces/*` key (all biomes ship only 4 variants → heavy collision), keeping the original subtle band for shared panoramas; wired at `PlanetScene.ts:1078`
+- [x] write a unit test asserting two planet ids that hash-collide to the same base variant receive different tint values — `planetBackdropTint.test.ts` finds a real colliding terran id pair via `resolvePlanetBackdropKey` and asserts distinct tints (+ band-widening + panorama-unchanged + determinism)
+- [x] run tests — must pass before next task — new + related tests green; full unit suite 6246 passed/13 skipped; `tsc --noEmit` clean; eslint clean on changed files
 
 ### Task 5: Fix raw NPC role tag leaking into nameplate tooltip
 - [ ] `src/presentation/flight/NpcShipManager.ts:840` — replace `` `${n.name} [${n.role}]` `` with the localized `roleLabel()`/`t("role...")` helper already used in `NpcContactPanel.ts:220`

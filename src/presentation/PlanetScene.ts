@@ -28,7 +28,7 @@ import { evaluateDelivery } from "@/systems/quests/deliveryCompletion";
 import { resourceLabelRu } from "@/domain/RouteRumor";
 import { pickVariantKey, panoramaTex, tex, loadTextureAsync } from "./textures";
 import { scaledFont } from "@/utils/fontScale";
-import { tintFromSeed } from "@/utils/instanceTint";
+import { planetBackdropTint } from "@/utils/instanceTint";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
 import { factionColor as resolveFactionColor } from "./ui/palette";
 import { Faction } from "@/types/faction";
@@ -1071,11 +1071,12 @@ export class PlanetScene extends GameScene {
       }
       panorama.y = (h - panorama.height) / 2;
       panorama.x = clampPanoramaX((w - panorama.width) / 2, panorama.width, w);
-      // Per-instance variety: a subtle, deterministic tint keyed by planet.id
-      // so two worlds sharing the same type/faction backdrop still look
-      // distinct (on top of the per-id surface-variant spread). Bounded band —
-      // never near-black or neon.
-      panorama.tint = tintFromSeed(this.planet?.id ?? "");
+      // Per-instance variety: a deterministic tint keyed by planet.id so two
+      // worlds sharing the same backdrop still look distinct. Surface art ships
+      // only 4 variants per biome (heavy hash-collision), so `planetBackdropTint`
+      // widens the band for `surfaces/*` keys while keeping shared panoramas on
+      // the original subtle band. Bounded — never near-black or neon.
+      panorama.tint = planetBackdropTint(this.planet?.id ?? "", backdropKey);
       // Draggable: start a pan on press; stage move/up (initialize) do the rest.
       panorama.eventMode = "static";
       panorama.cursor = "grab";
