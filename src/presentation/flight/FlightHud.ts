@@ -628,6 +628,45 @@ export class FlightHud implements FlightModule {
   // Construction
   // ---------------------------------------------------------------------------
 
+  /**
+   * Mount a hover tooltip to the right of a top-left cluster icon button
+   * ([I]/[?]), mirroring the star-map button's `starMapTooltip` pattern: an
+   * `eventMode="none"` label, hidden until the button is hovered, that surfaces
+   * the icon's meaning so the glyph isn't a mystery on first sight. The button
+   * keeps its own alpha/hover-audio handlers — this only adds the label's
+   * visibility toggle (PixiJS allows multiple listeners per event). Lives on
+   * `uiContainer` so it's torn down wholesale with the rest of the HUD.
+   */
+  private mountIconTooltip(btn: Text, label: string, color: number): Text {
+    const tip = new Text({
+      text: label,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(12),
+        fill: color,
+      },
+    });
+    tip.anchor.set(0, 0.5);
+    tip.eventMode = "none";
+    tip.visible = false;
+    // Position from the button's own (numeric) x/y plus a font-scaled glyph
+    // budget — NOT `btn.width`/`btn.height`, whose PixiJS Text measurement
+    // throws in the jsdom unit harness (same trap as `BOTTOM_LEFT_LANE_W`).
+    // The cluster buttons are 3-char "[X]" glyphs; ~3 mono chars at the base
+    // 14px font clears them and scales with the S/M/L font setting.
+    const glyph14 = scaledFont(14);
+    tip.x = btn.x + glyph14 * 3 * 0.6 + 8;
+    tip.y = btn.y + glyph14 * 0.6;
+    btn.on("pointerover", () => {
+      tip.visible = true;
+    });
+    btn.on("pointerout", () => {
+      tip.visible = false;
+    });
+    this.uiContainer?.addChild(tip);
+    return tip;
+  }
+
   private createUI(): void {
     this.uiContainer = new Container();
     // Container uses default eventMode ('auto') - it won't block clicks since it has no handlers
@@ -702,6 +741,7 @@ export class FlightHud implements FlightModule {
       invBtn.alpha = 1;
     });
     this.uiContainer.addChild(invBtn);
+    this.mountIconTooltip(invBtn, t("flight.inventoryTooltip"), 0xffaa00);
 
     // Help toggle button [?]
     const helpBtn = new Text({
@@ -730,6 +770,7 @@ export class FlightHud implements FlightModule {
       helpBtn.alpha = 1;
     });
     this.uiContainer.addChild(helpBtn);
+    this.mountIconTooltip(helpBtn, t("flight.helpTooltip"), 0x88ccff);
 
     // System menu button [МЕНЮ] — the true bottom-left corner element (♿
     // accessibility stacks above it, clear of the top-left journal/inventory/

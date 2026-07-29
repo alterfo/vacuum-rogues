@@ -460,6 +460,75 @@ describe("FlightHud help overlay and inventory button (Task 6)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Task 10 (UX review): the icon-only top-left cluster buttons [I]/[?] now carry
+// a hover tooltip (mirroring the star-map button's starMapTooltip) so the glyph
+// isn't a mystery on first sight — a short Russian label appears on pointerover
+// and hides on pointerout, and the label node itself never intercepts pointer
+// events (eventMode="none").
+// ---------------------------------------------------------------------------
+
+describe("FlightHud icon-button tooltips (Task 10)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  type TipNode = {
+    text: string;
+    visible: boolean;
+    eventMode: string;
+    on: ReturnType<typeof vi.fn>;
+  };
+
+  function findTextNode(label: string): TipNode {
+    const hit = vi
+      .mocked(Text)
+      .mock.results.map((r) => r.value as TipNode)
+      .find((t) => String(t.text) === label);
+    expect(hit, `Text node ${label} must exist`).toBeDefined();
+    return hit!;
+  }
+
+  /** Fire every handler registered for `event` on a button node. */
+  function fireAll(btn: TipNode, event: string): void {
+    for (const call of btn.on.mock.calls) {
+      if (call[0] === event) (call[1] as () => void)();
+    }
+  }
+
+  it("mounts an 'Инвентарь' tooltip that toggles with the [I] button's hover", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+
+    const tip = findTextNode("Инвентарь");
+    expect(tip.visible).toBe(false);
+    expect(tip.eventMode).toBe("none");
+
+    const invBtn = findTextNode("[I]");
+    fireAll(invBtn, "pointerover");
+    expect(tip.visible).toBe(true);
+    fireAll(invBtn, "pointerout");
+    expect(tip.visible).toBe(false);
+  });
+
+  it("mounts a 'Помощь' tooltip that toggles with the [?] button's hover", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+
+    const tip = findTextNode("Помощь");
+    expect(tip.visible).toBe(false);
+    expect(tip.eventMode).toBe("none");
+
+    const helpBtn = findTextNode("[?]");
+    fireAll(helpBtn, "pointerover");
+    expect(tip.visible).toBe(true);
+    fireAll(helpBtn, "pointerout");
+    expect(tip.visible).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Bug 3 (HUD clutter, 2026-07-06/07 playtest): the camera zoom/pan debug
 // read-out near the minimap is gone entirely, and the [МЕНЮ] button now lives
 // in the bottom-left corner (stacked above ♿) instead of the top-left stack —

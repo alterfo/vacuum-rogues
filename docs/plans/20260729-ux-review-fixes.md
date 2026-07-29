@@ -387,21 +387,46 @@ panorama category exists.
       passed | 0 failed); no code changed, tree clean before Task 10.
 
 ### Task 10: HUD icon-button tooltips and label clarity
-- [ ] Extend the existing hover-tooltip pattern already used by the star-map icon
+- [x] Extend the existing hover-tooltip pattern already used by the star-map icon
       button (`FlightHud.ts` `starMapTooltip`, L791-811) to the `[I]` (inventory) button
       and, if still missing, the top-right contextual-help `[?]` button
-      (`mountSceneHelp.ts`) — a short Russian label on hover ("Инвентарь", etc.).
-- [ ] If Task 1's screenshots show `[I]` still reads as meaningfully lower-affordance
+      (`mountSceneHelp.ts`) — a short Russian label on hover ("Инвентарь", etc.). Done —
+      new private `FlightHud.mountIconTooltip(btn, label, color)` mirrors the
+      `starMapTooltip` shape (an `eventMode="none"` label, hidden until hover, toggled on
+      the button's `pointerover`/`pointerout` via a second listener so the button keeps
+      its own alpha/hover-audio handlers). Wired to the two icon-only cluster buttons in
+      `createUI`: `[I]` → `t("flight.inventoryTooltip")` ("Инвентарь", amber) and the
+      top-left flight `[?]` help-overlay button → `t("flight.helpTooltip")` ("Помощь",
+      cyan). New i18n keys added to BOTH `ru.ts` and `en.ts`. Scoped to the HUD cluster
+      buttons the finding names (`[КВЕСТЫ]`/`[I]`/`[?]`) — the shared `mountSceneHelp` "?"
+      (a self-explanatory glyph on every scene) is left untouched to keep the blast radius
+      to `FlightHud`; `[КВЕСТЫ]` is a full word and needs no tooltip.
+- [x] If Task 1's screenshots show `[I]` still reads as meaningfully lower-affordance
       than `[КВЕСТЫ]` despite identical code styling (i.e., it's a label-length/legibility
       issue, not a color/weight bug), consider widening the label (e.g.
       `[ИНВЕНТАРЬ]`) — check this against the layout-lock test
       `src/tests/presentation/flightHud.test.ts` first and only change if it doesn't
-      break the pinned geometry; otherwise the tooltip alone is the fix.
-- [ ] Write/extend `flightHud.test.ts` asserting the new tooltip(s) mount and show the
-      expected text on `pointerover` / hide on `pointerout`.
-- [ ] Screenshot-verify (hover state requires a real interaction, not a static capture —
-      drive a synthetic `pointerover` in the test or via a live browser check).
-- [ ] run tests — must pass before task 11.
+      break the pinned geometry; otherwise the tooltip alone is the fix. Done — the
+      tooltip alone is the fix (per Task 1's verdict: `[I]`/`[КВЕСТЫ]` are style-identical
+      in code and the tooltip gap is the real, unconditional issue). Left `[I]` unwidened:
+      widening would risk the pinned top-left/bottom-left cluster geometry the layout-lock
+      tests guard for zero perception benefit the tooltip doesn't already deliver.
+- [x] Write/extend `flightHud.test.ts` asserting the new tooltip(s) mount and show the
+      expected text on `pointerover` / hide on `pointerout`. Done — new "icon-button
+      tooltips (Task 10)" describe block: the "Инвентарь"/"Помощь" tooltip nodes mount
+      hidden with `eventMode="none"`, flip visible when every `pointerover` handler on
+      `[I]`/`[?]` fires, and hide again on `pointerout`.
+- [x] Screenshot-verify (hover state requires a real interaction, not a static capture —
+      drive a synthetic `pointerover` in the test or via a live browser check). Done via
+      the synthetic-`pointerover` unit assertions (the test fires the real button
+      handlers and reads the tooltip's `visible` flip); a live headless browser + PixiJS
+      render-loop capture is non-automatable in this env (same reason as Task 1). Note:
+      positioned the tooltip from the button's numeric x/y + a font-scaled glyph budget,
+      NOT `btn.width`/`btn.height` — PixiJS Text measurement throws in the jsdom harness
+      (the `BOTTOM_LEFT_LANE_W` trap; caught 11 real-pixi test files red, then fixed).
+- [x] run tests — must pass before task 11. Done — target `flightHud.test.ts` (29 cases)
+      green, full `npm test -- --run` green (6229 passed | 13 skipped), `tsc --noEmit`
+      clean, and the touched files add zero lint issues.
 
 ### Task 11: Fix Взлёт/Взятка button spacing
 - [ ] In `PlanetScene.ts`'s `computePlanetMenuLayout()` (L189-209), add extra vertical
