@@ -501,6 +501,11 @@ export class StationScene extends GameScene {
     for (const svc of services) {
       const { label, color: btnColor } = this.serviceButton(svc);
       const blocked = isHostile && svc !== "leave";
+      // Already-satisfied rows (hull already full / tanks already full) have
+      // nothing to do — render them through the same non-interactive branch as
+      // hostile-`blocked` rows so they stop showing a pointer cursor / hover
+      // affordance and don't read as clickable (Task 8, UX-review fixes).
+      const inert = blocked || (!blocked && this.isServiceSatisfied(svc));
       this.mountServiceButton(
         STATION_SERVICE_ICON[svc] ?? "",
         label,
@@ -509,7 +514,7 @@ export class StationScene extends GameScene {
         btnY,
         BTN_W,
         BTN_H,
-        blocked,
+        inert,
         () => void this.executeService(svc),
       );
       btnY += BTN_H + 4;
@@ -626,6 +631,22 @@ export class StationScene extends GameScene {
     credText.y = y;
     credText.eventMode = "none";
     this.mainContainer!.addChild(credText);
+  }
+
+  /**
+   * A "repair"/"refuel" row is *satisfied* (nothing to do) when the ship is
+   * already at full hull / full energy — mirrors the exact `missing > 0`
+   * condition {@link serviceButton} uses to pick the "Корпус в норме" / "Баки
+   * полны" label, so the label and the interactivity gate can't drift. All
+   * other services are always actionable. Used by `renderMain` to render a
+   * satisfied row as a non-interactive dimmed chip (Task 8, UX-review fixes).
+   */
+  private isServiceSatisfied(svc: string): boolean {
+    const ship = this.gameEngine?.player?.ship;
+    if (!ship) return false;
+    if (svc === "repair") return !(ship.maxHull - ship.hullHP > 0);
+    if (svc === "refuel") return !(ship.maxEnergy - ship.energy > 0);
+    return false;
   }
 
   private serviceButton(svc: string): { label: string; color: number } {

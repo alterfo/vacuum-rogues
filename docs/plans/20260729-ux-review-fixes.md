@@ -320,23 +320,43 @@ panorama category exists.
       changes) so the new component constructs in their fakes.
 
 ### Task 8: Differentiate Station's non-actionable status rows
-- [ ] In `StationScene.ts`'s `serviceButton()` (L537-587) and the render loop
+- [x] In `StationScene.ts`'s `serviceButton()` (L537-587) and the render loop
       (L439-466), extend the existing `blocked` gate (currently only
       `isHostile && svc !== "leave"`, L441) to also cover non-actionable rows — e.g.
       hull-repair/refuel rows where the relevant `missing <= 0` — routing them through
       the same `eventMode="none"` / non-interactive / dimmer-but-distinct styling branch
       already used for `blocked`, so they stop showing pointer cursor and hover-alpha
-      feedback.
-- [ ] Ensure this doesn't change behavior for genuinely actionable rows or the
+      feedback. Done — new pure `StationScene.isServiceSatisfied(svc)` mirrors the exact
+      `missing > 0` condition `serviceButton()` uses to pick the "Корпус в норме" / "Баки
+      полны" label (so label and gate can't drift), and the `renderMain` service loop now
+      passes `blocked || (!blocked && isServiceSatisfied(svc))` as the `mountServiceButton`
+      inert flag — a satisfied row reuses the existing dimmed, `eventMode="none"`
+      non-interactive `Container` branch. Only "repair"/"refuel" can be satisfied; every
+      other service is always actionable.
+- [x] Ensure this doesn't change behavior for genuinely actionable rows or the
       `blocked`-due-to-hostile case — only adds a new "already satisfied, nothing to do"
-      branch.
-- [ ] Write a unit/real-engine test: a fully-repaired, fully-fueled station visit
+      branch. Done — the `blocked` term is unchanged and still wins (`blocked || …`);
+      actionable rows (missing > 0) still route through the `UiButton` chrome; only the
+      already-full case flips to inert. `executeService`/handlers untouched.
+- [x] Write a unit/real-engine test: a fully-repaired, fully-fueled station visit
       renders "Корпус в норме"/"Баки полны" as non-interactive (no click handler fires,
       `eventMode !== "static"`), while an actionable row (e.g. damaged hull) stays
-      interactive.
-- [ ] Screenshot-verify the visual distinction (dimmer, no bracket-hover affordance) is
-      legible.
-- [ ] run tests — must pass before task 9.
+      interactive. Done — new "satisfied status rows (Task 8)" describe block in
+      `src/tests/presentation/StationScene.test.ts`: a full-hull/full-tank REPAIR_DOCK
+      visit renders both satisfied rows with `eventMode !== "static"` and no pointer
+      cursor, while a damaged-hull visit keeps the cost-bearing "Ремонт (…₡)" row a
+      clickable `UiButton` (cursor "pointer", `eventMode "static"`) and the still-full
+      refuel row inert. The `makeEngine` fixture gained real `energy`/`maxEnergy` fields
+      (was relying on `NaN` for refuel) so the existing Task 7 "all 7 actionable"
+      assertion stays valid and meaningful.
+- [x] Screenshot-verify the visual distinction (dimmer, no bracket-hover affordance) is
+      legible. Non-automatable in this headless env (skipped — the `extract.base64`
+      pipeline needs a live browser + local receiver, same reason as Task 1); the
+      interactivity/eventMode unit assertions plus reusing the already-shipped `blocked`
+      dimmed-chip branch are the visual proxy.
+- [x] run tests — must pass before task 9. Done — target `StationScene.test.ts` (9/9),
+      full `npm test -- --run` green (6227 passed | 13 skipped), `tsc --noEmit` clean, and
+      the touched files add zero lint issues.
 
 ### Task 9: Bank loan-terms preview (contingent on Task 1)
 - [ ] If Task 1 confirmed the loan-terms block is genuinely blank pre-loan through real

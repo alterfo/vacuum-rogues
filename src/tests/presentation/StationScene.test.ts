@@ -130,12 +130,26 @@ const renderer = {
   clearUILayer: vi.fn(),
 } as unknown as Renderer;
 
-function makeEngine(loadout: ShipLoadout) {
+interface ShipStats {
+  hullHP: number;
+  maxHull: number;
+  energy: number;
+  maxEnergy: number;
+}
+
+const DEFAULT_SHIP: ShipStats = {
+  hullHP: 80,
+  maxHull: 100,
+  energy: 40,
+  maxEnergy: 100,
+};
+
+function makeEngine(loadout: ShipLoadout, ship: ShipStats = DEFAULT_SHIP) {
   return {
     player: {
       credits: 5000,
       currentSystemId: "sys1",
-      ship: { hullClass: "SCOUT", hullHP: 80, maxHull: 100 },
+      ship: { hullClass: "SCOUT", ...ship },
       isHostileTo: () => false,
       inventory: {
         ownedGearIds: [],
@@ -171,10 +185,13 @@ interface FakeGraphics {
   eventMode: string;
 }
 
-function renderMainChildren(type: StationType): FakeGraphics[] {
+function renderMainChildren(
+  type: StationType,
+  ship?: ShipStats,
+): FakeGraphics[] {
   const scene = new StationScene(renderer);
   scene.initialize({
-    gameEngine: makeEngine(new ShipLoadout("hull_scout")),
+    gameEngine: makeEngine(new ShipLoadout("hull_scout"), ship),
     station: station(type),
   });
   const main = (
@@ -254,6 +271,68 @@ describe("StationScene action buttons (Task 7, finding #6 — unified chrome)", 
     expect(
       topLevelTexts.some((t) => t.startsWith("[ ") && t.includes("Магазин")),
     ).toBe(false);
+  });
+});
+
+describe("StationScene satisfied status rows (Task 8, finding #7)", () => {
+  // Find the main-container row whose own or nested label text includes `substr`.
+  function findRow(children: FakeNode[], substr: string): FakeNode | undefined {
+    return children.find((c) =>
+      [c.text ?? "", ...c.children.map((ch) => ch.text ?? "")].some((t) =>
+        t.includes(substr),
+      ),
+    );
+  }
+
+  const FULL: ShipStats = {
+    hullHP: 100,
+    maxHull: 100,
+    energy: 100,
+    maxEnergy: 100,
+  };
+  const DAMAGED: ShipStats = {
+    hullHP: 50,
+    maxHull: 100,
+    energy: 100,
+    maxEnergy: 100,
+  };
+
+  it("renders 'Корпус в норме' / 'Баки полны' as non-interactive when nothing is missing", () => {
+    const children = renderMainChildren(
+      StationType.REPAIR_DOCK,
+      FULL,
+    ) as unknown as FakeNode[];
+
+    const repairRow = findRow(children, "Корпус в норме");
+    const refuelRow = findRow(children, "Баки полны");
+    expect(repairRow).toBeTruthy();
+    expect(refuelRow).toBeTruthy();
+    // Satisfied rows go through the non-interactive branch: no pointer cursor,
+    // not an event target.
+    for (const row of [repairRow!, refuelRow!]) {
+      expect(row.eventMode).not.toBe("static");
+      expect(row.cursor).not.toBe("pointer");
+    }
+  });
+
+  it("keeps a genuinely actionable row (damaged hull → Ремонт) interactive", () => {
+    const children = renderMainChildren(
+      StationType.REPAIR_DOCK,
+      DAMAGED,
+    ) as unknown as FakeNode[];
+
+    // Damaged hull → the repair row shows a cost and stays a clickable UiButton;
+    // full tanks → the refuel row is inert. Match on the cost-bearing label
+    // ("Ремонт  (…₡)") so we don't collide with the "Ремонтный узел" header.
+    const repairRow = findRow(children, "Ремонт  (");
+    expect(repairRow).toBeTruthy();
+    expect(repairRow!.cursor).toBe("pointer");
+    expect(repairRow!.eventMode).toBe("static");
+
+    const refuelRow = findRow(children, "Баки полны");
+    expect(refuelRow).toBeTruthy();
+    expect(refuelRow!.eventMode).not.toBe("static");
+    expect(refuelRow!.cursor).not.toBe("pointer");
   });
 });
 
