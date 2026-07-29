@@ -34,7 +34,17 @@ strictly by need (single source of truth; see the header comment there):
    best). `land "discover-prices"` on an unvisited in-system planet fires **before**
    `warp "find-sell-destination"` — this is what broke the warp-forever loop.
    Anti-consecutive-warp cadence: base-ladder warps gate on
-   `MAX_CONSECUTIVE_WARPS_WITHOUT_LAND` (2).
+   `MAX_CONSECUTIVE_WARPS_WITHOUT_LAND` (2). Its land-side sibling
+   (2026-07-29 live «посадка-взлёт» loop report): `AgentMemory.noopLandPlanetId`/
+   `noopLandStreak` count consecutive *barren* stays (no new prices, no cargo
+   delta, no quest change by the take-off fold), and the `land "earn"`
+   fallback stands down for that planet once the streak trips
+   `MAX_CONSECUTIVE_NOOP_LANDS` (2) — without it, a dead-end system (warp
+   never legal) with one priced, quest-less habitable planet cycled
+   land↔take-off forever, bounded only by the loose `stagnation-wait`.
+   `refuel-critical` is pushed unconditionally above the fallback and is
+   unaffected; a productive stay or a system change resets the streak
+   (`noopLandCooldown.test.ts`).
 4. **Progression** — `questDeliveryHere` → land/dock to complete; affordable
    in-system hull/gear/module upgrade → buy.
 5. **Explore** — `warp` to a **chosen** unvisited, non-Overmind neighbor

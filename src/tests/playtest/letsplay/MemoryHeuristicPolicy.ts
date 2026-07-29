@@ -164,6 +164,19 @@ export const REFUEL_THRESHOLD = 0.2;
 export const MAX_CONSECUTIVE_WARPS_WITHOUT_LAND = 2;
 
 /**
+ * Cap on consecutive *barren* stays (no new prices, no cargo moved, no quest
+ * change — see `AgentMemory.noopLandPlanetId`) after which the base ladder's
+ * `land "earn"` fallback stands down for that planet — the land-side sibling
+ * of {@link MAX_CONSECUTIVE_WARPS_WITHOUT_LAND} (live report 2026-07-29:
+ * without it, a dead-end system with one priced, quest-less habitable planet
+ * cycled land↔take-off forever, bounded only by the loose stagnation-wait).
+ * Survival refuelling (`refuel-critical`) is pushed unconditionally above the
+ * fallback and is deliberately unaffected; any productive stay or a system
+ * change resets the streak.
+ */
+export const MAX_CONSECUTIVE_NOOP_LANDS = 2;
+
+/**
  * Folds without a galaxy-day boundary above which the base ladder stops
  * *starting new* buy cycles (`buy-low`/`go-buy`/price-discovery landings) —
  * `land` teleports (no flight simulated) and a `trade` costs no time either,
@@ -1894,9 +1907,18 @@ export function decideWithMemory(
       // strand the ladder.
       const questsStructurallyUnavailable =
         (obs.overmindShare ?? 0) >= QUEST_ACCEPT_OVERMIND_SHARE_CEILING;
+      // No-op-land cooldown (2026-07-29): this planet's last
+      // MAX_CONSECUTIVE_NOOP_LANDS stays were all barren — re-landing "to
+      // earn" is provably pointless, so stand down and let the ladder fall
+      // through (dock/move/wait). `refuel-critical` above is unaffected.
+      const earnLandCooldownTripped =
+        earnPlanet !== undefined &&
+        mem.noopLandPlanetId === earnPlanet &&
+        mem.noopLandStreak >= MAX_CONSECUTIVE_NOOP_LANDS;
       if (
         earnPlanet !== undefined &&
         !holdsNonQuestCargo &&
+        !earnLandCooldownTripped &&
         !(questsStructurallyUnavailable && alreadyVisited)
       ) {
         push("land", "earn", earnPlanet);

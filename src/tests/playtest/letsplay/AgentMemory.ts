@@ -233,6 +233,29 @@ export interface AgentMemory {
    * stuck — see `MemoryHeuristicPolicy`'s SPACE_FLIGHT tier.
    */
   warpRejectFolds: number;
+  /**
+   * The planet whose consecutive *barren* stays {@link noopLandStreak} is
+   * counting — the land-side sibling of
+   * {@link consecutiveWarpsWithoutLanding} (live report 2026-07-29: the
+   * `land "earn"` fallback re-landed on the same already-priced, quest-less
+   * planet forever whenever every warp-side loop-breaker was gated). A stay is
+   * barren when it learned no new prices, moved no cargo, and changed no quest
+   * state by the time the take-off fold evaluates it. Reset (with the streak)
+   * by a productive stay or a system change.
+   */
+  noopLandPlanetId: string | null;
+  /** Consecutive barren stays on {@link noopLandPlanetId} — see its doc. */
+  noopLandStreak: number;
+  /**
+   * Internal: whether the *current* stay has already proven productive
+   * (fresh prices learned on the landing fold, or cargo/quest deltas on a
+   * mid-stay fold). Folded into the streak on the take-off fold, which also
+   * checks that fold's own deltas (the live trade round-trip surfaces its
+   * cargo delta only after leaving the planet).
+   */
+  landedStayProductive: boolean;
+  /** Internal: `obs.quests.length` on the immediately-previous fold (quest-delta signal for the stay tracker). */
+  lastQuestCount: number;
 }
 
 /** Bound on {@link AgentMemory.recentSystemIds} — see its field doc. */
@@ -308,6 +331,10 @@ export function createMemory(): AgentMemory {
     starMapStallFolds: 0,
     completedQuestsBaseline: -1,
     warpRejectFolds: 0,
+    noopLandPlanetId: null,
+    noopLandStreak: 0,
+    landedStayProductive: false,
+    lastQuestCount: 0,
   };
 }
 
@@ -402,6 +429,10 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       starMapStallFolds: mem.starMapStallFolds,
       completedQuestsBaseline: mem.completedQuestsBaseline,
       warpRejectFolds: mem.warpRejectFolds,
+      noopLandPlanetId: mem.noopLandPlanetId,
+      noopLandStreak: mem.noopLandStreak,
+      landedStayProductive: mem.landedStayProductive,
+      lastQuestCount: mem.lastQuestCount,
     };
   }
 
@@ -506,6 +537,59 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     : obs.system && mem.recentSystemIds.includes(obs.system.id)
       ? mem.frontCycleStreak + 1
       : 0;
+
+  // 4.7) No-op-land streak — the land-side sibling of the consecutive-warp
+  // cadence (live report 2026-07-29, «зацикливание посадка-взлёт»). A stay is
+  // productive if it learned new prices (the landing fold saw an un-priced
+  // planet), moved cargo, or changed quest state — the latter two checked on
+  // every fold of the stay AND on the take-off fold itself, because the live
+  // trade round-trip only surfaces its cargo delta after leaving the planet.
+  // Barren stays on the same planet accumulate; `MemoryHeuristicPolicy`'s
+  // earn-land fallback stands down once the streak trips its cap.
+  let cargoChangedThisFold = false;
+  for (const good of seenGoods) {
+    if ((mem.lastCargo.get(good) ?? 0) !== (cargoNow.get(good) ?? 0)) {
+      cargoChangedThisFold = true;
+      break;
+    }
+  }
+  const questCountChanged = obs.quests.length !== mem.lastQuestCount;
+  const freshlyLanded =
+    obs.currentPlanet !== null &&
+    mem.lastCurrentPlanetId !== obs.currentPlanet.id;
+  const justTookOff =
+    obs.currentPlanet === null && mem.lastCurrentPlanetId !== null;
+  let landedStayProductive = mem.landedStayProductive;
+  let noopLandPlanetId = mem.noopLandPlanetId;
+  let noopLandStreak = mem.noopLandStreak;
+  if (freshlyLanded && obs.currentPlanet) {
+    // NOTE: `mem.priceBook` (pre-fold) — section 1 above has already folded
+    // this landing's market into the local `priceBook` copy.
+    landedStayProductive =
+      !mem.priceBook.has(obs.currentPlanet.id) || questCountChanged;
+  } else if (obs.currentPlanet && (cargoChangedThisFold || questCountChanged)) {
+    landedStayProductive = true;
+  }
+  if (justTookOff) {
+    const stayedProductive =
+      landedStayProductive || cargoChangedThisFold || questCountChanged;
+    if (stayedProductive) {
+      noopLandPlanetId = null;
+      noopLandStreak = 0;
+    } else if (noopLandPlanetId === mem.lastCurrentPlanetId) {
+      noopLandStreak += 1;
+    } else {
+      noopLandPlanetId = mem.lastCurrentPlanetId;
+      noopLandStreak = 1;
+    }
+    landedStayProductive = false;
+  }
+  if (systemChanged) {
+    // A fresh system's planets are fair game — the streak is per-planet and
+    // planets are system-local.
+    noopLandPlanetId = null;
+    noopLandStreak = 0;
+  }
 
   // 5) Loan state — only what the observation says right now; no loan ⇒ absent.
   const loanState = obs.activeLoans
@@ -614,6 +698,10 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     starMapStallFolds,
     completedQuestsBaseline,
     warpRejectFolds,
+    noopLandPlanetId,
+    noopLandStreak,
+    landedStayProductive,
+    lastQuestCount: obs.quests.length,
   };
 
   // 8) Deadlock — sticky once true; logged exactly once per run at the transition.
