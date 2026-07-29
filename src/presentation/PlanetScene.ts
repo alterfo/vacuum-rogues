@@ -304,6 +304,49 @@ const RESOURCE_RU: Record<string, string> = {
   DATA_CORES: "Ядра данных",
 };
 
+/** RU display label per planet `type` (physical world class, not economy). */
+export function planetTypeLabel(type: string): string {
+  const t: Record<string, string> = {
+    TERRESTRIAL: "Земной",
+    GAS_GIANT: "Газовый гигант",
+    ICE: "Ледяной",
+    VOLCANIC: "Вулканический",
+    INDUSTRIAL: "Промышленный",
+    HABITAT: "Обитаемый",
+  };
+  return t[type] ?? type;
+}
+
+/**
+ * The landed planet-card text lines that carry the planet-type / economy words,
+ * in render order. Kept pure + exported so a unit test can assert the
+ * planet-type word is shown exactly once (UX-review finding #4 dedup): before
+ * this the type word appeared in both the subtitle *and* the info-panel's first
+ * row. Now the subtitle owns the type word; the info-panel row shows only the
+ * controlling faction. Population/economy/political stays a distinct fact line.
+ */
+export function planetInfoPanelLines(input: {
+  planetType: string;
+  isHabitable: boolean;
+  factionName: string;
+  economyType?: string | null;
+  politicalSystem?: string | null;
+  population?: number;
+  populationSeed: string;
+}): { subtitle: string; faction: string; profile: string | null } {
+  const subtitle = `${planetTypeLabel(input.planetType)} • ${
+    input.isHabitable ? "Обитаемая" : "Необитаемая"
+  }`;
+  const profile = input.isHabitable
+    ? `Население: ${formatPopulation(
+        resolvePopulation(input.population, input.populationSeed),
+      )}  •  ${economyLabel(input.economyType)}  •  ${politicalLabel(
+        input.politicalSystem,
+      )}`
+    : null;
+  return { subtitle, faction: input.factionName, profile };
+}
+
 export class PlanetScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
@@ -1169,9 +1212,12 @@ export class PlanetScene extends GameScene {
 
     // Subtitle: planet type and habitability status.
     const subtitle = new Text({
-      text: `${this.getType(this.planet.type)} • ${
-        this.planet.isHabitable ? "Обитаемая" : "Необитаемая"
-      }`,
+      text: planetInfoPanelLines({
+        planetType: this.planet.type,
+        isHabitable: this.planet.isHabitable,
+        factionName: "",
+        populationSeed: this.planet.id,
+      }).subtitle,
       style: {
         fontFamily: "Courier New",
         fontSize: scaledFont(13),
@@ -1427,23 +1473,22 @@ export class PlanetScene extends GameScene {
       .map((r) => RESOURCE_RU[r as string] ?? String(r))
       .join(", ");
 
-    // Line 1: type • faction (coloured)
-    const typeText = new Text({
-      text: `${this.getType(this.planet.type)} • `,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(13),
-        fill: 0x889aaa,
-      },
+    // Single source for the card's type/economy lines — the planet-type word
+    // lives only in the subtitle above, so Line 1 here is the faction alone
+    // (UX-review finding #4: the type word previously repeated on this row).
+    const lines = planetInfoPanelLines({
+      planetType: this.planet.type,
+      isHabitable: this.planet.isHabitable,
+      factionName,
+      economyType: system?.economyType,
+      politicalSystem: system?.politicalSystem,
+      population: this.planet.population,
+      populationSeed: this.planet.id,
     });
-    typeText.eventMode = "none";
-    typeText.anchor.set(0.5, 0);
-    typeText.x = w / 2 - 40;
-    typeText.y = topY;
-    ui.addChild(typeText);
 
+    // Line 1: controlling faction (coloured), centred.
     const factionText = new Text({
-      text: factionName,
+      text: lines.faction,
       style: {
         fontFamily: "Courier New",
         fontSize: scaledFont(13),
@@ -1452,8 +1497,8 @@ export class PlanetScene extends GameScene {
       },
     });
     factionText.eventMode = "none";
-    factionText.anchor.set(0, 0);
-    factionText.x = w / 2 - 40 + typeText.width;
+    factionText.anchor.set(0.5, 0);
+    factionText.x = w / 2;
     factionText.y = topY;
     ui.addChild(factionText);
 
@@ -1494,12 +1539,9 @@ export class PlanetScene extends GameScene {
     // — SOURCE-OF-TRUTH §11.1 wants all four social attributes on the card
     // (attitude is the reputation line above).
     const profileYOffset = this.planet.isHabitable ? 20 : 0;
-    if (this.planet.isHabitable) {
-      const pop = resolvePopulation(this.planet.population, this.planet.id);
+    if (this.planet.isHabitable && lines.profile) {
       const profileText = new Text({
-        text: `Население: ${formatPopulation(pop)}  •  ${economyLabel(
-          system?.economyType,
-        )}  •  ${politicalLabel(system?.politicalSystem)}`,
+        text: lines.profile,
         style: {
           fontFamily: "Courier New",
           fontSize: scaledFont(12),
@@ -2027,17 +2069,5 @@ export class PlanetScene extends GameScene {
       if (!toast.destroyed) toast.destroy();
       this.toastTimeout = null;
     }, 3000);
-  }
-
-  private getType(type: string): string {
-    const t: Record<string, string> = {
-      TERRESTRIAL: "Земной",
-      GAS_GIANT: "Газовый гигант",
-      ICE: "Ледяной",
-      VOLCANIC: "Вулканический",
-      INDUSTRIAL: "Промышленный",
-      HABITAT: "Обитаемый",
-    };
-    return t[type] ?? type;
   }
 }

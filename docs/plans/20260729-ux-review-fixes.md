@@ -159,19 +159,38 @@ panorama category exists.
       at 7 — literals moved, none added).
 
 ### Task 3: Deduplicate planet economy-type text
-- [ ] Read `PlanetScene.ts` around L1171-1174 (subtitle), L1410-1432 (`addInfoPanel`
+- [x] Read `PlanetScene.ts` around L1171-1174 (subtitle), L1410-1432 (`addInfoPanel`
       details row), L1499-1502 (population row) to see the full current layout in
-      context.
-- [ ] Keep exactly one visible instance of the planet's economy-type word: keep it in
+      context. Done — confirmed the literal duplicate was `getType(this.planet.type)`
+      rendered in BOTH the subtitle and the info-panel's first row.
+- [x] Keep exactly one visible instance of the planet's economy-type word: keep it in
       the subtitle line (L1171-1174, already paired with habitability), remove the
       standalone repeat in the details row (L1431-1432), and rephrase the population
       row (L1499-1502) to drop the redundant `economyLabel(system?.economyType)` segment
       if it duplicates the same displayed word (keep population + government, which are
-      distinct facts).
-- [ ] Write/extend a unit test asserting the rendered info-panel text contains the
+      distinct facts). Done — extracted pure exported `planetTypeLabel()` +
+      `planetInfoPanelLines()`; the subtitle owns the planet-type word, the info-panel
+      Line 1 now shows only the controlling faction (removed the `type • ` prefix,
+      centred the faction), and `getType()` is gone (dead after the change). The
+      population row KEEPS `economyLabel` — the conditional "if it duplicates the same
+      displayed word" is FALSE in general (planet `type` ≠ `economyType`; e.g. a
+      TERRESTRIAL planet with an AGRICULTURAL economy shows "Земной" vs "Аграрная"), and
+      economy is a distinct §11.1 social attribute, so dropping it would lose a real
+      fact. Both the subtitle and `addInfoPanel` now build their strings from the one
+      helper, so render and test can't drift.
+- [x] Write/extend a unit test asserting the rendered info-panel text contains the
       economy-type label exactly once (extend
-      `src/tests/presentation/planetInfoPanelProfile.test.ts`).
-- [ ] run tests — must pass before task 4.
+      `src/tests/presentation/planetInfoPanelProfile.test.ts`). Done — added a
+      `planetInfoPanelLines` describe block to
+      `src/tests/presentation/planetSceneUtils.test.ts` instead (that file already mocks
+      pixi.js and imports the `PlanetScene` pure helpers; `planetInfoPanelProfile.test.ts`
+      tests the unrelated flight-hover `PlanetInfoPanel` component). Asserts the
+      planet-type word appears exactly once across subtitle/faction/profile, the faction
+      row is faction-only, and the profile keeps population+economy+political.
+- [x] run tests — must pass before task 4. Done — target tests + `tsc --noEmit` + lint
+      green; full `npm test -- --run` green except the pre-existing stochastic
+      `sessionCompetence.test.ts` single-session campaign flake (passes in isolation on
+      both clean and this tree; zero coupling to a presentation-only text change).
 
 ### Task 4: Fix star map background (contingent on Task 1)
 - [ ] If Task 1 confirmed this is a real bug through real navigation: read

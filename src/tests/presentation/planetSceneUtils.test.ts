@@ -12,6 +12,8 @@ vi.mock("pixi.js", () => ({
 import {
   clampPanoramaX,
   computePlanetMenuLayout,
+  planetInfoPanelLines,
+  planetTypeLabel,
   skyGradientColors,
   visiblePlanetServices,
 } from "@/presentation/PlanetScene";
@@ -129,5 +131,59 @@ describe("visiblePlanetServices (regression — must still pass)", () => {
     expect(visiblePlanetServices(false, ALL).map((b) => b.label)).toEqual([
       "Взлёт",
     ]);
+  });
+});
+
+describe("planetInfoPanelLines (UX finding #4 — economy/type shown once)", () => {
+  it("shows the planet-type word only in the subtitle, never on the faction row", () => {
+    const lines = planetInfoPanelLines({
+      planetType: "INDUSTRIAL",
+      isHabitable: true,
+      factionName: "Синдикат",
+      economyType: "INDUSTRIAL",
+      politicalSystem: "REPUBLIC",
+      population: 2_400_000,
+      populationSeed: "planet-1",
+    });
+
+    const typeWord = planetTypeLabel("INDUSTRIAL"); // "Промышленный"
+    const occurrences = [lines.subtitle, lines.faction, lines.profile]
+      .filter((l): l is string => l != null)
+      .filter((l) => l.includes(typeWord)).length;
+
+    // The planet-type word appears exactly once across the whole card.
+    expect(occurrences).toBe(1);
+    expect(lines.subtitle).toContain(typeWord);
+    // Line 1 is the controlling faction alone — the old "type • faction" is gone.
+    expect(lines.faction).toBe("Синдикат");
+    expect(lines.faction).not.toContain(typeWord);
+    expect(lines.faction).not.toContain("•");
+  });
+
+  it("keeps population + economy + political as the distinct profile fact line", () => {
+    const lines = planetInfoPanelLines({
+      planetType: "TERRESTRIAL",
+      isHabitable: true,
+      factionName: "Синдикат",
+      economyType: "AGRICULTURAL",
+      politicalSystem: "DEMOCRACY",
+      population: 2_400_000,
+      populationSeed: "planet-1",
+    });
+    expect(lines.profile).toContain("Население: 2.4 млн");
+    expect(lines.profile).toContain("Аграрная");
+    expect(lines.profile).toContain("Демократия");
+  });
+
+  it("omits the profile line for an uninhabited (drone) world", () => {
+    const lines = planetInfoPanelLines({
+      planetType: "ICE",
+      isHabitable: false,
+      factionName: "Независимые",
+      populationSeed: "planet-2",
+    });
+    expect(lines.profile).toBeNull();
+    expect(lines.subtitle).toContain(planetTypeLabel("ICE"));
+    expect(lines.subtitle).toContain("Необитаемая");
   });
 });
