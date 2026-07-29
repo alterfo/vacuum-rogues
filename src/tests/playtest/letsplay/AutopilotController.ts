@@ -39,6 +39,16 @@ import { flagOddity } from "./oddityFlags";
 export const DEFAULT_AUTOPILOT_TICK_MS = 800;
 
 /**
+ * Ceiling on one tick's `dismiss → observe → decide → apply` chain. An order of
+ * magnitude above any legitimate verb (the slowest, a driven combat round, is
+ * ~3 s) — this only ever fires on a genuinely hung await. Without it a single
+ * never-settling promise latched `busy` forever and every later tick no-op'd
+ * silently while the «● АВТОПИЛОТ» pill stayed up (live stuck-in-combat report,
+ * 2026-07-29).
+ */
+export const DEFAULT_TICK_TIMEOUT_MS = 15_000;
+
+/**
  * Recurring-timer port. The live wiring backs it with `setInterval`; a test backs
  * it with a hand-driven fake clock so ticks are deterministic. `start` begins
  * invoking `onTick` every `intervalMs` and returns a function that cancels it.
@@ -84,6 +94,12 @@ export interface AutopilotDeps {
   readonly indicator?: AutopilotIndicator;
   /** Tick cadence (ms); defaults to {@link DEFAULT_AUTOPILOT_TICK_MS}. */
   readonly tickIntervalMs?: number;
+  /**
+   * Ceiling (ms) on one tick's async apply chain before the busy latch is
+   * force-released (routed to `onError`, next tick retries). Defaults to
+   * {@link DEFAULT_TICK_TIMEOUT_MS}.
+   */
+  readonly tickTimeoutMs?: number;
   /** Sink for a swallowed decision/apply fault (live: `logger.warn`). */
   readonly onError?: (err: unknown) => void;
   /**
@@ -239,6 +255,7 @@ export class AutopilotController {
   private readonly inputSource: HumanInputSource;
   private readonly indicator: AutopilotIndicator;
   private readonly intervalMs: number;
+  private readonly tickTimeoutMs: number;
   private readonly onError: (err: unknown) => void;
   private readonly isTerminal: (() => boolean) | undefined;
 
@@ -251,6 +268,7 @@ export class AutopilotController {
       deps.onHumanInput ?? makeDefaultInputSource(deps.ignoreReclaimKey);
     this.indicator = deps.indicator ?? domIndicator();
     this.intervalMs = deps.tickIntervalMs ?? DEFAULT_AUTOPILOT_TICK_MS;
+    this.tickTimeoutMs = deps.tickTimeoutMs ?? DEFAULT_TICK_TIMEOUT_MS;
     this.onError = deps.onError ?? (() => {});
     this.isTerminal = deps.isTerminal;
   }
@@ -358,20 +376,44 @@ export class AutopilotController {
       return;
     }
     this.busy = true;
+    // The busy latch is bounded: a never-settling await used to latch it
+    // forever (every later tick no-op'd silently — live stuck-in-combat,
+    // 2026-07-29). Racing against a timeout means the latch always releases;
+    // the abandoned promise's late side effects are tolerable, a permanent
+    // wedge is not. The timer is cleared on the fast path so a healthy tick
+    // never leaks one.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            new Error(
+              `autopilot tick timed out after ${this.tickTimeoutMs}ms — releasing the busy latch`,
+            ),
+          ),
+        this.tickTimeoutMs,
+      );
+    });
     try {
-      if (await this.controller.dismissBlockingModal?.()) return;
-      const obs = this.observeFn();
-      this.memory = updateMemory(this.memory, obs);
-      const action = this.policy.decide(obs, this.memory);
-      this.lastObs = obs;
-      this.lastAction = action;
-      this.step += 1;
-      await applyLiveAction(action, obs, this.controller);
+      await Promise.race([this.runTick(), timeout]);
     } catch (err) {
       this.onError(err);
     } finally {
+      if (timer !== null) clearTimeout(timer);
       this.busy = false;
     }
+  }
+
+  /** The tick body `tickOnce` races against its timeout. */
+  private async runTick(): Promise<void> {
+    if (await this.controller.dismissBlockingModal?.()) return;
+    const obs = this.observeFn();
+    this.memory = updateMemory(this.memory, obs);
+    const action = this.policy.decide(obs, this.memory);
+    this.lastObs = obs;
+    this.lastAction = action;
+    this.step += 1;
+    await applyLiveAction(action, obs, this.controller);
   }
 
   /**

@@ -691,6 +691,70 @@ describe("AutopilotController — ignoreReclaimKey (Shift+F must not reclaim)", 
   });
 });
 
+describe("AutopilotController — busy-latch timeout (live stuck-in-combat, 2026-07-29)", () => {
+  it("releases the busy latch when an apply hangs forever: surfaces the timeout to onError and keeps flying", async () => {
+    const sch = makeFakeScheduler();
+    const decide = vi.fn(() => ({ kind: "land" }) as Action);
+    // A verb that NEVER settles — the live wedge: `busy` stayed true forever,
+    // every later tick no-op'd, the ship sat frozen mid-combat-PLANNING with
+    // the «● АВТОПИЛОТ» pill still up.
+    const { controller } = makeController({
+      land: () => new Promise<void>(() => {}),
+    });
+    const onError = vi.fn();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: { name: "spy", decide },
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+      onError,
+      tickTimeoutMs: 20,
+    });
+
+    ap.start();
+    void ap.tickOnce(); // wedges on the hung land()
+    await flush();
+    expect(decide).toHaveBeenCalledTimes(1);
+
+    // Still inside the timeout window: the re-entrancy guard correctly skips.
+    await ap.tickOnce();
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+
+    // Past the timeout: the latch must have been force-released and the
+    // timeout surfaced (previously: silent, permanent wedge).
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    await ap.tickOnce(); // a fresh tick decides again — the pilot keeps flying
+    expect(decide).toHaveBeenCalledTimes(2);
+  });
+
+  it("a fast apply never trips the timeout (no spurious onError)", async () => {
+    const sch = makeFakeScheduler();
+    const { controller } = makeController();
+    const onError = vi.fn();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "wait" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+      onError,
+      tickTimeoutMs: 20,
+    });
+
+    ap.start();
+    await ap.tickOnce();
+    await new Promise((resolve) => setTimeout(resolve, 60)); // past the window
+    expect(onError).not.toHaveBeenCalled();
+
+    await ap.tickOnce(); // still flying normally
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
+
 /** A throwaway no-op indicator for tests that don't assert on it. */
 function noopIndicator(): AutopilotIndicator {
   return { show() {}, hide() {} };
