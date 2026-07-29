@@ -40,6 +40,7 @@ import { logger } from "@/utils/logger";
 import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
 import { ResearchUpgradePanel } from "./ResearchUpgradePanel";
 import { attachWheelScroll } from "./ui/WheelScroll";
+import { UiButton } from "./ui/UiButton";
 import {
   stationBackdropAccent,
   stationBackdropBands,
@@ -103,6 +104,26 @@ const TYPE_SERVICES: Record<StationType, string[]> = {
     "refuel",
     "leave",
   ],
+};
+
+/**
+ * Per-service icon glyph so Station action rows render through the shared
+ * {@link UiButton} chrome with the same icon+label layout planets use (Task 7,
+ * UX-review fixes) — unifying the two docked-menu button styles. Any service key
+ * without an entry falls back to no icon (label-only UiButton).
+ */
+const STATION_SERVICE_ICON: Record<string, string> = {
+  repair: "🔧",
+  refuel: "⛽",
+  shop: "⚔",
+  hangar: "⚙",
+  infoCenter: "ℹ",
+  bank: "⛁",
+  quests: "📋",
+  rankPromotion: "★",
+  micromodules: "▣",
+  research: "✦",
+  leave: "🚀",
 };
 
 const REPAIR_DISCOUNT: Record<StationType, number> = {
@@ -480,63 +501,95 @@ export class StationScene extends GameScene {
     for (const svc of services) {
       const { label, color: btnColor } = this.serviceButton(svc);
       const blocked = isHostile && svc !== "leave";
-      const btn = scaledText(
-        `[ ${label} ]`,
-        15,
-        blocked ? 0x445566 : btnColor,
-        { rawColor: true, fontFamily: "monospace" },
+      this.mountServiceButton(
+        STATION_SERVICE_ICON[svc] ?? "",
+        label,
+        btnColor,
+        btnX,
+        btnY,
+        BTN_W,
+        BTN_H,
+        blocked,
+        () => void this.executeService(svc),
       );
-      btn.anchor.set(0.5, 0.5);
-      btn.x = btnX + BTN_W / 2;
-      btn.y = btnY + BTN_H / 2;
-      if (blocked) {
-        btn.eventMode = "none";
-      } else {
-        btn.eventMode = "static";
-        btn.cursor = "pointer";
-        btn.on("pointerdown", (e) => {
-          e.stopPropagation();
-          void this.executeService(svc);
-        });
-        btn.on("pointerover", () => {
-          btn.alpha = 0.7;
-        });
-        btn.on("pointerout", () => {
-          btn.alpha = 1;
-        });
-      }
-      this.mainContainer!.addChild(btn);
       btnY += BTN_H + 4;
     }
 
     // Bribe button when hostile to the station's faction.
     if (isHostile) {
-      const brBtn = scaledText(
-        `[ Дать взятку (${STATION_BRIBE_COST} ₡) ]`,
-        14,
+      this.mountServiceButton(
+        "💰",
+        `Дать взятку (${STATION_BRIBE_COST} ₡)`,
         0xffaa44,
-        { rawColor: true, fontFamily: "monospace" },
+        btnX,
+        btnY,
+        BTN_W,
+        BTN_H,
+        false,
+        () => this.payStationBribe(stationFaction),
       );
-      brBtn.anchor.set(0.5, 0.5);
-      brBtn.x = btnX + BTN_W / 2;
-      brBtn.y = btnY + BTN_H / 2;
-      brBtn.eventMode = "static";
-      brBtn.cursor = "pointer";
-      brBtn.on("pointerdown", (e) => {
-        e.stopPropagation();
-        this.payStationBribe(stationFaction);
-      });
-      brBtn.on("pointerover", () => {
-        brBtn.alpha = 0.7;
-      });
-      brBtn.on("pointerout", () => {
-        brBtn.alpha = 1;
-      });
-      this.mainContainer!.addChild(brBtn);
     }
 
     // Toast slot (re-attached on render)
     this.addToastSlot(PX, PY, PW, PH);
+  }
+
+  /**
+   * Mount one docked-menu action row through the shared {@link UiButton} chrome
+   * (Task 7, UX-review fixes) so the Station menu matches Planet's bordered
+   * dark-navy buttons instead of the old bare-bracket `scaledText` rows.
+   * `blocked` rows mirror `PlanetScene.makeServiceBtn`'s non-interactive
+   * treatment: a dimmed, `eventMode="none"` container that reads as disabled and
+   * never fires its handler.
+   */
+  private mountServiceButton(
+    icon: string,
+    label: string,
+    accent: number,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    blocked: boolean,
+    onClick: () => void,
+  ): void {
+    if (blocked) {
+      const btn = new Container();
+      btn.x = x;
+      btn.y = y;
+      const bg = new Graphics();
+      bg.roundRect(0, 0, w, h, 4).fill({ color: 0x1a1a2e, alpha: 0.9 });
+      bg.roundRect(0, 0, w, h, 4).stroke({ color: 0x334455, width: 1 });
+      bg.eventMode = "none";
+      btn.addChild(bg);
+      const text = icon ? `${icon} ${label}` : label;
+      const lbl = scaledText(text, 13, 0x8899aa, {
+        rawColor: true,
+        fontFamily: "Courier New",
+      });
+      lbl.anchor.set(0.5, 0.5);
+      lbl.x = w / 2;
+      lbl.y = h / 2;
+      lbl.eventMode = "none";
+      btn.addChild(lbl);
+      btn.eventMode = "none";
+      this.mainContainer!.addChild(btn);
+      return;
+    }
+    const btn = new UiButton(
+      icon,
+      label,
+      accent,
+      (e) => {
+        e.stopPropagation();
+        onClick();
+      },
+      w,
+      h,
+    );
+    btn.x = x;
+    btn.y = y;
+    this.mainContainer!.addChild(btn.container);
   }
 
   private renderStatsRow(px: number, y: number, pw: number): void {

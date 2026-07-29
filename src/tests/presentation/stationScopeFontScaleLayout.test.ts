@@ -63,6 +63,9 @@ vi.mock("pixi.js", () => {
     rect() {
       return this;
     }
+    roundRect() {
+      return this;
+    }
     fill() {
       return this;
     }
@@ -85,6 +88,14 @@ vi.mock("pixi.js", () => {
     Container,
     Graphics,
     Text,
+    Rectangle: class {
+      constructor(
+        public x = 0,
+        public y = 0,
+        public width = 0,
+        public height = 0,
+      ) {}
+    },
     FederatedPointerEvent: class {},
   };
 });

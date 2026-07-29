@@ -283,18 +283,41 @@ panorama category exists.
       grandfathered at 2 — the two escalation literals moved, none added).
 
 ### Task 7: Unify Planet/Station action-menu button chrome
-- [ ] Run `gitnexus impact UiButton` before editing (shared component — root CLAUDE.md
-      blast-radius rule).
-- [ ] Replace `StationScene.ts`'s bare-bracket `scaledText` action rows (L439-469) with
+- [x] Run `gitnexus impact UiButton` before editing (shared component — root CLAUDE.md
+      blast-radius rule). Done — HIGH risk (41 impacted, 14 direct), but the risk is on
+      *editing* `UiButton`; this task only *adds* `StationScene` as a new consumer (it
+      already imported the module at depth 2), so no shared behaviour changes.
+- [x] Replace `StationScene.ts`'s bare-bracket `scaledText` action rows (L439-469) with
       the shared `UiButton` component, following `PlanetScene.ts`'s `makeServiceBtn()`
       (L1302-1348) as the pattern — same bordered dark-navy chrome, accent color per
-      action, same blocked/disabled treatment for `blocked` rows (L441).
-- [ ] Preserve existing StationScene behavior exactly other than the visual chrome: same
-      click handlers, same hover/cursor gating, same label text.
-- [ ] Update/extend `src/tests/presentation/StationScene.test.ts` (created in Task 5) to
-      assert action rows render via `UiButton` instances, not raw `Text`.
-- [ ] Screenshot-verify Station's menu now visually matches Planet's button style.
-- [ ] run tests — must pass before task 8.
+      action, same blocked/disabled treatment for `blocked` rows (L441). Done — new
+      private `StationScene.mountServiceButton()` mirrors `makeServiceBtn` exactly: an
+      actionable row is a `UiButton` (accent = the existing per-service `serviceButton()`
+      colour, passed as a raw number), and a `blocked` (hostile-gated) row is the same
+      non-interactive dimmed `Container` (0x1a1a2e fill / 0x334455 stroke / 0x8899aa
+      label, `eventMode="none"`) Planet uses. The service + bribe loops now call it; a new
+      per-service icon map (`STATION_SERVICE_ICON`) gives the icon+label layout planets have.
+- [x] Preserve existing StationScene behavior exactly other than the visual chrome: same
+      click handlers, same hover/cursor gating, same label text. Done — labels come from
+      the unchanged `serviceButton()`/bribe strings, `executeService(svc)` and
+      `payStationBribe(faction)` handlers are unchanged, and hover/active feedback is now
+      `UiButton`'s built-in draw states (replacing the old manual alpha toggles).
+- [x] Update/extend `src/tests/presentation/StationScene.test.ts` (created in Task 5) to
+      assert action rows render via `UiButton` instances, not raw `Text`. Done — new
+      "action buttons (Task 7)" describe block: TRADE_POST renders exactly 7 interactive
+      composite containers (cursor "pointer", eventMode "static", ≥2 chrome children), the
+      service label is nested inside the `UiButton` container, and no top-level bracketed
+      `[ … ]` Text row survives.
+- [x] Screenshot-verify Station's menu now visually matches Planet's button style.
+      Non-automatable in this headless env (skipped — the `extract.base64` pipeline needs a
+      live browser + local receiver, same reason as Task 1); the composite-chrome unit
+      assertions plus reusing the same shared `UiButton` Planet uses are the visual proxy.
+- [x] run tests — must pass before task 8. Done — full `npm test -- --run` green (6225
+      passed | 0 failed), `tsc --noEmit` clean, touched files lint-clean. Introducing
+      `UiButton` into `renderMain` surfaced five pre-existing station tests whose local
+      pixi mocks lacked `Graphics.roundRect` (and one lacked a `Rectangle` export) — added
+      those missing no-op mock methods/exports (mock-completeness only, zero assertion
+      changes) so the new component constructs in their fakes.
 
 ### Task 8: Differentiate Station's non-actionable status rows
 - [ ] In `StationScene.ts`'s `serviceButton()` (L537-587) and the render loop

@@ -211,6 +211,52 @@ describe("StationScene interior backdrop (Task 5, finding #3)", () => {
   });
 });
 
+interface FakeNode {
+  cursor: string;
+  eventMode: string;
+  children: FakeNode[];
+  text?: string;
+  fills?: FillCall[];
+}
+
+describe("StationScene action buttons (Task 7, finding #6 — unified chrome)", () => {
+  it("renders each service row through the shared UiButton chrome, not a bare Text", () => {
+    const children = renderMainChildren(
+      StationType.TRADE_POST,
+    ) as unknown as FakeNode[];
+    // A UiButton mounts its composite (bg + accent strip + icon + label) as an
+    // interactive Container (cursor 'pointer'); the old bare `scaledText` row was
+    // a childless Text. Every actionable service row must now be a composite.
+    const interactive = children.filter((c) => c.cursor === "pointer");
+    // TRADE_POST exposes 7 services, all actionable for a non-hostile visit.
+    expect(interactive.length).toBe(7);
+    for (const row of interactive) {
+      expect(row.eventMode).toBe("static");
+      expect(row.children.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("nests the service label inside the UiButton container, dropping the bare-bracket row", () => {
+    const children = renderMainChildren(
+      StationType.TRADE_POST,
+    ) as unknown as FakeNode[];
+    const nestedLabels = children
+      .filter((c) => c.cursor === "pointer")
+      .flatMap((c) => c.children)
+      .map((c) => c.text ?? "")
+      .filter(Boolean);
+    expect(nestedLabels.some((t) => t.includes("Магазин снаряжения"))).toBe(
+      true,
+    );
+    // The old bracketed style is gone: no top-level Text row wraps a service
+    // label directly on the main container.
+    const topLevelTexts = children.map((c) => c.text ?? "").filter(Boolean);
+    expect(
+      topLevelTexts.some((t) => t.startsWith("[ ") && t.includes("Магазин")),
+    ).toBe(false);
+  });
+});
+
 describe("stationBackdrop helpers (pure)", () => {
   it("gives each station type a distinct accent colour", () => {
     const accents = [
