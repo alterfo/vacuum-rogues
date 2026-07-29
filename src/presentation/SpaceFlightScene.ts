@@ -685,6 +685,10 @@ export class SpaceFlightScene extends GameScene {
     if (!frozen) this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);
     if (!frozen && !this.destroyed) this.combatExecution?.update(deltaTime);
+    // The freeze halts the whole execute loop, but the player still needs to
+    // read their own hull/shield while planning a turn — draw just their bar.
+    else if (this.combatPlanning.isPlanning && !this.destroyed)
+      this.combatExecution?.drawPlanningStatusBars();
     // A lethal hit fires GAME_OVER synchronously mid-frame — bail before driving destroyed modules.
     if (this.destroyed) return;
     this.flightHelp?.maybeShowCombatHint(this.combatModule.isActive); // 1st-fight hint

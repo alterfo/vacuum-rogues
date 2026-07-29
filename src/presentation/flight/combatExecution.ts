@@ -249,6 +249,8 @@ export class CombatExecutionController {
   private roll = 0;
   private prevShipAngle: number | null = null;
   private missileSeq = 0;
+  /** Bars drawn on the last draw pass — see {@link statusBarCount}. */
+  private lastDrawnBarCount = 0;
 
   /** Injected RNG (missile evasion rolls) — public setter for deterministic tests,
    *  the `SettingsPanel.selectFont` testability convention. */
@@ -307,6 +309,15 @@ export class CombatExecutionController {
   /** The player sprite's current visual banking roll (radians). */
   get bankingRoll(): number {
     return this.roll;
+  }
+
+  /**
+   * Count of floating hull/shield bars drawn on the last draw pass — 1 during
+   * PLANNING (player only, via {@link drawPlanningStatusBars}), else every
+   * combatant + the player (via {@link draw}). Test-observable.
+   */
+  get statusBarCount(): number {
+    return this.lastDrawnBarCount;
   }
 
   // ---------------------------------------------------------------------------
@@ -846,7 +857,11 @@ export class CombatExecutionController {
       drawShieldFlashes(flashG, specs);
     }
     const bars = this.ensureGraphics("bars");
-    if (bars) drawShipStatusBars(bars, this.statusBarSpecs(), SHIELD_COMBAT);
+    if (bars) {
+      const specs = this.statusBarSpecs();
+      this.lastDrawnBarCount = specs.length;
+      drawShipStatusBars(bars, specs, SHIELD_COMBAT);
+    }
     const wrecks = this.ensureGraphics("wrecks");
     if (wrecks) {
       drawWrecks(
@@ -883,19 +898,48 @@ export class CombatExecutionController {
         hullColor: 0xff5544,
       });
     }
+    const player = this.playerStatusBarSpec();
+    if (player) specs.push(player);
+    return specs;
+  }
+
+  /**
+   * The player's own floating hull/shield bar, or null when the ship/physics
+   * aren't wired (headless callers). Broken out of {@link statusBarSpecs} so the
+   * PLANNING freeze can render the player's bar alone (see
+   * {@link drawPlanningStatusBars}).
+   */
+  playerStatusBarSpec(): ShipStatusBarSpec | null {
     const physics = this.host.getShipPhysics();
     const ship = this.host.getPlayerShip();
-    if (physics && ship) {
-      specs.push({
-        x: physics.shipX,
-        y: physics.shipY,
-        hull: ship.hullHP,
-        maxHull: ship.maxHull,
-        shields: ship.shields,
-        maxShields: ship.maxShields,
-      });
-    }
-    return specs;
+    if (!physics || !ship) return null;
+    return {
+      x: physics.shipX,
+      y: physics.shipY,
+      hull: ship.hullHP,
+      maxHull: ship.maxHull,
+      shields: ship.shields,
+      maxShields: ship.maxShields,
+    };
+  }
+
+  /**
+   * Draw ONLY the player's own status bar while the sim is frozen for PLANNING.
+   * The full per-frame {@link update}/{@link draw} pass is gated off during a
+   * freeze (no NPC bars, no VFX, no fire), but the player still needs to read
+   * their own hull/shield while planning a turn — the whole point of the pause.
+   * The scene calls this each frozen-planning frame; it clears the shared "bars"
+   * layer and redraws just the player, so lingering NPC bars from the prior
+   * execute window are wiped. It touches nothing else about the freeze.
+   */
+  drawPlanningStatusBars(): void {
+    if (!this.host.isCombatActive()) return;
+    const bars = this.ensureGraphics("bars");
+    if (!bars) return;
+    const player = this.playerStatusBarSpec();
+    const specs = player ? [player] : [];
+    this.lastDrawnBarCount = specs.length;
+    drawShipStatusBars(bars, specs, SHIELD_COMBAT);
   }
 
   private readonly gfx = new Map<string, Graphics>();
@@ -941,6 +985,7 @@ export class CombatExecutionController {
     if (visual?.scale) visual.scale.y = 1;
     const bars = this.gfx.get("bars");
     if (bars && !bars.destroyed) drawShipStatusBars(bars, [], SHIELD_COMBAT);
+    this.lastDrawnBarCount = 0;
     const fx = this.gfx.get("fx");
     if (fx && !fx.destroyed) drawWeaponVfx(fx, []);
   }

@@ -452,6 +452,40 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     expect(harness.errors()).toEqual([]);
   });
 
+  it("PLANNING draws the player's own status bar even while the sim is frozen (Task 3)", () => {
+    const player = harness.player()!;
+    const foe = spawnFoe();
+    expect(scene.combatPlanning.isPlanning).toBe(true);
+
+    // The player's own bar spec is available and reflects the live ship.
+    const spec = scene.combatExecution.playerStatusBarSpec();
+    expect(spec).not.toBeNull();
+    expect(spec!.hull).toBe(player.ship.hullHP);
+    expect(spec!.maxHull).toBe(player.ship.maxHull);
+    expect(spec!.shields).toBe(player.ship.shields);
+
+    // A frozen-planning frame draws exactly ONE bar — the player's — and never
+    // opens the execute loop (freeze semantics for NPC bars unchanged).
+    harness.tick(100);
+    expect(scene.combatPlanning.isPlanning).toBe(true); // still frozen/planning
+    expect(scene.combatExecution.statusBarCount).toBe(1);
+    expect(scene.combatModule.combatants.has(foe)).toBe(true); // foe engaged…
+    expect(harness.errors()).toEqual([]); // …but its bar is not drawn while planning
+  });
+
+  it("regression: EXECUTING still draws every combatant's bar plus the player's (Task 3)", () => {
+    const foe = spawnFoe();
+    scene.combatPlanning.confirm(); // → EXECUTING, the freeze lifts
+    expect(scene.combatPlanning.isPlanning).toBe(false);
+
+    harness.tick(100);
+    // player (1) + the engaged hostile (1): the frozen-planning carve-out did
+    // NOT alter the unfrozen full draw path.
+    expect(scene.combatExecution.statusBarCount).toBe(2);
+    expect(scene.combatModule.combatants.has(foe)).toBe(true);
+    expect(harness.errors()).toEqual([]);
+  });
+
   it("round-length parity: the execute window still matches the balance constant", () => {
     expect(COMBAT_ROUND_MS).toBe(3000);
     expect(FIRE).toBeLessThan(2900);

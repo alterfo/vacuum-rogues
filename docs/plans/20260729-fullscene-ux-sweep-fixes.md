@@ -155,11 +155,11 @@ in `StationScene` (prior pass, Task 7) — reuse it for the bank repay button
 - [x] run tests — must pass before next task
 
 ### Task 3: Show player hull/shield status bar during combat PLANNING phase
-- [ ] run `gitnexus impact` on `combatExecution.ts`'s `update()`/`draw` gate before touching it — this freeze-gate has a documented history of subtle bugs (isPaused/isFrozen shadowing)
-- [ ] in `src/presentation/flight/combatExecution.ts`, draw the player's own status bar (from `statusBarSpecs()`) even while the sim is frozen for PLANNING — do not change the freeze gate for NPC bars or any other frozen-state behavior
-- [ ] write a real-engine playtest test asserting the player's hull/shield bar is present and drawn while combat is in the PLANNING phase
-- [ ] write a regression test confirming NPC bar draw timing and other frozen-state behavior is unchanged
-- [ ] run tests — must pass before next task
+- [x] run `gitnexus impact` on `combatExecution.ts`'s `update()`/`draw` gate before touching it — this freeze-gate has a documented history of subtle bugs (isPaused/isFrozen shadowing) — blast radius minimal: `statusBarSpecs`/`draw` are private; the only tick site is `SpaceFlightScene.ts:687`, and the change only adds a new method + a new frozen-branch call
+- [x] in `src/presentation/flight/combatExecution.ts`, draw the player's own status bar (from `statusBarSpecs()`) even while the sim is frozen for PLANNING — do not change the freeze gate for NPC bars or any other frozen-state behavior — added `playerStatusBarSpec()` + `drawPlanningStatusBars()`; the scene calls it in an `else if (isPlanning)` branch alongside the existing unfrozen `update()`, leaving the NPC-bar freeze untouched
+- [x] write a real-engine playtest test asserting the player's hull/shield bar is present and drawn while combat is in the PLANNING phase — `combatExecutionLive.test.ts` "PLANNING draws the player's own status bar…" (statusBarCount===1, spec reflects live ship)
+- [x] write a regression test confirming NPC bar draw timing and other frozen-state behavior is unchanged — `combatExecutionLive.test.ts` "regression: EXECUTING still draws every combatant's bar plus the player's" (statusBarCount===2)
+- [x] run tests — must pass before next task — full unit suite green; `tsc --noEmit` clean; eslint clean on changed files
 
 ### Task 4: Reduce terran-biome planet art collisions
 - [ ] in `PlanetScene.ts`'s `resolvePlanetBackdropKey`/`textures.ts`'s `pickVariantKey` path, apply a small deterministic per-planet-id color-grade/tint overlay when a terran variant is selected, so two planets that hash to the same base image (`terran_0{1-4}.webp`) still read as visually distinct — code-only mitigation, no new art assets in this task
