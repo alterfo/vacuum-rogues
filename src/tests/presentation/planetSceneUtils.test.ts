@@ -115,6 +115,57 @@ describe("computePlanetMenuLayout (playtest2 ⑥ — menu must fit on-screen)", 
   }
 });
 
+describe("computePlanetMenuLayout danger-row clearance (UX finding #11)", () => {
+  const CONTENT_BOTTOM = 466;
+
+  // Same screen-height/button-count matrix the fit tests above cover, now with
+  // the danger-row count the production caller passes (1 = «Взлёт» only,
+  // 2 = «Взлёт» + «Взятка» when hostile).
+  const cases: Array<{ h: number; count: number; dangerRows: number }> = [
+    { h: 720, count: 8, dangerRows: 1 },
+    { h: 720, count: 9, dangerRows: 2 },
+    { h: 768, count: 8, dangerRows: 1 },
+    { h: 1080, count: 8, dangerRows: 1 },
+    { h: 1080, count: 9, dangerRows: 2 },
+    { h: 900, count: 1, dangerRows: 1 }, // uninhabited: only «Взлёт»
+  ];
+
+  for (const { h, count, dangerRows } of cases) {
+    it(`separates the danger row(s) and still fits ${count} buttons at ${h}px`, () => {
+      const { btnStartY, btnStep, btnH, dangerGap } = computePlanetMenuLayout(
+        h,
+        CONTENT_BOTTOM,
+        count,
+        dangerRows,
+      );
+      // A positive gap is reserved before each danger row.
+      expect(dangerGap).toBeGreaterThan(0);
+      // The gap before the danger row is at least as large as the routine
+      // between-button gap (btnStep - btnH) — the last rows are no longer the
+      // most-cramped in the stack.
+      const routineGap = btnStep - btnH;
+      expect(dangerGap).toBeGreaterThanOrEqual(routineGap);
+      // The real last button (bottom-most danger row) still fits on-screen once
+      // every danger gap is applied.
+      const lastBottom =
+        btnStartY + (count - 1) * btnStep + dangerRows * dangerGap + btnH;
+      expect(lastBottom).toBeLessThanOrEqual(h);
+      // No overlap between consecutive buttons.
+      expect(btnH).toBeLessThanOrEqual(btnStep);
+    });
+  }
+
+  it("reserves no danger gap when there are no danger rows (unchanged layout)", () => {
+    const withRows = computePlanetMenuLayout(720, CONTENT_BOTTOM, 8, 0);
+    expect(withRows.dangerGap).toBe(0);
+    // dangerRows omitted defaults to 0, matching the legacy 3-arg call.
+    const legacy = computePlanetMenuLayout(720, CONTENT_BOTTOM, 8);
+    expect(legacy.btnStep).toBe(withRows.btnStep);
+    expect(legacy.btnH).toBe(withRows.btnH);
+    expect(legacy.dangerGap).toBe(0);
+  });
+});
+
 describe("visiblePlanetServices (regression — must still pass)", () => {
   const ALL = [
     { label: "Губернатор" },

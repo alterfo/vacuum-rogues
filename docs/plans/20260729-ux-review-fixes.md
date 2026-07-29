@@ -429,16 +429,38 @@ panorama category exists.
       clean, and the touched files add zero lint issues.
 
 ### Task 11: Fix Взлёт/Взятка button spacing
-- [ ] In `PlanetScene.ts`'s `computePlanetMenuLayout()` (L189-209), add extra vertical
+- [x] In `PlanetScene.ts`'s `computePlanetMenuLayout()` (L189-209), add extra vertical
       clearance specifically before the danger (`Взлёт`) and bribe (`Взятка`) rows
       rather than globally changing `btnStep`/`btnH` for every row (avoid regressing
-      the general no-overlap layout other button counts rely on).
-- [ ] Extend `src/tests/presentation/planetSceneUtils.test.ts:56-114`
+      the general no-overlap layout other button counts rely on). Done — the function now
+      takes an optional `dangerRows` (default 0, so the legacy 3-arg call is byte-identical)
+      and treats each danger row as `1 + DANGER_ROW_GAP_STEPS` (0.5) slots, reserving the
+      extra clearance out of the same shrink-to-fit budget as the buttons themselves. It
+      returns the computed `dangerGap` (= `0.5 * btnStep`); the `renderMain` caller passes
+      `dangerRows = 1 + (showBribe ? 1 : 0)` and adds `dangerGap` before the `accent ===
+      "danger"` («Взлёт») row and before the bribe row. `btnStep`/`btnH` are untouched for
+      the routine rows — the gap only lands before the two destructive actions. The
+      half-step reservation keeps the fit invariant (last button always on-screen with the
+      16px bottom margin) for every screen-height/button-count/danger-row combination.
+- [x] Extend `src/tests/presentation/planetSceneUtils.test.ts:56-114`
       (`computePlanetMenuLayout` tests) with a new assertion: the gap between the last
       two rows (danger + bribe) is at least as large as the existing minimum, across the
-      same screen-height/button-count matrix the existing tests already cover.
-- [ ] Screenshot-verify the two buttons no longer read as cramped.
-- [ ] run tests — must pass before task 12.
+      same screen-height/button-count matrix the existing tests already cover. Done — new
+      "danger-row clearance (UX finding #11)" describe block over the same
+      height/count matrix (now with production `dangerRows` 1/2): asserts `dangerGap > 0`,
+      `dangerGap >= (btnStep - btnH)` (the routine between-button gap), the real
+      last-button bottom (with every danger gap applied) still `<= h`, and no overlap. A
+      second case pins the legacy contract: omitting `dangerRows` (or passing 0) yields
+      `dangerGap === 0` and identical `btnStep`/`btnH`. Existing 3-arg assertions untouched
+      and still green.
+- [x] Screenshot-verify the two buttons no longer read as cramped. Non-automatable in this
+      headless env (skipped — the `extract.base64` pipeline needs a live browser + local
+      receiver, same reason as Task 1); the `dangerGap >= routineGap` + fit-with-gap unit
+      assertions are the visual proxy.
+- [x] run tests — must pass before task 12. Done — target `planetSceneUtils.test.ts` (28
+      cases) green, `tsc --noEmit` clean, touched files lint-clean; full `npm test -- --run`
+      green except the pre-existing stochastic `cometHeadSprite.test.ts` comet-rotation
+      flake (passes in isolation; zero coupling to a pure planet-menu-layout change).
 
 ### Task 12: Fix main-menu "Новая игра" button color
 - [ ] In `MainMenuScene.ts`, pass an explicit color to the `createButton()` call for

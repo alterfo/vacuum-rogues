@@ -186,17 +186,35 @@ const FACTION_PANORAMA: Record<string, string> = {
  * (`contentBottomY`) and a bottom margin so the LAST button's bottom edge always
  * stays on-screen, and consecutive buttons never overlap (overlap steals clicks).
  */
+/**
+ * Extra clearance (as a fraction of one button step) inserted *before* each
+ * danger-accent row — «Взлёт» (take-off) and «Взятка» (bribe). UX review
+ * finding #11: the last two rows sat only ~6px apart and read as cramped, with
+ * the destructive take-off/bribe actions visually glued to the routine service
+ * buttons above them. Half a step gives a clear break that scales with the
+ * screen (bigger gap on tall screens, smaller on short ones) and is reserved out
+ * of the available space up front so it never pushes the last button off-screen.
+ */
+const DANGER_ROW_GAP_STEPS = 0.5;
+
 export function computePlanetMenuLayout(
   screenH: number,
   contentBottomY: number,
   count: number,
-): { btnStartY: number; btnStep: number; btnH: number } {
+  dangerRows: number = 0,
+): { btnStartY: number; btnStep: number; btnH: number; dangerGap: number } {
   const bottomMargin = 16;
   const btnStartY = contentBottomY + 36;
   const avail = Math.max(0, screenH - bottomMargin - btnStartY);
+  // Each danger row is treated as `1 + DANGER_ROW_GAP_STEPS` slots so the extra
+  // clearance shares the same shrink-to-fit budget as the buttons themselves —
+  // the last button's bottom edge therefore always stays on-screen regardless of
+  // how many danger rows are present (see the fit invariant tests).
+  const slots =
+    Math.max(0, count) + DANGER_ROW_GAP_STEPS * Math.max(0, dangerRows);
   // Cap the step so buttons aren't enormous on tall screens; shrink to fit on
   // short ones.
-  const btnStep = count > 0 ? Math.min(38, avail / count) : 32;
+  const btnStep = slots > 0 ? Math.min(38, avail / slots) : 32;
   // Button height sits a hair under the step so consecutive buttons never
   // overlap; floor 20 keeps the label legible. The hard cap at `floor(btnStep)`
   // preserves the no-overlap invariant even on very short screens (< ~700px),
@@ -205,7 +223,9 @@ export function computePlanetMenuLayout(
     Math.max(20, Math.min(Math.floor(btnStep) - 2, 32)),
     Math.floor(btnStep),
   );
-  return { btnStartY, btnStep, btnH };
+  // The gap the caller adds before each danger row (0 when there are none).
+  const dangerGap = dangerRows > 0 ? DANGER_ROW_GAP_STEPS * btnStep : 0;
+  return { btnStartY, btnStep, btnH, dangerGap };
 }
 
 /**
@@ -1338,10 +1358,15 @@ export class PlanetScene extends GameScene {
     // (plus the optional bribe button) must fit on-screen at every resolution.
     const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
     const showBribe = isHostile && this.planet.isHabitable;
-    const { btnStartY, btnStep, btnH } = computePlanetMenuLayout(
+    // «Взлёт» is always a danger row; the bribe row (when shown) is the second.
+    // Both get extra clearance before them so they don't glue to the routine
+    // service buttons above (UX review finding #11).
+    const dangerRows = 1 + (showBribe ? 1 : 0);
+    const { btnStartY, btnStep, btnH, dangerGap } = computePlanetMenuLayout(
       h,
       statY,
       visible.length + (showBribe ? 1 : 0),
+      dangerRows,
     );
     const btnW = 280;
 
@@ -1400,6 +1425,8 @@ export class PlanetScene extends GameScene {
 
     let y = btnStartY;
     for (const b of visible) {
+      // Separate the destructive «Взлёт» action from the routine services above.
+      if (b.accent === "danger") y += dangerGap;
       const blocked =
         (isHostile && b.label !== "Взлёт") ||
         (b.label === "Карты" && systemHostile);
@@ -1409,6 +1436,8 @@ export class PlanetScene extends GameScene {
 
     // Show bribe button when hostile to the controlling faction.
     if (showBribe) {
+      // Extra clearance before the bribe row for the same reason as «Взлёт».
+      y += dangerGap;
       makeServiceBtn(
         {
           icon: "💰",
