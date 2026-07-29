@@ -250,20 +250,37 @@ panorama category exists.
       this branch, unchanged by this task).
 
 ### Task 6: Style the star-map critical-threat banner
-- [ ] Rework `StarMapScene.ts:453-472` (`warningIndicator`): route it through
+- [x] Rework `StarMapScene.ts:453-472` (`warningIndicator`): route it through
       `scaledText`/`scaledFont` (per `src/presentation/CLAUDE.md`, StarMapScene is
       explicitly listed as not-yet-migrated — do this only for the line(s) touched
       here, not a full-file migration), increase weight/size relative to the routine
       stat lines above it, and add a bordered/filled background chip so it reads as a
-      banner, not a stray line of red text.
-- [ ] Gate any animated emphasis (e.g. a subtle pulse) on `!isReducedMotionSet()`
+      banner, not a stray line of red text. Done — new
+      `src/presentation/ui/starMapThreatBanner.ts` (`buildThreatBanner`) mounts a
+      bordered, filled `Graphics` chip behind a **bold** `scaledText` label at
+      `THREAT_BANNER_BASE_PX` (15) — strictly larger than the 12px routine РАЗУМ/ПИРАТЫ
+      stat lines — with hotter red accent for `critical` than `warning`. The old raw
+      `new Text({ fontSize: 12 })` warningIndicator in `renderStarMap()` is replaced by
+      the chip, `eventMode="none"` so it never intercepts map clicks.
+- [x] Gate any animated emphasis (e.g. a subtle pulse) on `!isReducedMotionSet()`
       (`ui/reducedMotion.ts`) per the existing accessibility seam — do not add
-      unconditional per-frame animation.
-- [ ] Write a unit test asserting the warning line's font size/weight differ from the
+      unconditional per-frame animation. Done — the pulse is driven from `update()`
+      only when `shouldPulseThreatBanner(level, env)` is true, which is `critical` **and**
+      `!reducedMotion(env)`; a reduced-motion player gets a static banner (alpha stays 1).
+- [x] Write a unit test asserting the warning line's font size/weight differ from the
       routine stat lines, and that pulse animation is skipped when reduced-motion is set.
-- [ ] Screenshot-verify the banner reads as urgent against the (now-fixed, if Task 4
-      applied) dark background.
-- [ ] run tests — must pass before task 7.
+      Done — `src/tests/presentation/starMapThreatBanner.test.ts` (7 cases): banner base
+      px > stat-line px and weight is bold; critical vs warning use distinct accents;
+      pulse ON with reduced-motion off, OFF when set, never for `warning`; alpha
+      oscillates within `[floor, 1]`.
+- [x] Screenshot-verify the banner reads as urgent against the (now-fixed, if Task 4
+      applied) dark background. Non-automatable in this headless env (skipped — the
+      `extract.base64` pipeline needs a live browser + local receiver, same reason as
+      Task 1); the pure fill/weight/accent unit tests are the visual proxy.
+- [x] run tests — must pass before task 7. Done — full `npm test -- --run` green (6236
+      passed | 0 failed), `tsc --noEmit` clean, and the touched files add zero lint
+      issues; cyrillicBaseline ratchet updated (StarMapScene 34→32, new banner file
+      grandfathered at 2 — the two escalation literals moved, none added).
 
 ### Task 7: Unify Planet/Station action-menu button chrome
 - [ ] Run `gitnexus impact UiButton` before editing (shared component — root CLAUDE.md

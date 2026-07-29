@@ -12,6 +12,11 @@ import { logger } from "@/utils/logger";
 import { getSystemVisibility, pickLabelPosition } from "@/utils/starMapUtils";
 import type { LabelBound, StarPos, WarpLine } from "@/utils/starMapUtils";
 import { computeGalaxyThreat } from "@/systems/galaxy/GalaxyStatusIndicator";
+import {
+  buildThreatBanner,
+  shouldPulseThreatBanner,
+  threatBannerPulseAlpha,
+} from "./ui/starMapThreatBanner";
 import { isDowned } from "@/systems/combat/godMode";
 import { FACTION_LABEL } from "@/config/factionConfig";
 
@@ -54,6 +59,12 @@ export class StarMapScene extends GameScene {
   private pointerStartX = 0;
   private pointerStartY = 0;
   private mapContainer: Container | null = null;
+
+  // Critical-threat banner (finding #5). Rebuilt each `renderStarMap()`; pulsed
+  // from `update()` only when `shouldPulseThreatBanner` allows (reduced-motion off).
+  private threatBanner: Container | null = null;
+  private threatBannerPulsing = false;
+  private threatBannerElapsedMs = 0;
   private boundHandleWheel: ((e: WheelEvent) => void) | null = null;
   private boundMouseDown: ((e: MouseEvent) => void) | null = null;
   private boundMouseMove: ((e: MouseEvent) => void) | null = null;
@@ -264,8 +275,16 @@ export class StarMapScene extends GameScene {
     this.mapContainer.scale.set(this.zoomLevel);
   }
 
-  update(_deltaTime: number): void {
-    // Star map animations could go here
+  update(deltaTime: number): void {
+    // Pulse the critical-threat banner so an urgent warning draws the eye. Gated
+    // on the reduced-motion seam via `shouldPulseThreatBanner` at build time — a
+    // player with reduced motion set gets a static banner (alpha stays 1).
+    if (this.threatBanner && this.threatBannerPulsing) {
+      this.threatBannerElapsedMs += deltaTime;
+      this.threatBanner.alpha = threatBannerPulseAlpha(
+        this.threatBannerElapsedMs,
+      );
+    }
   }
 
   destroy(): void {
@@ -302,6 +321,8 @@ export class StarMapScene extends GameScene {
     this.renderer.clearUILayer();
     this.infoPanel = null;
     this.fixedUIContainer = null;
+    this.threatBanner = null;
+    this.threatBannerPulsing = false;
     this.gameEngine = null;
     this.moodBackdrop = null;
   }
@@ -379,6 +400,10 @@ export class StarMapScene extends GameScene {
       this.fixedUIContainer.destroy({ children: true });
     }
     this.fixedUIContainer = new Container();
+    // The banner is rebuilt below only when a threat is active; the container it
+    // lived in was just destroyed, so drop the stale ref up front.
+    this.threatBanner = null;
+    this.threatBannerPulsing = false;
 
     // Fixed UI elements
     const title = new Text({
@@ -454,21 +479,15 @@ export class StarMapScene extends GameScene {
         threat.threatLevel === "warning" ||
         threat.threatLevel === "critical"
       ) {
-        const warningIndicator = new Text({
-          text:
-            threat.threatLevel === "critical"
-              ? "!! КРИТИЧЕСКАЯ УГРОЗА: РАЗУМ ЗАХВАТЫВАЕТ ГАЛАКТИКУ"
-              : "! ВНИМАНИЕ: РАЗУМ РАСШИРЯЕТСЯ",
-          style: {
-            fontFamily: "Courier New",
-            fontSize: 12,
-            fill: threat.threatLevel === "critical" ? 0xff2222 : 0xff8844,
-          },
-        });
-        warningIndicator.x = 20;
-        warningIndicator.y = 108;
-        warningIndicator.eventMode = "none";
-        this.fixedUIContainer.addChild(warningIndicator);
+        // Finding #5: render the warning as a weighted, bordered banner chip
+        // (bold, larger than the routine stat lines above) instead of a stray
+        // line of red text. A subtle pulse on the most-urgent (critical) level
+        // is driven from `update()`, gated on the reduced-motion seam.
+        const banner = buildThreatBanner(threat.threatLevel, 20, 108);
+        this.threatBanner = banner;
+        this.threatBannerPulsing = shouldPulseThreatBanner(threat.threatLevel);
+        this.threatBannerElapsedMs = 0;
+        this.fixedUIContainer.addChild(banner);
       }
     }
 
