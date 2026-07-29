@@ -135,6 +135,7 @@ export const ru: Dict = {
   "role.TRADER": "Торговец",
   "role.PIRATE": "Пират",
   "role.PATROL": "Патруль",
+  "role.OVERMIND": "Сверхразум",
 
   // --- main menu -----------------------------------------------------------
   "menu.title": "ВАКУУМНЫЕ ПРОЙДОХИ",

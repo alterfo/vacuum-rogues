@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { NpcShip } from "@/domain/NpcShip";
-import { NpcRole, FactionType } from "@/types";
+import { FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import {
   commsContextFor,
@@ -9,6 +9,7 @@ import {
   type CommsOption,
 } from "@/systems/comms/commsOptions";
 import { bindModalKeys } from "./ui/bindModalKeys";
+import { roleLabel } from "./npcLabels";
 import { t } from "@/i18n/i18n";
 
 /** Localized button label per context-driven comms option (live per language). */
@@ -34,11 +35,6 @@ function factionTypeLabel(race: FactionType): string {
 /** Localized alliance (plural) label, e.g. «Окраинники» / "Outlanders". */
 function factionLabel(faction: Faction): string {
   return t(`faction.${faction}`);
-}
-
-/** Localized NPC role label, e.g. «Рейнджер» / "Ranger". */
-function roleLabel(role: NpcRole): string {
-  return t(`role.${role}`);
 }
 
 export interface NpcContactCallbacks {

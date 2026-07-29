@@ -28,6 +28,7 @@ import {
 import { NpcRole } from "@/types";
 import type { SpaceLootItem } from "@/types";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
+import { npcNameplateTooltip } from "../npcLabels";
 import { hashStr } from "@/utils/hashStr";
 import { logger } from "@/utils/logger";
 import { t } from "@/i18n/i18n";
@@ -837,7 +838,8 @@ export class NpcShipManager implements FlightModule {
     sprite.setClickHandler((n) => this.onNpcClick(n));
     sprite.updateHitArea(this.lastCameraZoom);
     sprite.setHoverHandler(
-      (n, sx, sy) => this.deps.showTooltip(`${n.name} [${n.role}]`, sx, sy),
+      (n, sx, sy) =>
+        this.deps.showTooltip(npcNameplateTooltip(n.name, n.role), sx, sy),
       () => this.deps.hideTooltip(),
     );
     sprite.container.zIndex = 100; // above planet discs so clicks reach the ship

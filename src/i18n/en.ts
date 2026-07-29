@@ -135,6 +135,7 @@ export const en: Dict = {
   "role.TRADER": "Trader",
   "role.PIRATE": "Pirate",
   "role.PATROL": "Patrol",
+  "role.OVERMIND": "Overmind",
 
   // --- main menu -----------------------------------------------------------
   "menu.title": "VACUUM ROGUES",
