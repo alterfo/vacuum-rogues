@@ -49,7 +49,7 @@ function makeCtx(overrides: Partial<Ctx> = {}): Ctx {
     combatPause: { paused: false, resume: vi.fn() },
     npcManager: {
       isContactPanelOpen: false,
-      closeContactPanel: vi.fn(),
+      closeContactPanel: vi.fn<() => void>(),
       isEncounterPromptOpen: false,
       closeEncounterPrompt: vi.fn(),
     },
@@ -63,7 +63,7 @@ function makeCtx(overrides: Partial<Ctx> = {}): Ctx {
       closeSystemMenu: vi.fn(),
       showMessage: vi.fn(),
     },
-    planetManager: { hasInfoPanel: false, closeInfoPanel: vi.fn() },
+    planetManager: { hasInfoPanel: false, closeInfoPanel: vi.fn<() => void>() },
     plannedRoute: null,
     isTurnRunning: false,
     clearPlannedRoute: vi.fn(),
@@ -207,7 +207,10 @@ describe("handleFlightKey — Space launch guards", () => {
   it("does not launch the turn while a contact panel is open", () => {
     const ctx = makeCtx({
       plannedRoute: { x: 5, y: 5 },
-      npcManager: { isContactPanelOpen: true, closeContactPanel: vi.fn() },
+      npcManager: {
+        isContactPanelOpen: true,
+        closeContactPanel: vi.fn<() => void>(),
+      },
     });
 
     handleFlightKey(space(), ctx);
@@ -223,7 +226,7 @@ describe("handleFlightKey — Space launch guards", () => {
       plannedRoute: { x: 5, y: 5 },
       npcManager: {
         isContactPanelOpen: false,
-        closeContactPanel: vi.fn(),
+        closeContactPanel: vi.fn<() => void>(),
         hasOpenModal: vi.fn().mockReturnValue(true),
       },
     });
@@ -238,7 +241,7 @@ describe("handleFlightKey — Space launch guards", () => {
       plannedRoute: { x: 7, y: 8 },
       npcManager: {
         isContactPanelOpen: false,
-        closeContactPanel: vi.fn(),
+        closeContactPanel: vi.fn<() => void>(),
         hasOpenModal: vi.fn().mockReturnValue(false),
       },
     });
@@ -252,7 +255,10 @@ describe("handleFlightKey — Space launch guards", () => {
   it("does not launch the turn while a planet info panel is open", () => {
     const ctx = makeCtx({
       plannedRoute: { x: 5, y: 5 },
-      planetManager: { hasInfoPanel: true, closeInfoPanel: vi.fn() },
+      planetManager: {
+        hasInfoPanel: true,
+        closeInfoPanel: vi.fn<() => void>(),
+      },
     });
 
     handleFlightKey(space(), ctx);
@@ -289,7 +295,10 @@ describe("handleFlightKey — Space launch guards", () => {
 
   it("calls preventDefault on Space even when the launch is suppressed", () => {
     const ctx = makeCtx({
-      npcManager: { isContactPanelOpen: true, closeContactPanel: vi.fn() },
+      npcManager: {
+        isContactPanelOpen: true,
+        closeContactPanel: vi.fn<() => void>(),
+      },
     });
     const ev = space();
     const prevent = vi.spyOn(ev, "preventDefault");

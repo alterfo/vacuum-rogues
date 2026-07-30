@@ -11,10 +11,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { EscalationInputs } from "@/systems/campaign/escalationNotices";
 
 const tx = vi.hoisted(() => ({
-  pickVariantKey: vi.fn<
-    [cat: string, prefix: string, seed: string],
-    string | undefined
-  >(),
+  pickVariantKey:
+    vi.fn<(cat: string, prefix: string, seed: string) => string | undefined>(),
 }));
 
 vi.mock("@/presentation/textures", async () => {

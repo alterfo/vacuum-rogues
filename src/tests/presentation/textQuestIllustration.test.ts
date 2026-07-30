@@ -11,9 +11,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 
 const tx = vi.hoisted(() => ({
-  pickVariantKey: vi.fn<[string, string, string], string | undefined>(),
-  tex: vi.fn<[string], unknown>(),
-  loadTextureAsync: vi.fn<[string], Promise<unknown>>(),
+  pickVariantKey:
+    vi.fn<(a: string, b: string, c: string) => string | undefined>(),
+  tex: vi.fn<(a: string) => unknown>(),
+  loadTextureAsync: vi.fn<(a: string) => Promise<unknown>>(),
 }));
 
 vi.mock("@/presentation/textures", () => ({

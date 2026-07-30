@@ -21,7 +21,7 @@ describe("attachDevAutopilot — dev-only runtime gate", () => {
   const fakeEngine = {} as GameEngine;
 
   it("attaches nothing in a non-DEV build (load is never called)", async () => {
-    const load = vi.fn<[], Promise<AutopilotHookModule>>();
+    const load = vi.fn<() => Promise<AutopilotHookModule>>();
 
     attachDevAutopilot(false, fakeEngine, load);
 
@@ -40,7 +40,7 @@ describe("attachDevAutopilot — dev-only runtime gate", () => {
     const hook = { engaged: false, start: vi.fn() };
     const installAutopilotHook = vi.fn(() => hook);
     const load = vi
-      .fn<[], Promise<AutopilotHookModule>>()
+      .fn<() => Promise<AutopilotHookModule>>()
       .mockResolvedValue({ installAutopilotHook });
     const onError = vi.fn();
 
@@ -57,7 +57,7 @@ describe("attachDevAutopilot — dev-only runtime gate", () => {
   it("routes a load/install fault to onError instead of throwing", async () => {
     const boom = new Error("dev chunk missing");
     const load = vi
-      .fn<[], Promise<AutopilotHookModule>>()
+      .fn<() => Promise<AutopilotHookModule>>()
       .mockRejectedValue(boom);
     const onError = vi.fn();
 
@@ -108,7 +108,7 @@ describe("attachDevAutopilot — autopilot resume seam", () => {
 
   const loaderFor = (hook: { engaged: boolean; start: () => void }) =>
     vi
-      .fn<[], Promise<AutopilotHookModule>>()
+      .fn<() => Promise<AutopilotHookModule>>()
       .mockResolvedValue({ installAutopilotHook: () => hook });
 
   it("injects a provider whose resume(true) re-engages the hook", async () => {

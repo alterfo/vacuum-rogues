@@ -148,7 +148,7 @@ function makeCtx(
   player: Player,
   presets: LoadoutPreset[] = [],
 ) {
-  const playSfx = vi.fn<[SfxKey], void>();
+  const playSfx = vi.fn<(key: SfxKey) => void>();
   const ctx = {
     container: new Container(),
     player,

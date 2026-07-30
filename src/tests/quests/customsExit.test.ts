@@ -179,7 +179,7 @@ describe("Customs quest — win exits once and does not restart", () => {
     expect(transitionTo).toHaveBeenCalledTimes(1);
     expect(transitionTo.mock.calls[0][0]).toBe(SceneType.PLANET);
     const reLaunched = transitionTo.mock.calls.some(
-      ([s]: [SceneType]) => s === SceneType.TEXT_QUEST,
+      ([s]) => s === SceneType.TEXT_QUEST,
     );
     expect(reLaunched).toBe(false);
     scene.destroy(); // release the global keydown listener (no cross-test leak)

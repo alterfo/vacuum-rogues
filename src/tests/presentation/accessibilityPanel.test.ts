@@ -86,13 +86,15 @@ type KeyEvt = { key: string; code?: string };
 
 /** A capture installer that records handlers + a disposer spy (no real DOM). */
 function makeCapture(): {
-  install: ReturnType<typeof vi.fn<[(e: KeyEvt) => void], () => void>>;
+  install: ReturnType<
+    typeof vi.fn<(handler: (e: KeyEvt) => void) => () => void>
+  >;
   dispose: ReturnType<typeof vi.fn>;
   fire: (e: KeyEvt) => void;
 } {
   const dispose = vi.fn();
   let handler: ((e: KeyEvt) => void) | null = null;
-  const install = vi.fn<[(e: KeyEvt) => void], () => void>(
+  const install = vi.fn<(handler: (e: KeyEvt) => void) => () => void>(
     (h: (e: KeyEvt) => void): (() => void) => {
       handler = h;
       return dispose;

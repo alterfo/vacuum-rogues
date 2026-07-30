@@ -16,10 +16,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { StationType } from "@/types";
 
 const tx = vi.hoisted(() => ({
-  pickVariantKey: vi.fn<
-    [cat: string, prefix: string, seed: string],
-    string | undefined
-  >(),
+  pickVariantKey:
+    vi.fn<(cat: string, prefix: string, seed: string) => string | undefined>(),
 }));
 
 vi.mock("@/presentation/textures", async () => {

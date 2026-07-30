@@ -77,8 +77,8 @@ vi.mock("@/presentation/PlanetInfoPanel", () => ({
 // Control the art resolver + texture cache so we can drive the sprite/diamond
 // branch deterministically without any real `station/` art on disk.
 const art = vi.hoisted(() => ({
-  stationSpriteKey: vi.fn<[type: unknown, id: string], string | null>(),
-  tex: vi.fn<[key: string], unknown>(),
+  stationSpriteKey: vi.fn<(type: unknown, id: string) => string | null>(),
+  tex: vi.fn<(key: string) => unknown>(),
 }));
 
 vi.mock("@/presentation/flight/stationArt", async () => {
