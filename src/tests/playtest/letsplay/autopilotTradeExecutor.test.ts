@@ -49,6 +49,9 @@ describe("letsplay live trade executor (Task 4)", () => {
   }
 
   it("the real TRADE scene exposes both e2e seams the live executor drives", async () => {
+    // Fixed seed ⇒ deterministic galaxy: a silent early return here would mean
+    // the seed regressed to a market-less system, so fail loudly instead.
+    expect.hasAssertions();
     const engine = harness.engine;
     const planet = currentSystem(engine)?.planets[0];
     if (!planet) return;
@@ -62,6 +65,9 @@ describe("letsplay live trade executor (Task 4)", () => {
   });
 
   it("executeTrade() buys the preferred good through the real TradeScene seam (round trip changes cargo/credits)", async () => {
+    // Fixed seed ⇒ this suite must actually drive the buy path; a silent skip
+    // (no market / nothing affordable) is a regression, not a pass.
+    expect.hasAssertions();
     const engine = harness.engine;
     const sys = currentSystem(engine);
     const planet = sys?.planets.find(
@@ -117,6 +123,9 @@ describe("letsplay live trade executor (Task 4)", () => {
   });
 
   it("TradeScene.e2eSellItem sells qty units, mirroring e2eBuyItem", async () => {
+    // Fixed seed ⇒ the buy-then-sell round trip must run; a silent skip is a
+    // regression in the deterministic market, so fail loudly.
+    expect.hasAssertions();
     const engine = harness.engine;
     const sys = currentSystem(engine);
     const planet = sys?.planets.find(
@@ -156,6 +165,9 @@ describe("letsplay live trade executor (Task 4)", () => {
   });
 
   it("executeTrade() sells held cargo through the real TradeScene seam when no margin is known (sell-only)", async () => {
+    // Fixed seed ⇒ the sell-only path must actually run; a silent skip means the
+    // deterministic market regressed, so fail loudly instead of passing green.
+    expect.hasAssertions();
     const engine = harness.engine;
     const sys = currentSystem(engine);
     const planet = sys?.planets.find(

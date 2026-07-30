@@ -157,6 +157,14 @@ interface ScenePrivate {
   doTakeLoan: () => void;
   doRepay: () => void;
   doWithdraw: () => void;
+  doDeposit: () => void;
+}
+
+/** Zero a scene's player credits so hard-failure paths trigger. */
+function drainCredits(
+  host: import("@/presentation/BankSceneHost").BankSceneHost,
+): void {
+  (host as unknown as { player: { credits: number } }).player.credits = 0;
 }
 
 /** Spy on `showToast` and return the captured (text, colour) call log. */
@@ -203,5 +211,44 @@ describe("BankScene toast colours (call sites)", () => {
     expect(noDebt.color).not.toBe(withdrew.color);
 
     scene.destroy();
+  });
+
+  it("uses BANK_TOAST.error at every hard-failure call site", () => {
+    // Withdraw with an empty savings account → "На вкладе нет средств".
+    const withdrawScene = new BankScene(renderer);
+    const withdrawHost = makeHost(); // no savings opened
+    withdrawScene.initialize({ gameEngine: withdrawHost });
+    const withdrawCalls = spyToasts(withdrawScene);
+    (withdrawScene as unknown as ScenePrivate).doWithdraw();
+    expect(withdrawCalls).toHaveLength(1);
+    expect(withdrawCalls[0].text).toBe("На вкладе нет средств");
+    expect(withdrawCalls[0].color).toBe(BANK_TOAST.error);
+    withdrawScene.destroy();
+
+    // Deposit with no funds → "Недостаточно средств для вклада".
+    const depositScene = new BankScene(renderer);
+    const depositHost = makeHost();
+    depositScene.initialize({ gameEngine: depositHost });
+    drainCredits(depositHost);
+    const depositCalls = spyToasts(depositScene);
+    (depositScene as unknown as ScenePrivate).doDeposit();
+    expect(depositCalls).toHaveLength(1);
+    expect(depositCalls[0].text).toBe("Недостаточно средств для вклада");
+    expect(depositCalls[0].color).toBe(BANK_TOAST.error);
+    depositScene.destroy();
+
+    // Active loan but no funds to service it → "Недостаточно средств для погашения".
+    const repayScene = new BankScene(renderer);
+    const repayHost = makeHost();
+    repayScene.initialize({ gameEngine: repayHost });
+    const repayPriv = repayScene as unknown as ScenePrivate;
+    repayPriv.doTakeLoan(); // opens a loan (player still has funds here)
+    drainCredits(repayHost); // now broke, with the loan outstanding
+    const repayCalls = spyToasts(repayScene);
+    repayPriv.doRepay();
+    expect(repayCalls).toHaveLength(1);
+    expect(repayCalls[0].text).toBe("Недостаточно средств для погашения");
+    expect(repayCalls[0].color).toBe(BANK_TOAST.error);
+    repayScene.destroy();
   });
 });

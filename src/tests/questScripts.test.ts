@@ -457,13 +457,14 @@ describe("Gravity Slalom quest", () => {
   it("the coast rolls do not consume the constructor RNG (window rolls unchanged)", () => {
     // Same seed, read the seed-determined windows — adding coast_* params with
     // initial:0 must not shift the four window_* rolls off their old values.
+    // The golden configs below are the pre-coast-param values: if the coast
+    // rolls ever consume the constructor RNG, the window order shifts and these
+    // literals go red (a bare 0/1 range check could never catch that).
+    const golden: Record<number, string> = { 1: "0011", 7: "1100", 42: "0000" };
     for (const seed of [1, 7, 42]) {
       const vm = new QuestVM(gravitySlalomScript, seed);
-      // Windows are still a clean 0/1 config (regression: coast params inert).
-      for (let i = 1; i <= 4; i++) {
-        const w = vm.getParam(`window_${i}`);
-        expect(w === 0 || w === 1).toBe(true);
-      }
+      const cfg = [1, 2, 3, 4].map((i) => vm.getParam(`window_${i}`)).join("");
+      expect(cfg).toBe(golden[seed]);
     }
   });
 
