@@ -7,34 +7,15 @@ import type { NewsEvent, OvermindSpreadState } from "@/types";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { logger } from "@/utils/logger";
 
-/** Maximum number of news events retained in the feed. */
 const NEWS_FEED_MAX = 100;
 
 export class Galaxy {
   gameDays = 0;
-  /** Living-galaxy simulation events, newest last (capped at NEWS_FEED_MAX). */
   newsFeed: NewsEvent[] = [];
-  /**
-   * Quest board cache: maps planetId → game day when the board was last
-   * refreshed. Persisted with the save so cross-session consistency is
-   * preserved. The board content itself is regenerated deterministically from
-   * (galaxy.id + planetId + day-bucket), so only the refresh timestamp is
-   * stored here.
-   */
   questBoards: Record<string, number> = {};
-  /** System IDs currently controlled by OVERMIND. Serialized as string[] for save compatibility. */
   overmindSystems: string[] = [];
-  /** System IDs currently controlled by pirates. Serialized as string[] for save compatibility. */
   pirateSystems: string[] = [];
-  /** The core OVERMIND system; destroying it triggers the win condition. */
   overmindCoreSystemId: string = "";
-  /**
-   * Overmind endgame-arc clock + threat snapshot (the spread machine's persisted
-   * state; `src/systems/overmind/overmindSpread.ts`). The captured *set* is the
-   * separate `overmindSystems` above — this carries only the arc clock/threat/status
-   * the EOD spread tick advances. Initialised dormant; mirrors
-   * `initialOvermindSpreadState()`.
-   */
   overmindArc: OvermindSpreadState = {
     dayZero: -1,
     lastSpreadDay: -1,
@@ -42,17 +23,7 @@ export class Galaxy {
     threat: 0,
     peakThreat: 0,
   };
-  /**
-   * Active TradeBoom events: maps systemId → day on which the boom expires.
-   * While active, market prices in that system are reduced by 15%.
-   */
   activeTradeBoomSystems: Record<string, number> = {};
-  /**
-   * Currently published trade-route rumors (living-trade-economy). Maintained by
-   * `RumorDirector.updateRumors` on the daily tick: opened above
-   * `rumorMarginOpen`, re-scored each day, and expired below `rumorMarginExpire`.
-   * Persisted so a rumor's lifecycle survives save/load.
-   */
   activeRumors: RouteRumor[] = [];
 
   constructor(
@@ -60,7 +31,6 @@ export class Galaxy {
     public readonly systems: StarSystem[],
     public readonly overmind: Overmind,
     public readonly activeEvents: GalacticEvent[],
-    /** Autonomous NPC ships living across the galaxy (Feature 8). */
     public readonly npcShips: NpcShip[] = [],
     overmindSystems: string[] = [],
     overmindCoreSystemId: string = "",
@@ -71,20 +41,14 @@ export class Galaxy {
     this.pirateSystems = pirateSystems;
   }
 
-  /** Returns true if this system is currently controlled by OVERMIND. */
   isOvermindSystem(systemId: string): boolean {
     return this.overmindSystems.includes(systemId);
   }
 
-  /** Returns true when OVERMIND controls more than half the galaxy (raw majority check). */
   isOvermindMajority(): boolean {
     return this.overmindSystems.length > this.systems.length / 2;
   }
 
-  /**
-   * True loss condition: majority AND past grace period AND galaxy is large
-   * enough that the save is not a legacy small-map edge case.
-   */
   isOvermindVictory(
     graceDays: number,
     minSystems: number,
@@ -95,7 +59,6 @@ export class Galaxy {
     return this.isOvermindMajority();
   }
 
-  /** Mark a system as OVERMIND-controlled (idempotent; removes from pirate if present). */
   addOvermindSystem(systemId: string): void {
     this.removePirateSystem(systemId);
     if (!this.overmindSystems.includes(systemId)) {
@@ -103,23 +66,19 @@ export class Galaxy {
     }
   }
 
-  /** Remove a system from OVERMIND control (liberate it). */
   removeOvermindSystem(systemId: string): void {
     const idx = this.overmindSystems.indexOf(systemId);
     if (idx >= 0) this.overmindSystems.splice(idx, 1);
   }
 
-  /** Returns true if this system is currently controlled by pirates. */
   isPirateSystem(systemId: string): boolean {
     return this.pirateSystems.includes(systemId);
   }
 
-  /** Returns true if this system is hostile (overmind or pirate). */
   isHostileSystem(systemId: string): boolean {
     return this.isOvermindSystem(systemId) || this.isPirateSystem(systemId);
   }
 
-  /** Mark a system as pirate-controlled (idempotent; removes from overmind if present). */
   addPirateSystem(systemId: string): void {
     this.removeOvermindSystem(systemId);
     if (!this.pirateSystems.includes(systemId)) {
@@ -127,31 +86,22 @@ export class Galaxy {
     }
   }
 
-  /** Remove a system from pirate control (liberate it). */
   removePirateSystem(systemId: string): void {
     const idx = this.pirateSystems.indexOf(systemId);
     if (idx >= 0) this.pirateSystems.splice(idx, 1);
   }
 
-  /**
-   * Liberate a system: remove it from overmind or pirate control and emit a
-   * SYSTEM_LIBERATED news event. Returns true if the system was hostile and
-   * has been freed; false if it was already faction-controlled (no-op).
-   *
-   * `source: "player"` marks a genuine player-driven liberation (a combat
-   * clear the player actually fought, or a DEFENSE quest they completed) and
-   * increments `overmindArc.playerLiberations` when the freed system was
-   * Overmind-held — the counter `advanceOvermind` reads to gate the arc's
-   * `won` derivation on real player participation (F10: an NPC-only
-   * equilibrium/auto-liberation clearing the front must never win the game
-   * for a player who never engaged). NPC-driven liberation (Ranger convoys,
-   * the garrison-cleared-and-held countdown) defaults to `"npc"` and does
-   * not count.
-   */
   tryLiberate(systemId: string, source: "player" | "npc" = "npc"): boolean {
     const wasOvermind = this.isOvermindSystem(systemId);
     const wasPirate = this.isPirateSystem(systemId);
     if (!wasOvermind && !wasPirate) return false;
+    if (
+      wasOvermind &&
+      source !== "player" &&
+      systemId === this.overmindCoreSystemId
+    ) {
+      return false;
+    }
 
     if (wasOvermind) {
       this.removeOvermindSystem(systemId);
@@ -173,11 +123,6 @@ export class Galaxy {
     return true;
   }
 
-  /**
-   * The star system that contains a location (a planet/station whose id matches)
-   * or whose own id is `locationId` — used to route a quest objective that lives
-   * in another, possibly not-yet-revealed, system. Null if nothing matches.
-   */
   systemForLocation(locationId: string): StarSystem | null {
     return (
       this.systems.find((s) => s.planets.some((p) => p.id === locationId)) ??
@@ -186,7 +131,6 @@ export class Galaxy {
     );
   }
 
-  /** Returns the hostile (overmind + pirate) share of total systems as [0, 1]. */
   getHostileShare(): number {
     if (this.systems.length === 0) return 0;
     return (
@@ -195,7 +139,6 @@ export class Galaxy {
     );
   }
 
-  /** Returns all star systems adjacent (connected) to any OVERMIND system that are not themselves OVERMIND-controlled and not the player's current system. */
   getOvermindAdjacentSystems(excludeSystemId?: string): StarSystem[] {
     const overmindSet = new Set(this.overmindSystems);
     const seen = new Set<string>();
@@ -219,11 +162,9 @@ export class Galaxy {
     return result;
   }
 
-  /** Apply a TradeBoom to a system (prices drop 15% for durationDays). */
   applyTradeBoom(systemId: string, durationDays: number): void {
     const expiresDay = this.gameDays + durationDays;
     if (this.activeTradeBoomSystems[systemId]) {
-      // Already active: extend expiry without re-applying the multiplier.
       this.activeTradeBoomSystems[systemId] = expiresDay;
       return;
     }
@@ -241,7 +182,6 @@ export class Galaxy {
     }
   }
 
-  /** Expire TradeBoom effects whose endDay has passed, restoring prices. */
   expireGlobalEvents(): void {
     for (const [systemId, expiresDay] of Object.entries(
       this.activeTradeBoomSystems,
@@ -264,17 +204,12 @@ export class Galaxy {
     }
   }
 
-  /**
-   * Active trade-route rumors, sorted most-profitable first (by live
-   * `lastMarginPct`). Returns a fresh array so callers cannot mutate the store.
-   */
   getActiveRumors(): RouteRumor[] {
     return [...this.activeRumors].sort(
       (a, b) => b.lastMarginPct - a.lastMarginPct,
     );
   }
 
-  /** Append a news event, trimming the feed to NEWS_FEED_MAX. */
   addNewsEvent(event: NewsEvent): void {
     this.newsFeed.push(event);
     if (this.newsFeed.length > NEWS_FEED_MAX) {
@@ -283,7 +218,6 @@ export class Galaxy {
   }
 
   static generate(_seed: string): Galaxy {
-    // Placeholder: actual generation in GalaxySimulator
     throw new GameSystemException(
       "GALAXY_GENERATE_DEPRECATED",
       "Use GalaxySimulator.generateGalaxy instead",
@@ -301,11 +235,9 @@ export class Galaxy {
       return;
     }
 
-    // Reveal the system itself
     system.explored = true;
     system.fogOfWar = false;
 
-    // Reveal all connected neighbors
     let revealedCount = 0;
     for (const connection of system.connections) {
       const neighbor = this.systems.find((s) => s.id === connection.toSystemId);
@@ -321,14 +253,6 @@ export class Galaxy {
     );
   }
 
-  /**
-   * Star-map purchase reveal (Task 3): BFS up to `hops` warp jumps from
-   * `systemId`, marking each discovered system `explored = true` /
-   * `fogOfWar = false`. The graph is treated as undirected (a warp link is
-   * traversable in either direction). The origin is marked explored but is not
-   * counted. Returns the number of *newly* revealed systems (already-explored
-   * systems within range do not count).
-   */
   revealSystemsWithinHops(systemId: string, hops: number): number {
     const origin = this.systems.find((s) => s.id === systemId);
     if (!origin) {
@@ -336,7 +260,6 @@ export class Galaxy {
       return 0;
     }
 
-    // Undirected adjacency over the warp graph.
     const byId = new Map(this.systems.map((s) => [s.id, s]));
     const adj = new Map<string, Set<string>>();
     for (const s of this.systems) adj.set(s.id, new Set());

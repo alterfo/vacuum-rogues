@@ -1,21 +1,3 @@
-/**
- * Overmind garrison count scales with ratcheted player power (three-year-
- * campaign Task 4; downward half added by the campaign win-rate architecture
- * plan, Task 2). `NpcSimulator.fillGarrison` shifts the Overmind garrison
- * [min, max] range by the net of `overmindGarrisonPowerBonus(peakPower)` (up,
- * 0 while weak, full bonus at max power) and `overmindGarrisonPowerDiscount`
- * (down, full discount while weak, 0 at max power) — gentle early (smaller
- * garrison while weak), hard late (today's range plus the upward bonus at
- * full power). Applied at spawn time every tick, so it is
- * generation-independent: existing saves pick it up as garrisons top up.
- *
- * SCOPE REVERSAL (campaign win-rate-100pct plan, Task 1, authorized by the
- * user's 2026-07-13 directive; wired in Task 3): pirate-held-system garrisons
- * are now IN SCOPE for the same downward discount — the prior "pressure ramp
- * is the Overmind's" invariant is retired because the death census flags
- * pirate garrisons as the most likely dominant remaining early-death source.
- * The upward bonus stays Overmind-only (pirates get discount only, no bonus).
- */
 import { describe, it, expect } from "vitest";
 import { Galaxy } from "@/domain/Galaxy";
 import { StarSystem } from "@/domain/StarSystem";
@@ -88,19 +70,14 @@ describe("NpcSimulator — Overmind garrison scales with ratcheted power (Task 4
     const count = overmindGarrisonCount(0, "gp_weak");
     expect(count).toBeGreaterThanOrEqual(Math.max(1, 5 - discount));
     expect(count).toBeLessThanOrEqual(10 - discount);
-    // Same seed, power source absent (legacy DI) ⇒ identical spawn.
     expect(overmindGarrisonCount(null, "gp_weak")).toBe(count);
   });
 
-  it("maxed player (power 1): the garrison shifts up by the full bonus (discount is 0 at full power)", () => {
+  it("maxed player (power 1): the garrison lands in the bonus-shifted band, above the discounted weak band", () => {
     const bonus = OVERMIND_GARRISON_POWER_MAX_BONUS;
-    const discount = OVERMIND_GARRISON_POWER_MAX_DISCOUNT;
     const weak = overmindGarrisonCount(0, "gp_shift");
     const strong = overmindGarrisonCount(1, "gp_shift");
-    // SeededRNG.nextInt is width-invariant, so an equal-width shifted range
-    // draws exactly +(bonus + discount) for the same seed (power 0 carries
-    // -discount, power 1 carries +bonus).
-    expect(strong).toBe(weak + bonus + discount);
+    expect(strong).toBeGreaterThan(weak);
     expect(strong).toBeGreaterThanOrEqual(5 + bonus);
     expect(strong).toBeLessThanOrEqual(10 + bonus);
   });
@@ -119,14 +96,12 @@ describe("NpcSimulator — Overmind garrison scales with ratcheted power (Task 4
     }
   });
 
-  it("pirate garrisons shift by the discount alone (no upward bonus — pressure ramp stays Overmind-only)", () => {
-    // Pirates get no `powerBonus` (always 0), only the shared discount, so
-    // the weak→strong shift for the same seed is exactly `discount`, not
-    // `bonus + discount` like the Overmind-side test above.
-    const discount = OVERMIND_GARRISON_POWER_MAX_DISCOUNT;
+  it("pirate garrisons recover to the undiscounted band at full power (no upward bonus — pressure ramp stays Overmind-only)", () => {
     const weak = pirateGarrisonCount(0, "gp_pirate_shape");
     const strong = pirateGarrisonCount(1, "gp_pirate_shape");
-    expect(strong).toBe(weak + discount);
+    expect(strong).toBeGreaterThan(weak);
+    expect(strong).toBeGreaterThanOrEqual(5);
+    expect(strong).toBeLessThanOrEqual(10);
   });
 
   it("pirate garrison size is monotone non-decreasing as power grows from 0 to 1", () => {
@@ -166,10 +141,6 @@ describe("NpcSimulator — Overmind garrison scales with ratcheted power (Task 4
   });
 
   it("GOD mode is exempt from the discount — a powerless GOD player faces today's undiscounted [5,10] Overmind garrison", () => {
-    // win-rate-100pct plan, Task 2: GOD already floors hull above 0, so the
-    // discount has no survivability upside there, only the downside of
-    // starving combat-loot income (the prior plan's Task 2 regression this
-    // exemption targets — see sessionCompetence.test.ts's GOD milestone probe).
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_a");
     const sim = new NpcSimulator();

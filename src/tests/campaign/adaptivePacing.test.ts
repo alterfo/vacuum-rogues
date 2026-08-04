@@ -19,15 +19,6 @@ import {
   ADAPTIVE_CREEP_MIN_DAYS,
 } from "@/config/balance";
 
-/**
- * Adaptive Overmind spread pacing (three-year-campaign Task 3) — the 2–3-year
- * clock. The spread interval is a pure function of (day, arc dayZero, RATCHETED
- * player power): a weak player faces the slow cadence, a strong player the fast
- * one, and the baseline-creep floor guarantees a permanently idle run still
- * resolves (loses) well before the 1080-day campaign ceiling.
- */
-
-/** A ring galaxy of `n` systems — the frontier never pinches off. */
 function ringGalaxy(n: number, overmind: string[]): SpreadGalaxyView {
   const systems = Array.from({ length: n }, (_, i) => ({
     id: `s${i}`,
@@ -41,7 +32,6 @@ function ringGalaxy(n: number, overmind: string[]): SpreadGalaxyView {
   };
 }
 
-/** The live adaptive spread config the EOD drive assembles for one day. */
 function adaptiveConfig(
   day: number,
   dayZero: number,
@@ -57,11 +47,6 @@ function adaptiveConfig(
   };
 }
 
-/**
- * Drive the pure spread machine day-by-day with the adaptive schedule, the way
- * `DayTickController.advanceOvermindArc` does, applying captures to the view.
- * Returns the day the arc resolved (won/lost) or -1 if it never did.
- */
 function runIdleCampaign(
   totalSystems: number,
   peakPowerByDay: (day: number) => number,
@@ -87,27 +72,16 @@ function runIdleCampaign(
   return { resolvedDay: -1, status: state.status, engagedBeforeLoss };
 }
 
-describe("adaptive pacing constants — 2026-07-19 widening", () => {
-  // Pins the campaign win-rate gate's Task 2 lever change (see
-  // docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md): the
-  // arming-up economy is structurally slow (one lucky early hull upgrade, then
-  // a multi-hundred-day plateau), so SLOW_DAYS is the ACTIVE interval for
-  // nearly the whole run — widening it gives that economy a bit more runway
-  // before the front outruns it. GRACE_DAYS is deliberately left UNCHANGED
-  // this round: two widening attempts there (120, then 105) both broke
-  // sessionCompetence.test.ts's Task 7 day-200 milestone identically, isolated
-  // to GRACE_DAYS specifically (SLOW_DAYS alone tested clean) — delaying the
-  // Overmind's first appearance also delays MemoryHeuristicPolicy's own
-  // urgency to arm up, a genuine tension left for a dedicated follow-up round.
-  it("SLOW_DAYS widened 45 -> 55; GRACE_DAYS left unchanged at 90", () => {
+describe("adaptive pacing constants — 2026-08-04 authorized creep-floor widening", () => {
+  it("SLOW_DAYS stays 55; GRACE_DAYS left unchanged at 90", () => {
     expect(ADAPTIVE_SPREAD_SLOW_DAYS).toBe(55);
     expect(ADAPTIVE_GRACE_DAYS).toBe(90);
   });
 
-  it("FAST_DAYS and the creep guards are unchanged by this widening", () => {
+  it("FAST_DAYS unchanged; creep guards widened 360/12 -> 540/30 (front must not outrun a ~d280 battle-ready player)", () => {
     expect(ADAPTIVE_SPREAD_FAST_DAYS).toBe(10);
-    expect(ADAPTIVE_CREEP_START_DAY).toBe(360);
-    expect(ADAPTIVE_CREEP_MIN_DAYS).toBe(12);
+    expect(ADAPTIVE_CREEP_START_DAY).toBe(540);
+    expect(ADAPTIVE_CREEP_MIN_DAYS).toBe(30);
   });
 });
 
@@ -149,8 +123,6 @@ describe("adaptiveSpreadIntervalDays — power-keyed cadence", () => {
   });
 
   it("under a RATCHETED power sequence the cadence never slows over the run", () => {
-    // Ratcheted input is non-decreasing by construction; the schedule must
-    // never re-open breathing room (no rubber-band exploit even across days).
     const peaks = [0, 0.05, 0.05, 0.3, 0.3, 0.55, 0.8, 0.8, 1];
     let prev = Infinity;
     peaks.forEach((peak, i) => {
@@ -215,9 +187,7 @@ describe("adaptive pacing — the campaign always resolves", () => {
     const run = runIdleCampaign(24, () => 0, 1080);
     expect(run.status).toBe("lost");
     expect(run.resolvedDay).toBeGreaterThan(ADAPTIVE_GRACE_DAYS);
-    // "Well before" the hard ceiling — the creep floor leaves real headroom.
     expect(run.resolvedDay).toBeLessThan(900);
-    // A loss is only ever declared by an ENGAGED front (spread actually ran).
     expect(run.engagedBeforeLoss).toBe(true);
   });
 
@@ -229,9 +199,7 @@ describe("adaptive pacing — the campaign always resolves", () => {
   });
 
   it("loss share and engagement semantics are unchanged by the adaptive clock", () => {
-    // The loss line itself did not move.
     expect(GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE).toBe(0.85);
-    // A never-engaged front cleared during grace still cannot win.
     const state = {
       ...initialOvermindSpreadState(),
       dayZero: 1,

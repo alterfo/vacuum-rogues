@@ -1,25 +1,3 @@
-/**
- * Letsplay engine — the agent loop + action applier (dev-only).
- *
- * {@link PlayerAgent} closes the loop: each step it `observe`s the live engine,
- * asks its {@link PlayerPolicy} to `decide`, **applies** that action onto the
- * real {@link GameEngine} through the {@link RealEngineHarness}, then advances a
- * frame — `observe → decide → apply → tick` — for a fixed step budget, recording
- * a transcript and surfacing the harness error sink at the end.
- *
- * The applier maps each abstract {@link Action} to a *real* engine effect via the
- * harness:
- *  - `land`/`dock`/`trade`/`move` → genuine `transitionTo` scene wiring;
- *  - `warp` → navigate to the star map, then the real `performWarpJumpTo` jump;
- *  - `take-quest` → accept the landed planet's offered, registered contracts;
- *  - `wait`/`attack`/`flee`/`repair` → advance a frame (combat/repair are driven
- *    by their own modules; here they degrade to a safe tick).
- *
- * Every mapped operation is chosen to never call `logger.error`, so a clean
- * session ends with `errors()` empty — the agent's value as a bug-finder is that
- * a *real* engine fault (an integration break) is exactly what shows up there.
- * Dev-only: lives under `src/tests/`, imported by no production module.
- */
 import { NpcState, QuestType, SceneType } from "@/types";
 import { GAME_BALANCE, WRECK } from "@/config/balance";
 import { WRECK_LOOT_SPREAD_FRACTION } from "@/presentation/flight/combatExecution";
@@ -57,121 +35,46 @@ import {
 import { executeTakeLoan, executeRepayLoan } from "./bankingQueries";
 import { confirmPlanningIfOpen } from "./planningDriver";
 
-/**
- * A compact, egocentric vitals snapshot taken at one step — the player's own
- * scoreboard the LLM judge reasons over. Built solely from what the player can
- * perceive of *itself* (vitals + its own reputation sheet, kill points, and quest
- * journal), never from omniscient world state. All scalars so it serialises flat.
- */
 export interface StepVitals {
-  /** Spendable credits (the current-account GL projection). */
   credits: number;
-  /** Current hull HP. */
   hull: number;
-  /** Max hull HP (a rise flags a ship upgrade). */
   maxHull: number;
-  /** Reactor energy / warp fuel. */
   fuel: number;
-  /** Cargo units currently held. */
   cargoUsed: number;
-  /**
-   * Lowest faction standing the player holds (0 when no faction interacted) —
-   * the signal-rich number for the "rep fell to −50 with no way back" oddity.
-   */
   reputationMin: number;
-  /** Cumulative combat kill points (resets on rank promotion). */
   killPoints: number;
-  /** Number of active quests the player is carrying. */
   questsActive: number;
-  /** Number of quests the player has completed so far. */
   questsCompleted: number;
 }
 
-/** One recorded decision in a session transcript. */
 export interface AgentStep {
-  /** Zero-based step index. */
   readonly index: number;
-  /** The scene the decision was made in. */
   readonly scene: SceneType;
-  /** The action the policy chose. */
   readonly action: Action;
-  /** Galaxy business day when the decision was made (egocentric, pre-apply). */
   readonly day?: number;
-  /** Player vitals snapshot BEFORE the action was applied (egocentric). */
   readonly vitals?: StepVitals;
-  /**
-   * Harness error-sink messages that newly surfaced *while applying this step* —
-   * the notable-log evidence the judge keys off. Omitted/absent when none fired
-   * (a clean step), so a clean session carries no log noise.
-   */
   readonly notableLogs?: string[];
 }
 
-/** The outcome of an agent run — the transcript plus any failures surfaced. */
 export interface AgentRunResult {
-  /** Every observe→decide step taken, in order. */
   readonly steps: AgentStep[];
-  /** The harness error sink (logged errors + global rejections) at run end. */
   readonly errors: RecordedError[];
-  /** The scene the agent ended in. */
   readonly endScene: SceneType;
-  /** Galaxy business day on the resting state after the last applied action. */
   readonly finalDay?: number;
-  /**
-   * Vitals snapshot of the resting state AFTER the last applied action — the
-   * "after" reference the transcript builder diffs the final step against and the
-   * closing point of every curve. Absent only when there was no player.
-   */
   readonly finalVitals?: StepVitals;
 }
 
-/**
- * Drives the real engine as the player. Construct with a booted harness and a
- * policy, then `run(budget)`.
- *
- * The agent is a POMDP solver: it carries a **per-run** {@link AgentMemory} belief
- * notebook (a human's memory of what it has *seen*), folds each egocentric
- * observation into it **before** deciding, and hands `{obs, memory}` to its policy
- * — so a memory-using policy can act on remembered prices/threats/offers while the
- * memoryless heuristic simply ignores the notebook. The belief is created fresh
- * per agent (so a new session = a new game = a clean slate) and is inspectable via
- * {@link belief}; {@link reset} starts it over for an explicit re-run.
- */
-
-/** `driveAttack`'s own 50ms tick granularity (matches `this.harness.tick(50)`). */
 const ATTACK_TICK_MS = 50;
-/**
- * How many extra `ATTACK_TICK_MS` ticks to linger at a fresh kill before
- * `driveAttack` finally breaks — long enough for the wreck's last staggered
- * loot emission to have fired (`combatWreck.ts`'s `WRECK.lifeMs` ×
- * `WRECK_LOOT_SPREAD_FRACTION`), so `LootDropHandler`'s per-tick proximity
- * pickup (already running every frame regardless of who's driving) actually
- * gets the chance to collect it. Live report, 2026-07-19: the autopilot never
- * picked up loot from a kill — root cause was leaving the instant the target
- * died, before any drop had spawned yet.
- */
 export const LOOT_LINGER_TICKS = Math.ceil(
   (WRECK.lifeMs * WRECK_LOOT_SPREAD_FRACTION) / ATTACK_TICK_MS,
 );
 
-/**
- * Combat-variant diversity (campaign-coverage plan Task 7): the shield-cell
- * consumable id `driveAttack` activates when hull drops critical and one is
- * owned — matches `combatConsumable.ts`'s `COMBAT_CONSUMABLES` catalog id.
- * (No production acquisition path exists yet — CLAUDE.md's known gap — this
- * only exercises the mechanic once a consumable IS owned, e.g. a scripted
- * test or a future loot/shop grant.)
- */
 export const SHIELD_CELL_CONSUMABLE_ID = "con_shield_cell";
-/** Hull fraction below which `driveAttack` activates an owned shield cell. */
 const SHIELD_CELL_HULL_FRACTION = 0.3;
-/** Target hull fraction below which `driveAttack` tries "demand-surrender". */
 const DEMAND_SURRENDER_TARGET_HULL_FRACTION = 0.3;
 
 export class PlayerAgent {
-  /** Per-run belief state — folded from observations, never from omniscient state. */
   private memory: AgentMemory = createMemory();
-  /** The system id the agent was in on the previous step — used to prefer unvisited warp targets. */
   private lastSystemId: string | null = null;
 
   constructor(
@@ -179,28 +82,15 @@ export class PlayerAgent {
     private readonly policy: PlayerPolicy,
   ) {}
 
-  /** The agent's current belief notebook (inspectable for transcripts / tests). */
   get belief(): AgentMemory {
     return this.memory;
   }
 
-  /** Start a fresh per-run notebook — a human starting the game over. */
   reset(): void {
     this.memory = createMemory();
     this.lastSystemId = null;
   }
 
-  /**
-   * Play `budget` steps: observe → **remember** → decide → apply → tick. Each step
-   * folds the egocentric observation into the per-run belief *before* the policy
-   * decides, then passes `{obs, memory}` to it, so decisions are memory-informed.
-   * Returns the transcript (each step's action carries the belief-driven `reason`)
-   * plus the harness error sink. Never throws — a thrown applier error is caught by
-   * the harness `tick` sink or recorded here as an `unhandled` failure, so the
-   * caller asserts on `result.errors` rather than a try/catch. The belief persists
-   * across calls (so the `run(1)`-per-step session driver keeps accumulating); call
-   * {@link reset} to start a new run.
-   */
   async run(budget: number): Promise<AgentRunResult> {
     const engine = this.harness.engine;
     const steps: AgentStep[] = [];
@@ -208,8 +98,6 @@ export class PlayerAgent {
       const obs = observe(engine, questBaselineForObserve(this.memory, engine));
       this.memory = updateMemory(this.memory, obs);
       const action = this.policy.decide(obs, this.memory);
-      // Egocentric per-step record: the day + vitals the player perceives *now*,
-      // plus any harness-sink error that fires while this action is applied.
       const day = engine.galaxy?.gameDays ?? 0;
       const vitals = this.snapVitals(obs);
       const logsBefore = this.harness.errors().length;
@@ -227,8 +115,6 @@ export class PlayerAgent {
         ...(notableLogs.length ? { notableLogs } : {}),
       });
     }
-    // A resting snapshot after the last applied action — the "after" reference the
-    // transcript diffs the final step against and the closing point of the curves.
     const finalVitals = this.snapVitals(observe(engine));
     return {
       steps,
@@ -239,12 +125,6 @@ export class PlayerAgent {
     };
   }
 
-  /**
-   * Project the player's own scoreboard into a {@link StepVitals}. Egocentric: it
-   * reads the already-observed vitals plus the player's *own* reputation sheet,
-   * kill points and quest journal — never omniscient world state. Returns `null`
-   * when there is no player (a pre-game menu), so the step simply carries no vitals.
-   */
   private snapVitals(obs: Observation): StepVitals | null {
     const engine = this.harness.engine;
     const player = engine.player;
@@ -265,17 +145,9 @@ export class PlayerAgent {
     };
   }
 
-  /** Map one abstract action onto a real engine effect through the harness. */
   private async apply(action: Action, obs: Observation): Promise<void> {
     const engine = this.harness.engine;
 
-    // Safety net: while a hyperjump is already in transit (ship flying to the
-    // system edge), only a genuine combat reaction may override the wait —
-    // land/dock/move/trade/etc. would each redirect the route or tear down the
-    // scene via `goTo` (destroying SpaceFlightScene's private `pendingWarp`,
-    // silently dropping the pending jump). Drive the warp to completion instead.
-    // Mirrors LiveApplier's identical dispatch-layer gate so every policy (not
-    // just the ones that happen to self-censor) is covered here too.
     if (
       obs.warpInTransit &&
       action.kind !== "wait" &&
@@ -288,35 +160,29 @@ export class PlayerAgent {
 
     switch (action.kind) {
       case "wait":
-        // A real wait turn so a galaxy DAY actually passes (markets / NPC sim /
-        // quests / Overmind all advance) — the agent's biggest gap was never
-        // advancing time. Degrades to a plain frame outside flight.
-        // When warpInTransit: the ship is already flying to the edge — drive it
-        // to completion instead of starting a course-less day-wait that stalls it.
         if (obs.warpInTransit) await this.completeWarp();
         else this.waitOneDay();
         return;
 
       case "move": {
-        // In flight "move" flies a REAL route across the system (so the ship
-        // traverses space and the calendar advances, pixelsPerDay px = 1 day); on
-        // a sub-screen it backs out toward flight (the universal "leave this panel").
         if (obs.scene === SceneType.SPACE_FLIGHT) this.flyForward();
-        else await this.harness.goTo(SceneType.SPACE_FLIGHT);
+        else if (obs.scene === SceneType.STATION) {
+          const fromStationId = (
+            engine.currentScene as { station?: { id?: string } } | null
+          )?.station?.id;
+          await this.harness.goTo(
+            SceneType.SPACE_FLIGHT,
+            fromStationId ? { fromStationId } : {},
+          );
+        } else await this.harness.goTo(SceneType.SPACE_FLIGHT);
         return;
       }
 
       case "land": {
         const sys = currentSystem(engine);
-        // Only land on the exact targeted planet — never fall back to planets[0]
-        // which may be uninhabited (no market, creates a spin-land-takeoff loop).
         const planet = sys?.planets.find((p) => p.id === action.targetId);
         if (planet) {
           await this.harness.goTo(SceneType.PLANET, { planet });
-          // Mirrors SpaceFlightScene.onLandOnPlanet's refuel side effect — the
-          // headless teleport-land skips the physical flight live play uses to
-          // reach the planet, so it must restore fuel itself or the fuel-survival
-          // tier's "land to refuel" never actually refuels headlessly.
           const ship = engine.player?.ship;
           if (ship) ship.energy = ship.maxEnergy;
         } else {
@@ -332,9 +198,6 @@ export class PlayerAgent {
           sys?.stations[0];
         if (station) {
           await this.harness.goTo(SceneType.STATION, { station });
-          // Mirrors SpaceFlightScene.onDockAtStation's refuel side effect — the
-          // headless teleport-dock skips the live docking path, so it must
-          // restore fuel itself (Task 7).
           const ship = engine.player?.ship;
           if (ship) ship.energy = ship.maxEnergy;
         } else {
@@ -351,27 +214,10 @@ export class PlayerAgent {
           return;
         }
         if (obs.scene === SceneType.TRADE) {
-          // Execute the actual market trade, then return to the planet lobby.
-          // A carried DELIVERY quest's unmet cargo need wins first when it is
-          // stocked+profitable HERE (a known, contractual payout — never a
-          // speculative buy) and is capped to exactly the remaining shortfall.
-          // Otherwise fall back to the best-known cross-planet margin good,
-          // passed ONLY when this planet is actually that margin's cheap buy
-          // planet — otherwise null (sell-only). Without this check, landing
-          // here to realise a SELL (the ladder's `sell-for-profit`/`go-sell`
-          // tiers) would still hand in the same preferred good, and the
-          // executor would immediately buy it right back at this (non-cheap)
-          // planet the moment it's stocked and affordable — re-creating cargo
-          // the ladder just sold, sometimes at a same-planet loss, and
-          // stalling the agent re-selling the same shrinking lot for many
-          // rounds instead of moving on.
           const questNeed = deliveryCargoNeed(
             obs.quests,
             obs.currentPlanet?.market,
           );
-          // Cargo already committed to an active DELIVERY quest's COLLECT_ITEM
-          // need — never auto-sold by the sell-all-cargo step below, even at a
-          // planet that isn't this quest's own target (see `sellAllCargo`).
           const questCommittedGoods = new Set(
             obs.quests
               .filter((q) => q.type === QuestType.DELIVERY && q.collectItem)
@@ -404,7 +250,6 @@ export class PlayerAgent {
           await this.harness.goTo(SceneType.TRADE, { planet });
           return;
         }
-        // From flight or elsewhere, navigate to the planet first.
         await this.harness.goTo(SceneType.PLANET, { planet });
         return;
       }
@@ -416,9 +261,6 @@ export class PlayerAgent {
       }
 
       case "warp": {
-        // Two-step real warp: open the galaxy map, then jump to a neighbour.
-        // (warpInTransit is handled by the blanket guard above — it's never
-        // true here, since warpInTransit only fires in SPACE_FLIGHT.)
         if (obs.scene !== SceneType.STAR_MAP) {
           await this.harness.goTo(SceneType.STAR_MAP);
           return;
@@ -428,8 +270,6 @@ export class PlayerAgent {
           engine.galaxy?.systems ?? [],
           sys?.id ?? null,
         );
-        // Avoid every hostile-HELD system, pirate dens included (Task 6):
-        // both are lethal standing garrisons and both are star-map-visible.
         const hostileHeld = new Set([
           ...(engine.galaxy?.overmindSystems ?? []),
           ...(engine.galaxy?.pirateSystems ?? []),
@@ -437,23 +277,15 @@ export class PlayerAgent {
         const rawQuestTarget = warpWantsQuestBias(action.reason)
           ? questRoutingPreference(obs.quests, sys?.id ?? null)
           : null;
-        // Never steer AT a hostile-held target/destination (Task 7): the
-        // policy refuses them too, but a quest accepted before its target
-        // was captured can still name one — degrade to the blind safe pick.
         const questTarget =
           rawQuestTarget != null && hostileHeld.has(rawQuestTarget)
             ? null
             : rawQuestTarget;
         const directTarget =
           action.targetId &&
-          !hostileHeld.has(action.targetId) &&
           connections.some((c) => c.toSystemId === action.targetId)
             ? action.targetId
             : undefined;
-        // A non-adjacent `targetId` naming a real system is a DESTINATION
-        // (e.g. `go-restock`'s remembered buy system, Task 7) — route toward
-        // it hop-by-hop through the same preference machinery the quest bias
-        // uses, rather than dropping it for a blind pick.
         const destination =
           directTarget == null &&
           action.targetId != null &&
@@ -484,29 +316,16 @@ export class PlayerAgent {
           const startSys = engine.player?.currentSystemId;
           await scene.performWarpJumpTo(target);
           if (engine.currentSceneType === SceneType.SPACE_FLIGHT) {
-            // performWarpJumpTo transitions to SPACE_FLIGHT with a plannedRoute to
-            // the system edge, but the ship does NOT start moving until the player
-            // presses "Ход". completeWarp() kicks off the route and ticks until the
-            // system changes (the warp fires on reaching the boundary).
             await this.completeWarp(startSys);
           } else {
-            // Warp rejected (e.g. insufficient fuel) — go back to flight so the
-            // agent can make a different decision (land to refuel, wait, etc.).
             await this.harness.goTo(SceneType.SPACE_FLIGHT);
           }
         } else {
-          // No reachable connection — leave the star map.
           await this.harness.goTo(SceneType.SPACE_FLIGHT);
         }
         return;
       }
 
-      // Economic actions execute their real domain effect directly (bypassing
-      // the shop/bank UI, exactly as `trade` bypasses TradeScene's buttons) and
-      // stay put — `legalActionsForScene` only ever offers them from a scene
-      // already at the right place (STATION/EQUIPMENT_SHOP/BANK), so no extra
-      // navigation is needed. Each executor is a safe no-op when nothing is
-      // affordable/owed, so a "wrong" scene can never throw.
       case "buy-gear":
         executeBuyBestGear(engine);
         this.harness.tick();
@@ -538,10 +357,6 @@ export class PlayerAgent {
         return;
 
       case "sell-cargo": {
-        // `legalActionsForScene` only offers this from PLANET/TRADE, both of
-        // which imply the player is landed — so this is a true no-op guard,
-        // not a "pick any planet" fallback (selling at an unvisited planet's
-        // market would silently misprice the trade).
         const planet = landedPlanet(engine);
         if (planet) executeSellAll(engine, planet);
         if (planet && obs.scene === SceneType.TRADE) {
@@ -552,24 +367,6 @@ export class PlayerAgent {
         return;
       }
 
-      // Combat: the player INITIATES the fight via the real «Атаковать»
-      // handler (NpcShipManager.onAttackNpc — engage in weapon range, else
-      // plot an intercept and auto-follow), exactly like the live autopilot
-      // executor and a human clicking the panel button. Waiting passively for
-      // the hostile to close (the old behavior) stopped being enough when
-      // checkGarrisonAggro's weak-ship neutral-aggro shield landed: a
-      // shielded wanderer never approaches, so "attack" degenerated into a
-      // multi-week stand-off the policy re-picks forever (competentSession's
-      // soft-lock guard). See driveAttack for the pursuit/round time model.
-      // No hostile target resolvable → degrade to the safe wait tick.
-      // While warpInTransit, waitOneDay()'s trailing endTurn() would halt the
-      // ship short of the edge exactly like the actions the blanket guard
-      // above already redirects (the route survives, but the turn — and so
-      // the ship's motion — stops, with no way back in for a memoryless
-      // policy that keeps picking "attack" while the hostile stays around).
-      // Drive the warp forward instead: the turn is already running, so
-      // real-time combat keeps auto-resolving via completeWarp()'s own
-      // combat-pause handling.
       case "attack": {
         if (obs.warpInTransit) {
           await this.completeWarp();
@@ -587,11 +384,6 @@ export class PlayerAgent {
         return;
       }
 
-      // Flee: escape by navigating to the star map and warping to another system.
-      // If no connections exist (trapped with no exit), fight it out via waitOneDay.
-      // The two-step sequence (flee → STAR_MAP; next step `warp` completes the jump)
-      // mirrors the warp action's own two-step flow, so the policy naturally picks
-      // `warp` on the next observe from STAR_MAP to finish the escape.
       case "flee": {
         const fleeSys = currentSystem(engine);
         const fleeConns = fleeSys?.connections ?? [];
@@ -619,35 +411,6 @@ export class PlayerAgent {
     }
   }
 
-  /**
-   * Drive a **pending hyperjump** to completion in the headless engine.
-   *
-   * After `performWarpJumpTo` the new `SpaceFlightScene` initialises with a
-   * `plannedRoute` to the system edge, but the ship does NOT start moving —
-   * the player must press «Ход» (US-070 #11). This calls `onPlayPause()` to
-   * kick off that route, then ticks 50 ms at a time until the system changes
-   * (the warp fires) or the budget is exhausted.
-   *
-   * Physics limits: `ShipPhysics.update` caps `dt` at 100 ms; max speed is
-   * 0.1 px/ms, so each `tick(50)` moves the ship 5 px. The ship spawns at
-   * `innerRadius` (600 px) from the star centre opposite the exit vector, and
-   * the jump fires at `boundaryRadius` (2800 px) from centre — a max journey
-   * of ~3400 px ≈ 680 ticks. The 2000-tick ceiling is a generous safety net.
-   *
-   * **Combat pause:** the «Огонь!» controller pauses the frame loop whenever a
-   * fight engages (and `onCombatEnded`'s `reset()` leaves `_paused` stuck true
-   * after it resolves). Both cases are resumed here, before every tick — the
-   * same discipline as `waitOneDay` — because a paused ship does not fly: it
-   * used to be left alone during a LIVE fight on the theory that the freeze
-   * was "safe" (NPCs can't fire either), but measured on the Task 6 campaign
-   * horizon that theory is false twice over. The engagement volley still lands
-   * BEFORE the pause freezes (~27 hull per warp attempt on a starter ship,
-   * with zero ship movement — death by retries on NORMAL), and the frozen
-   * standoff pins the calendar so the session soft-locks (the day-94 campaign
-   * wedge). Resuming is the honest game: a real player must un-pause to run
-   * for the jump point, eats the in-range volleys, breaks weapon range, and
-   * the fight disengages naturally.
-   */
   private async completeWarp(startSys?: string): Promise<void> {
     const engine = this.harness.engine;
     const sys0 = startSys ?? engine.player?.currentSystemId;
@@ -660,30 +423,15 @@ export class PlayerAgent {
       pendingWarp?: unknown;
     } | null;
 
-    // Round-based combat (Task 9 (v)): a committed flee/warp crossing is ONE
-    // round — incoming fire is bounded to a single round's budget for the whole
-    // traverse, so a fleeing weak ship survives the escape (the near-edge route
-    // from Task 9 (iv) keeps the crossing short; the round cap keeps its cost
-    // bounded). Begun once here, NOT per tick, so the budget spans the crossing.
     flightScene?.combatModule?.beginCombatRound?.();
 
-    // Resume any combat pause (stale or live) — a paused ship does not fly.
     if (
       flightScene?.combatPause?.paused &&
       typeof flightScene.combatPause.resume === "function"
     ) {
       flightScene.combatPause.resume();
     }
-    // The pause-and-plan loop freezes the sim the frame combat engages (Task
-    // 14.5): confirm the round with weapons on the nearest combatant and the
-    // course untouched — the honest game is unchanged, the ship keeps running
-    // for the edge and eats the in-range volleys through each execute window.
     const confirmedAtEntry = confirmPlanningIfOpen(flightScene);
-    // A fight frozen at entry means the confirm above just opened an execute
-    // window: the stale-turn reset below would defeat the escape valve —
-    // endTurn parks the ship and kills the warp-edge course, and the
-    // onPlayPause kickoff is a no-op during EXECUTING, so the route would
-    // never restart (review 2026-07-15). Reset only outside the planning loop.
     if (!confirmedAtEntry) {
       if (
         flightScene?.isTurnRunning &&
@@ -700,27 +448,16 @@ export class PlayerAgent {
     }
 
     for (let i = 0; i < 2000; i++) {
-      // Un-pause before each tick so the ship keeps flying and weapons fire —
-      // combat auto-resolves (or disengages on range) instead of freezing.
       if (
         flightScene?.combatPause?.paused &&
         typeof flightScene.combatPause.resume === "function"
       ) {
         flightScene.combatPause.resume();
       }
-      // PLANNING re-opens after every execute window while hostiles remain —
-      // confirm each round (weapons on nearest, course untouched) so the
-      // warp-edge run keeps flying instead of freezing mid-fight.
       confirmPlanningIfOpen(flightScene);
       this.harness.tick(50);
       await Promise.resolve(); // yield so async performWarp() can settle
       if (engine.player?.currentSystemId !== sys0) break;
-      // If the turn ended mid-flight (ship stopped without reaching the edge),
-      // restart the route. PLANNING may have re-opened inside this same tick:
-      // onPlayPause during PLANNING is the confirm itself (14.5a) and would
-      // consume the fresh EMPTY draft (hold fire, every window) before the
-      // next iteration's armed confirm ever saw it — confirm armed instead
-      // (review 2026-07-15).
       if (
         !flightScene?.isTurnRunning &&
         typeof flightScene?.onPlayPause === "function"
@@ -729,15 +466,6 @@ export class PlayerAgent {
       }
     }
 
-    // Budget exhausted with the jump unfired ⇒ the hyperjump is STUCK — e.g. a
-    // mid-transit combat chase re-routed the ship so it never "arrives" at the
-    // edge, or a downed ship can't fire the jump. Leaving `pendingWarp` set
-    // turns `apply()`'s warp-in-transit intercept into a permanent trap: every
-    // later action (dock-to-repair included) is redirected back here forever
-    // (the day-229 capacity wedge, 300× dock no-ops). A live player can cancel
-    // or re-plot a stuck route; the headless agent's only equivalent is
-    // aborting the orphaned jump — do that, end the turn, and let the next
-    // decide re-plan with full agency.
     if (
       engine.player?.currentSystemId === sys0 &&
       flightScene?.pendingWarp != null
@@ -752,22 +480,6 @@ export class PlayerAgent {
     }
   }
 
-  /**
-   * Run a real course-less **wait turn** over the live flight scene so one galaxy
-   * DAY passes — the headless equivalent of pressing «ХОД» with no plotted route.
-   * `onPlayPause` starts the wait (`isTurnRunning`, ship stationary), a tick of
-   * `MS_PER_WAIT_DAY` (1000 ms) crosses exactly one day boundary
-   * (`advanceWaitTime` → `advanceGalaxyDay`), then `endTurn` returns to a decision
-   * point. Outside flight (or with no turn seam — e.g. a partial test stub) it
-   * degrades to a plain frame so the loop is always safe. Private scene methods are
-   * reached by a structural cast, the same pattern the warp applier uses.
-   *
-   * Combat handling: if an NPC engages mid-wait, the combat-pause controller freezes
-   * everything (no weapons fire on either side). This method clears the pause before
-   * each tick so the fight actually resolves — both player and NPC fire for the tick
-   * window, and the engagement ends naturally via `onCombatEnded`. Without this the
-   * headless engine would sit frozen indefinitely and no day would ever advance.
-   */
   private waitOneDay(): void {
     const engine = this.harness.engine;
     const scene = this.harness.currentScene() as unknown as {
@@ -789,46 +501,19 @@ export class PlayerAgent {
       return;
     }
     const day0 = engine.galaxy?.gameDays ?? 0;
-    // A fight staged before the turn starts opens the PLANNING freeze, and
-    // onPlayPause during PLANNING is the confirm (14.5a) — it would consume an
-    // EMPTY draft instead of starting the turn. Confirm the round first (with
-    // weapons on the nearest combatant), THEN start the turn via the
-    // now-unblocked Play branch so the execute window actually resolves.
     confirmPlanningIfOpen(scene);
     if (!scene.isTurnRunning) scene.onPlayPause(); // start the course-less wait
-    // Round-based combat (Task 9 (v)): start a fresh combat round for THIS step so
-    // incoming fire is bounded to one round's budget (a fraction of max hull).
-    // The natural observe→decide between steps is the reaction window — the
-    // policy's outgunned-flee gets a turn each step instead of the ship being
-    // deleted from full hull inside a single 4-tick blur (the death that four
-    // prior config/harness escalations could not close).
     scene.combatModule?.beginCombatRound?.();
-    // Tick budget: 4 × 1000 ms covers the combatFireIntervalMs (2500 ms).
-    // Exit early only when a day has passed AND combat is NOT active — the
-    // non-combat "wait one day" case. When combat is active (NPC initiated in
-    // npcManager.update, which runs AFTER updateShip/advanceWaitTime in the
-    // same frame), continue ticking so fire timers accumulate past 2500 ms even
-    // though the day already advanced in the first tick.
     for (let i = 0; i < 4; i++) {
-      // Un-pause before each tick so weapons fire (combat resolves rather than
-      // freezing). This drives the controller directly, so it does NOT reset the
-      // round budget (only the live overlay buttons begin a new round) — the
-      // budget keeps accruing across the step's ticks until the round completes.
       if (
         scene.combatPause?.paused &&
         typeof scene.combatPause.resume === "function"
       ) {
         scene.combatPause.resume();
       }
-      // Pause-and-plan freeze (Task 14.5): a fight engaged mid-wait opens
-      // PLANNING and stops the calendar — confirm the round with weapons on
-      // the nearest combatant so the fight resolves and the day advances.
       confirmPlanningIfOpen(scene);
       this.harness.tick(1000);
-      // A completed combat round halts fire and opens the reaction window — end
-      // the step so the policy re-decides (flee vs fight on) before more damage.
       if (scene.combatModule?.roundComplete === true) break;
-      // Stop once a day has passed AND we are not in an active fight.
       const dayAdvanced = (engine.galaxy?.gameDays ?? 0) > day0;
       const inCombat = scene.combatModule?.isActive === true;
       if (dayAdvanced && !inCombat) break;
@@ -838,20 +523,6 @@ export class PlayerAgent {
     }
   }
 
-  /**
-   * Drive a player-initiated attack to a resolution point: invoke the real
-   * «Атаковать» handler (engage in weapon range, else auto-follow intercept),
-   * then run the turn in the same 50 ms slices {@link completeWarp} uses —
-   * `waitOneDay`'s 4 × 1000 ms ticks move only ~400 ms of capped physics, far
-   * too coarse for a cross-system chase (the ship crawls ~40 px per step while
-   * the calendar stalls, the exact multi-week stand-off the soft-lock guard
-   * flags). The chase itself costs no hull, so it runs uninterrupted; once the
-   * exchange starts, ONE combat round resolves and the step ends — the same
-   * per-round reaction window `waitOneDay` gives the policy (flee vs fight on)
-   * before more damage lands. Breaks off when the target dies, leaves the
-   * system, the scene changes (player death), or the tick budget expires
-   * (an uncatchable runner), so a step can never hang.
-   */
   private driveAttack(target: NpcShip): void {
     const engine = this.harness.engine;
     const scene = this.harness.currentScene() as unknown as {
@@ -876,33 +547,8 @@ export class PlayerAgent {
       return;
     }
 
-    // An already-engaged fight is DRIVEN, never re-targeted: re-invoking
-    // onAttackNpc mid-exchange re-plots an intercept route (a "manual route"
-    // that breaks off the live combat pursuit), and a policy attacking with
-    // no explicit targetId would silently switch to whatever hostile happens
-    // to head obs.hostiles as new wanderers spawn — the staged slayer grind
-    // (slayerCampaign.test) never finishes its kill that way.
     const alreadyFighting = scene.combatModule?.isActive === true;
     if (!alreadyFighting) scene.npcManager.onAttackNpc(target);
-    // Combat-variant diversity (2026-07-19, campaign-coverage plan Task 7): the
-    // driver used to always "assign every weapon to one target, steer, hold
-    // nothing else" — never afterburner/consumables/comms, never split fire
-    // by weapon class.
-    //  - afterburner while still closing to engage (not yet alreadyFighting)
-    //    — irrelevant once already in range, so only set then.
-    //  - a shield-cell consumable when hull is critical and one is owned
-    //    (never granted in production yet — CLAUDE.md's known gap — but the
-    //    mechanic itself must work once it is) — ONE-SHOT per fight: retrying
-    //    every round would just re-activate/no-op after the first real use.
-    //  - "demand-surrender" once the target is already softened — also
-    //    ONE-SHOT: a refusal must fall through to normal combat every round
-    //    after, never block the kill forever by re-asking (confirmed live:
-    //    re-requesting every round the target stayed under the threshold
-    //    stalled the fight indefinitely, since the target can never actually
-    //    die while every round is spent hailing instead of firing).
-    //  - weapon-class-aware targeting: split missile fire onto a second
-    //    hostile instead of piling every gun on the one target (see
-    //    `confirmPlanningIfOpen`'s own doc comment).
     const playerShip = engine.player?.ship;
     let surrenderAttempted = false;
     let consumableUsed = false;
@@ -932,59 +578,32 @@ export class PlayerAgent {
         commsAction: wantsSurrender ? "demand-surrender" : null,
       };
     };
-    // PLANNING may already be open (an e2e-staged or garrison-opened fight):
-    // confirm the first round (weapons on the chased target, steer at it)
-    // BEFORE the turn-start below — onPlayPause during PLANNING is the confirm
-    // itself (14.5a) and would otherwise consume an EMPTY hold-fire draft.
     confirmPlanningIfOpen(scene, buildCombatOptions());
     if (!scene.isTurnRunning) scene.onPlayPause();
     scene.combatModule?.beginCombatRound?.();
-    // Driver-side reaction-window budget (review 2026-07-15): the legacy
-    // `roundComplete` flag below tracked "this round's incoming damage spent
-    // its `combatRoundHullFraction` budget" — but it is GOD-disabled and, with
-    // the fight-freeze wedges fixed, a step no longer stalls out on its tick
-    // budget either, so an attack step could silently drive a whole fight to
-    // termination with the policy never re-deciding. Re-implement the same
-    // budget here (hull actually lost since the step began) so the step ends
-    // at the documented per-round reaction window in every mode.
     const stepHull0 = engine.player?.ship?.hullHP ?? 0;
     const stepBudget = Math.max(
       1,
       (engine.player?.ship?.maxHull ?? 0) *
         GAME_BALANCE.combatRoundHullFraction,
     );
-    // Set once the kill/fight-resolution is first detected (below); a bounded
-    // countdown of extra ticks so the loop lingers at the kill point instead
-    // of breaking the instant it happens — see LOOT_LINGER_TICKS.
     let lootLingerTicksLeft: number | null = null;
     for (let i = 0; i < 2000; i++) {
-      // Un-pause before each tick so weapons fire (same discipline as
-      // waitOneDay/completeWarp — a paused ship neither flies nor shoots).
       if (
         scene.combatPause?.paused &&
         typeof scene.combatPause.resume === "function"
       ) {
         scene.combatPause.resume();
       }
-      // Pause-and-plan loop (Task 14.5): each round, assign every weapon to
-      // the chased target, steer at it (close into weapon range) and confirm
-      // — the headless equivalent of the player's assign-and-«Ход». Rebuilt
-      // each round (hull fractions move as the fight progresses), but the
-      // one-shot consumable/comms choices above ratchet off after their first
-      // use regardless.
       confirmPlanningIfOpen(scene, buildCombatOptions());
       this.harness.tick(50);
-      // Reaction window (see stepBudget above): enough incoming damage landed
-      // this step — yield to the policy (flee vs fight on) before more does.
       if (stepHull0 - (engine.player?.ship?.hullHP ?? stepHull0) >= stepBudget)
         break;
-      // Scene changed mid-fight (player death → GAME_OVER): stop driving.
       if (engine.currentSceneType !== SceneType.SPACE_FLIGHT) return;
       const resolved = alreadyFighting
         ? // Driving a pre-engaged exchange: done when the fight resolves.
           scene.combatModule?.isActive !== true
         : // Chasing our own pick: done when it dies (loot lingers below) or
-          // flees the system (nothing to loot — break immediately, unchanged).
           target.state === NpcState.DEAD || target.hullHP <= 0;
       if (
         !alreadyFighting &&
@@ -1001,9 +620,6 @@ export class PlayerAgent {
         lootLingerTicksLeft--;
         continue;
       }
-      // Reaction window: one completed round ends the step (policy re-decides).
-      // Skipped once lingering for loot — a round "completing" on the very
-      // kill tick must not cut the linger short.
       if (scene.combatModule?.roundComplete === true) break;
     }
     if (scene.isTurnRunning && typeof scene.endTurn === "function") {
@@ -1011,13 +627,6 @@ export class PlayerAgent {
     }
   }
 
-  /**
-   * Fly a REAL route across the system so the ship traverses space and the
-   * calendar advances (every `pixelsPerDay` px = 1 day). Plots a course toward the
-   * star (a safe interior point), stopping a ring short so it never flies into the
-   * sun, then ticks the turn until a day passes or the ship arrives. Degrades to a
-   * {@link waitOneDay} if the route seam is unavailable, so time still advances.
-   */
   private flyForward(): void {
     const engine = this.harness.engine;
     const scene = this.harness.currentScene() as unknown as {
@@ -1047,17 +656,12 @@ export class PlayerAgent {
       tx = physics.shipX + dx * f;
       ty = physics.shipY + dy * f;
     } else {
-      // Already near the centre — head outward for a long traverse instead.
       tx = physics.shipX - (dx / dist) * 700;
       ty = physics.shipY - (dy / dist) * 700;
     }
     const day0 = engine.galaxy?.gameDays ?? 0;
     scene.executeRouteTo(tx, ty);
-    // Run the turn: tick until a day passes or the ship reaches the waypoint.
     for (let i = 0; i < 800; i++) {
-      // A fight engaged mid-flight opens the PLANNING freeze (Task 14.5) —
-      // confirm the round (weapons on nearest, course untouched) so the
-      // traverse keeps flying instead of stalling the step.
       confirmPlanningIfOpen(scene);
       this.harness.tick();
       if ((engine.galaxy?.gameDays ?? 0) > day0) break;

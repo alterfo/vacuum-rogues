@@ -1,17 +1,3 @@
-/**
- * Letsplay engine — equipment-shop query + purchase helpers (dev-only).
- *
- * The pure finders scan the player's current system via the shared
- * {@link generateSystemListings} (`observeHelpers.ts`) — the same call backing
- * the `cheapestGearPrice`/`bestHullPrice` observation signals, so "what's
- * affordable" (what gates the `buy-gear`/`upgrade-hull` legal actions) and "what
- * the applier actually buys" can never diverge. The executors move real credits
- * + gear through the canonical `GearBridge`/`sellHull`/`micromoduleShop` seams
- * (never a direct field mutation), bypassing the shop UI exactly as
- * `executeTradeOnPlanet` (`engineQueries.ts`) bypasses `TradeScene`.
- *
- * Dev-only: lives under `src/tests/`, imported by no production module.
- */
 import type { GameEngine } from "@/systems/GameEngine";
 import type { MicroModule } from "@/types";
 import {
@@ -38,6 +24,7 @@ import {
   buyHullWithTradeIn,
   hullTradeInPrice,
 } from "@/systems/equipment/sellHull";
+import { sellUninstalledGear } from "@/systems/equipment/sellGear";
 import {
   adjustPlayerCredits,
   GL_COUNTERPARTY,
@@ -45,10 +32,6 @@ import {
 import { currentSystem, runInHangarPanel } from "./engineQueries";
 import { generateSystemListings } from "./observeHelpers";
 
-/**
- * Every gear listing stocked in the player's current system, via the shared
- * {@link generateSystemListings}. Empty with no system/galaxy.
- */
 function systemListings(engine: GameEngine): GearListing[] {
   const sys = currentSystem(engine);
   const galaxy = engine.galaxy;
@@ -60,11 +43,6 @@ function systemListings(engine: GameEngine): GearListing[] {
   });
 }
 
-/**
- * The priciest affordable non-hull gear stocked in-system — a genuine upgrade
- * over the cheapest filler, capped at what the player can pay right now. `null`
- * when nothing affordable is stocked.
- */
 export function bestAffordableGear(engine: GameEngine): GearListing | null {
   const credits = engine.player?.credits ?? 0;
   let best: GearListing | null = null;
@@ -76,23 +54,6 @@ export function bestAffordableGear(engine: GameEngine): GearListing | null {
   return best;
 }
 
-/**
- * The priciest affordable hull stocked in-system that is a genuine upgrade over
- * the currently-fitted hull (hulls are planet-only). Candidates with `hp` at or
- * below the fitted hull's are skipped — buying one would trade the ship down for
- * a weaker hull at a net credit cost (the trade-in never refunds the full price),
- * so "upgrade-hull" must never make the ship worse. `null` if none qualifies.
- *
- * Affordability is the **net** cost (`price − trade-in of the fitted hull`), not
- * the gross listing price — installing a replacement trades the old hull in, so
- * the wallet only has to cover the net. This mirrors the real shop UI exactly
- * (`EquipmentShopScene.buyHull`: `if (player.credits < price − tradeIn) return`);
- * gating on gross made the autopilot believe a battle-ready hull was out of reach
- * one upgrade before a real player at the same wallet could buy it — the exact
- * gap that kept the campaign agent stranded at hull 180 (freighter) with the
- * warden (220) always "unaffordable" despite the ~1560cr freighter trade-in that
- * covers the difference (0.4 × the 2026-07-25-tuned 3900cr freighter price).
- */
 export function bestAffordableHull(engine: GameEngine): GearListing | null {
   const credits = engine.player?.credits ?? 0;
   const loadout = engine.playerLoadout;
@@ -109,12 +70,6 @@ export function bestAffordableHull(engine: GameEngine): GearListing | null {
   return best;
 }
 
-/**
- * Net wallet cost of the {@link bestAffordableHull} upgrade right now
- * (`price − trade-in`), or `null` when no improving hull is affordable — the
- * exact credits `executeUpgradeHull` will remove, so the policy's reserve gate
- * (`credits − cost ≥ reserve`) weighs the true spend, not the gross listing.
- */
 export function hullUpgradeNetCost(engine: GameEngine): number | null {
   const listing = bestAffordableHull(engine);
   if (!listing) return null;
@@ -123,7 +78,6 @@ export function hullUpgradeNetCost(engine: GameEngine): number | null {
   return Math.max(0, listing.price - tradeIn);
 }
 
-/** The cheapest not-yet-owned micromodule the player can currently afford. `null` if none. */
 export function cheapestMicromodule(engine: GameEngine): MicroModule | null {
   const player = engine.player;
   if (!player) return null;
@@ -139,12 +93,6 @@ export function cheapestMicromodule(engine: GameEngine): MicroModule | null {
   return best;
 }
 
-/**
- * Buy the priciest affordable non-hull gear in-system into the owned-uninstalled
- * store (never auto-installed — mirrors both the station shop and the planet
- * Верфь gear tab). A real player→equipment GL transfer. A no-op when nothing
- * affordable is stocked.
- */
 export function executeBuyBestGear(engine: GameEngine): void {
   const player = engine.player;
   if (!player) return;
@@ -162,11 +110,6 @@ export function executeBuyBestGear(engine: GameEngine): void {
   });
 }
 
-/**
- * Trade in the current hull for the priciest affordable one in-system through the
- * canonical {@link buyHullWithTradeIn} seam. A no-op when nothing affordable is
- * stocked or the best available is already fitted.
- */
 export function executeUpgradeHull(engine: GameEngine): void {
   const player = engine.player;
   const loadout = engine.playerLoadout;
@@ -180,10 +123,6 @@ export function executeUpgradeHull(engine: GameEngine): void {
   });
 }
 
-/**
- * Buy the cheapest affordable not-yet-owned micromodule through the canonical
- * {@link buyMicromodule} seam. A no-op when none is affordable/unowned.
- */
 export function executeBuyBestModule(engine: GameEngine): void {
   const player = engine.player;
   if (!player) return;
@@ -194,18 +133,11 @@ export function executeBuyBestModule(engine: GameEngine): void {
   });
 }
 
-/** Base damage of a gear id (0 for anything that isn't a weapon / unknown). */
 function weaponBaseDamage(gearId: string): number {
   const g = gearById(gearId);
   return g && g.kind === GearKind.WEAPON ? (g as WeaponSpec).damage : 0;
 }
 
-/**
- * The strongest affordable weapon stocked in-system — the best gun the player
- * can buy right now, ranked by raw {@link WeaponSpec.damage} (not price, unlike
- * {@link bestAffordableGear}: military progression wants firepower, not the
- * priciest filler). `null` when none is affordable/stocked.
- */
 export function bestAffordableWeapon(engine: GameEngine): GearListing | null {
   const credits = engine.player?.credits ?? 0;
   let best: GearListing | null = null;
@@ -222,26 +154,13 @@ export function bestAffordableWeapon(engine: GameEngine): GearListing | null {
   return best;
 }
 
-/** A single "get better armed" move: which gun to field and how (buy/swap). */
 export interface ArmUpPlan {
-  /** Weapon to purchase first (its listed price), when the pick isn't owned yet. */
   buyId?: string;
   buyPrice?: number;
-  /** Weapon id to install into the loadout (owned after any buy above). */
   installId: string;
-  /** Installed-slot index to free first when the weapon bank is full. */
   uninstallIndex?: number;
 }
 
-/**
- * Decide the single best move that raises **installed** weapon damage: field the
- * strongest gun the player can access — one already owned-uninstalled, or the
- * strongest affordable one stocked in-system — into a free weapon slot, or swap
- * it in for the weakest installed weapon when the bank is full. `null` when no
- * improvement is possible (already carrying the best fittable guns, or nothing
- * to buy/install). Pure — never mutates; {@link canArmUp}/{@link executeArmUp}
- * share it so legality can never diverge from what the executor actually does.
- */
 export function planArmUp(engine: GameEngine): ArmUpPlan | null {
   const player = engine.player;
   const loadout = engine.playerLoadout;
@@ -261,8 +180,6 @@ export function planArmUp(engine: GameEngine): ArmUpPlan | null {
     });
   }
   if (candidates.length === 0) return null;
-  // Strongest first; on a damage tie prefer an already-owned copy (costs nothing
-  // to field) over one that must be bought.
   candidates.sort(
     (a, b) => b.damage - a.damage || (a.buyPrice ?? -1) - (b.buyPrice ?? -1),
   );
@@ -271,9 +188,6 @@ export function planArmUp(engine: GameEngine): ArmUpPlan | null {
       ? { installId: c.id, uninstallIndex }
       : { buyId: c.id, buyPrice: c.buyPrice, installId: c.id, uninstallIndex };
 
-  // A free weapon slot: install the strongest candidate that fits (slot + mass).
-  // `gearFit` reads the loadout's live capacity, so it answers for a buyable id
-  // just as well as an owned one.
   const weapons = loadout.derivedStats().categories.weapon;
   if (weapons.used < weapons.total) {
     for (const c of candidates) {
@@ -281,9 +195,6 @@ export function planArmUp(engine: GameEngine): ArmUpPlan | null {
     }
   }
 
-  // Bank full (or nothing fit a free slot on mass): swap the strongest candidate
-  // in for the weakest installed weapon — only when it's a genuine damage
-  // upgrade and fits once that weapon's mass is freed.
   const installed = loadout
     .installedSlots()
     .map((s, index) => ({
@@ -307,18 +218,10 @@ export function planArmUp(engine: GameEngine): ArmUpPlan | null {
   return null;
 }
 
-/** Whether {@link executeArmUp} would raise installed weapon damage right now. */
 export function canArmUp(engine: GameEngine): boolean {
   return planArmUp(engine) != null;
 }
 
-/**
- * Get the ship better armed: buy the strongest affordable in-system gun when it
- * beats what the player already has, then install the strongest owned weapon
- * (swapping out the weakest fitted one if every weapon slot is full). Routes
- * every credit + gear move through the canonical banking / {@link GearBridge}
- * seams. A safe no-op when no weapon improvement is possible.
- */
 export function executeArmUp(engine: GameEngine): void {
   const player = engine.player;
   const loadout = engine.playerLoadout;
@@ -336,7 +239,11 @@ export function executeArmUp(engine: GameEngine): void {
     acquireUninstalledGear(player, plan.buyId);
   }
   if (plan.uninstallIndex != null) {
+    const displacedId = loadout.installedSlots()[plan.uninstallIndex]?.gearId;
     uninstallToOwned(player, loadout, plan.uninstallIndex);
+    if (displacedId != null && displacedId !== plan.installId) {
+      sellUninstalledGear(player, displacedId, engine.bank);
+    }
   }
   installOwnedGear(player, loadout, plan.installId);
 }

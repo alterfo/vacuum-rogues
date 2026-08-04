@@ -16,20 +16,6 @@ import type { PriceRecord } from "./AgentMemory";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { PlayerAgent } from "./PlayerAgent";
 
-/**
- * Task 2 of the smart-autopilot plan: break the warp-forever loop.
- *
- * Root cause (see docs/plans/20260701-smart-autopilot-player.md): `warp
- * "find-sell-destination"` outranked `land "earn"` in the base ladder, so once
- * the agent held cargo with only one planet's prices known, it warped
- * system-to-system forever without ever landing on a second planet to learn
- * its prices — a self-reinforcing loop that only ended in fuel-death (fixed
- * separately by Task 1's fuel-survival tier, which now just makes it refuel
- * mid-loop instead of dying). These tests pin the fix: landing on an
- * unvisited in-system planet outranks the blind cross-system warp, and an
- * anti-consecutive-warp cadence stops the ladder from ever warping more than
- * {@link MAX_CONSECUTIVE_WARPS_WITHOUT_LAND} times in a row without a landing.
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
 const M = ResourceType.METALS;
@@ -60,7 +46,6 @@ interface ObsOpts {
   connections?: number;
 }
 
-/** Mirrors the fixture builder in MemoryHeuristicPolicy.test.ts (kept local to avoid touching that file). */
 function obs(opts: ObsOpts = {}): Observation {
   const scene = opts.scene ?? SceneType.SPACE_FLIGHT;
   const planets = opts.planets ?? [];
@@ -106,7 +91,6 @@ const rec = (buy: number, sell: number): PriceRecord => ({
 describe("decideWithMemory — land-before-warp economy tier (pure)", () => {
   it("holding cargo with an unvisited in-system planet ⇒ lands there instead of blind-warping", () => {
     const mem: AgentMemory = createMemory();
-    // Bought elsewhere (no priceBook entry at all — nothing to arbitrage yet).
     mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
     const here = obs({
       planets: [{ id: "Q", name: "Q", availableQuests: 0 }],
@@ -163,8 +147,6 @@ describe("decideWithMemory — anti-consecutive-warp cadence (pure)", () => {
     mem.priceBook.set("B", new Map([[M, rec(200, 160)]]));
     mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
     mem.consecutiveWarpsWithoutLanding = MAX_CONSECUTIVE_WARPS_WITHOUT_LAND;
-    // No planets here (mirrors the existing "warps to find a sell destination"
-    // fixture) so the only way to satisfy holdingForOtherSystem is a warp.
     const here = obs({ connections: 2 });
 
     const action = decideWithMemory(here, mem);
@@ -186,7 +168,6 @@ describe("decideWithMemory — anti-consecutive-warp cadence (pure)", () => {
   });
 });
 
-/** Render the harness error sink as a readable assertion hint. */
 function formatRecorded(errors: RecordedError[]): string {
   return errors.map((e) => `[${e.source}] ${e.message}`).join("\n");
 }
@@ -201,35 +182,14 @@ describe("PlayerAgent — real-engine no warp-forever loop (Task 2)", () => {
 
       expect(res.errors, formatRecorded(res.errors)).toEqual([]);
 
-      // The loop-breaker's payoff: the agent actually landed on more than one
-      // planet's market rather than warping blind forever.
       expect(agent.belief.priceBook.size).toBeGreaterThanOrEqual(2);
 
-      // The cadence's payoff: no run of consecutive system-to-system hops
-      // longer than the cap ever occurs without a landing in between. Each
-      // real hop is requested exactly once from SPACE_FLIGHT (the applier's
-      // two-step warp then re-decides "warp" again from STAR_MAP to execute
-      // the jump it just requested) — filtering to that scene counts hops,
-      // not the doubled raw action count.
-      //
-      // A flee-motivated hop (kind "flee", or a "warp" whose reason is a
-      // `mem:flee-*` escape jump) also resets the streak, same as landing:
-      // this cap targets the *blind economic* warp-forever loop (Task 2's own
-      // bug — no in-system planet ever visited between hops), not legitimate
-      // back-to-back danger-avoidance. The round-budget hardening pass
-      // (win-rate-100pct plan) made an ambushed ship correctly continue
-      // fleeing instead of getting hijacked into the combat auto-orbit
-      // (`CombatPursuitController.tickAggressor`'s ambush-preservation fix) —
-      // fleeing successfully from one hostile system straight into fleeing
-      // the Overmind front again (verified live: seed LETSPLAY_EXPLORE,
-      // steps 109/111 — `mem:flee-outmatched` then `mem:flee-overmind-front`)
-      // is the intended, safer outcome, not the bug this cadence cap exists
-      // to catch.
       let streak = 0;
       let longestStreak = 0;
       for (const step of res.steps) {
         if (
           step.action.kind === "land" ||
+          step.action.kind === "dock" ||
           step.action.kind === "flee" ||
           step.action.reason?.startsWith("mem:flee")
         ) {

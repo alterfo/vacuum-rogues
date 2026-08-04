@@ -9,17 +9,6 @@ import type {
   NpcSnapshot,
 } from "./observe";
 
-/**
- * Task 2 of the partial-observability plan: the structured belief state.
- *
- * `AgentMemory` + `updateMemory` are **pure**, so they are tested in isolation
- * over hand-built {@link Observation} fixtures (no engine/harness needed). The
- * contract under test: visiting a market records its prices, a buy records its
- * lot at the paid price, a sell drains lots, a hostile presence marks the system,
- * re-seeing a market bumps `seenAt`, and nothing the observation didn't contain is
- * ever stored.
- */
-
 function playerFixture(over: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
   return {
     credits: 1000,
@@ -55,7 +44,6 @@ function npc(id: string): NpcSnapshot {
   };
 }
 
-/** Build a minimal, well-formed Observation; override only what a test cares about. */
 function obs(over: Partial<Observation> = {}): Observation {
   return {
     scene: SceneType.SPACE_FLIGHT,
@@ -77,7 +65,6 @@ function obs(over: Partial<Observation> = {}): Observation {
   };
 }
 
-/** A market where one good has a known buy/sell spread. */
 const METALS_MARKET: MarketGoodSnapshot[] = [
   { resource: ResourceType.METALS, buy: 100, sell: 80 },
 ];
@@ -122,7 +109,6 @@ describe("updateMemory — price book", () => {
     );
     expect(mem.priceBook.get("p1")!.get(ResourceType.METALS)!.seenAt).toBe(1);
 
-    // Visit the same planet again a step later, now at a different price.
     mem = updateMemory(
       mem,
       obs({
@@ -139,7 +125,6 @@ describe("updateMemory — price book", () => {
   });
 
   it("never records prices for unvisited planets or while in flight", () => {
-    // In flight: a system listing other planets, but no landed market.
     const mem = updateMemory(
       createMemory(),
       obs({
@@ -162,7 +147,6 @@ describe("updateMemory — price book", () => {
 describe("updateMemory — inventory lots", () => {
   it("a buy records a lot at the landed planet's buy price", () => {
     let mem = createMemory();
-    // Land, see the market (cargo still empty).
     mem = updateMemory(
       mem,
       obs({
@@ -172,7 +156,6 @@ describe("updateMemory — inventory lots", () => {
     );
     expect(mem.inventoryLots).toEqual([]);
 
-    // Next step: still landed, cargo has grown by 5 — a buy of 5 @ 100.
     mem = updateMemory(
       mem,
       obs({
@@ -193,7 +176,6 @@ describe("updateMemory — inventory lots", () => {
     const mem = updateMemory(
       createMemory(),
       obs({
-        // In flight: no landed market, but cargo appeared (e.g. combat loot).
         player: playerFixture({
           cargo: [{ type: ResourceType.WEAPONS, amount: 2 }],
           cargoUsed: 2,
@@ -207,7 +189,6 @@ describe("updateMemory — inventory lots", () => {
 
   it("a sell drains lots FIFO, keeping the buy-price of what remains", () => {
     let mem = createMemory();
-    // Buy 5 @ 100 (after first seeing the market).
     mem = updateMemory(
       mem,
       obs({
@@ -227,7 +208,6 @@ describe("updateMemory — inventory lots", () => {
       }),
     );
 
-    // Sell 3 — cargo drops to 2; the remaining lot keeps its 100 buy price.
     mem = updateMemory(
       mem,
       obs({
@@ -241,7 +221,6 @@ describe("updateMemory — inventory lots", () => {
       { good: ResourceType.METALS, qty: 2, buyPrice: 100 },
     ]);
 
-    // Sell the rest — no lots left.
     mem = updateMemory(
       mem,
       obs({ player: playerFixture({ cargo: [], cargoUsed: 0 }) }),
@@ -254,7 +233,6 @@ describe("updateMemory — inventory lots", () => {
       { resource: ResourceType.METALS, buy: 120, sell: 90 },
     ];
     let mem = createMemory();
-    // Buy 3 @ 100 at p1 (see the market, then cargo grows by 3).
     mem = updateMemory(
       mem,
       obs({
@@ -273,7 +251,6 @@ describe("updateMemory — inventory lots", () => {
         }),
       }),
     );
-    // Fly to p2 (cargo unchanged ⇒ no spurious lot), then buy 2 more @ 120.
     mem = updateMemory(
       mem,
       obs({
@@ -301,7 +278,6 @@ describe("updateMemory — inventory lots", () => {
       { good: ResourceType.METALS, qty: 2, buyPrice: 120 },
     ]);
 
-    // Sell 4 — drains the whole oldest lot (3 @ 100) then 1 of the next (1 @ 120).
     mem = updateMemory(
       mem,
       obs({
@@ -336,7 +312,6 @@ describe("updateMemory — inventory lots", () => {
         }),
       }),
     );
-    // Cargo desync: drop straight to 0 (more than the lots could supply step-wise).
     mem = updateMemory(
       mem,
       obs({ player: playerFixture({ cargo: [], cargoUsed: 0 }) }),
@@ -382,7 +357,6 @@ describe("updateMemory — threat map", () => {
     );
     expect(mem.threatMap.get("sysC")).toBe(3);
 
-    // Revisit with fewer hostiles — the remembered danger stays at the worst seen.
     mem = updateMemory(
       mem,
       obs({
@@ -416,7 +390,6 @@ describe("updateMemory — purity & menus", () => {
         currentPlanet: landed("p1", METALS_MARKET),
       }),
     );
-    // The original notebook is untouched — updateMemory returns a fresh one.
     expect(mem0.priceBook.size).toBe(0);
     expect(mem0.inventoryLots).toEqual([]);
     expect(mem0.step).toBe(0);
@@ -494,5 +467,23 @@ describe("updateMemory — STAR_MAP warp-stall (Task 3)", () => {
       }),
     );
     expect(mem.starMapStallFolds).toBe(0);
+  });
+});
+
+describe("updateMemory — consecutive-warp cadence", () => {
+  const inSystem = (id: string, scene = SceneType.SPACE_FLIGHT): Observation =>
+    obs({
+      scene,
+      system: { id, name: id, planets: [], stations: [], connections: 2 },
+    });
+
+  it("docking at a station resets the warp cadence, just like landing on a planet", () => {
+    let mem = updateMemory(createMemory(), inSystem("sysA"));
+    mem = updateMemory(mem, inSystem("sysB"));
+    mem = updateMemory(mem, inSystem("sysC"));
+    expect(mem.consecutiveWarpsWithoutLanding).toBe(2);
+
+    mem = updateMemory(mem, inSystem("sysC", SceneType.STATION));
+    expect(mem.consecutiveWarpsWithoutLanding).toBe(0);
   });
 });

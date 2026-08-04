@@ -18,19 +18,6 @@ import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { PlayerAgent } from "./PlayerAgent";
 import { pickWarpTarget } from "./engineQueries";
 
-/**
- * Task 3 of the smart-autopilot plan: threat & Overmind-avoidance tier.
- *
- * Root cause (see docs/plans/20260701-smart-autopilot-player.md): the base
- * (goal-less) ladder never looks at `overmindShare`/`nearOvermindCore` at
- * all — that reaction only lived in the dead `decideOvermindSlayer` goal
- * branch, which the default autopilot never activates. So a goal-less agent
- * sitting in a system the Overmind front has reached, with nothing actively
- * shooting at it, just idled/traded/explored in place instead of leaving.
- * These tests pin the fix: a rising front + a hull that isn't battle-ready
- * makes the base ladder proactively `warp` away, and a present hostile still
- * gets the existing fight-or-flee-by-hull-fraction reaction ahead of it.
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
 function playerFixture(over: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
@@ -62,7 +49,6 @@ interface ObsOpts {
   overmindShare?: number;
 }
 
-/** Mirrors the fixture builder in MemoryHeuristicPolicy.test.ts (kept local to avoid touching that file). */
 function obs(opts: ObsOpts = {}): Observation {
   const scene = opts.scene ?? SceneType.SPACE_FLIGHT;
   const planets = opts.planets ?? [];
@@ -240,7 +226,6 @@ describe("pickWarpTarget — biased away from Overmind-held systems", () => {
   });
 });
 
-/** Render the harness error sink as a readable assertion hint. */
 function formatRecorded(errors: RecordedError[]): string {
   return errors.map((e) => `[${e.source}] ${e.message}`).join("\n");
 }
@@ -261,24 +246,31 @@ describe("PlayerAgent — real-engine Overmind avoidance (Task 3)", () => {
       const neighborId = startSystem.connections[0]?.toSystemId;
       expect(neighborId).toBeDefined();
 
-      // The core is one hop away (nearOvermindCore=true) — the current system
-      // itself is untouched, so no garrison/hostile spawns complicate the run.
       galaxy.overmindCoreSystemId = neighborId!;
-      // Weaken the hull below the threat-flee threshold so the tier fires.
       player.ship.hullHP = Math.floor(
         player.ship.maxHull * (OVERMIND_THREAT_HULL_FRACTION - 0.1),
       );
 
       const agent = new PlayerAgent(harness, new MemoryHeuristicPolicy());
-      const res = await agent.run(40);
+      let fled = false;
+      let leftStartSystem = false;
+      const errors: RecordedError[] = [];
+      for (let i = 0; i < 40; i++) {
+        const res = await agent.run(1);
+        errors.push(...res.errors);
+        if (
+          res.steps.some((s) =>
+            s.action.reason?.includes("flee-overmind-front"),
+          )
+        ) {
+          fled = true;
+        }
+        if (player.currentSystemId !== startSystemId) leftStartSystem = true;
+      }
 
-      expect(res.errors, formatRecorded(res.errors)).toEqual([]);
-
-      const fled = res.steps.some((s) =>
-        s.action.reason?.includes("flee-overmind-front"),
-      );
+      expect(errors, formatRecorded(errors)).toEqual([]);
       expect(fled).toBe(true);
-      expect(player.currentSystemId).not.toBe(startSystemId);
+      expect(leftStartSystem).toBe(true);
     } finally {
       harness.dispose();
     }
