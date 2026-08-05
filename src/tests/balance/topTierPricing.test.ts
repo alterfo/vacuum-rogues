@@ -12,14 +12,6 @@ import {
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import { RARE_TECH_THRESHOLD } from "@/config/balance";
 
-// ---------------------------------------------------------------------------
-// Task 2: the top tier must be a steep, rare, very-expensive climb — most of
-// the galaxy runs similar mid-tech, and the apex hull/engine is a long-term
-// goal only the richest field. Assert the *relationships* (steep top step, a
-// ≥4× gap to the mid tier, rare flagging, scarce high-end stock), not exact
-// magnitudes, so later tuning doesn't churn these tests.
-// ---------------------------------------------------------------------------
-
 const HULLS = GEAR_CATALOG.filter(
   (g): g is HullSpec => g.kind === GearKind.HULL,
 );
@@ -70,7 +62,6 @@ describe("top-tier pricing & rarity (Task 2)", () => {
     it("the apex hull and apex engine are flagged rare", () => {
       expect(isRareGear(maxBy(HULLS))).toBe(true);
       expect(isRareGear(maxBy(ENGINES))).toBe(true);
-      // The two named apex pieces carry the explicit flag.
       expect(gearById("hull_bastion")?.rare).toBe(true);
       expect(gearById("eq_engine_v")?.rare).toBe(true);
     });
@@ -80,7 +71,6 @@ describe("top-tier pricing & rarity (Task 2)", () => {
       expect(engineV).toBeDefined();
       expect(engineV!.equipmentClass).toBe(EquipmentClass.ENGINE);
       expect(isRareGear(engineV!)).toBe(true);
-      // Pricier than the previous top engine (eq_engine_iii) — a genuine apex.
       const mid = gearById("eq_engine_iii") as EquipmentSpec;
       expect(engineV!.basePrice).toBeGreaterThan(mid.basePrice);
     });
@@ -94,17 +84,30 @@ describe("top-tier pricing & rarity (Task 2)", () => {
           `${g.id} flagged rare but low-tech`,
         ).toBeGreaterThanOrEqual(RARE_TECH_THRESHOLD);
       }
-      // Mid/low-tech staples are never rare.
       expect(isRareGear(gearById("hull_corvette")!)).toBe(false);
       expect(isRareGear(gearById("eq_engine_i")!)).toBe(false);
     });
 
-    it("rare gear stays within the documented endgame price ceiling (≤ 14000)", () => {
-      for (const g of GEAR_CATALOG.filter(isRareGear)) {
+    it("always-available rare gear stays within the base price ceiling (≤ 14000)", () => {
+      for (const g of GEAR_CATALOG.filter(
+        (g) => isRareGear(g) && g.minDay === undefined,
+      )) {
+        expect(g.basePrice, `${g.id} above base ceiling`).toBeLessThanOrEqual(
+          14000,
+        );
+      }
+    });
+
+    it("the day-gated endgame band is priced far above the base catalog", () => {
+      const endgame = GEAR_CATALOG.filter(
+        (g) => g.minDay !== undefined && g.id !== "eq_engine_v",
+      );
+      expect(endgame.length).toBeGreaterThanOrEqual(9);
+      for (const g of endgame) {
         expect(
           g.basePrice,
-          `${g.id} above endgame ceiling`,
-        ).toBeLessThanOrEqual(14000);
+          `${g.id} priced as a sidegrade`,
+        ).toBeGreaterThanOrEqual(36000);
       }
     });
   });
@@ -126,7 +129,6 @@ describe("top-tier pricing & rarity (Task 2)", () => {
         if (ids.has("eq_engine_v")) apexEngineSeen++; // rare T7
         if (ids.has("eq_tank")) commonSeen++; // common T1
       }
-      // Common gear is nearly ubiquitous; the rare apex is a scarce minority.
       expect(commonSeen).toBeGreaterThan(planets * 0.6);
       expect(apexEngineSeen).toBeLessThan(planets * 0.3);
       expect(apexEngineSeen).toBeLessThan(commonSeen);

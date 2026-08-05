@@ -10,17 +10,8 @@ import {
 import { APEX_ENGINE_MIN_DAY } from "@/config/balance";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 
-/**
- * Overmind plan Task 6: the apex engine `eq_engine_v` is calendar-gated — it
- * never appears in any shop before {@link APEX_ENGINE_MIN_DAY} (~year 3),
- * regardless of the system's tech level or the per-shop stock roll. At/after
- * that day it becomes *possible* (still subject to the ordinary stock-chance
- * roll — a floor, not a guarantee). No other catalog item is affected.
- */
 describe("apex engine minDay gate (plan Task 6)", () => {
   const PLANETS = 300;
-  /** One giant refresh window so days on both sides of the gate share the
-   *  same rng bucket — isolating the day gate as the only variable. */
   const SAME_BUCKET = 1_000_000;
 
   function shopIds(planetId: string, day: number): Set<string> {
@@ -36,11 +27,27 @@ describe("apex engine minDay gate (plan Task 6)", () => {
     );
   }
 
-  it("only eq_engine_v carries the minDay gate, set to APEX_ENGINE_MIN_DAY", () => {
+  const DAY_GATED_IDS = new Set([
+    "eq_engine_v",
+    "hull_dreadnought",
+    "hull_liberator",
+    "wpn_lance_array",
+    "wpn_aft_shredder",
+    "wpn_nova_driver",
+    "wpn_annihilator",
+    "eq_engine_vi",
+    "eq_shield_fortress",
+    "eq_droid_swarm",
+  ]);
+
+  it("the day-gated set is exactly the apex engine plus the endgame band", () => {
     expect(gearById("eq_engine_v")?.minDay).toBe(APEX_ENGINE_MIN_DAY);
     for (const g of GEAR_CATALOG) {
-      if (g.id === "eq_engine_v") continue;
-      expect(g.minDay, `${g.id} must not be day-gated`).toBeUndefined();
+      if (DAY_GATED_IDS.has(g.id)) {
+        expect(g.minDay, `${g.id} must be day-gated`).toBeGreaterThan(0);
+      } else {
+        expect(g.minDay, `${g.id} must not be day-gated`).toBeUndefined();
+      }
     }
   });
 
@@ -49,8 +56,6 @@ describe("apex engine minDay gate (plan Task 6)", () => {
     for (let i = 0; i < PLANETS; i++) {
       const ids = shopIds(`P${i}`, APEX_ENGINE_MIN_DAY - 1);
       expect(ids.has("eq_engine_v")).toBe(false);
-      // Prove the sweep is meaningful: other rare tech-7 gear DOES show up
-      // at this tech level — only the day gate is filtering the apex engine.
       if (ids.has("hull_bastion") || ids.has("wpn_torpedo")) otherRareSeen++;
     }
     expect(otherRareSeen).toBeGreaterThan(0);
@@ -64,7 +69,6 @@ describe("apex engine minDay gate (plan Task 6)", () => {
       if (ids.has("eq_engine_v")) stocked++;
       else missing++;
     }
-    // The ordinary stock-chance roll still applies on both sides.
     expect(stocked).toBeGreaterThan(0);
     expect(missing).toBeGreaterThan(0);
   });
@@ -75,14 +79,15 @@ describe("apex engine minDay gate (plan Task 6)", () => {
     apexLoadout.install(apex.id);
     const apexSpeed = apexLoadout.derivedStats().speed;
 
-    const otherEngines = GEAR_CATALOG.filter(
+    const ungatedEngines = GEAR_CATALOG.filter(
       (g): g is EquipmentSpec =>
         g.kind === GearKind.EQUIPMENT &&
         g.equipmentClass === EquipmentClass.ENGINE &&
-        g.id !== apex.id,
+        g.id !== apex.id &&
+        g.minDay === undefined,
     );
-    for (const engine of otherEngines) {
-      expect(engine.minDay, engine.id).toBeUndefined();
+    expect(ungatedEngines.length).toBeGreaterThan(0);
+    for (const engine of ungatedEngines) {
       const loadout = new ShipLoadout("hull_bastion");
       loadout.install(engine.id);
       expect(

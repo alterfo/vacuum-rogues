@@ -1,11 +1,3 @@
-/**
- * Escalation-notice wiring (three-year-campaign plan, Task 5).
- *
- * Drives the REAL `DayTickController` over a real `Galaxy` and asserts the
- * CAMPAIGN_ESCALATION news events land in `galaxy.newsFeed` — i18n-keyed,
- * fired exactly once per threshold, suppressed on terminal arc states and on
- * the first (seeding) observation of an already-escalated run.
- */
 import { describe, it, expect, vi } from "vitest";
 import {
   DayTickController,
@@ -64,8 +56,6 @@ function connect(a: StarSystem, b: StarSystem): void {
   b.connections.push(new WarpPath(b.id, a.id, 2));
 }
 
-/** Ten-system chain galaxy — enough resolution to place the share on either
- *  side of the OVERMIND_WARNING_THRESHOLD band. */
 function makeGalaxy(): Galaxy {
   const systems = Array.from({ length: 10 }, (_, i) => makeSystem(`S${i}`));
   for (let i = 1; i < systems.length; i++) connect(systems[0], systems[i]);
@@ -86,13 +76,9 @@ function makeDeps(
     galaxySimulator: new GalaxySimulator(),
     tradeSystem: new TradeSystem(),
     bankBus,
-    checkWinCondition: () => false,
     checkExpiredQuests: vi.fn(),
     isOutcomeShown: () => false,
     showGameOutcomeScreen: vi.fn(),
-    isWinScreenShown: () => false,
-    markWinScreenShown: vi.fn(),
-    transitionToWinScreen: vi.fn(),
     invalidateInfoRegistryCache: vi.fn(),
     ...overrides,
   };
@@ -118,7 +104,6 @@ describe("DayTickController escalation notices (wiring)", () => {
     const fired = escalationEvents(galaxy);
     expect(fired).toHaveLength(1);
     expect(fired[0].description).toBe(t("news.escalation.NOTICED"));
-    // The description is a real translation, not a bare fallback key.
     expect(fired[0].description).not.toContain("news.escalation");
     expect(fired[0].systemId).toBe(galaxy.systems[0].id);
     expect(fired[0].day).toBe(galaxy.gameDays);
@@ -135,8 +120,6 @@ describe("DayTickController escalation notices (wiring)", () => {
     controller.run(); // baseline: share 0
     expect(escalationEvents(galaxy)).toEqual([]);
 
-    // Push the share past OVERMIND_WARNING_THRESHOLD (4/10 = 0.4 ≥ 0.35).
-    // Keep it dormant-safe: well below the 0.85 loss share.
     for (const id of ["S1", "S2", "S3", "S4"]) galaxy.addOvermindSystem(id);
     controller.run();
 
@@ -155,10 +138,6 @@ describe("DayTickController escalation notices (wiring)", () => {
     controller.run(); // baseline: dormant, no front
     expect(escalationEvents(galaxy)).toEqual([]);
 
-    // An engaged arc that once peaked above the contained line, now cleared:
-    // past grace with zero Overmind systems ⇒ the machine derives `contained`.
-    // (peakThreat 0.5 > containedShare, share 0 ≤ containedShare; not a win —
-    // eradication requires an engaged front, lastSpreadDay stays -1.)
     galaxy.overmindArc = {
       dayZero: 1,
       lastSpreadDay: -1,
@@ -218,7 +197,6 @@ describe("DayTickController escalation notices (wiring)", () => {
     const controller = new DayTickController(makeDeps(galaxy));
 
     controller.run();
-    // 3/10 = 0.30 < 0.35 warning threshold.
     for (const id of ["S1", "S2", "S3"]) galaxy.addOvermindSystem(id);
     controller.run();
 

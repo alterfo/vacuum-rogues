@@ -1,13 +1,6 @@
-// Russian (default) UI dictionary. RU values are the verbatim in-game strings.
-//
-// Keys are namespaced `area.thing` (e.g. `common.back`, `settings.title`). Keep
-// this in lockstep with `en.ts` — the parity test (`src/tests/i18n/parity.test.ts`)
-// fails if the two key sets diverge. Add a new string here AND in `en.ts`.
-
 import type { Dict } from "./i18n";
 
 export const ru: Dict = {
-  // --- common controls -----------------------------------------------------
   "common.back": "Назад",
   "common.close": "Закрыть",
   "common.cancel": "Отмена",
@@ -20,7 +13,6 @@ export const ru: Dict = {
   "common.credits": "кредитов",
   "common.continue": "Продолжить",
 
-  // --- settings panel ------------------------------------------------------
   "settings.title": "НАСТРОЙКИ",
   "settings.speed": "СКОРОСТЬ",
   "settings.font": "ШРИФТ",
@@ -31,12 +23,9 @@ export const ru: Dict = {
   "settings.language": "ЯЗЫК",
   "settings.on": "ВКЛ",
   "settings.off": "ВЫКЛ",
-  // Language autonyms — each shown in its own script regardless of the active
-  // language, so the values are intentionally identical in `ru.ts` and `en.ts`.
   "lang.ru": "Русский",
   "lang.en": "English",
 
-  // --- accessibility panel (palette / reduced-motion / key remap) ----------
   "a11y.title": "ДОСТУПНОСТЬ",
   "a11y.palette": "ПАЛИТРА",
   "a11y.reducedMotion": "МЕНЬШЕ ДВИЖЕНИЯ",
@@ -53,10 +42,8 @@ export const ru: Dict = {
   "action.journal": "Журнал",
   "action.inventory": "Инвентарь",
 
-  // --- shared labels -------------------------------------------------------
   "label.creditsLine": "Кредиты: {n}",
 
-  // --- resources (market goods) --------------------------------------------
   "resource.FUEL": "Топливо",
   "resource.METALS": "Металлы",
   "resource.CRYSTALS": "Кристаллы",
@@ -68,7 +55,6 @@ export const ru: Dict = {
   "resource.LUXURY": "Роскошь",
   "resource.DATA_CORES": "Ядра данных",
 
-  // --- trade-route rumors (Info Center "Торговые возможности" band) ---------
   "rumor.panelHeader": "ТОРГОВЫЕ ВОЗМОЖНОСТИ",
   "rumor.panelEmpty": "Активных торговых маршрутов нет",
   "rumor.panelNoIntel": "Нет данных — разведайте новые системы",
@@ -78,7 +64,6 @@ export const ru: Dict = {
   "rumor.expired":
     "Везти {resource} из {from} в {to} больше невыгодно — акция закончилась.",
 
-  // --- Info Center news feed -----------------------------------------------
   "news.type.NPC_QUEST_COMPLETE": "[РЕЙНДЖЕР]",
   "news.type.PIRATE_ATTACK": "[АТАКА]",
   "news.type.MARKET_SHIFT": "[РЫНОК]",
@@ -118,7 +103,6 @@ export const ru: Dict = {
   "news.lore6": "Парадоксы зафиксированы вблизи запретной зоны R-17",
   "news.lore7": "Рейнджеры сообщают об аномальной активности в туманности",
 
-  // --- factions (singular type) / alliances (plural) / NPC roles -----------
   "factionType.OUTLANDERS": "Окраинник",
   "factionType.BASTIONS": "Бастион",
   "factionType.SYNDICATE": "Синдикат",
@@ -137,7 +121,6 @@ export const ru: Dict = {
   "role.PATROL": "Патруль",
   "role.OVERMIND": "Сверхразум",
 
-  // --- main menu -----------------------------------------------------------
   "menu.title": "ВАКУУМНЫЕ ПРОЙДОХИ",
   "menu.intro":
     "Галактика на изломе: пробудились древние Предтечи, и их Сверхразум " +
@@ -158,7 +141,6 @@ export const ru: Dict = {
   "menu.noSaves": "Нет доступных сохранений",
   "menu.loadError": "Ошибка загрузки. Начните новую игру.",
 
-  // --- new-game / faction selection ----------------------------------------
   "race.title": "ВЫБЕРИТЕ ФРАКЦИЮ",
   "race.back": "[ Назад ]",
   "race.start": "НАЧАТЬ ИГРУ",
@@ -197,7 +179,6 @@ export const ru: Dict = {
   "race.stat.speed": "Скорость: {value}",
   "race.stat.evasion": "Уворот: {value}",
 
-  // --- trade / market ------------------------------------------------------
   "trade.title": "МАРКЕТ — {planet}",
   "trade.colResource": "Ресурс",
   "trade.colBuy": "Покупка",
@@ -215,7 +196,6 @@ export const ru: Dict = {
   "trade.cargoFull": "Недостаточно места в трюме",
   "trade.failed": "Сделка не удалась",
 
-  // --- job board / quest types ---------------------------------------------
   "quest.type.DELIVERY": "Доставка",
   "quest.type.BOUNTY": "Охота",
   "quest.type.ESCORT": "Эскорт",
@@ -238,7 +218,6 @@ export const ru: Dict = {
   "jobBoard.requireRank": "Ранг {rank}+",
   "jobBoard.busy": "Занят",
 
-  // --- comms / NPC contact panel -------------------------------------------
   "comms.option.trade": "Торговать",
   "comms.option.hire": "Нанять",
   "comms.option.ally": "Союз",
@@ -261,25 +240,21 @@ export const ru: Dict = {
   "comms.cargo": "Груз: {cargo}",
   "comms.shielded": "Цель защищена полем —\nсканирование невозможно",
 
-  // --- captured-system landing denial (with recovery hint) -----------------
   "landing.denial.overmind":
     "Система под контролем Овермайнда — посадка невозможна",
   "landing.denial.pirateRep":
     "Планета захвачена пиратами — нужна репутация. Откупайтесь от пиратов, чтобы её поднять",
 
-  // --- customs fine + standing-recovery hint (Task 7: no rep dead-end) ------
   "customs.fineReason": "Таможенный штраф",
   "standing.recovery.faction":
     "Совет: выполняйте задания фракции, чтобы поднять репутацию",
   "standing.recovery.pirate":
     "Совет: откупайтесь от пиратов, чтобы поднять репутацию и вернуть доступ",
 
-  // --- player-driven liberation of a captured system -----------------------
   "flight.liberationHint":
     "Система захвачена. Уничтожьте всех захватчиков, чтобы освободить её",
   "flight.systemLiberated": "Система {name} освобождена!",
 
-  // --- pirate shakedown tribute («Откупиться») ------------------------------
   "flight.tributeReason": "Откуп пирату «{name}»",
   "flight.turn.finishingDay": "⏸ Завершаю день…",
   "flight.turn.waiting": "⏳ Ожидание… (мир движется)",
@@ -287,27 +262,24 @@ export const ru: Dict = {
   "flight.tributePaidRep":
     "Откуп {amount} кр. — {name} отступает. Репутация у пиратов растёт.",
 
-  // --- combat salvage (Task 5: killing a credit-carrying NPC pays out) ------
   "flight.salvageTrophy": "Трофей: +{amount} ₡",
   "flight.salvageReason": "Трофей с уничтоженного корабля",
 
-  // --- floating loot pickup (Task 6: collect drops by proximity) ------------
   "flight.lootPickup": "Подобрано: {item}",
   "flight.lootTractor": "Гравитяга подобрала: {item}",
   "flight.lootArtifact": "артефакт",
   "flight.lootModule": "модуль",
 
-  // --- incoming-attacker warning (Task 5: threat indicator) -----------------
   "flight.incomingAttacker": "⚠ Приближается противник: {name}!",
+  "flight.overmindCoreBroken":
+    "Ядро Овермайнда уничтожено — рой обезглавлен! Освободите оставшиеся системы.",
   "flight.starMap": "Межзвёздная карта",
   "flight.inventoryTooltip": "Инвентарь",
   "flight.helpTooltip": "Помощь",
 
-  // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",
   "help.gotIt": "Понятно",
 
-  // --- onboarding: welcome / goal intro ------------------------------------
   "help.welcome.title": "Добро пожаловать, пройдоха!",
   "help.welcome.body1":
     "Вы — вольный пилот в живой галактике. Цель — разбогатеть и остановить" +
@@ -318,7 +290,6 @@ export const ru: Dict = {
     " первое задание. Кнопка «?» вверху справа в любой момент откроет" +
     " подсказку для текущего экрана.",
 
-  // --- onboarding: faction selection / new game ----------------------------
   "help.RACE_SELECTION.title": "Новая игра",
   "help.RACE_SELECTION.body1":
     "Выберите фракцию и уровень сложности, прежде чем начать новый забег." +
@@ -330,7 +301,6 @@ export const ru: Dict = {
   "help.RACE_SELECTION.control1": "ЛКМ по карточке — выбрать фракцию",
   "help.RACE_SELECTION.control2": "Сложность, затем «Начать игру» — старт",
 
-  // --- onboarding: space flight --------------------------------------------
   "help.SPACE_FLIGHT.title": "Космический полёт",
   "help.SPACE_FLIGHT.body1":
     "Вы пилотируете корабль внутри звёздной системы. Подлетайте к планетам" +
@@ -344,7 +314,6 @@ export const ru: Dict = {
     "ЛКМ по объекту — взаимодействие (посадка / захват / бой)",
   "help.SPACE_FLIGHT.control3": "Звёздная карта — гиперпрыжок между системами",
 
-  // --- onboarding: star map ------------------------------------------------
   "help.STAR_MAP.title": "Звёздная карта",
   "help.STAR_MAP.body1":
     "Карта галактики показывает звёздные системы и связи между ними." +
@@ -356,7 +325,6 @@ export const ru: Dict = {
   "help.STAR_MAP.control1": "ЛКМ по системе — выбрать цель",
   "help.STAR_MAP.control2": "Прыжок — переместиться в выбранную систему",
 
-  // --- onboarding: planet --------------------------------------------------
   "help.PLANET.title": "Планета",
   "help.PLANET.body1":
     "Вы на поверхности планеты. Отсюда открыт доступ к местным заведениям:" +
@@ -367,7 +335,6 @@ export const ru: Dict = {
   "help.PLANET.control1": "Кнопки заведений — войти",
   "help.PLANET.control2": "Взлёт — вернуться в полёт",
 
-  // --- onboarding: trade ---------------------------------------------------
   "help.TRADE.title": "Торговля",
   "help.TRADE.body1":
     "Покупайте дёшево, продавайте дорого. Цены меняются от планеты к" +
@@ -378,7 +345,6 @@ export const ru: Dict = {
   "help.TRADE.control1": "Купить / Продать — заключить сделку",
   "help.TRADE.control2": "Кол-во — задать объём",
 
-  // --- onboarding: station -------------------------------------------------
   "help.STATION.title": "Космическая станция",
   "help.STATION.body1":
     "На станции можно дозаправиться, отремонтироваться, переоснастить" +
@@ -389,7 +355,6 @@ export const ru: Dict = {
   "help.STATION.control1": "Ангар — оснащение корабля",
   "help.STATION.control2": "Услуги — топливо / ремонт",
 
-  // --- onboarding: shipyard / equipment ------------------------------------
   "help.EQUIPMENT_SHOP.title": "Верфь и оборудование",
   "help.EQUIPMENT_SHOP.body1":
     "Здесь три вкладки: «Снаряжение» — оружие, двигатели и модули; «Корпус» —" +
@@ -401,7 +366,6 @@ export const ru: Dict = {
   "help.EQUIPMENT_SHOP.control2": "Корпус — сменить корпус со сдачей старого",
   "help.EQUIPMENT_SHOP.control3": "Ангар — установить купленное",
 
-  // --- onboarding: government ----------------------------------------------
   "help.GOVERNMENT.title": "Правительство",
   "help.GOVERNMENT.body1":
     "Местные власти выдают задания и платят за услуги. Берите подходящий" +
@@ -412,7 +376,6 @@ export const ru: Dict = {
   "help.GOVERNMENT.control1": "Взять задание — принять контракт",
   "help.GOVERNMENT.control2": "Сдать — получить награду",
 
-  // --- onboarding: information center ---------------------------------------
   "help.INFO_CENTER.title": "Информационный центр",
   "help.INFO_CENTER.body1":
     "Узел новостей галактики: цены, слухи о выгодных сделках, сведения о" +
@@ -423,7 +386,6 @@ export const ru: Dict = {
   "help.INFO_CENTER.control1": "Поиск — найти сведения",
   "help.INFO_CENTER.control2": "Слухи — узнать о ценах",
 
-  // --- onboarding: bank ----------------------------------------------------
   "help.BANK.title": "Банк",
   "help.BANK.body1":
     "Банк хранит сбережения под процент и выдаёт кредиты под залог будущей" +
@@ -434,7 +396,6 @@ export const ru: Dict = {
   "help.BANK.control1": "Вклад — положить деньги",
   "help.BANK.control2": "Кредит — занять под процент",
 
-  // --- onboarding: inventory -----------------------------------------------
   "help.INVENTORY.title": "Инвентарь и снаряжение",
   "help.INVENTORY.body1":
     "Здесь ваш груз и снаряжение корабля. Устанавливайте модули по слотам," +
@@ -445,7 +406,6 @@ export const ru: Dict = {
   "help.INVENTORY.control1": "Перетаскивание — установить / снять",
   "help.INVENTORY.control2": "Слоты — банки модулей",
 
-  // --- onboarding: text quest ----------------------------------------------
   "help.TEXT_QUEST.title": "Текстовое приключение",
   "help.TEXT_QUEST.body1":
     "Перед вами история с выбором. Читайте текст и выбирайте вариант" +
@@ -455,7 +415,6 @@ export const ru: Dict = {
     " так что выбирайте обдуманно.",
   "help.TEXT_QUEST.control1": "Выбор варианта — продолжить историю",
 
-  // --- onboarding: quest journal -------------------------------------------
   "help.quest-journal.title": "Журнал заданий",
   "help.quest-journal.body1":
     "Здесь собраны ваши активные задания: что нужно сделать, куда лететь и" +
@@ -465,7 +424,6 @@ export const ru: Dict = {
     " маршрут по звёздной карте.",
   "help.quest-journal.control1": "ЛКМ по заданию — подробности",
 
-  // --- onboarding: combat --------------------------------------------------
   "help.combat.title": "Тактическое планирование боя",
   "help.combat.body1":
     "Бой ставит игру на паузу: наведите оружие на цель (кнопка оружия, затем" +
@@ -476,7 +434,6 @@ export const ru: Dict = {
   "help.combat.control1": "Оружие → цель — назначить выстрел",
   "help.combat.control2": "«Ход» — подтвердить план и начать раунд",
 
-  // --- tactical planning phase (pause-and-plan combat, Task 14.5b) ---------
   "combat.planning.enter": "⏸ Тактическое планирование — Ход для подтверждения",
   "combat.planning.executing": "▶ Выполнение хода…",
   "combat.planning.armWeapon": "«{name}»: выберите цель",
@@ -485,7 +442,6 @@ export const ru: Dict = {
     "«{weapon}» → {target} — вне досягаемости, огонь при сближении",
   "combat.planning.afterburner": "Форсаж",
 
-  // --- execute-window mechanics (Task 14.5c) --------------------------------
   "combat.execution.afterburnerEngaged":
     "🔥 Форсаж! Ресурс двигателя: {integrity}%",
   "combat.execution.afterburnerSpent": "Двигатель изношен — форсаж недоступен",
@@ -498,7 +454,6 @@ export const ru: Dict = {
   "combat.execution.allyJoined": "{name} присоединяется к бою на вашей стороне",
   "combat.execution.allyNone": "Никто не ответил на призыв о помощи",
 
-  // --- combat consumables (tactical devices) -------------------------------
   "combat.consumable.category": "Тактическое устройство",
   "combat.consumable.shieldCell.name": "Щитовая ячейка",
   "combat.consumable.shieldCell.desc":
@@ -509,7 +464,6 @@ export const ru: Dict = {
   "combat.consumable.jammer.name": "Глушитель",
   "combat.consumable.jammer.desc": "Отключает оружие цели на несколько секунд.",
 
-  // --- in-combat comms («Связь») -------------------------------------------
   "combat.comms.category": "Связь",
   "combat.comms.bribe.name": "Откупиться",
   "combat.comms.bribe.desc": "Заплатить дань, чтобы враг вышел из боя.",
@@ -520,7 +474,6 @@ export const ru: Dict = {
   "combat.comms.callHelp.desc":
     "Ближайший союзный корабль вступит в бой на вашей стороне.",
 
-  // --- onboarding: refuel ---------------------------------------------------
   "help.refuel.title": "Дозаправка",
   "help.refuel.body1":
     "Посадка на планету или стыковка со станцией сразу и бесплатно" +
@@ -529,7 +482,6 @@ export const ru: Dict = {
     "Платная «Заправка» на станции нужна только если бак опустел в полёте —" +
     " после самой посадки или стыковки он уже полон.",
 
-  // --- inventory scene: warehouse / cargo actions (Bug 2) -------------------
   "inventory.warehouseTitle": "СКЛАД",
   "inventory.warehouseEmpty": "Склад пуст",
   "inventory.install": "[Установить]",
@@ -538,12 +490,10 @@ export const ru: Dict = {
   "inventory.jettisonConfirm": "Точно?",
   "inventory.overflowMore": "…и ещё {n}",
 
-  // --- info center: objects search (Bug 6) -----------------------------------
   "infoCenter.objectsPlaceholder": "Введите имя NPC, планеты или системы...",
   "infoCenter.objectsHintOtherTab":
     "Поиск кораблей, планет и систем — вкладка ОБЪЕКТЫ",
 
-  // --- star-map purchase feedback (Bug 7) ------------------------------------
   "planet.starMapPurchased":
     "Карта куплена за {price} ₡ — открыто систем: {revealed}",
   "planet.starMapPurchasedNoneNew":

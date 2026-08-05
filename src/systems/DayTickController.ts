@@ -20,12 +20,6 @@ import { GAME_BALANCE, ADAPTIVE_GRACE_DAYS } from "@/config/balance";
 import { t } from "@/i18n/i18n";
 import { logger } from "@/utils/logger";
 
-/**
- * Everything {@link DayTickController.run} needs from `GameEngine` — pure state
- * accessors + the handful of steps that must stay engine-owned (the win/loss
- * outcome guards and quest-expiry callback are Task 10's `EndgameController`
- * territory; this controller calls back into them rather than duplicating them).
- */
 export interface DayTickControllerDeps {
   getGalaxy: () => Galaxy | null;
   getPlayer: () => Player | null;
@@ -34,36 +28,14 @@ export interface DayTickControllerDeps {
   galaxySimulator: GalaxySimulator;
   tradeSystem: TradeSystem;
   bankBus: BankBus;
-  checkWinCondition: () => boolean;
   checkExpiredQuests: () => void;
   isOutcomeShown: () => boolean;
   showGameOutcomeScreen: (win: boolean) => void;
-  isWinScreenShown: () => boolean;
-  markWinScreenShown: () => void;
-  transitionToWinScreen: () => void;
   invalidateInfoRegistryCache: () => void;
-  /**
-   * Ratchet the campaign peak power from the live loadout and return the new
-   * peak (adaptive-pacing input, three-year-campaign Task 3). Optional so
-   * headless/legacy DI sites keep compiling; absent ⇒ 0 (the slowest cadence).
-   */
   updateCampaignPeakPower?: () => number;
 }
 
-/**
- * Orchestrates one galaxy-day tick (extracted from `GameEngine.advanceGalaxyDay`,
- * Phase 2 Task 9). Each step is a 1:1 move of the original inline block; the
- * ordering (drift → rumor scan → ownership tick → Overmind arc → outcome →
- * quest expiry → EOD banking → win condition) is preserved exactly, since
- * several steps depend on the state the previous one leaves behind (e.g. rumor
- * scan must run after today's market drift).
- */
 export class DayTickController {
-  /**
-   * Fire-once escalation-notice state (three-year-campaign Task 5). In-memory
-   * only — keyed by galaxy id inside the tracker, so a new game/other run
-   * resets it and a loaded mid-game save seeds silently (no retroactive spam).
-   */
   private readonly escalationNotices = new EscalationNoticeTracker();
 
   constructor(private readonly deps: DayTickControllerDeps) {}
@@ -75,13 +47,6 @@ export class DayTickController {
     galaxy.simulateDay();
     const rng = new SeededRNG(`${galaxy.id}_day_${galaxy.gameDays}`);
 
-    // Ratchet the campaign peak power BEFORE the NPC tick: `NpcSimulator`
-    // reads it live (via `attachCampaignPeakPower`) to size today's Overmind
-    // garrisons, so it must see today's ratchet, not yesterday's — see the
-    // "always reads the current ratchet" contract on
-    // `NpcSimulator.campaignPeakPowerSource`. `advanceOvermindArc` below
-    // re-ratchets too, which is an idempotent no-op re-read of the same
-    // (unchanged) player/loadout state.
     this.deps.updateCampaignPeakPower?.();
 
     const npcEvents = this.deps.npcSimulator.tick(
@@ -93,7 +58,6 @@ export class DayTickController {
       galaxy.addNewsEvent(event);
     }
 
-    // Global galaxy events: PIRATE_SURGE, TRADE_BOOM, PLAGUE, DISCOVERY (Task 24).
     const globalEvents = this.deps.galaxySimulator.tickGlobalEvents(
       galaxy,
       rng,
@@ -114,18 +78,9 @@ export class DayTickController {
 
     this.deps.checkExpiredQuests();
 
-    // End-of-day banking batch (АБС): accrue interest on savings/loan accounts,
-    // cut statements, and roll the bank's business date. Dispatched on the
-    // universal bus so the core books balanced accrual entries and consumers
-    // (the HUD, the Bank UI) react via events. Runs after today's fines so they
-    // land on the day's statement; idempotent per business date.
     this.deps.bankBus.dispatch({ kind: "RunEndOfDay" });
-
-    this.dispatchWinCondition();
   }
 
-  // Advance market drift on every planet (Task 1: daily supply/demand drift).
-  // Emit a MARKET_SHIFT news event for notable price swings (~10% chance/day per system).
   private advanceMarketDrift(galaxy: Galaxy, rng: SeededRNG): void {
     for (const system of galaxy.systems) {
       for (const planet of system.planets) {
@@ -144,13 +99,6 @@ export class DayTickController {
     }
   }
 
-  // Trade-route rumors (living-trade-economy): after today's drift settles,
-  // re-scan the galaxy's neutral spreads and advance the rumor lifecycle so
-  // TRADE_OPPORTUNITY rumors open/refresh/expire against current prices.
-  // Ordering matters — drift → scan → rumor update — so rumors reflect the
-  // prices that were just rolled. Skip galaxies with fewer than two
-  // market-bearing systems: no cross-system route can exist there, so there is
-  // nothing to scan (and the guard keeps degenerate maps from crashing).
   private advanceTradeRumors(galaxy: Galaxy): void {
     const marketSystemCount = galaxy.systems.filter((s) =>
       s.planets.some((p) => !!p.market),
@@ -163,8 +111,6 @@ export class DayTickController {
           galaxy,
           (planet, resource) =>
             this.deps.tradeSystem.referenceMarketPrice(planet, resource),
-          // One route per ResourceType at most — keep them all visible so a
-          // closing rumor stays in the re-score set until it truly expires.
           { maxRoutes: Object.values(ResourceType).length, minMarginPct: 0 },
         ),
       galaxy.gameDays,
@@ -176,7 +122,6 @@ export class DayTickController {
     );
   }
 
-  // Droid repair: if player has a droid installed, heal hull by repairRate HP/day.
   private advanceDroidRepair(): void {
     const player = this.deps.getPlayer();
     const playerLoadout = this.deps.getPlayerLoadout();
@@ -190,9 +135,6 @@ export class DayTickController {
     }
   }
 
-  // Self-balancing ownership tick: replaces the old unidirectional expansion.
-  // Runs every OVERMIND_BALANCE_INTERVAL days; pure function, no side effects
-  // beyond the returned ownership sets.
   private advanceOwnershipEquilibrium(galaxy: Galaxy, rng: SeededRNG): void {
     if (galaxy.gameDays % GAME_BALANCE.OVERMIND_BALANCE_INTERVAL !== 0) return;
 
@@ -200,12 +142,6 @@ export class DayTickController {
       pCapture: GAME_BALANCE.OVERMIND_CAPTURE_PROB,
       pRecaptureBase: GAME_BALANCE.OVERMIND_RECAPTURE_BASE_PROB,
       feedbackStrength: GAME_BALANCE.OVERMIND_FEEDBACK_STRENGTH,
-      // The endgame-arc spread (`advanceOvermindArc`, run every EOD) is the sole
-      // authority on the Overmind front whenever the Overmind holds territory:
-      // the equilibrium then only churns PIRATES. This stops the equilibrium's
-      // ~25% feedback ceiling from (a) capping the arc below its loss line —
-      // making the "galaxy consumed" defeat unreachable — and (b) liberating the
-      // Overmind core, which would fire a spurious "core broken" victory.
       freezeOvermind: galaxy.overmindSystems.length > 0,
     };
     const nodes = galaxy.systems.map((s) => ({
@@ -224,7 +160,6 @@ export class DayTickController {
     galaxy.overmindSystems = result.overmindSystems;
     galaxy.pirateSystems = result.pirateSystems;
 
-    // Emit news for newly captured systems.
     for (const id of result.overmindSystems) {
       if (!prevOvermind.has(id)) {
         const sys = galaxy.systems.find((s) => s.id === id);
@@ -254,16 +189,6 @@ export class DayTickController {
       }
     }
 
-    // Floor: the balance tick maintains a minimum cosmic overmind presence
-    // (OVERMIND_FLOOR_MIN) ONLY while the endgame arc has never engaged
-    // (peakThreat === 0 — i.e. before the first arc spread tick). Once the arc
-    // owns the front (peakThreat > 0), the arc is the sole authority on the
-    // Overmind front (the same rationale as `freezeOvermind` above), so the
-    // legacy floor must NOT resurrect a front the player has pushed below it —
-    // otherwise it would (a) silently undo the player's containment progress on
-    // every 5-day churn and (b) snatch the eradication win by reseeding before
-    // the arc sees the empty front. Check overmindSystems only — pirates
-    // filling the hostile quota must not mask an overmind wipe-out.
     if (
       galaxy.overmindArc.peakThreat === 0 &&
       galaxy.overmindSystems.length < GAME_BALANCE.OVERMIND_FLOOR_MIN
@@ -289,26 +214,9 @@ export class DayTickController {
     }
   }
 
-  /**
-   * Drive the Overmind endgame-arc spread machine one EOD tick.
-   *
-   * Pure decision (`advanceOvermind`) over a read-only galaxy view → newly
-   * captured frontier ids + the next arc state. The captures are applied to the
-   * live galaxy (`addOvermindSystem`, which the landing gate / garrisons / threat
-   * indicator all derive from) and announced as OVERMIND_EXPANSION news; the arc
-   * clock/threat/status snapshot is persisted on `galaxy.overmindArc`.
-   *
-   * Idempotent per business date: the machine's `lastSpreadDay` cadence blocks a
-   * second capture on the same day, status re-derivation is a pure read, and
-   * `peakThreat`/`dayZero` are monotone — so a re-run for the same day is a no-op.
-   */
   private advanceOvermindArc(galaxy: Galaxy): number {
     const day = galaxy.gameDays;
 
-    // Adaptive pacing (three-year-campaign Task 3): ratchet the campaign peak
-    // power on this EOD tick, then schedule the spread from it — weak player ⇒
-    // slow cadence, armed player ⇒ fast, creep floor past the dormancy window.
-    // The ratcheted input makes the schedule monotone within a run.
     const peakPower = this.deps.updateCampaignPeakPower?.() ?? 0;
     const config: OvermindSpreadConfig = {
       graceDays: ADAPTIVE_GRACE_DAYS,
@@ -324,8 +232,6 @@ export class DayTickController {
     };
 
     const prevStatus = galaxy.overmindArc.status;
-    // The real Galaxy/StarSystem structurally satisfy the spread machine's
-    // minimal read-only view (id + connections + the overmind sets).
     const { state, captured } = advanceOvermind(
       galaxy.overmindArc,
       {
@@ -354,17 +260,9 @@ export class DayTickController {
     if (state.status !== prevStatus) {
       logger.info(`OVERMIND arc status: ${prevStatus} → ${state.status}`);
     }
-    // Escalation notices read the same ratcheted power the schedule just used.
     return peakPower;
   }
 
-  /**
-   * Announce escalation-band crossings to the player (three-year-campaign
-   * Task 5): as the ratcheted power / Overmind share / arc status cross the
-   * NOTICED → HARDENING → FINAL_PUSH bands, emit a one-shot i18n-keyed
-   * CAMPAIGN_ESCALATION news event into the feed the Info Center renders.
-   * Runs right after the arc tick so it sees today's post-capture state.
-   */
   private emitEscalationNotices(galaxy: Galaxy, peakPower: number): void {
     const total = galaxy.systems.length;
     const fresh = this.escalationNotices.observe(galaxy.id, {
@@ -373,8 +271,6 @@ export class DayTickController {
       arcStatus: galaxy.overmindArc.status,
     });
     if (fresh.length === 0) return;
-    // Galaxy-wide notice; anchored to the player's current system so the
-    // partial-observability feed filter (known systems only) always shows it.
     const systemId =
       this.deps.getPlayer()?.currentSystemId ?? galaxy.systems[0]?.id ?? "";
     for (const stage of fresh) {
@@ -388,14 +284,6 @@ export class DayTickController {
     }
   }
 
-  // Endgame outcome: the arc status machine is the single source of truth.
-  // `won` (core broken / Overmind eradicated) shows the victory screen; `lost`
-  // (front past the loss line, past grace, full-size galaxy) shows the defeat
-  // screen. The overlay is drawn over the current scene — NOT a terminal scene
-  // transition — so it never clobbers the autosave checkpoint the way an
-  // autosaving GAME_OVER scene would. Gated on the outcome-shown guard (and the
-  // overlay is itself idempotent) so the sticky won/lost status re-running each
-  // EOD — and the in-flight core-kill win path — only shows the screen once.
   private dispatchOutcomeOverlay(galaxy: Galaxy): void {
     if (this.deps.isOutcomeShown()) return;
     if (galaxy.overmindArc.status === "won") {
@@ -404,21 +292,6 @@ export class DayTickController {
     } else if (galaxy.overmindArc.status === "lost") {
       logger.warn("OVERMIND arc lost — galaxy consumed, showing defeat screen");
       this.deps.showGameOutcomeScreen(false);
-    }
-  }
-
-  // Win condition: rank >= VETERAN (2) + 3+ factions with rep > 50. Suppressed
-  // once an Overmind-arc outcome overlay has shown this run, so a rank-WIN_SCREEN
-  // scene transition can't clobber the arc's win/loss overlay (notably showing a
-  // victory over an arc-loss) if both fire the same EOD.
-  private dispatchWinCondition(): void {
-    if (
-      this.deps.checkWinCondition() &&
-      !this.deps.isWinScreenShown() &&
-      !this.deps.isOutcomeShown()
-    ) {
-      this.deps.markWinScreenShown();
-      this.deps.transitionToWinScreen();
     }
   }
 }

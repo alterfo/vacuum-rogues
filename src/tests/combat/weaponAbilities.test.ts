@@ -55,23 +55,23 @@ function startCombat(system: CombatSystem, enemy: EnemyShip): void {
   });
 }
 
-// --- Weapon catalog checks ---
 describe("WeaponSpec catalog — Task 10", () => {
   const weapons = GEAR_CATALOG.filter(
     (g) => g.kind === GearKind.WEAPON,
   ) as WeaponSpec[];
 
-  it("has exactly 12 weapon variants", () => {
-    expect(weapons).toHaveLength(12);
+  it("has exactly 16 weapon variants (12 base + 4 endgame)", () => {
+    expect(weapons).toHaveLength(16);
   });
 
-  it("has exactly 4 weapons per class (energy / fragment / missile)", () => {
-    const energy = weapons.filter((w) => w.weaponClass === "ENERGY");
-    const fragment = weapons.filter((w) => w.weaponClass === "FRAGMENT");
-    const missile = weapons.filter((w) => w.weaponClass === "MISSILE");
-    expect(energy).toHaveLength(4);
-    expect(fragment).toHaveLength(4);
-    expect(missile).toHaveLength(4);
+  it("keeps 4 per class in the always-available band; endgame adds 2 energy + 2 fragment", () => {
+    const base = weapons.filter((w) => w.minDay === undefined);
+    expect(base.filter((w) => w.weaponClass === "ENERGY")).toHaveLength(4);
+    expect(base.filter((w) => w.weaponClass === "FRAGMENT")).toHaveLength(4);
+    expect(base.filter((w) => w.weaponClass === "MISSILE")).toHaveLength(4);
+    const endgame = weapons.filter((w) => w.minDay !== undefined);
+    expect(endgame.filter((w) => w.weaponClass === "ENERGY")).toHaveLength(2);
+    expect(endgame.filter((w) => w.weaponClass === "FRAGMENT")).toHaveLength(2);
   });
 
   it("all weapons have ability and cooldownTurns fields", () => {
@@ -98,7 +98,6 @@ describe("WeaponSpec catalog — Task 10", () => {
   });
 });
 
-// --- EMP ability ---
 describe("CombatSystem — EMP ability (Task 10)", () => {
   it("sets shieldDisabledTurns=2 on target after EMP hit", () => {
     const system = makeSystem();
@@ -123,7 +122,6 @@ describe("CombatSystem — EMP ability (Task 10)", () => {
     const hpBefore = enemy.hullHP;
     system.applyDamageToEnemy(enemy, 20);
 
-    // Shield is disabled so hull should take full damage
     expect(enemy.hullHP).toBe(hpBefore - 20);
     expect(enemy.shields).toBe(50); // shield untouched
   });
@@ -137,15 +135,12 @@ describe("CombatSystem — EMP ability (Task 10)", () => {
     const shieldsBefore = enemy.shields;
     system.applyDamageToEnemy(enemy, 20);
 
-    // Shield should absorb some/all damage
     expect(enemy.shields).toBeLessThan(shieldsBefore);
-    // Hull damage = max(0, rawDamage - shields)
     const expectedHullDmg = Math.max(0, 20 - 50);
     expect(enemy.hullHP).toBe(hpBefore - expectedHullDmg);
   });
 });
 
-// --- BURST ability ---
 describe("CombatSystem — BURST ability (Task 10)", () => {
   it("hits adjacent enemies in 1-hex radius", () => {
     const system = makeSystem();
@@ -159,7 +154,6 @@ describe("CombatSystem — BURST ability (Task 10)", () => {
       nebulae: [],
     });
 
-    // Place enemy2 adjacent to enemy1 (enemy1 at q=7,r=2; enemy2 at q=7,r=3)
     const tile1 = system.grid.getTile({ q: 7, r: 2 });
     const tile2 = system.grid.getTile({ q: 7, r: 3 });
     expect(tile1).not.toBeNull();
@@ -176,13 +170,11 @@ describe("CombatSystem — BURST ability (Task 10)", () => {
 
     system.resolvePlayerAttack(burstWeapon.id);
 
-    // Both enemies should take damage
     expect(enemy1.hullHP).toBeLessThan(hp1Before);
     expect(enemy2.hullHP).toBeLessThan(hp2Before);
   });
 });
 
-// --- Cooldown tracking ---
 describe("CombatSystem — weapon cooldowns (Task 10)", () => {
   it("weapon cooldown is set after firing", () => {
     const system = makeSystem();
@@ -248,7 +240,6 @@ describe("CombatSystem — weapon cooldowns (Task 10)", () => {
   });
 });
 
-// --- EMP disabled turns decrement ---
 describe("CombatSystem — EMP timer decrement (Task 10)", () => {
   it("shieldDisabledTurns decrements each enemy phase", async () => {
     const system = makeSystem();

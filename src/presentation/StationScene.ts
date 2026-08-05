@@ -19,6 +19,7 @@ import { SceneType, StationType, QuestType, type MicroModule } from "@/types";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
+import { techLevelWithUplift } from "@/systems/campaign/techUplift";
 import { GearKind } from "@/systems/equipment/GearCatalog";
 import {
   micromoduleShopCatalog,
@@ -51,8 +52,6 @@ interface StationContext {
   station?: Station;
 }
 
-// ── Station metadata ─────────────────────────────────────────────────────────
-
 const TYPE_LABEL: Record<StationType, string> = {
   [StationType.TRADE_POST]: "Торговый пост",
   [StationType.REPAIR_DOCK]: "Ремонтный узел",
@@ -69,7 +68,6 @@ const TYPE_COLOR: Record<StationType, number> = {
   [StationType.CRAFT_CENTER]: 0xffaa22,
 };
 
-/** Services available per station type. */
 const TYPE_SERVICES: Record<StationType, string[]> = {
   [StationType.TRADE_POST]: [
     "shop",
@@ -106,12 +104,6 @@ const TYPE_SERVICES: Record<StationType, string[]> = {
   ],
 };
 
-/**
- * Per-service icon glyph so Station action rows render through the shared
- * {@link UiButton} chrome with the same icon+label layout planets use (Task 7,
- * UX-review fixes) — unifying the two docked-menu button styles. Any service key
- * without an entry falls back to no icon (label-only UiButton).
- */
 const STATION_SERVICE_ICON: Record<string, string> = {
   repair: "🔧",
   refuel: "⛽",
@@ -134,13 +126,6 @@ const REPAIR_DISCOUNT: Record<StationType, number> = {
   [StationType.CRAFT_CENTER]: 1.0,
 };
 
-/**
- * Build the full-bleed interior backdrop node for a station type (Task 5).
- * A vertical near-black → accent-tinted gradient (via {@link stationBackdropBands})
- * plus a soft dark vignette so the centred panel reads against a settled edge.
- * `eventMode="static"` keeps it swallowing stray clicks like the old flat bg.
- * Exported for the `StationScene.test.ts` backdrop-ordering + colour assertions.
- */
 export function buildStationBackdrop(
   width: number,
   height: number,
@@ -155,7 +140,6 @@ export function buildStationBackdrop(
     g.rect(0, i * bandH, width, bandH + 1);
     g.fill({ color: bands[i], alpha: 1 });
   }
-  // Vignette: darken the outer frame so the panel floats on a settled centre.
   g.rect(0, 0, width, height);
   g.stroke({
     color: 0x000000,
@@ -166,8 +150,6 @@ export function buildStationBackdrop(
   return g;
 }
 
-// ── Scene ────────────────────────────────────────────────────────────────────
-
 type View =
   | "main"
   | "shop"
@@ -176,12 +158,8 @@ type View =
   | "micromodule_apply"
   | "research";
 
-/** The fitted loadout gear being micro-modded (for the apply sub-panel). */
 interface MicromoduleApplyTarget {
-  /** Slot index of the installed item receiving the micromodule (authoritative
-   *  so the exact clicked copy is targeted with duplicate gear fitted). */
   slotIndex: number;
-  /** Catalog gear id of that item — for display + category matching. */
   gearId: string;
 }
 
@@ -191,7 +169,6 @@ export class StationScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private station: Station | null = null;
   private mainContainer: Container | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
   private view: View = "main";
   private shopListings: GearListing[] = [];
@@ -201,24 +178,15 @@ export class StationScene extends GameScene {
   private researchPanel: ResearchUpgradePanel | null = null;
   private shopScroll = 0;
   private micromoduleScroll = 0;
-  /** Rows the micromodule list can show at once — set by its render, read by the
-   *  scroll clamp so the full catalog (gear + hull families) is reachable. */
   private micromoduleVisibleRows = 0;
   private readonly VISIBLE_ROWS = 9;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private detachWheel: (() => void) | null = null;
   private toast: Text | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
-  /** Bribe paid this docking — gates are lifted for the duration of the visit. */
   private bribed = false;
-  /** The shared slot-fitting hangar, mounted into mainContainer when the hangar
-   *  view is active (same component the equipment shop embeds). */
   private readonly hangarPanel: HangarPanel;
-  /** The shared micromodule-apply modal, opened from the hangar's per-slot
-   *  "[установить микромодуль]" control (same component the equipment shop uses). */
   private readonly micromoduleApplyPanel: MicromoduleApplyPanel;
-  /** The military-base quest board overlay (same panel planets use). Non-null
-   *  only while the «Задания» surface is open at a MILITARY_BASE. */
   private jobBoardPanel: JobBoardPanel | null = null;
 
   constructor(renderer: Renderer) {
@@ -226,8 +194,6 @@ export class StationScene extends GameScene {
     this.hangarPanel = new HangarPanel(renderer);
     this.micromoduleApplyPanel = new MicromoduleApplyPanel(renderer);
   }
-
-  // ── lifecycle ──────────────────────────────────────────────────────────────
 
   initialize(context?: object): void {
     const ctx = context as StationContext | undefined;
@@ -247,15 +213,10 @@ export class StationScene extends GameScene {
 
     this.render();
 
-    // Claim rewards for any return-requiring quests this station issued and the
-    // player has now satisfied (re-docked here). Without this, station-issued
-    // BOUNTY/ESCORT/etc. quests stay stuck in pending-return forever.
     this.checkReturnQuestCompletion();
 
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
-    // Mouse-wheel scrolls the shop list (matches the ArrowUp/Down keys); only
-    // the shop view is scrollable, so other views ignore the wheel.
     this.detachWheel = attachWheelScroll((dir) => {
       if (this.view === "shop") this.scrollShop(dir);
       else if (this.view === "micromodules") this.scrollMicromodules(dir);
@@ -266,10 +227,6 @@ export class StationScene extends GameScene {
     logger.info(`StationScene: docked at ${this.station?.name}`);
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen),
-   * mounted on `renderer.stage` so it survives the per-view UI rebuilds.
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -307,20 +264,14 @@ export class StationScene extends GameScene {
     this.researchPanel = null;
   }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
-
   private hasService(service: string): boolean {
     if (!this.station) return false;
     return TYPE_SERVICES[this.station.type].includes(service);
   }
 
   private buildMicromoduleListings(): void {
-    // Craft centers sell a deterministic subset based on station id seed
     const seed = this.station?.id.charCodeAt(0) ?? 0;
-    // Offer the full catalog at craft centers: the 12 gear micromodules plus the
-    // hull micromodule family (defense / cargo / energy-redirect).
     this.micromoduleListings = micromoduleShopCatalog();
-    // Shuffle deterministically so different stations have different order
     this.micromoduleListings.sort(
       (a, b) =>
         a.id.charCodeAt(seed % a.id.length) -
@@ -333,25 +284,20 @@ export class StationScene extends GameScene {
     const station = this.station;
     if (!galaxy || !station) return;
 
-    // Find the star system that owns this station to read its tech level.
     const starSystem = galaxy.systems.find((s) =>
       s.stations.some((st) => st.id === station.id),
     );
-    const systemTechLevel = starSystem?.techLevel ?? 1;
+    const systemTechLevel = techLevelWithUplift(
+      starSystem?.techLevel ?? 1,
+      galaxy.gameDays,
+    );
 
-    // RESEARCH_LAB stations have access to one tier above the system level
-    // (frontier research premium), capped at 8.
     const maxTechLevel =
       station.type === StationType.RESEARCH_LAB
         ? Math.min(8, systemTechLevel + 1)
         : systemTechLevel;
     const priceFactor = station.type === StationType.RESEARCH_LAB ? 1.1 : 1.0;
 
-    // Hull market + trade-in is planet-only specialization (Task 1 audit). The
-    // in-space shop has no hull tab and `buyItem` warehouses every purchase, so a
-    // hull listed here would land in the owned-uninstalled store where it can
-    // never be fitted (the hangar has no hull bank). Exclude hulls so a station
-    // shop only ever sells gear it can actually fit.
     this.shopListings = generateShop({
       systemId: station.id,
       planetId: station.id,
@@ -361,8 +307,6 @@ export class StationScene extends GameScene {
       maxTechLevel,
     }).filter((l) => l.gear.kind !== GearKind.HULL);
   }
-
-  // ── rendering ─────────────────────────────────────────────────────────────
 
   private render(): void {
     if (!this.mainContainer) return;
@@ -390,13 +334,6 @@ export class StationScene extends GameScene {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
 
-    // Full-bleed interior backdrop (Task 5): the station used to read as a bare
-    // panel on a flat black void. We paint a procedural vertical gradient tinted
-    // by the station type, so the interior has a mood matching its flight-map
-    // marker. Structured to mirror the planet panorama: once a real
-    // `station_interior/` art asset exists, `resolveStationBackdropKey` returns a
-    // key and a Sprite mounts here instead — no other wiring change. Mounted
-    // first (layer 0) so the panel + all service rows sit above it.
     const stationTypeForBg = this.station?.type ?? StationType.TRADE_POST;
     this.mainContainer!.addChild(
       buildStationBackdrop(sw, sh, stationTypeForBg),
@@ -435,7 +372,6 @@ export class StationScene extends GameScene {
       return;
     }
 
-    // Panel
     const PW = Math.min(600, sw - 40);
     const PH = Math.min(560, sh - 60);
     const PX = (sw - PW) / 2;
@@ -447,7 +383,6 @@ export class StationScene extends GameScene {
     panel.stroke({ color: 0x334455, width: 1 });
     this.mainContainer!.addChild(panel);
 
-    // Type badge
     const stationType = this.station?.type ?? StationType.TRADE_POST;
     const color = TYPE_COLOR[stationType];
 
@@ -465,7 +400,6 @@ export class StationScene extends GameScene {
     typeLabel.eventMode = "none";
     this.mainContainer!.addChild(typeLabel);
 
-    // Station name
     const title = scaledText(this.station?.name ?? "Станция", 20, 0xeeeeff, {
       rawColor: true,
       fontFamily: "monospace",
@@ -476,22 +410,18 @@ export class StationScene extends GameScene {
     title.eventMode = "none";
     this.mainContainer!.addChild(title);
 
-    // Separator
     const sep = new Graphics();
     sep.rect(PX + 16, PY + 72, PW - 32, 1);
     sep.fill({ color: 0x223344 });
     this.mainContainer!.addChild(sep);
 
-    // Stats row: hull / fuel / credits
     this.renderStatsRow(PX, PY + 82, PW);
 
-    // Reputation gate: hostile faction blocks all services except undocking.
     const stationFaction = String(this.station?.faction ?? "INDEPENDENT");
     const player = this.gameEngine?.player;
     const isHostile =
       !this.bribed && (player?.isHostileTo(stationFaction) ?? false);
 
-    // Service buttons
     const services = this.station ? TYPE_SERVICES[this.station.type] : [];
     const BTN_W = PW - 80;
     const BTN_H = 38;
@@ -501,10 +431,6 @@ export class StationScene extends GameScene {
     for (const svc of services) {
       const { label, color: btnColor } = this.serviceButton(svc);
       const blocked = isHostile && svc !== "leave";
-      // Already-satisfied rows (hull already full / tanks already full) have
-      // nothing to do — render them through the same non-interactive branch as
-      // hostile-`blocked` rows so they stop showing a pointer cursor / hover
-      // affordance and don't read as clickable (Task 8, UX-review fixes).
       const inert = blocked || (!blocked && this.isServiceSatisfied(svc));
       this.mountServiceButton(
         STATION_SERVICE_ICON[svc] ?? "",
@@ -520,7 +446,6 @@ export class StationScene extends GameScene {
       btnY += BTN_H + 4;
     }
 
-    // Bribe button when hostile to the station's faction.
     if (isHostile) {
       this.mountServiceButton(
         "💰",
@@ -535,18 +460,9 @@ export class StationScene extends GameScene {
       );
     }
 
-    // Toast slot (re-attached on render)
     this.addToastSlot(PX, PY, PW, PH);
   }
 
-  /**
-   * Mount one docked-menu action row through the shared {@link UiButton} chrome
-   * (Task 7, UX-review fixes) so the Station menu matches Planet's bordered
-   * dark-navy buttons instead of the old bare-bracket `scaledText` rows.
-   * `blocked` rows mirror `PlanetScene.makeServiceBtn`'s non-interactive
-   * treatment: a dimmed, `eventMode="none"` container that reads as disabled and
-   * never fires its handler.
-   */
   private mountServiceButton(
     icon: string,
     label: string,
@@ -633,14 +549,6 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(credText);
   }
 
-  /**
-   * A "repair"/"refuel" row is *satisfied* (nothing to do) when the ship is
-   * already at full hull / full energy — mirrors the exact `missing > 0`
-   * condition {@link serviceButton} uses to pick the "Корпус в норме" / "Баки
-   * полны" label, so the label and the interactivity gate can't drift. All
-   * other services are always actionable. Used by `renderMain` to render a
-   * satisfied row as a non-interactive dimmed chip (Task 8, UX-review fixes).
-   */
   private isServiceSatisfied(svc: string): boolean {
     const ship = this.gameEngine?.player?.ship;
     if (!ship) return false;
@@ -758,10 +666,6 @@ export class StationScene extends GameScene {
     }
   }
 
-  // ── military-base quest board ────────────────────────────────────────────────
-
-  /** Open the military-base job board — the same `JobBoardPanel` planets use,
-   *  keyed by the station id so each base keeps its own (deduped) board. */
   private openJobBoard(): void {
     if (!this.gameEngine || !this.station) return;
     this.closeJobBoard();
@@ -772,7 +676,6 @@ export class StationScene extends GameScene {
     const acceptedIds = new Set<string>([
       ...activeQuests.map((q) => q.id),
       ...this.gameEngine.questManager.getCompletedQuestIds(),
-      // Pending-return quests are still "taken" — keep them off the board.
       ...this.gameEngine.questManager.getPendingReturnQuests().map((q) => q.id),
     ]);
     this.jobBoardPanel = new JobBoardPanel(
@@ -828,15 +731,6 @@ export class StationScene extends GameScene {
     }
   }
 
-  /**
-   * On docking, claim rewards for any pending-return quests issued at THIS
-   * station (`quest.planetId === this.station.id`). A military base issues
-   * return-requiring quests (BOUNTY/ESCORT/EXPLORATION/DEFENSE/DIPLOMACY) tagged
-   * with the station id; `PlanetScene.checkReturnQuestCompletion` only claims
-   * *planet*-issued ones, so without a station-side equivalent these would be
-   * stuck in pending-return permanently (and silently dropped off the board).
-   * Mirrors PlanetScene.checkReturnQuestCompletion (toast instead of message).
-   */
   private checkReturnQuestCompletion(): void {
     if (!this.gameEngine?.player || !this.station) return;
     const player = this.gameEngine.player;
@@ -881,9 +775,6 @@ export class StationScene extends GameScene {
       "Ремонт корпуса",
     );
     ship.hullHP = ship.maxHull;
-    // Re-render FIRST — render() nulls `this.toast` and remounts a fresh empty
-    // slot, so a toast set beforehand would be wiped and never paint. The
-    // robot-assistant voice line (canon §11.4) then survives the re-render.
     this.render();
     this.showToast(repairVoiceLine(cost), 0x44ff88);
   }
@@ -911,8 +802,6 @@ export class StationScene extends GameScene {
       "Заправка",
     );
     ship.energy = ship.maxEnergy;
-    // Render before the toast for the same reason as doRepair (the fresh slot
-    // would otherwise clear the message).
     this.render();
     this.showToast(refuelVoiceLine(cost), 0x44aaff);
   }
@@ -992,20 +881,10 @@ export class StationScene extends GameScene {
     }
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
-      // Spawn beside the station we just left, not at the distant edge (Task 9).
       fromStationId: this.station?.id,
     });
   }
 
-  // ── shop sub-view ─────────────────────────────────────────────────────────
-
-  /**
-   * Gear-listing row height. Historically a fixed 50 px, sized for the "M"
-   * scale's kind-badge + name two-line stack — at "L" scale the taller badge
-   * line bled into the name line beneath it (Task 3,
-   * `docs/plans/20260708-font-scale-and-faction-bugs.md`). Grows with the
-   * current font scale, floored at the historical 50 px.
-   */
   private get ROW_H(): number {
     const badgeStep = lineStepFor(scaledFont(11));
     const nameStep = lineStepFor(scaledFont(13));
@@ -1033,7 +912,6 @@ export class StationScene extends GameScene {
     panel.stroke({ color: 0x334455, width: 1 });
     this.mainContainer!.addChild(panel);
 
-    // Header
     const title = scaledText("[ МАГАЗИН СНАРЯЖЕНИЯ ]", 18, 0x44ddff, {
       rawColor: true,
       fontFamily: "monospace",
@@ -1084,13 +962,6 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(mask);
     this.mainContainer!.addChild(listContainer);
 
-    // "Owned" = in the canonical owned-uninstalled warehouse OR the legacy bag
-    // OR installed in the loadout. A purchase warehouses into `ownedGearIds`
-    // (screen-consistency Task 4, never auto-installs), so the warehouse set must
-    // be included — otherwise the shop keeps offering [Купить] for an item just
-    // bought, letting the player re-buy duplicates. Mirrors EquipmentShopScene's
-    // owned set (canonical warehouse ∪ bag ∪ installed) so the badge reads the
-    // same at both entry points.
     const ownedIds = [
       ...(this.gameEngine?.player?.inventory.ownedGearIds ?? []),
       ...(this.gameEngine?.player?.inventory.modules.map((m) => m.id) ?? []),
@@ -1107,7 +978,6 @@ export class StationScene extends GameScene {
       rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
       listContainer.addChild(rowBg);
 
-      // Kind badge
       const kindBadge = scaledText(
         KIND_LABEL[listing.gear.kind],
         11,
@@ -1120,7 +990,6 @@ export class StationScene extends GameScene {
       kindBadge.eventMode = "none";
       listContainer.addChild(kindBadge);
 
-      // Tech level
       const tech = scaledText(`T${listing.gear.techLevel}`, 11, 0x556677, {
         rawColor: true,
         fontFamily: "monospace",
@@ -1130,20 +999,15 @@ export class StationScene extends GameScene {
       tech.eventMode = "none";
       listContainer.addChild(tech);
 
-      // Name
       const name = scaledText(listing.gear.name, 13, 0xddeeff, {
         rawColor: true,
         fontFamily: "monospace",
       });
       name.x = PX + PAD + 6;
-      // Stacked below the kind badge — steps by the badge's own font-scale
-      // line height so the two never overlap at "L" (Task 3: the fixed +26
-      // offset assumed the "M"-scale ~14 px badge-line height).
       name.y = kindBadgeTop + lineStepFor(scaledFont(11));
       name.eventMode = "none";
       listContainer.addChild(name);
 
-      // Price
       const price = scaledText(
         `${listing.price} ₡`,
         13,
@@ -1156,7 +1020,6 @@ export class StationScene extends GameScene {
       price.eventMode = "none";
       listContainer.addChild(price);
 
-      // Buy button
       const buyLabel = isOwned ? "Есть" : canAfford ? "[Купить]" : "Мало₡";
       const buyColor = isOwned ? 0x448844 : canAfford ? 0x44ff88 : 0x554433;
       const buyBtn = scaledText(buyLabel, 13, buyColor, {
@@ -1185,7 +1048,6 @@ export class StationScene extends GameScene {
       listContainer.addChild(buyBtn);
     }
 
-    // Back button
     const back = scaledText("[ ← Назад ]", 14, 0x88ccff, {
       rawColor: true,
       fontFamily: "monospace",
@@ -1208,8 +1070,6 @@ export class StationScene extends GameScene {
     });
     this.mainContainer!.addChild(back);
 
-    // Toast slot so purchases in the gear shop confirm on screen (mirrors
-    // renderMain). Without it `this.toast` is null and `showToast` no-ops.
     this.addToastSlot(PX, PY, PW, PH);
   }
 
@@ -1223,22 +1083,11 @@ export class StationScene extends GameScene {
       GL_COUNTERPARTY.EQUIPMENT,
       `Покупка: ${listing.gear.name}`,
     );
-    // SR-canon (screen-consistency Task 4): a purchase ALWAYS lands in the
-    // warehouse — the canonical owned-uninstalled store (shown in the hangar
-    // ТРЮМ, sellable from there) — identical to the planet Верфь gear tab. The
-    // shop never auto-installs; fitting is a separate hangar action, so the same
-    // «buy this gear» action lands in the same place regardless of where it was
-    // bought (planet vs. station). Spares the current hull can't yet hold are
-    // stocked and fitted later (by category + mass) in the hangar.
     acquireUninstalledGear(player, listing.gear.id);
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
-    // Re-render first (rebuilds the toast slot), THEN toast — the re-render
-    // wipes any toast set before it, so a pre-render message never paints.
     this.render();
     this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
   }
-
-  // ── micromodule shop sub-view ──────────────────────────────────────────────
 
   private renderMicromoduleShop(): void {
     const sw = this.renderer.app.screen.width;
@@ -1283,10 +1132,6 @@ export class StationScene extends GameScene {
     credText.eventMode = "none";
     this.mainContainer!.addChild(credText);
 
-    // Historically a fixed 46 px, sized for the "M" scale's tier-badge + name
-    // two-line stack — at "L" scale the taller badge line bled into the name
-    // line beneath it (Task 3). Grows with the current font scale, floored at
-    // the historical 46 px.
     const ROW = Math.max(
       46,
       6 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(13)) + 6,
@@ -1294,8 +1139,6 @@ export class StationScene extends GameScene {
     let rowY = PY + 50;
     const TIER_BONUS = ["", "+20%", "+12%", "+6%"] as const;
 
-    // The full catalog (21 entries) overflows the panel — slice from the scroll
-    // offset so every micromodule is reachable at a single station.
     const visibleRows = Math.max(1, Math.floor((PH - 96 - 50) / ROW) + 1);
     this.micromoduleVisibleRows = visibleRows;
     this.micromoduleScroll = Math.max(
@@ -1343,9 +1186,6 @@ export class StationScene extends GameScene {
       tierBadge.eventMode = "none";
       this.mainContainer!.addChild(tierBadge);
 
-      // Stacked below the tier badge — steps by the badge's own font-scale
-      // line height so the two never overlap at "L" (Task 3: the fixed +24
-      // offset assumed the "M"-scale ~14 px badge-line height).
       const nameTop = tierBadgeTop + lineStepFor(scaledFont(11));
       const nameText = scaledText(mm.name, 13, 0xddeeff, {
         rawColor: true,
@@ -1396,8 +1236,6 @@ export class StationScene extends GameScene {
         buyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
           const result = buyMicromodule(this.gameEngine?.bank, player, mm);
-          // Re-render first (rebuilds the toast slot), THEN toast — the
-          // re-render wipes any toast set before it.
           this.render();
           if (result.ok) {
             this.showToast(`Куплено: ${mm.name}`, 0x44ff88);
@@ -1464,8 +1302,6 @@ export class StationScene extends GameScene {
     });
     this.mainContainer!.addChild(back);
 
-    // Toast slot so micromodule purchases confirm on screen (mirrors
-    // renderMain). Without it `this.toast` is null and `showToast` no-ops.
     this.addToastSlot(PX, PY, PW, PH);
   }
 
@@ -1479,9 +1315,6 @@ export class StationScene extends GameScene {
       this.render();
       return;
     }
-    // The shared modal mutates the canonical loadout + owned micromodules; the
-    // scene supplies toast + the "back to hangar" close (same component the
-    // equipment shop mounts, so the apply flow is identical wherever it opens).
     this.micromoduleApplyPanel.render({
       container: this.mainContainer,
       player,
@@ -1495,8 +1328,6 @@ export class StationScene extends GameScene {
       },
     });
   }
-
-  // ── research upgrade sub-view ─────────────────────────────────────────────
 
   private renderResearch(): void {
     const sw = this.renderer.app.screen.width;
@@ -1517,8 +1348,6 @@ export class StationScene extends GameScene {
     this.researchPanel.render(this.mainContainer!, sw, sh);
   }
 
-  // ── toast ─────────────────────────────────────────────────────────────────
-
   private addToastSlot(px: number, py: number, pw: number, ph: number): void {
     const toast = scaledText("", 13, 0x44ff88, {
       rawColor: true,
@@ -1536,19 +1365,12 @@ export class StationScene extends GameScene {
   private renderHangar(): void {
     const player = this.gameEngine?.player;
     if (!player || !this.mainContainer) return;
-    // The shared hangar component draws the full fitting board; the scene wires
-    // in its canonical model (player + loadout) and the scene-owned concerns
-    // (toast, navigation, re-render) so fitting behaves identically wherever the
-    // panel is mounted (here and in the equipment shop).
     this.hangarPanel.render({
       container: this.mainContainer,
       player,
       loadout: this.gameEngine?.playerLoadout ?? null,
       bank: this.gameEngine?.bank ?? null,
       equipment: this.equipment,
-      // Match this station's own "Ремонт" pricing (REPAIR_DISCOUNT) so the
-      // hangar tab's СЕРВИСНЫЙ ЦЕНТР can't undercut the same station's
-      // discounted rate with the planet Верфь's flat 2 cr/HP baseline.
       repairRatePerHp:
         8 * (this.station ? REPAIR_DISCOUNT[this.station.type] : 1.0),
       presets: this.gameEngine?.playerLoadoutPresets ?? [],
@@ -1573,42 +1395,24 @@ export class StationScene extends GameScene {
     });
   }
 
-  /** Screen-coord drop zones for the current hangar render (read-only, for E2E). */
   e2eDropZones(): ReturnType<HangarPanel["getDropZones"]> {
     return this.hangarPanel.getDropZones();
   }
 
-  /** Screen-coord drag-source chip rects for the current hangar render (E2E). */
   e2eMicromoduleChips(): ReturnType<HangarPanel["getChipRects"]> {
     return this.hangarPanel.getChipRects();
   }
 
-  /** Open the hangar fitting board (navigation hook for E2E; not the interaction). */
   e2eOpenHangar(): void {
     this.view = "hangar";
     this.render();
   }
 
-  /**
-   * Return to the station's main service menu — the close half of the
-   * {@link e2eOpenHangar} navigation hook. Used by the live dev autopilot's
-   * refit executors (`installAutopilotHook.ts` → `equipmentQueries`/
-   * `engineQueries` via `runInHangarPanel`) so a repair / gear buy / hull
-   * upgrade / micromodule purchase is watchable through the real `HangarPanel`
-   * (opened, mutated, closed) instead of a silent domain-only mutation
-   * (Task 5, docs/plans/20260727-autopilot-ui-parity-fixes.md). Idempotent.
-   */
   e2eCloseHangar(): void {
     this.view = "main";
     this.render();
   }
 
-  /**
-   * Why an install is blocked, or null when it would succeed — delegates to the
-   * shared {@link explainInstallBlock} helper (one source of truth with the
-   * hangar warehouse install path and the equipment-shop per-listing hint).
-   * Public so the hangar-layout test can assert the block reason directly.
-   */
   explainInstallBlock(loadout: ShipLoadout, gearId: string): string | null {
     return explainInstallBlock(loadout, gearId);
   }
@@ -1624,8 +1428,6 @@ export class StationScene extends GameScene {
       }, 2500);
     }
   }
-
-  // ── input ─────────────────────────────────────────────────────────────────
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.key === "Escape") {

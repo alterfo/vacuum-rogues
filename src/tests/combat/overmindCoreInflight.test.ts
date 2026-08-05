@@ -8,21 +8,15 @@ import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
 
-/**
- * Task 5 (hex removal): the OVERMIND-core final boss used to hop to the hex
- * `SceneType.COMBAT`. It now resolves in real-time in-flight combat — the prompt
- * spawns the core as an aggressive in-flight combatant and killing it wins the
- * game. Both assertions would have failed before this change (the boss had no
- * in-flight path and transitioned scenes instead).
- */
 describe("OVERMIND core — real-time in-flight boss (no hex CombatScene)", () => {
-  function makeHarness(): {
+  function makeHarness(overmindSystems: string[] = []): {
     manager: NpcShipManager;
     engaged: NpcShipSprite[];
     targeted: NpcShipSprite[];
     transitions: unknown[];
     wins: boolean[];
-    galaxy: { npcShips: unknown[]; id: string };
+    liberations: Array<{ id: string; source: string }>;
+    galaxy: { npcShips: unknown[]; id: string; overmindSystems: string[] };
   } {
     const stage = new Container();
     const uiLayer = new Container();
@@ -39,7 +33,18 @@ describe("OVERMIND core — real-time in-flight boss (no hex CombatScene)", () =
     const transitions: unknown[] = [];
     const wins: boolean[] = [];
 
-    const galaxy = { npcShips: [], id: "g1" };
+    const liberations: Array<{ id: string; source: string }> = [];
+    const galaxy = {
+      npcShips: [] as unknown[],
+      id: "g1",
+      overmindCoreSystemId: "core_sys",
+      overmindSystems: [...overmindSystems],
+      tryLiberate(id: string, source: string) {
+        liberations.push({ id, source });
+        galaxy.overmindSystems = galaxy.overmindSystems.filter((s) => s !== id);
+        return true;
+      },
+    };
     const gameEngine = {
       galaxy,
       player: { currentSystemId: "core_sys" },
@@ -70,7 +75,15 @@ describe("OVERMIND core — real-time in-flight boss (no hex CombatScene)", () =
       deps,
     );
     manager.initialize();
-    return { manager, engaged, targeted, transitions, wins, galaxy };
+    return {
+      manager,
+      engaged,
+      targeted,
+      transitions,
+      wins,
+      liberations,
+      galaxy,
+    };
   }
 
   it("spawns the core as an in-flight combatant, no scene transition", () => {
@@ -97,10 +110,6 @@ describe("OVERMIND core — real-time in-flight boss (no hex CombatScene)", () =
       manager as unknown as { spawnOvermindCoreCombatant(): void }
     ).spawnOvermindCoreCombatant();
 
-    // The boss must live in the domain galaxy — npcsPresentInSystem reads it, and
-    // a day boundary during the fight calls refresh() which begins-departure on
-    // any sprite absent from galaxy.npcShips. Boss stats folded the shield layer
-    // into the hull (300 + 150 = 450).
     const ships = galaxy.npcShips as { id: string; maxHull: number }[];
     const coreShip = ships.find((n) => n.id === "overmind_core");
     expect(coreShip).toBeDefined();
@@ -111,8 +120,6 @@ describe("OVERMIND core — real-time in-flight boss (no hex CombatScene)", () =
     const core = sprites.find((s) => s.npc.id === "overmind_core");
     expect(core).toBeDefined();
 
-    // A refresh (fired on every in-flight day boundary) must NOT send the boss
-    // departing — it would if the core were absent from galaxy.npcShips.
     manager.refresh();
     expect((core as unknown as { departing: boolean }).departing).toBe(false);
 
@@ -131,8 +138,30 @@ describe("OVERMIND core — real-time in-flight boss (no hex CombatScene)", () =
     manager.destroy();
   });
 
-  it("killing the core in-flight wins the game", () => {
-    const { manager, wins } = makeHarness();
+  it("killing the core liberates it player-credited but does NOT win while remnant systems hold out", () => {
+    const { manager, wins, liberations, galaxy } = makeHarness([
+      "core_sys",
+      "s2",
+    ]);
+    (
+      manager as unknown as { spawnOvermindCoreCombatant(): void }
+    ).spawnOvermindCoreCombatant();
+
+    const sprites = (manager as unknown as { npcSprites: NpcShipSprite[] })
+      .npcSprites;
+    const core = sprites.find((s) => s.npc.id === "overmind_core");
+    expect(core).toBeDefined();
+
+    manager.handleInFlightDeath(core as NpcShipSprite, () => 0.99);
+
+    expect(liberations).toEqual([{ id: "core_sys", source: "player" }]);
+    expect(galaxy.overmindSystems).toEqual(["s2"]);
+    expect(wins).toEqual([]);
+    manager.destroy();
+  });
+
+  it("killing the core as the LAST Overmind system wins the game", () => {
+    const { manager, wins } = makeHarness(["core_sys"]);
     (
       manager as unknown as { spawnOvermindCoreCombatant(): void }
     ).spawnOvermindCoreCombatant();
@@ -156,7 +185,6 @@ describe("OVERMIND core — real-time in-flight boss (no hex CombatScene)", () =
     const sprites = (manager as unknown as { npcSprites: NpcShipSprite[] })
       .npcSprites;
     const core = sprites.find((s) => s.npc.id === "overmind_core");
-    // Rename the spawned sprite's npc id so it is treated as an ordinary kill.
     (core as unknown as { npc: { id: string } }).npc.id = "pirate_42";
     manager.handleInFlightDeath(core as NpcShipSprite, () => 0.99);
     expect(wins).toEqual([]);

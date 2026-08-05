@@ -56,7 +56,6 @@ function connect(a: StarSystem, b: StarSystem): void {
   b.connections.push(new WarpPath(b.id, a.id, 2));
 }
 
-/** Minimal two-system galaxy with a seeded cross-system price spread. */
 function makeGalaxy(): Galaxy {
   const cheap = makeSystem("S1", [makePlanet("S1p", 0.4)]);
   const dear = makeSystem("S2", [makePlanet("S2p", 2.5)]);
@@ -116,13 +115,9 @@ function makeDeps(
     galaxySimulator: new GalaxySimulator(),
     tradeSystem: new TradeSystem(),
     bankBus,
-    checkWinCondition: () => false,
     checkExpiredQuests: vi.fn(),
     isOutcomeShown: () => false,
     showGameOutcomeScreen: vi.fn(),
-    isWinScreenShown: () => false,
-    markWinScreenShown: vi.fn(),
-    transitionToWinScreen: vi.fn(),
     invalidateInfoRegistryCache: vi.fn(),
     ...overrides,
   };
@@ -219,7 +214,6 @@ describe("DayTickController", () => {
     new DayTickController(deps).run();
     expect(deps.showGameOutcomeScreen).toHaveBeenCalledWith(true);
 
-    // Once the outcome guard reports shown, a second run must not re-dispatch.
     const deps2 = makeDeps(galaxy, { isOutcomeShown: () => true });
     new DayTickController(deps2).run();
     expect(deps2.showGameOutcomeScreen).not.toHaveBeenCalled();
@@ -230,33 +224,6 @@ describe("DayTickController", () => {
     const deps = makeDeps(galaxy);
     new DayTickController(deps).run();
     expect(deps.showGameOutcomeScreen).toHaveBeenCalledWith(false);
-  });
-
-  it("triggers the win-condition scene transition when eligible and no outcome overlay has fired", () => {
-    const deps = makeDeps(galaxy, { checkWinCondition: () => true });
-    new DayTickController(deps).run();
-    expect(deps.markWinScreenShown).toHaveBeenCalledTimes(1);
-    expect(deps.transitionToWinScreen).toHaveBeenCalledTimes(1);
-  });
-
-  it("suppresses the win-condition transition once an outcome overlay has already shown", () => {
-    const deps = makeDeps(galaxy, {
-      checkWinCondition: () => true,
-      isOutcomeShown: () => true,
-    });
-    new DayTickController(deps).run();
-    expect(deps.markWinScreenShown).not.toHaveBeenCalled();
-    expect(deps.transitionToWinScreen).not.toHaveBeenCalled();
-  });
-
-  it("suppresses the win-condition transition once the win screen has already shown", () => {
-    const deps = makeDeps(galaxy, {
-      checkWinCondition: () => true,
-      isWinScreenShown: () => true,
-    });
-    new DayTickController(deps).run();
-    expect(deps.markWinScreenShown).not.toHaveBeenCalled();
-    expect(deps.transitionToWinScreen).not.toHaveBeenCalled();
   });
 
   it("does not crash for a galaxy with fewer than two market-bearing systems", () => {

@@ -69,7 +69,6 @@ describe("Economy re-balance — Task 3", () => {
       const mean =
         quests.reduce((s, q) => s + q.template.reward.credits, 0) /
         quests.length;
-      // Old 1-hop DELIVERY would yield ≈200 credits; new baseline is ≥600
       expect(mean).toBeGreaterThan(600);
     });
 
@@ -93,10 +92,12 @@ describe("Economy re-balance — Task 3", () => {
       }
     });
 
-    it("all tech-7 and tech-8 gear has basePrice ≤ 14000", () => {
-      const endgame = GEAR_CATALOG.filter((g) => g.techLevel >= 7);
-      expect(endgame.length).toBeGreaterThan(0);
-      for (const g of endgame) {
+    it("all always-available tech-7/8 gear has basePrice ≤ 14000", () => {
+      const top = GEAR_CATALOG.filter(
+        (g) => g.techLevel >= 7 && g.minDay === undefined,
+      );
+      expect(top.length).toBeGreaterThan(0);
+      for (const g of top) {
         expect(
           g.basePrice,
           `${g.id} (tech ${g.techLevel}) basePrice out of band`,
@@ -150,8 +151,10 @@ describe("Economy re-balance — Task 3", () => {
       }
     });
 
-    it("tech 7-8 gear prices fall in 10000-14000", () => {
-      const items = GEAR_CATALOG.filter((g) => g.techLevel >= 7);
+    it("always-available tech 7-8 gear prices fall in 10000-14000", () => {
+      const items = GEAR_CATALOG.filter(
+        (g) => g.techLevel >= 7 && g.minDay === undefined,
+      );
       expect(items.length).toBeGreaterThan(0);
       for (const g of items) {
         expect(
@@ -160,6 +163,22 @@ describe("Economy re-balance — Task 3", () => {
         ).toBeGreaterThanOrEqual(10000);
         expect(g.basePrice, `${g.id} tech=${g.techLevel}`).toBeLessThanOrEqual(
           14000,
+        );
+      }
+    });
+
+    it("day-gated endgame gear prices fall in 36000-240000", () => {
+      const items = GEAR_CATALOG.filter(
+        (g) => g.minDay !== undefined && g.id !== "eq_engine_v",
+      );
+      expect(items.length).toBeGreaterThan(0);
+      for (const g of items) {
+        expect(
+          g.basePrice,
+          `${g.id} tech=${g.techLevel}`,
+        ).toBeGreaterThanOrEqual(36000);
+        expect(g.basePrice, `${g.id} tech=${g.techLevel}`).toBeLessThanOrEqual(
+          240000,
         );
       }
     });

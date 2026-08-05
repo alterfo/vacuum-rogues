@@ -136,31 +136,6 @@ function makeDeps(
   return Object.assign(deps, { state });
 }
 
-describe("EndgameController.checkWinCondition", () => {
-  it("false with no player", () => {
-    const deps = makeDeps();
-    expect(new EndgameController(deps).checkWinCondition()).toBe(false);
-  });
-
-  it("false below veteran rank", () => {
-    const deps = makeDeps();
-    deps.state.player = makePlayer({ rank: 1 });
-    expect(new EndgameController(deps).checkWinCondition()).toBe(false);
-  });
-
-  it("false with fewer than 3 allied factions", () => {
-    const deps = makeDeps();
-    deps.state.player = makePlayer({ rank: 2, alliedFactions: 2 });
-    expect(new EndgameController(deps).checkWinCondition()).toBe(false);
-  });
-
-  it("true at veteran rank with 3+ allied factions", () => {
-    const deps = makeDeps();
-    deps.state.player = makePlayer({ rank: 2, alliedFactions: 3 });
-    expect(new EndgameController(deps).checkWinCondition()).toBe(true);
-  });
-});
-
 describe("EndgameController.showGameOutcomeScreen", () => {
   it("liberates the core + flips arc status to won on a win", () => {
     const deps = makeDeps();

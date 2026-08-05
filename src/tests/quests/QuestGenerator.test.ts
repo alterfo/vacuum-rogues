@@ -9,10 +9,6 @@ import {
   type GeneratedQuest,
 } from "@/systems/quests/QuestGenerator";
 
-/**
- * Minimal star-system stub. The generator only reads id/name/connections/
- * planets[].{id,isHabitable}, so we avoid constructing real Markets etc.
- */
 function sys(
   id: string,
   name: string,
@@ -33,7 +29,6 @@ function sys(
   } as unknown as StarSystem;
 }
 
-/** A linear chain A—B—C—D (origin A): B=1 jump, C=2, D=3. */
 function chainGalaxy(): StarSystem[] {
   return [
     sys("A", "Альфа", ["B"]),
@@ -76,7 +71,6 @@ describe("QuestGenerator", () => {
 
   it("sends routine quests to OTHER systems with correct jump distance", () => {
     const dist: Record<string, number> = { B: 1, C: 2, D: 3 };
-    // Force routine-only by disabling text-quests.
     const board = generateQuestBoard(baseOpts({ count: 40, textRatio: 0 }));
     for (const q of board) {
       expect(q.targetSystemId).not.toEqual("A"); // galaxy reach (US-082)
@@ -110,7 +104,6 @@ describe("QuestGenerator", () => {
   it("mixes in text-quests at roughly the configured ratio (~1 in 5)", () => {
     let text = 0;
     let total = 0;
-    // Vary planet/day to sample many independent boards.
     for (let p = 0; p < 60; p++) {
       for (let d = 0; d < 5; d++) {
         const board = generateQuestBoard(
@@ -138,7 +131,6 @@ describe("QuestGenerator", () => {
   });
 
   it("text-quests are local and have no deadline", () => {
-    // textRatio=1 → every slot is a text-quest.
     const board = generateQuestBoard(baseOpts({ count: 6, textRatio: 1 }));
     for (const q of board) {
       expect(q.template.type).toEqual(QuestType.TEXT_ADVENTURE);
@@ -165,21 +157,17 @@ describe("QuestGenerator", () => {
       }
     };
 
-    // Routine types (DELIVERY/BOUNTY/ESCORT/DIPLOMACY/EXPLORATION) over many slots.
     record(
       generateQuestBoard(
         baseOpts({ count: 200, textRatio: 0, eliteRatio: 0, chainRatio: 0 }),
       ),
     );
-    // Text adventures.
     record(generateQuestBoard(baseOpts({ count: 10, textRatio: 1 })));
-    // Local delivery (isolated origin → jumps=0 fallback).
     record(
       generateQuestBoard(
         baseOpts({ systems: [sys("A", "Альфа", [])], count: 5 }),
       ),
     );
-    // DEFENSE quest (OVERMIND adjacent to a contestable system).
     const omGalaxy = [
       sys("A", "Альфа", ["B"]),
       sys("B", "Бета", ["A", "O"]),
@@ -253,6 +241,30 @@ describe("QuestGenerator", () => {
             : "Дельта",
       );
       expect(q.template.description).toMatch(/\d+ ₢/);
+    }
+  });
+
+  it("late-campaign boards pay era-scaled rewards (same board, day 900 ≫ day 0)", () => {
+    const early = generateQuestBoard(
+      baseOpts({ count: 20, textRatio: 0, day: 0 }),
+    );
+    const late = generateQuestBoard(
+      baseOpts({ count: 20, textRatio: 0, day: 900 }),
+    );
+    const maxEarly = Math.max(...early.map((q) => q.template.reward.credits));
+    const maxLate = Math.max(...late.map((q) => q.template.reward.credits));
+    expect(maxLate).toBeGreaterThan(maxEarly * 20);
+  });
+
+  it("era scaling never inflates experience (rank pacing stays on the base curve)", () => {
+    const late = generateQuestBoard(
+      baseOpts({ count: 20, textRatio: 0, day: 900 }),
+    );
+    for (const q of late) {
+      expect(q.template.reward.experience).toBeLessThan(
+        q.template.reward.credits,
+      );
+      expect(q.template.reward.experience).toBeLessThan(3000);
     }
   });
 });

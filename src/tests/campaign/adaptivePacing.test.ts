@@ -183,11 +183,11 @@ describe("adaptiveSpreadIntervalDays — baseline creep floor", () => {
 });
 
 describe("adaptive pacing — the campaign always resolves", () => {
-  it("a permanently idle player still loses the galaxy well before day 1080", () => {
+  it("a permanently idle player still loses the fully-captured galaxy before day 1080", () => {
     const run = runIdleCampaign(24, () => 0, 1080);
     expect(run.status).toBe("lost");
     expect(run.resolvedDay).toBeGreaterThan(ADAPTIVE_GRACE_DAYS);
-    expect(run.resolvedDay).toBeLessThan(900);
+    expect(run.resolvedDay).toBeLessThanOrEqual(1080);
     expect(run.engagedBeforeLoss).toBe(true);
   });
 
@@ -198,8 +198,8 @@ describe("adaptive pacing — the campaign always resolves", () => {
     expect(strong.resolvedDay).toBeLessThan(idle.resolvedDay);
   });
 
-  it("loss share and engagement semantics are unchanged by the adaptive clock", () => {
-    expect(GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE).toBe(0.85);
+  it("loss fires only at total capture (final-defeat share = 1)", () => {
+    expect(GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE).toBe(1);
     const state = {
       ...initialOvermindSpreadState(),
       dayZero: 1,

@@ -102,22 +102,27 @@ describe("Overmind arc — no spurious Victory", () => {
     expect(harness.errors().map((e) => e.message)).toEqual([]);
   });
 
-  it("STILL wins on a real rank+rep milestone (checkWinCondition is unchanged)", async () => {
+  it("a rank+rep milestone no longer triggers any victory — only total eradication wins", async () => {
     harness = await RealEngineHarness.boot({
       seed: "LEGIT_RANKREP_WIN",
       systemCount: 24,
     });
     await harness.newGame();
     const player = harness.player()!;
+    const galaxy = harness.galaxy()!;
+    const outcome = vi.spyOn(harness.engine, "showGameOutcomeScreen");
 
-    player.rank = 2; // VETERAN
-    expect(harness.engine.checkWinCondition()).toBe(false);
-
+    player.rank = 2;
     player.adjustReputation(FactionType.OUTLANDERS, 80);
     player.adjustReputation(FactionType.BASTIONS, 80);
     player.adjustReputation(FactionType.SYNDICATE, 80);
-    expect(harness.engine.checkWinCondition()).toBe(true);
 
+    harness.engine.advanceGalaxyDay();
+    harness.engine.advanceGalaxyDay();
+
+    expect(galaxy.overmindArc.status).not.toBe("won");
+    expect(outcome).not.toHaveBeenCalledWith(true);
+    expect(harness.engine.currentSceneType).not.toBe(SceneType.WIN_SCREEN);
     expect(harness.errors().map((e) => e.message)).toEqual([]);
   });
 });

@@ -1,12 +1,6 @@
-// English UI dictionary (additive translation of `ru.ts`).
-//
-// Keep in lockstep with `ru.ts` — identical key set (the parity test enforces
-// this). EN is the translated counterpart of each RU value.
-
 import type { Dict } from "./i18n";
 
 export const en: Dict = {
-  // --- common controls -----------------------------------------------------
   "common.back": "Back",
   "common.close": "Close",
   "common.cancel": "Cancel",
@@ -19,7 +13,6 @@ export const en: Dict = {
   "common.credits": "credits",
   "common.continue": "Continue",
 
-  // --- settings panel ------------------------------------------------------
   "settings.title": "SETTINGS",
   "settings.speed": "SPEED",
   "settings.font": "FONT",
@@ -30,12 +23,9 @@ export const en: Dict = {
   "settings.language": "LANGUAGE",
   "settings.on": "ON",
   "settings.off": "OFF",
-  // Language autonyms — identical to `ru.ts` on purpose (each language's own name
-  // is shown in its own script regardless of the active UI language).
   "lang.ru": "Русский",
   "lang.en": "English",
 
-  // --- accessibility panel (palette / reduced-motion / key remap) ----------
   "a11y.title": "ACCESSIBILITY",
   "a11y.palette": "PALETTE",
   "a11y.reducedMotion": "REDUCED MOTION",
@@ -52,10 +42,8 @@ export const en: Dict = {
   "action.journal": "Journal",
   "action.inventory": "Inventory",
 
-  // --- shared labels -------------------------------------------------------
   "label.creditsLine": "Credits: {n}",
 
-  // --- resources (market goods) --------------------------------------------
   "resource.FUEL": "Fuel",
   "resource.METALS": "Metals",
   "resource.CRYSTALS": "Crystals",
@@ -67,7 +55,6 @@ export const en: Dict = {
   "resource.LUXURY": "Luxury",
   "resource.DATA_CORES": "Data Cores",
 
-  // --- trade-route rumors (Info Center "Trade Opportunities" band) ----------
   "rumor.panelHeader": "TRADE OPPORTUNITIES",
   "rumor.panelEmpty": "No active trade routes",
   "rumor.panelNoIntel": "No intel yet — scout new systems",
@@ -77,7 +64,6 @@ export const en: Dict = {
   "rumor.expired":
     "Shipping {resource} from {from} to {to} no longer pays — the deal has ended.",
 
-  // --- Info Center news feed -----------------------------------------------
   "news.type.NPC_QUEST_COMPLETE": "[RANGER]",
   "news.type.PIRATE_ATTACK": "[ATTACK]",
   "news.type.MARKET_SHIFT": "[MARKET]",
@@ -118,7 +104,6 @@ export const en: Dict = {
   "news.lore6": "Paradoxes detected near the forbidden zone R-17",
   "news.lore7": "Rangers report anomalous activity in the nebula",
 
-  // --- factions (singular type) / alliances (plural) / NPC roles -----------
   "factionType.OUTLANDERS": "Outlander",
   "factionType.BASTIONS": "Bastion",
   "factionType.SYNDICATE": "Syndicate",
@@ -137,7 +122,6 @@ export const en: Dict = {
   "role.PATROL": "Patrol",
   "role.OVERMIND": "Overmind",
 
-  // --- main menu -----------------------------------------------------------
   "menu.title": "VACUUM ROGUES",
   "menu.intro":
     "The galaxy stands at a breaking point: the ancient Precursors have " +
@@ -158,7 +142,6 @@ export const en: Dict = {
   "menu.noSaves": "No saved games available",
   "menu.loadError": "Load failed. Start a new game.",
 
-  // --- new-game / faction selection ----------------------------------------
   "race.title": "CHOOSE YOUR FACTION",
   "race.back": "[ Back ]",
   "race.start": "START GAME",
@@ -195,7 +178,6 @@ export const en: Dict = {
   "race.stat.speed": "Speed: {value}",
   "race.stat.evasion": "Evasion: {value}",
 
-  // --- trade / market ------------------------------------------------------
   "trade.title": "MARKET — {planet}",
   "trade.colResource": "Resource",
   "trade.colBuy": "Buy",
@@ -213,7 +195,6 @@ export const en: Dict = {
   "trade.cargoFull": "Not enough cargo space",
   "trade.failed": "Trade failed",
 
-  // --- job board / quest types ---------------------------------------------
   "quest.type.DELIVERY": "Delivery",
   "quest.type.BOUNTY": "Bounty",
   "quest.type.ESCORT": "Escort",
@@ -236,7 +217,6 @@ export const en: Dict = {
   "jobBoard.requireRank": "Rank {rank}+",
   "jobBoard.busy": "Busy",
 
-  // --- comms / NPC contact panel -------------------------------------------
   "comms.option.trade": "Trade",
   "comms.option.hire": "Hire",
   "comms.option.ally": "Ally",
@@ -259,25 +239,21 @@ export const en: Dict = {
   "comms.cargo": "Cargo: {cargo}",
   "comms.shielded": "Target is field-shielded —\nscan impossible",
 
-  // --- captured-system landing denial (with recovery hint) -----------------
   "landing.denial.overmind":
     "System under Overmind control — landing impossible",
   "landing.denial.pirateRep":
     "Planet captured by pirates — reputation required. Pay pirates off to raise it",
 
-  // --- customs fine + standing-recovery hint (Task 7: no rep dead-end) ------
   "customs.fineReason": "Customs fine",
   "standing.recovery.faction":
     "Tip: complete faction quests to raise your standing",
   "standing.recovery.pirate":
     "Tip: pay pirates off to raise standing and regain access",
 
-  // --- player-driven liberation of a captured system -----------------------
   "flight.liberationHint":
     "System captured. Destroy every invader to liberate it",
   "flight.systemLiberated": "System {name} liberated!",
 
-  // --- pirate shakedown tribute («Откупиться») ------------------------------
   "flight.tributeReason": "Tribute to pirate «{name}»",
   "flight.turn.finishingDay": "⏸ Finishing the day…",
   "flight.turn.waiting": "⏳ Waiting… (the world moves)",
@@ -285,27 +261,24 @@ export const en: Dict = {
   "flight.tributePaidRep":
     "Paid {amount} cr. — {name} backs off. Pirate standing rises.",
 
-  // --- combat salvage (Task 5: killing a credit-carrying NPC pays out) ------
   "flight.salvageTrophy": "Salvage: +{amount} ₡",
   "flight.salvageReason": "Salvage from a destroyed ship",
 
-  // --- floating loot pickup (Task 6: collect drops by proximity) ------------
   "flight.lootPickup": "Picked up: {item}",
   "flight.lootTractor": "Gravity tractor collected: {item}",
   "flight.lootArtifact": "artifact",
   "flight.lootModule": "module",
 
-  // --- incoming-attacker warning (Task 5: threat indicator) -----------------
   "flight.incomingAttacker": "⚠ Incoming attacker: {name}!",
+  "flight.overmindCoreBroken":
+    "The Overmind core is destroyed — the swarm is beheaded! Liberate the remaining systems.",
   "flight.starMap": "Interstellar Map",
   "flight.inventoryTooltip": "Inventory",
   "flight.helpTooltip": "Help",
 
-  // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",
   "help.gotIt": "Got it",
 
-  // --- onboarding: welcome / goal intro ------------------------------------
   "help.welcome.title": "Welcome, rogue!",
   "help.welcome.body1":
     "You are a free pilot in a living galaxy. Your goal — get rich and stop" +
@@ -316,7 +289,6 @@ export const en: Dict = {
     " contract. The «?» button at the top right opens a hint for the current" +
     " screen at any time.",
 
-  // --- onboarding: faction selection / new game ----------------------------
   "help.RACE_SELECTION.title": "New Game",
   "help.RACE_SELECTION.body1":
     "Choose a faction and a difficulty mode before starting a new run. Your" +
@@ -328,7 +300,6 @@ export const en: Dict = {
   "help.RACE_SELECTION.control1": "Click a card — pick a faction",
   "help.RACE_SELECTION.control2": "Difficulty, then «Start Game» — begin",
 
-  // --- onboarding: space flight --------------------------------------------
   "help.SPACE_FLIGHT.title": "Space Flight",
   "help.SPACE_FLIGHT.body1":
     "You pilot your ship within a star system. Approach planets and stations" +
@@ -341,7 +312,6 @@ export const en: Dict = {
     "LMB on an object — interact (land / grapple / combat)",
   "help.SPACE_FLIGHT.control3": "Star map — hyperjump between systems",
 
-  // --- onboarding: star map ------------------------------------------------
   "help.STAR_MAP.title": "Star Map",
   "help.STAR_MAP.body1":
     "The galaxy map shows star systems and the links between them. Pick an" +
@@ -352,7 +322,6 @@ export const en: Dict = {
   "help.STAR_MAP.control1": "LMB on a system — select target",
   "help.STAR_MAP.control2": "Jump — travel to the selected system",
 
-  // --- onboarding: planet --------------------------------------------------
   "help.PLANET.title": "Planet",
   "help.PLANET.body1":
     "You are on a planet's surface. From here you can reach the local" +
@@ -364,7 +333,6 @@ export const en: Dict = {
   "help.PLANET.control1": "Establishment buttons — enter",
   "help.PLANET.control2": "Take off — return to flight",
 
-  // --- onboarding: trade ---------------------------------------------------
   "help.TRADE.title": "Trade",
   "help.TRADE.body1":
     "Buy low, sell high. Prices vary from planet to planet — carry goods to" +
@@ -375,7 +343,6 @@ export const en: Dict = {
   "help.TRADE.control1": "Buy / Sell — close a deal",
   "help.TRADE.control2": "Quantity — set the amount",
 
-  // --- onboarding: station -------------------------------------------------
   "help.STATION.title": "Space Station",
   "help.STATION.body1":
     "At a station you can refuel, repair, refit your ship in the hangar and" +
@@ -386,7 +353,6 @@ export const en: Dict = {
   "help.STATION.control1": "Hangar — outfit the ship",
   "help.STATION.control2": "Services — fuel / repair",
 
-  // --- onboarding: shipyard / equipment ------------------------------------
   "help.EQUIPMENT_SHOP.title": "Shipyard & Equipment",
   "help.EQUIPMENT_SHOP.body1":
     "Three tabs here: «Gear» — weapons, engines and modules; «Hull» — new" +
@@ -399,7 +365,6 @@ export const en: Dict = {
     "Hull — swap your hull, trading in the old one",
   "help.EQUIPMENT_SHOP.control3": "Hangar — install what you bought",
 
-  // --- onboarding: government ----------------------------------------------
   "help.GOVERNMENT.title": "Government",
   "help.GOVERNMENT.body1":
     "The local authorities hand out contracts and pay for services. Take a" +
@@ -410,7 +375,6 @@ export const en: Dict = {
   "help.GOVERNMENT.control1": "Take quest — accept a contract",
   "help.GOVERNMENT.control2": "Hand in — claim the reward",
 
-  // --- onboarding: information center ---------------------------------------
   "help.INFO_CENTER.title": "Information Center",
   "help.INFO_CENTER.body1":
     "The galaxy's news hub: prices, rumors of lucrative deals, system intel" +
@@ -421,7 +385,6 @@ export const en: Dict = {
   "help.INFO_CENTER.control1": "Search — find information",
   "help.INFO_CENTER.control2": "Rumors — learn about prices",
 
-  // --- onboarding: bank ----------------------------------------------------
   "help.BANK.title": "Bank",
   "help.BANK.body1":
     "The bank holds savings at interest and grants loans against future" +
@@ -432,7 +395,6 @@ export const en: Dict = {
   "help.BANK.control1": "Deposit — put money in",
   "help.BANK.control2": "Loan — borrow at interest",
 
-  // --- onboarding: inventory -----------------------------------------------
   "help.INVENTORY.title": "Inventory & Equipment",
   "help.INVENTORY.body1":
     "Here is your cargo and ship equipment. Install modules by slot, move" +
@@ -443,7 +405,6 @@ export const en: Dict = {
   "help.INVENTORY.control1": "Drag and drop — install / remove",
   "help.INVENTORY.control2": "Slots — module banks",
 
-  // --- onboarding: text quest ----------------------------------------------
   "help.TEXT_QUEST.title": "Text Adventure",
   "help.TEXT_QUEST.body1":
     "Before you is a story with choices. Read the text and pick an action —" +
@@ -453,7 +414,6 @@ export const en: Dict = {
     " hold, so choose deliberately.",
   "help.TEXT_QUEST.control1": "Pick an option — continue the story",
 
-  // --- onboarding: quest journal -------------------------------------------
   "help.quest-journal.title": "Quest Journal",
   "help.quest-journal.body1":
     "Your active quests are gathered here: what to do, where to fly and the" +
@@ -463,7 +423,6 @@ export const en: Dict = {
     " on the star map.",
   "help.quest-journal.control1": "LMB on a quest — details",
 
-  // --- onboarding: combat --------------------------------------------------
   "help.combat.title": "Tactical Combat Planning",
   "help.combat.body1":
     "Combat pauses the game: arm a weapon (its bar button), click an enemy" +
@@ -474,7 +433,6 @@ export const en: Dict = {
   "help.combat.control1": "Weapon → target — assign a shot",
   "help.combat.control2": "Turn — confirm the plan and run the round",
 
-  // --- tactical planning phase (pause-and-plan combat, Task 14.5b) ---------
   "combat.planning.enter": "⏸ Tactical planning — press Turn to confirm",
   "combat.planning.executing": "▶ Executing turn…",
   "combat.planning.armWeapon": "“{name}”: click a target",
@@ -483,7 +441,6 @@ export const en: Dict = {
     "“{weapon}” → {target} — out of range, fires on closing",
   "combat.planning.afterburner": "Afterburner",
 
-  // --- execute-window mechanics (Task 14.5c) --------------------------------
   "combat.execution.afterburnerEngaged":
     "🔥 Afterburner! Engine integrity: {integrity}%",
   "combat.execution.afterburnerSpent":
@@ -497,7 +454,6 @@ export const en: Dict = {
   "combat.execution.allyJoined": "{name} joins the fight on your side",
   "combat.execution.allyNone": "No one answered the call for help",
 
-  // --- combat consumables (tactical devices) -------------------------------
   "combat.consumable.category": "Tactical Device",
   "combat.consumable.shieldCell.name": "Shield Cell",
   "combat.consumable.shieldCell.desc": "Instantly restores the ship's shields.",
@@ -508,7 +464,6 @@ export const en: Dict = {
   "combat.consumable.jammer.desc":
     "Disables the target's weapons for several seconds.",
 
-  // --- in-combat comms («Связь») -------------------------------------------
   "combat.comms.category": "Comms",
   "combat.comms.bribe.name": "Bribe",
   "combat.comms.bribe.desc":
@@ -520,7 +475,6 @@ export const en: Dict = {
   "combat.comms.callHelp.desc":
     "A nearby friendly ship joins the fight on your side.",
 
-  // --- onboarding: refuel ---------------------------------------------------
   "help.refuel.title": "Refueling",
   "help.refuel.body1":
     "Landing on a planet or docking at a station instantly and freely tops" +
@@ -529,7 +483,6 @@ export const en: Dict = {
     "The station's paid «Refuel» service only matters if you burn fuel" +
     " again in flight — right after landing or docking, the tank is already full.",
 
-  // --- inventory scene: warehouse / cargo actions (Bug 2) -------------------
   "inventory.warehouseTitle": "WAREHOUSE",
   "inventory.warehouseEmpty": "Warehouse is empty",
   "inventory.install": "[Install]",
@@ -538,12 +491,10 @@ export const en: Dict = {
   "inventory.jettisonConfirm": "Confirm?",
   "inventory.overflowMore": "…and {n} more",
 
-  // --- info center: objects search (Bug 6) -----------------------------------
   "infoCenter.objectsPlaceholder": "Enter an NPC, planet, or system name...",
   "infoCenter.objectsHintOtherTab":
     "Search ships, planets, systems — OBJECTS tab",
 
-  // --- star-map purchase feedback (Bug 7) ------------------------------------
   "planet.starMapPurchased":
     "Map purchased for {price} ₡ — systems revealed: {revealed}",
   "planet.starMapPurchasedNoneNew":

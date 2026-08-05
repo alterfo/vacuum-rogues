@@ -8,6 +8,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import { SceneType, PlanetType } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
+import { techLevelWithUplift } from "@/systems/campaign/techUplift";
 import {
   GearKind,
   gearById,
@@ -55,13 +56,11 @@ interface ShopContext {
 
 type ShopTab = "gear" | "hull" | "hangar";
 
-/** The fitted slot the micromodule-apply modal targets (shop hangar tab). */
 interface MicromoduleApplyTarget {
   slotIndex: number;
   gearId: string;
 }
 
-/** Derive tech level from planet type (higher-tech worlds carry rarer gear). */
 function techLevelForPlanet(type: PlanetType): number {
   switch (type) {
     case PlanetType.INDUSTRIAL:
@@ -73,7 +72,6 @@ function techLevelForPlanet(type: PlanetType): number {
   }
 }
 
-/** Build a one-line stat summary for a gear item (shown on hover / detail). */
 export function gearStatLine(gear: Gear): string {
   if (gear.kind === GearKind.HULL) {
     return `HP: ${gear.hp}  Слоты: ${gear.slots}  Трюм: ${gear.cargo}`;
@@ -81,23 +79,12 @@ export function gearStatLine(gear: Gear): string {
   if (gear.kind === GearKind.WEAPON) {
     return `Урон: ${gear.damage}  Дальность: ${gear.range}`;
   }
-  // Engine speed is purely tech-level-driven (ShipLoadout.derivedStats never
-  // reads an engine's `potency`) — a "Мощность: <potency>" line would compare
-  // a number that doesn't actually affect speed, misleadingly implying a
-  // lower-potency same-tier engine (a genuine mass/price tradeoff) is slower.
   if ((gear as EquipmentSpec).equipmentClass === EquipmentClass.ENGINE) {
     return `Тех.ур.: ${gear.techLevel}  Масса: ${gear.mass}`;
   }
   return `Мощность: ${formatStat(gear.potency)}`;
 }
 
-/**
- * Find the installed gear whose slot-class matches `gear` — the item a purchase
- * would replace, used to show the "→ Заменит X" comparison. Weapons match by
- * {@link WeaponClass}, standard equipment by {@link EquipmentClass}; a hull has
- * no per-class replacement. Pure over an installed-id list (resolved through the
- * catalog) so it's unit-testable without a live loadout.
- */
 export function installedSameClass(
   installedIds: Iterable<string>,
   gear: Gear,
@@ -124,12 +111,6 @@ export function installedSameClass(
   return null;
 }
 
-/**
- * The comparison suffix appended to a shop row's stat line when the browsed
- * item would replace an installed one. Weapons compare by `damage`; engines by
- * tech level (speed is tech-driven, see {@link gearStatLine}); other equipment
- * by `potency`.
- */
 export function gearComparisonSuffix(gear: Gear, replacing: Gear): string {
   let delta: number;
   if (gear.kind === GearKind.WEAPON && replacing.kind === GearKind.WEAPON) {
@@ -148,7 +129,6 @@ export function gearComparisonSuffix(gear: Gear, replacing: Gear): string {
   return `  (${formatStatDelta(delta)} vs ${replacing.name})`;
 }
 
-/** Bank labels for the per-listing fit indicator (mirrors the hangar's banks). */
 const BANK_LABEL: Record<SlotCategory, string> = {
   weapon: "ОРУЖИЕ",
   engine: "ДВИГАТЕЛЬ",
@@ -156,12 +136,6 @@ const BANK_LABEL: Record<SlotCategory, string> = {
   equipment: "ОБОРУДОВАНИЕ",
 };
 
-/**
- * Render the per-listing fit hint: whether the item will fit the current hull
- * (by category + mass) once the player goes to install it from the warehouse.
- * Returns null for gear with no slot (a hull) so the row shows no indicator.
- * Colours stay ≥0xb4b4b4 readable: green «Влезет», amber «Нет слота», red «Перегруз».
- */
 function fitIndicator(fit: GearFit): { text: string; color: number } | null {
   switch (fit.status) {
     case "fits":
@@ -181,11 +155,6 @@ function fitIndicator(fit: GearFit): { text: string; color: number } | null {
   }
 }
 
-/**
- * Equipment shop scene (EPIC-007 / Feature 12): browse and purchase gear from
- * a planet's deterministic inventory. Credits are deducted immediately; bought
- * items land in player.inventory.modules (equip-to-slot comes in a later slice).
- */
 export class EquipmentShopScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
@@ -200,18 +169,12 @@ export class EquipmentShopScene extends GameScene {
   private readonly VISIBLE_ROWS = 7;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private detachWheel: (() => void) | null = null;
-  /** The shared slot-fitting hangar (same component StationScene mounts) — the
-   *  single fitting surface, shown on the АНГАР tab. */
   private readonly hangarPanel: HangarPanel;
-  /** The shared micromodule-apply modal, opened from the hangar's per-slot
-   *  "[установить микромодуль]" control. */
   private readonly micromoduleApplyPanel: MicromoduleApplyPanel;
-  /** Legacy-bag install path used by the hangar warehouse (engine/radar swaps). */
   private readonly equipment = new EquipmentSystem();
   private micromoduleApplyTarget: MicromoduleApplyTarget | null = null;
   private toast: Text | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
@@ -242,11 +205,6 @@ export class EquipmentShopScene extends GameScene {
     );
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so it sits above the panel and survives the
-   * scene's `render()` UI rebuilds.
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -287,11 +245,6 @@ export class EquipmentShopScene extends GameScene {
     this.planet = null;
   }
 
-  /**
-   * Open the АНГАР (shared {@link HangarPanel}) tab — navigation hook for E2E,
-   * mirroring {@link StationScene.e2eOpenHangar} so a visual-parity test can show
-   * the identical fitting surface from either entry point. Not the interaction.
-   */
   e2eOpenHangar(): void {
     this.activeTab = "hangar";
     this.render();
@@ -302,10 +255,10 @@ export class EquipmentShopScene extends GameScene {
     const system = this.gameEngine.galaxy.systems.find(
       (s) => s.id === this.gameEngine!.player?.currentSystemId,
     );
-    // Cap stock to the owning system's current research level — mirrors
-    // StationScene's gating so planet shops can't stock gear the local
-    // system hasn't researched yet.
-    const maxTechLevel = system?.techLevel ?? 1;
+    const maxTechLevel = techLevelWithUplift(
+      system?.techLevel ?? 1,
+      this.gameEngine.galaxy.gameDays,
+    );
     this.listings = generateShop({
       systemId: system?.id ?? "unknown",
       planetId: this.planet.id,
@@ -316,21 +269,12 @@ export class EquipmentShopScene extends GameScene {
     });
   }
 
-  // Gear-tab rows exclude hulls: hulls are bought via the КОРПУС tab's trade-in
-  // install path. A hull bought from the gear tab would land in the warehouse via
-  // `buyItem` → `acquireUninstalledGear`, where it can never be fitted (the hangar
-  // has no hull bank) — a credit-loss trap. The station shop excludes hulls for the
-  // same reason; this keeps the two gear-buy surfaces consistent. The full
-  // `this.listings` (with hulls) still feeds the КОРПУС tab (`renderHullPanel`).
   private gearListings(): GearListing[] {
     return this.listings.filter((l) => l.gear.kind !== GearKind.HULL);
   }
 
   private render(): void {
     if (!this.mainContainer) return;
-    // The АНГАР tab is the shared fitting surface: it fills the screen with the
-    // hangar board (its own backdrop + [Назад]), so it replaces the shop chrome
-    // rather than drawing under it — exactly how StationScene mounts the panel.
     if (this.activeTab === "hangar") {
       if (this.micromoduleApplyTarget) this.renderMicromoduleApplyPanel();
       else this.renderHangar();
@@ -356,7 +300,6 @@ export class EquipmentShopScene extends GameScene {
     panel.stroke({ width: 1, color: 0x1a4060 });
     this.mainContainer.addChild(panel);
 
-    // Header bar
     const header = new Graphics();
     header.rect(PX, PY, PW, 44);
     header.fill({ color: 0x081828 });
@@ -375,9 +318,6 @@ export class EquipmentShopScene extends GameScene {
 
     const credits = this.gameEngine?.player?.credits ?? 0;
     this.creditsText = scaledText(
-      // No space before ₡ — the scene-wide convention (matches every row-price
-      // and «Мало₡» label here; the gear-row price format is locked by
-      // equipmentShopFontScaleLayout.test.ts).
       `${credits.toLocaleString("ru")}₡`,
       14,
       0xffee55,
@@ -389,15 +329,11 @@ export class EquipmentShopScene extends GameScene {
     this.creditsText.y = PY + 14;
     this.mainContainer.addChild(this.creditsText);
 
-    // Tab switcher
     this.renderTabs(PX, PY + 44, PW);
 
     if (this.activeTab === "gear") {
-      // Column headers
       this.renderColumnHeaders(PX, PY + 76, PW);
 
-      // Scrollable item list — mask must be a child of the clipped container
-      // (PixiJS 8 rule: mask must be addChild()'d to the masked object)
       const listH = this.VISIBLE_ROWS * this.ROW_H;
       const listClip = new Container();
       this.mainContainer.addChild(listClip);
@@ -412,11 +348,8 @@ export class EquipmentShopScene extends GameScene {
 
       this.renderRows(PX, PY + 96, PW);
 
-      // Scroll buttons (outside clip so they're always visible)
       this.addScrollButtons(PX + PW - 28, PY + 96, listH);
 
-      // Current loadout strip (installed gear), then the ТРЮМ strip (owned but
-      // uninstalled gear, each with a sell action) below it.
       const stripY = PY + 96 + listH + 4;
       this.renderLoadoutStrip(PX, stripY, PW, 28);
       if (!this.holdContainer) {
@@ -429,7 +362,6 @@ export class EquipmentShopScene extends GameScene {
       this.renderHullPanel(PX, PY + 76, PW, PH - 76 - 44);
     }
 
-    // Back button
     const back = scaledText("[ НАЗАД ]", 14, 0xaaaaaa, {
       rawColor: true,
       fontWeight: "bold",
@@ -451,13 +383,7 @@ export class EquipmentShopScene extends GameScene {
     });
     this.mainContainer.addChild(back);
 
-    // Toast slot so gear/hull purchases + sales confirm on screen (the АНГАР
-    // tab already has one via HangarPanel). Without it `this.toast` is null and
-    // `showToast` no-ops on the СНАРЯЖЕНИЕ/КОРПУС tabs.
     this.addToastSlot(PX, PY, PW, PH);
-    // Mouse-wheel scroll is handled by a window-level listener (attached in
-    // initialize via attachWheelScroll); a federated `backdrop.on("wheel")`
-    // never fires because the list rows on top swallow the event.
   }
 
   private renderTabs(x: number, y: number, w: number): void {
@@ -512,10 +438,8 @@ export class EquipmentShopScene extends GameScene {
     );
 
     const currentClass = player?.ship.hullClass ?? "CORVETTE";
-    // Hold size + max hull come from the canonical loadout (single source of truth).
     const derived = this.gameEngine?.playerLoadout?.derivedStats();
     const cargo = derived?.cargo ?? "—";
-    // Show current/max hull (not just max) so a damaged hull reads correctly.
     const maxHull = derived?.maxHull ?? player?.ship.maxHull;
     const hp =
       player && maxHull !== undefined
@@ -554,8 +478,6 @@ export class EquipmentShopScene extends GameScene {
       const rowY = y + 34 + i * ROW;
       const playerCredits = player?.credits ?? 0;
       const isCurrent = player?.ship.hullClass === hull.hullClass;
-      // Installing a replacement trades in the current hull, so the player only
-      // needs the net (price − trade-in). The current-hull row trades nothing.
       const tradeIn =
         currentHull && currentHull.id !== hull.id
           ? hullTradeInPrice(currentHull)
@@ -604,7 +526,6 @@ export class EquipmentShopScene extends GameScene {
       priceText.y = rowY + 16;
       this.mainContainer.addChild(priceText);
 
-      // Show the trade-in credit for the old hull so the net cost is legible.
       if (tradeIn > 0) {
         const tradeInText = scaledText(
           `сдача +${tradeIn.toLocaleString("ru")}₡`,
@@ -662,19 +583,11 @@ export class EquipmentShopScene extends GameScene {
     const player = this.gameEngine?.player;
     const loadout = this.gameEngine?.playerLoadout;
     if (!player || !loadout) return;
-    // Installing a replacement trades in the old hull, so the player only needs
-    // to afford the net (price − trade-in), not the full price.
     const tradeIn =
       loadout.hull.id === hull.id ? 0 : hullTradeInPrice(loadout.hull);
     const netPrice = Math.max(0, listing.price - tradeIn);
     if (player.credits < netPrice) return;
 
-    // The canonical loadout is the single source of truth: the shared
-    // trade-in flow charges the new hull, credits the old hull's trade-in
-    // through the banking bus, swaps the loadout (re-bagging gear that no
-    // longer fits a smaller hull losslessly), then projects the new hull's HP
-    // pool + class label onto the live ship. The loadout always holds exactly
-    // one hull, so the player can never end hull-less.
     const result = buyHullWithTradeIn(
       this.gameEngine?.bank,
       player,
@@ -683,8 +596,6 @@ export class EquipmentShopScene extends GameScene {
       listing.price,
     );
 
-    // A hull swap is the single largest transaction in the shop — give it the
-    // same purchase audio cue every other buy path plays.
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
 
     logger.info(
@@ -695,9 +606,6 @@ export class EquipmentShopScene extends GameScene {
         ".",
     );
 
-    // Rebuild first (mounts a fresh toast slot), THEN toast — rebuild() wipes
-    // the container, so a pre-rebuild message never paints. The КОРПУС tab was
-    // silent on the largest transaction in the game before this.
     this.rebuild();
     this.showToast(`Установлен корпус: ${hull.name}`, 0x44ff88);
   }
@@ -709,10 +617,6 @@ export class EquipmentShopScene extends GameScene {
     this.renderer.uiLayer.addChild(this.mainContainer);
     this.listContainer = null;
     this.creditsText = null;
-    // `holdContainer` was a child of the destroyed `mainContainer`, so it is now
-    // destroyed too. Null it (and its layout) so `render()` re-creates and
-    // re-parents it instead of calling `renderHold()` on a dead container. The
-    // toast lives on the container too, so null it for the same reason.
     this.holdContainer = null;
     this.holdPos = null;
     this.toast = null;
@@ -739,30 +643,16 @@ export class EquipmentShopScene extends GameScene {
     this.mainContainer!.addChild(divider);
   }
 
-  /** Gear IDs currently installed in the canonical loadout. */
   private installedGearIds(): Set<string> {
     return new Set(this.gameEngine?.playerLoadout?.installedGearIds() ?? []);
   }
 
-  /**
-   * Find the currently installed gear of the same slot-class as `gear` (weapon
-   * or equipment) — used to show "→ Заменит X" in the comparison column. Weapons
-   * now get the same treatment equipment always had.
-   */
   private installedOfSameClass(gear: Gear): Gear | null {
     const loadout = this.gameEngine?.playerLoadout;
     if (!loadout) return null;
     return installedSameClass(loadout.installedGearIds(), gear);
   }
 
-  /**
-   * Gear-listing row height. Historically a fixed 52 px, sized for the "M"
-   * scale's ~14 px name-line height + ~18 px gap to the stat line below it —
-   * at "L" scale the taller name line bled into the stat line beneath it
-   * (Task 3, `docs/plans/20260708-font-scale-and-faction-bugs.md`). Grows with
-   * the current font scale, floored at the historical 52 px so "M"/"S" keep
-   * the established row density.
-   */
   private get ROW_H(): number {
     const nameStep = lineStepFor(scaledFont(13));
     const statStep = lineStepFor(scaledFont(10));
@@ -776,13 +666,9 @@ export class EquipmentShopScene extends GameScene {
     const player = this.gameEngine?.player ?? null;
     const playerCredits = player?.credits ?? 0;
     const loadout = this.gameEngine?.playerLoadout ?? null;
-    // Canonical owned-uninstalled store (feeds the ТРЮМ strip and is what a
-    // purchase lands in); a shop install acts on this set via installOwnedGear.
     const canonicalOwned = new Set(
       player ? ownedUninstalledGear(player, loadout) : [],
     );
-    // Owned for badge purposes = canonical store ∪ legacy bag (loot/unequip
-    // still feed the bag) — so an owned item is never mislabelled "[Купить]".
     const ownedIds = new Set<string>([
       ...canonicalOwned,
       ...(player?.inventory.modules.map((m) => m.id) ?? []),
@@ -797,10 +683,6 @@ export class EquipmentShopScene extends GameScene {
       const canAfford = playerCredits >= listing.price;
       const alreadyOwned = ownedIds.has(gear.id);
       const isInstalled = installedIds.has(gear.id);
-      // Fit projection drives the per-row fit hint (informational). Fitting
-      // itself is no longer a shop-row action — the АНГАР tab is the single
-      // fitting surface (canon Task 4: one fitting surface, no duplicate
-      // controls), so an owned item reads "В трюме" here and is installed there.
       const fitResult = loadout ? gearFit(loadout, gear.id) : null;
 
       const replacing = this.installedOfSameClass(gear);
@@ -815,8 +697,6 @@ export class EquipmentShopScene extends GameScene {
       if (isInstalled) rowBg.stroke({ width: 1, color: 0x226622 });
       this.listContainer.addChild(rowBg);
 
-      // Icon (mirrors the hangar's per-slot icon; text-only fallback until
-      // the item's tiered/family art is loaded — Task 7 shared `gearIcon.ts`)
       const iconSize = 16;
       const iconOffset = mountGearIcon(
         this.listContainer,
@@ -826,7 +706,6 @@ export class EquipmentShopScene extends GameScene {
         iconSize,
       );
 
-      // Name + stat line
       const nameColor = isInstalled
         ? 0x44ff88
         : alreadyOwned
@@ -846,9 +725,6 @@ export class EquipmentShopScene extends GameScene {
       nameText.y = nameTop;
       this.listContainer.addChild(nameText);
 
-      // Stat line — show comparison delta if this item replaces an installed one
-      // (weapons compare by damage, engines by tech level, other gear by potency;
-      // see gearComparisonSuffix).
       let statLine = gearStatLine(gear);
       if (replacing && !isInstalled) {
         statLine += gearComparisonSuffix(gear, replacing);
@@ -861,13 +737,9 @@ export class EquipmentShopScene extends GameScene {
       );
       statText.eventMode = "none";
       statText.x = startX + w * 0.01 + iconOffset;
-      // Stacked below the name line — its step tracks the name's own font-scale
-      // line height so the two never overlap at "L" (Task 3: the fixed +25
-      // offset assumed the "M"-scale ~14 px name-line height).
       statText.y = nameTop + lineStepFor(scaledFont(13));
       this.listContainer.addChild(statText);
 
-      // Kind badge
       const kindText = scaledText(
         KIND_LABEL[gear.kind],
         12,
@@ -879,7 +751,6 @@ export class EquipmentShopScene extends GameScene {
       kindText.y = rowY + 16;
       this.listContainer.addChild(kindText);
 
-      // Tech level
       const techText = scaledText(`T${gear.techLevel}`, 12, 0x8899aa, {
         rawColor: true,
       });
@@ -888,7 +759,6 @@ export class EquipmentShopScene extends GameScene {
       techText.y = rowY + 16;
       this.listContainer.addChild(techText);
 
-      // Price
       const priceText = scaledText(
         `${listing.price.toLocaleString("ru")}₡`,
         12,
@@ -901,10 +771,6 @@ export class EquipmentShopScene extends GameScene {
       priceText.y = priceTop;
       this.listContainer.addChild(priceText);
 
-      // Right-hand control: buy / owned-in-hold / no-funds. Fitting lives on the
-      // АНГАР tab (the single fitting surface), so this listing never offers an
-      // install action — owned-but-uninstalled gear reads as a clear "В трюме"
-      // status (never a dead "Есть"), and the ТРЮМ strip / АНГАР tab fit it.
       const rowAction = shopRowAction({
         isInstalled,
         owned: alreadyOwned,
@@ -915,10 +781,6 @@ export class EquipmentShopScene extends GameScene {
         rawColor: true,
         fontWeight: "bold",
       });
-      // Right-align the status/action label to the list clip edge (PW - 30) so a
-      // long word («Установлено») is never sliced off by the scroll mask — the
-      // fixed 0.89·w left edge overflowed the clip. Anchor keeps the pointer hit
-      // box on the glyphs.
       buyBtn.anchor.set(1, 0);
       buyBtn.x = startX + w - 30 - 6;
       buyBtn.y = rowY + 16;
@@ -941,16 +803,11 @@ export class EquipmentShopScene extends GameScene {
       }
       this.listContainer.addChild(buyBtn);
 
-      // Per-listing fit hint: does this gear fit the current hull (by category +
-      // mass) once installed from the warehouse? Hulls have no slot → no hint.
       const fit = fitResult ? fitIndicator(fitResult) : null;
       if (fit) {
         const fitText = scaledText(fit.text, 10, fit.color, { rawColor: true });
         fitText.eventMode = "none";
         fitText.x = startX + w * 0.78;
-        // Stacked below the price line in the same column — steps by the
-        // price line's own font-scale height (Task 3: the fixed +34 offset
-        // assumed the "M"-scale ~14 px price-line height).
         fitText.y = priceTop + lineStepFor(scaledFont(12));
         this.listContainer.addChild(fitText);
       }
@@ -981,12 +838,6 @@ export class EquipmentShopScene extends GameScene {
     this.mainContainer!.addChild(downBtn);
   }
 
-  /**
-   * Render a compact, read-only strip showing what's currently installed in the
-   * loadout — at-a-glance comparison while shopping. Fitting/unfitting is the
-   * АНГАР tab's job (the single fitting surface), so this strip carries no
-   * controls (canon Task 4: no duplicate fitting controls).
-   */
   private renderLoadoutStrip(x: number, y: number, w: number, h: number): void {
     if (!this.mainContainer || h < 24) return;
     const loadout = this.gameEngine?.playerLoadout;
@@ -1041,12 +892,6 @@ export class EquipmentShopScene extends GameScene {
     }
   }
 
-  /**
-   * ТРЮМ (hold) strip: gear the player owns but hasn't installed — the canonical
-   * `ownedUninstalledGear` store — each with a «Продать» action at the trade-in
-   * rate. Rendered into its own container so a sell rebuilds just this strip
-   * (the rest of the shop is built once in `render`).
-   */
   private renderHold(): void {
     const hold = this.holdContainer;
     const pos = this.holdPos;
@@ -1120,15 +965,6 @@ export class EquipmentShopScene extends GameScene {
     }
   }
 
-  // ── shared hangar (АНГАР tab) ─────────────────────────────────────────────
-
-  /**
-   * Mount the shared {@link HangarPanel} — the single fitting surface, identical
-   * to the station hangar. The scene wires in its canonical model (player +
-   * loadout) and the scene-owned concerns (toast, navigation, re-render); all
-   * install/unfit/sell mutations route through `ShipLoadout` + the shared gear
-   * helpers inside the panel, so fitting behaves the same wherever it is opened.
-   */
   private renderHangar(): void {
     const player = this.gameEngine?.player;
     if (!player || !this.mainContainer) return;
@@ -1138,9 +974,6 @@ export class EquipmentShopScene extends GameScene {
       loadout: this.gameEngine?.playerLoadout ?? null,
       bank: this.gameEngine?.bank ?? null,
       equipment: this.equipment,
-      // Planet Верфь baseline rate — mirrors `PlanetScene.openGarage`'s flat
-      // 2 cr/HP (the `repairCost` default); explicit here so both hangar
-      // mount points always supply the same context shape as `StationScene`.
       repairRatePerHp: 2,
       presets: this.gameEngine?.playerLoadoutPresets ?? [],
       mutatePresets: (next) => {
@@ -1151,9 +984,6 @@ export class EquipmentShopScene extends GameScene {
         this.gameEngine?.audio.playSfx(key).catch(() => {});
       },
       addToastSlot: (px, py, pw, ph) => this.addToastSlot(px, py, pw, ph),
-      // The shop's render() appends (it doesn't clear), so a fit re-render must
-      // tear the screen down first — rebuild() destroys + recreates the
-      // container, then render() redraws the hangar (activeTab is still "hangar").
       rerender: () => this.rebuild(),
       back: () => {
         this.activeTab = "gear";
@@ -1166,8 +996,6 @@ export class EquipmentShopScene extends GameScene {
     });
   }
 
-  /** The shared micromodule-apply modal, opened from the hangar's per-slot
-   *  "[установить микромодуль]" control (identical to the station flow). */
   private renderMicromoduleApplyPanel(): void {
     const player = this.gameEngine?.player;
     const loadout = this.gameEngine?.playerLoadout ?? null;
@@ -1190,7 +1018,6 @@ export class EquipmentShopScene extends GameScene {
     });
   }
 
-  /** Flash a transient status message in the hangar's toast slot. */
   private addToastSlot(px: number, py: number, pw: number, ph: number): void {
     const toast = scaledText("", 13, 0x44ff88, {
       rawColor: true,
@@ -1227,14 +1054,11 @@ export class EquipmentShopScene extends GameScene {
       this.creditsText.text = `${player.credits.toLocaleString("ru")}₡`;
     }
     this.renderHold();
-    // The partial re-render above leaves the render()-mounted toast slot intact,
-    // so confirm the sale on screen (previously silent on the gear tab).
     const soldName = gearById(gearId)?.name ?? "предмет";
     this.showToast(`Продано: ${soldName} (+${refund}₡)`, 0xffcc44);
   }
 
   private scroll(dir: number): void {
-    // Only the gear list scrolls; the hull/hangar tabs ignore wheel/arrow input.
     if (this.activeTab !== "gear") return;
     const maxScroll = Math.max(
       0,
@@ -1265,11 +1089,6 @@ export class EquipmentShopScene extends GameScene {
       GL_COUNTERPARTY.EQUIPMENT,
       `Покупка: ${listing.gear.name}`,
     );
-    // SR-canon (Task 4): a purchase always lands in the warehouse (the canonical
-    // owned-uninstalled store, shown in the ТРЮМ strip and sellable from there).
-    // Fitting gear is a separate hangar action — the shop never auto-installs, so
-    // the player can stock spares the current hull can't yet hold and decide what
-    // to fit (by category + mass) in the hangar.
     acquireUninstalledGear(player, listing.gear.id);
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
 
@@ -1278,7 +1097,6 @@ export class EquipmentShopScene extends GameScene {
         `(to warehouse, balance: ${player.credits})`,
     );
 
-    // Update credits display and re-render rows so affordability badges update.
     if (this.creditsText) {
       this.creditsText.text = `${player.credits.toLocaleString("ru")}₡`;
     }
@@ -1287,16 +1105,11 @@ export class EquipmentShopScene extends GameScene {
     const PW = Math.min(820, sw - 40);
     const PY = (sh - Math.min(580, sh - 40)) / 2;
     this.renderRows((sw - PW) / 2, PY + 96, PW);
-    // A purchase with no free slot lands in the ТРЮМ — refresh that strip too.
     this.renderHold();
-    // The partial re-render above leaves the render()-mounted toast slot intact,
-    // so confirm the purchase on screen (previously silent on the gear tab).
     this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
   }
 
   private onKeyDown(e: KeyboardEvent): void {
-    // In the hangar tab, Escape steps back through the fitting surface (modal →
-    // hangar → shop) rather than leaving the shop outright.
     if (this.activeTab === "hangar") {
       if (e.key === "Escape") {
         if (this.micromoduleApplyTarget) this.micromoduleApplyTarget = null;

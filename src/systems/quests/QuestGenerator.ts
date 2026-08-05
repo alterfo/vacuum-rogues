@@ -1,16 +1,3 @@
-/**
- * Deterministic quest generator (EPIC-008, US-081/US-082/US-083).
- *
- * Builds a planet's "job board" of quests from a stable seed (galaxy seed +
- * planet + a time bucket), so the same board is reproduced on reload and only
- * refreshes as days pass. Most quests deliberately target *other* systems to
- * draw the player across the galaxy; reward and deadline scale with the number
- * of hyperjumps to the target. Roughly one quest in five is a branching
- * text-quest (EPIC-005) — the rare "cherry on top".
- *
- * Pure logic: no PixiJS / DOM / ONNX. Fully deterministic and unit-testable.
- * The produced {@link QuestTemplate} plugs straight into {@link QuestManager}.
- */
 import type { StarSystem } from "@/domain/StarSystem";
 import type { QuestTemplate } from "@/systems/QuestManager";
 import { QuestType, ResourceType, EnemyType } from "@/types";
@@ -28,41 +15,29 @@ import {
   LOCAL_DELIVERY_REWARD_MARGIN,
 } from "@/config/balance";
 import { ALL_QUEST_SCRIPTS } from "@/systems/quests/TextQuestRegistry";
+import { questRewardEraMult } from "@/systems/campaign/rewardEra";
 
-/** Share of issued quests that are branching text-quests (the "cherry"). */
 export const QUEST_TEXT_RATIO = 0.2;
 
-/** Share of routine quests that are "elite" (require minReputation=50, ×2 reward). */
 export const QUEST_ELITE_RATIO = 0.2;
 
-/** Share of routine quests that belong to a quest chain (3 parts + finale). */
 export const QUEST_CHAIN_RATIO = 0.15;
 
-/** How many days a single board stays fixed before it refreshes. */
 export const BOARD_REFRESH_DAYS = 5;
 
-/** A generated quest plus the galaxy-reach metadata used by the UI/registry. */
 export interface GeneratedQuest {
   readonly template: QuestTemplate;
-  /** System the quest sends the player to (may equal the origin for text-quests). */
   readonly targetSystemId: string;
-  /** A concrete target planet in that system, when the objective needs one. */
   readonly targetPlanetId: string | null;
-  /** Hyperjumps from the issuing system to the target (0 = local). */
   readonly jumps: number;
-  /** In-character name of whoever posted the job (e.g. "Маклай"). */
   readonly issuerName: string;
-  /** Title that fits the job (e.g. "Губернатор", "Снабженец", "Шериф"). */
   readonly issuerTitle: string;
-  /** For BOUNTY quests: the name of the specific ship the player must destroy. */
   readonly targetNpcName: string | null;
-  /** Colored metadata tags shown in the job board and journal (cargo, system, issuer planet, etc.). */
   readonly highlights: ReadonlyArray<{
     label: string;
     value: string;
     color: number;
   }>;
-  /** Planet ID where this quest was posted. */
   readonly issuerPlanetId: string;
 }
 
@@ -71,52 +46,20 @@ export interface BoardOptions {
   readonly originSystemId: string;
   readonly planetId: string;
   readonly day: number;
-  /** Galaxy seed (stable for the save) — mixes into the board seed. */
   readonly seed: string;
   readonly count?: number; // default 5
   readonly refreshEveryDays?: number; // default BOARD_REFRESH_DAYS
   readonly textRatio?: number; // default QUEST_TEXT_RATIO
-  /** Fraction of routine quests marked elite (minReputation=50, ×2 reward). Default QUEST_ELITE_RATIO. */
   readonly eliteRatio?: number;
-  /** Fraction of routine quests that are part of a quest chain. Default QUEST_CHAIN_RATIO. */
   readonly chainRatio?: number;
-  /** Chain IDs already fully completed by the player; those chains show a finale quest instead. */
   readonly completedQuestChains?: readonly string[];
-  /**
-   * Content {@link questKey}s the board must NOT re-offer — typically the
-   * player's active + pending-return quests, so a quest already taken never
-   * reappears as a fresh offer ("задания не должны повторяться"). When present
-   * (even empty `[]`), the board also dedupes **within itself** and back-fills
-   * from later slots so it still reaches `count`. When `undefined`, the board is
-   * produced exactly as before (no dedupe) — preserving the legacy output every
-   * existing test relies on.
-   */
   readonly excludeKeys?: readonly string[];
-  /**
-   * HOSTILE-HELD system IDs (Overmind- or pirate-controlled) that routine
-   * quests must never TARGET (Task 6, three-year-campaign plan). An occupied
-   * system has no functioning civilian port: a board that sells a starter-rank
-   * courier run into a standing 9-ship garrison is selling a death sentence —
-   * measured on the campaign harness, the agent (or an honest player) takes
-   * the 1-jump delivery, flies straight into the den, and is annihilated
-   * before it can flee. War content stays on its designed paths: DEFENSE
-   * quests (via `overmindAdjacentSystems`) target the *frontier*, and finale
-   * quests deliberately point INTO held space. Default `[]` (no exclusion)
-   * keeps legacy boards byte-identical.
-   */
   readonly hostileSystems?: readonly string[];
-  /** OVERMIND-controlled system IDs; used to build DEFENSE quest targets. */
   readonly overmindSystems?: readonly string[];
-  /** System IDs adjacent to OVERMIND-controlled systems (non-OVERMIND). Triggers 1 DEFENSE quest when non-empty. */
   readonly overmindAdjacentSystems?: readonly string[];
-  /**
-   * When set, the planet is on a faction home system. Quest titles will include
-   * a faction-specific prefix to give them a distinctive flavour.
-   */
   readonly homeFactionId?: string | null;
 }
 
-/** The routine (non-text) quest types, in pick order. */
 const ROUTINE_TYPES: QuestType[] = [
   QuestType.DELIVERY,
   QuestType.BOUNTY,
@@ -125,11 +68,6 @@ const ROUTINE_TYPES: QuestType[] = [
   QuestType.EXPLORATION,
 ];
 
-/**
- * Generate the job board for a planet. Deterministic in
- * `(seed, planetId, day-bucket)`: identical inputs yield identical boards.
- */
-/** Faction-themed quest title prefix for home system boards. */
 const FACTION_HOME_PREFIX: Record<string, string> = {
   OUTLANDERS: "[ОКРАИНА]",
   BASTIONS: "[БАСТИОН]",
@@ -138,7 +76,6 @@ const FACTION_HOME_PREFIX: Record<string, string> = {
   PROGRESSORS: "[ПРОГРЕССОРЫ]",
 };
 
-/** Nouns used to name escort convoy ships, e.g. "Транспорт «Аврора»". */
 const CONVOY_SHIP_NOUNS = [
   "Аврора",
   "Альтаир",
@@ -164,7 +101,6 @@ const CONVOY_SHIP_NOUNS = [
   "Антарес",
 ];
 
-/** Names of wanted ships for BOUNTY quests. */
 const BOUNTY_SHIP_NAMES = [
   "Стальная Тень",
   "Красный Клинок",
@@ -190,7 +126,6 @@ const BOUNTY_SHIP_NAMES = [
   "Зубастая Пасть",
 ];
 
-/** First-name pool for quest issuers (deterministic per quest slot). */
 const ISSUER_NAMES = [
   "Маклай",
   "Зорба",
@@ -218,7 +153,6 @@ const ISSUER_NAMES = [
   "Раш",
 ];
 
-/** Per-type title pool, so the issuer's rank fits the job they post. */
 const ISSUER_TITLES: Partial<Record<QuestType, string[]>> = {
   [QuestType.DELIVERY]: [
     "Снабженец",
@@ -271,11 +205,6 @@ const ISSUER_TITLES: Partial<Record<QuestType, string[]>> = {
   ],
 };
 
-/**
- * Pick a deterministic in-character issuer (name + fitting title) for a quest.
- * Consumes two RNG draws; call it at a stable point in each builder so the
- * board stays reproducible.
- */
 function pickIssuer(
   rng: SeededRNG,
   type: QuestType,
@@ -286,11 +215,6 @@ function pickIssuer(
   return { name, title };
 }
 
-/**
- * Frame a generated quest as a first-person dialogue line from its issuer, so
- * the governor screen can "offer" the job in character (Task 7). Falls back to
- * a plain "Губернатор" speaker when no issuer metadata is present.
- */
 export function governorOfferLine(quest: GeneratedQuest): string {
   const speaker =
     quest.issuerName && quest.issuerTitle
@@ -299,33 +223,10 @@ export function governorOfferLine(quest: GeneratedQuest): string {
   return `${speaker}: «${quest.template.description}»`;
 }
 
-/**
- * A stable identity for "the same quest" across board re-generation
- * ("задания не должны повторяться"). Two offers that send the player on the
- * same job to the same destination share a key, *regardless* of the
- * bucket-bearing board-slot id, the randomised reward/quantity, or the issuer —
- * so an offer the player has already taken (active) or that is already placed on
- * the board being built can be recognised and skipped.
- *
- * - Text-quests are keyed by their script (`targetObjectId`): the same script is
- *   a repeat wherever it is posted.
- * - Every other quest is keyed by type + target system + a destination signature
- *   built from its objectives (planet/system targets and cargo kind), excluding
- *   slot ids and randomised quantities. That makes the key identical on the next
- *   board refresh and lets it match an already-accepted copy (whose objective
- *   ids and reward differ, but whose destination signature does not).
- *
- * The objective signature uses only fields present on **both** a generated
- * quest's template and a restored {@link Quest} (objective `type` + `locationId`
- * + `targetSystemId` + `itemType`), so the same key can be computed for the
- * player's active quests when threading exclusions into the board generator.
- */
 export function questKey(quest: GeneratedQuest): string {
   const t = quest.template;
   return questKeyFromParts({
     type: t.type,
-    // The GeneratedQuest's resolved target system wins over the template's,
-    // matching the historical behaviour (`quest.targetSystemId || t.targetSystemId`).
     targetSystemId: quest.targetSystemId || (t.targetSystemId ?? ""),
     targetObjectId: t.targetObjectId,
     id: t.id,
@@ -335,17 +236,10 @@ export function questKey(quest: GeneratedQuest): string {
   });
 }
 
-/**
- * The minimal shape `questKey` needs — shared by a generated quest's template
- * and a restored {@link Quest} so the *same* key is computed for both. Lets the
- * board generator exclude the player's active/pending quests by content (not by
- * the slot id, which differs once a quest is accepted).
- */
 export interface QuestKeyParts {
   readonly type: QuestType;
   readonly targetSystemId: string | null | undefined;
   readonly targetObjectId: string | null | undefined;
-  /** Fallback identity for text-quests that carry no `targetObjectId`. */
   readonly id: string;
   readonly objectives: ReadonlyArray<{
     type: string;
@@ -357,7 +251,6 @@ export interface QuestKeyParts {
   readonly chainPart?: number | null;
 }
 
-/** Core key derivation, shared by {@link questKey} and {@link questKeyForQuest}. */
 function questKeyFromParts(p: QuestKeyParts): string {
   if (p.type === QuestType.TEXT_ADVENTURE) {
     return `TEXT|${p.targetObjectId ?? p.id}`;
@@ -373,11 +266,6 @@ function questKeyFromParts(p: QuestKeyParts): string {
   return `${p.type}|${system}|${chain}|${objSig}`;
 }
 
-/**
- * The {@link questKey} of a restored {@link Quest} (or any object carrying the
- * same fields). Used at the board call site to exclude the player's active and
- * pending-return quests from re-generation ("задания не должны повторяться").
- */
 export function questKeyForQuest(quest: QuestKeyParts): string {
   return questKeyFromParts(quest);
 }
@@ -407,21 +295,10 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     : null;
 
   const bucket = Math.floor(day / Math.max(1, refreshEveryDays));
+  const eraDay = bucket * Math.max(1, refreshEveryDays);
   const boardSeed = `${seed}|board|${planetId}|${bucket}`;
 
-  // Hyperjump distance from the origin to every reachable system. Use the
-  // UNDIRECTED warp metric so the advertised jump count matches the route the
-  // nav/star-map actually flies (warp follows an edge either way; ~25% of links
-  // are one-way) — never "1-2 advertised / 3-6 actual".
   const jumpDist = jumpDistances(systems, originSystemId, { undirected: true });
-  // Systems we can actually send the player to (anything but the origin).
-  // Unexplored ("?") systems are excluded — a quest must never point the
-  // player at a system they have not yet charted (Task 2). `explored` is a
-  // real boolean in production; the `!== false` guard keeps undefined-stub
-  // systems in older tests reachable. Hostile-HELD systems are excluded too
-  // (see `BoardOptions.hostileSystems`) — no civilian contract may target an
-  // occupied system; every routine/chain/elite builder draws from this pool,
-  // so the exclusion covers them all at the source.
   const hostileSet = new Set(hostileSystems);
   const reachable = systems
     .filter(
@@ -434,12 +311,9 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     .sort((a, b) => a.id.localeCompare(b.id)); // stable order for determinism
   const origin = systems.find((s) => s.id === originSystemId) ?? null;
 
-  // Chain ID is deterministic per planet+bucket so the same chain appears on refresh.
   const chainId = `chain-${planetId}-${bucket}`;
-  // Track how many chain parts have been added to this board.
   let chainPartsOnBoard = 0;
 
-  /** Apply faction home prefix to a quest's title when the board is a home system board. */
   const applyPrefix = (quest: GeneratedQuest): GeneratedQuest => {
     if (!factionPrefix) return quest;
     return {
@@ -451,30 +325,16 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     };
   };
 
-  /**
-   * Build the quest for board slot `i`, deterministic in `(boardSeed, i)`.
-   * Mutates `chainPartsOnBoard` (closure) exactly as the legacy inline loop did,
-   * so the slot's output is byte-identical whether or not dedupe is enabled.
-   */
   const buildForSlot = (i: number): GeneratedQuest => {
     const rng = new SeededRNG(`${boardSeed}|${i}`);
     const isText = rng.next() < textRatio;
 
     if (isText || reachable.length === 0) {
-      // A «Местный подряд» local delivery now goes to a *different* HABITABLE
-      // planet in the same system, so it needs a real habitable neighbour. A
-      // KNOWN origin without a second inhabited world (single-planet, or one
-      // habitable planet + only barren ones) has nowhere meaningful to deliver —
-      // emit a text quest instead of a dead-end contract to an uninhabited rock.
-      // The guard uses the SAME predicate as the destination picker
-      // (`pickTargetPlanet(..., habitableOnly=true)`) so the two always agree.
-      // An unknown origin (null, only in tests) keeps the legacy local delivery
-      // with a system-level (null target planet) completion.
       const originHasNeighbour =
         !origin || pickTargetPlanet(origin, planetId, true) !== null;
       return applyPrefix(
         isText || !originHasNeighbour
-          ? buildTextQuest(rng, planetId, bucket, i, day, origin)
+          ? buildTextQuest(rng, planetId, bucket, i, eraDay, origin)
           : buildLocalDelivery(
               rng,
               planetId,
@@ -491,11 +351,9 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     const target = reachable[rng.nextInt(0, reachable.length - 1)];
     const jumps = jumpDist.get(target.id) ?? 1;
 
-    // Determine quest tier: chain → elite → normal
     const isChain = rng.next() < chainRatio && chainPartsOnBoard < 3;
     if (isChain) {
       if (completedQuestChains.includes(chainId) && chainPartsOnBoard === 0) {
-        // Chain is complete: show the finale quest once per board.
         const q = applyPrefix(
           buildFinaleQuest(
             rng,
@@ -505,12 +363,10 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
             planetId,
             bucket,
             i,
-            day,
+            eraDay,
             origin,
           ),
         );
-        // Increment so subsequent isChain rolls fall through to the else branch
-        // (routine quest) instead of adding a duplicate finale.
         chainPartsOnBoard++;
         return q;
       } else if (!completedQuestChains.includes(chainId)) {
@@ -523,7 +379,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
             planetId,
             bucket,
             i,
-            day,
+            eraDay,
             chainId,
             chainPartsOnBoard,
             origin,
@@ -532,7 +388,6 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         chainPartsOnBoard++;
         return q;
       }
-      // Chain finale already on board: emit normal quest instead.
       return applyPrefix(
         buildRoutineQuest(
           rng,
@@ -542,7 +397,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
           planetId,
           bucket,
           i,
-          day,
+          eraDay,
           origin,
         ),
       );
@@ -558,30 +413,18 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         planetId,
         bucket,
         i,
-        day,
+        eraDay,
         origin,
         isElite,
       ),
     );
   };
 
-  // Dedupe is opt-in: only when the caller passes `excludeKeys` (the player's
-  // active/pending quests). Then a candidate whose content key is excluded — or
-  // already placed on this board — is skipped, and later slots back-fill so the
-  // board still reaches `count`. With no `excludeKeys`, the loop runs the legacy
-  // path (slots 0..count-1, no skipping) and the output is unchanged.
   const dedupe = excludeKeys !== undefined;
   const seen = new Set<string>(excludeKeys ?? []);
-  // Cap back-fill attempts so an exhausted pool (more exclusions than distinct
-  // quests reachable) can never spin forever; best-effort fill to `count`.
   const cap = dedupe ? count * 8 + 32 : count;
   const out: GeneratedQuest[] = [];
   for (let i = 0; out.length < count && i < cap; i++) {
-    // `buildForSlot` advances `chainPartsOnBoard` for any chain quest it builds.
-    // When dedupe then skips that quest (its key is excluded or already placed),
-    // the counter must be rolled back — otherwise the next chain slot emits a
-    // *later* chain part with no earlier part on the board (an orphaned
-    // «часть 2/3»), and the `< 3` cap / finale logic counts a dropped quest.
     const chainPartsBefore = chainPartsOnBoard;
     const q = buildForSlot(i);
     if (dedupe) {
@@ -594,9 +437,6 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     }
     out.push(q);
   }
-  // Inject 1 DEFENSE quest when OVERMIND has adjacent systems the player can contest.
-  // A defense target must be explored — the player cannot be sent to defend a
-  // system they have not yet charted (Task 2).
   const exploredAdjacent = overmindAdjacentSystems.filter((id) => {
     const s = systems.find((sys) => sys.id === id);
     return s != null && s.explored !== false;
@@ -605,8 +445,6 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     const defRng = new SeededRNG(`${boardSeed}|defense`);
     const targetAdjacentId =
       exploredAdjacent[defRng.nextInt(0, exploredAdjacent.length - 1)];
-    // The OVERMIND system adjacent to the target (to be removed on completion).
-    // Find the first OVERMIND system that is connected to the target.
     const targetSys = systems.find((s) => s.id === targetAdjacentId) ?? null;
     const adjacentOvermindId =
       targetSys?.connections
@@ -622,6 +460,8 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         QuestType.DEFENSE,
         jumps,
         defRng,
+        Math.floor(day / Math.max(1, refreshEveryDays)) *
+          Math.max(1, refreshEveryDays),
       );
       const defIssuer = pickIssuer(defRng, QuestType.DEFENSE);
       const defId = `${slotId(planetId, Math.floor(day / Math.max(1, refreshEveryDays)), out.length)}_defense`;
@@ -673,7 +513,6 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         ],
         issuerPlanetId: planetId,
       };
-      // Don't re-offer a DEFENSE quest the player already has active/pending.
       if (!dedupe || !seen.has(questKey(defenseQuest))) {
         out.push(defenseQuest);
       }
@@ -683,18 +522,6 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   return out;
 }
 
-/**
- * Prefer a habitable planet in a system as a concrete target, else any, else null.
- * `excludeId` (the issuer planet) is skipped so an in-system courier run targets a
- * genuine *neighbour* — a different habitable planet if one exists, else any other
- * planet, else null (no neighbour ⇒ caller falls back to a non-delivery quest).
- *
- * `habitableOnly` (local delivery): restrict candidates to *habitable* planets, so
- * a «Местный подряд» never delivers to a barren/uninhabited dead-end. With it set,
- * a system whose only neighbour is barren returns null and the caller demotes the
- * slot to a text quest — the destination picker and the eligibility guard share
- * this exact predicate so they always agree.
- */
 function pickTargetPlanet(
   system: StarSystem | null,
   excludeId: string | null = null,
@@ -710,17 +537,10 @@ function pickTargetPlanet(
   return (habitable ?? candidates[0]).id;
 }
 
-/** Stable quest id for a board slot. */
 function slotId(planetId: string, bucket: number, i: number): string {
   return `gen_${planetId}_${bucket}_${i}`;
 }
 
-/**
- * Resolve a planet id (e.g. `planet_Сириус_0`) to its display name for quest
- * UI (highlight chips, flavor text) — never leak the raw internal id. Falls
- * back to the id itself only when the owning system's planet list doesn't
- * resolve it (an unknown/stubbed system, test-only path).
- */
 function planetDisplayName(
   system: StarSystem | null | undefined,
   planetId: string,
@@ -728,14 +548,11 @@ function planetDisplayName(
   return system?.planets.find((p) => p.id === planetId)?.name ?? planetId;
 }
 
-/**
- * Reward + deadline scale with distance (jumps) and a per-type risk multiplier,
- * so far, dangerous jobs pay more and pressure the player to commit (US-083).
- */
 function economics(
   type: QuestType,
   jumps: number,
   rng: SeededRNG,
+  day = 0,
 ): { credits: number; experience: number; deadline: number } {
   const risk: Record<string, number> = {
     [QuestType.DELIVERY]: 1.0,
@@ -747,15 +564,13 @@ function economics(
     [QuestType.DEFENSE]: 1.8,
   };
   const m = risk[type] ?? 1;
-  const credits = Math.round(
+  const baseCredits = Math.round(
     (QUEST_BASE_REWARD + jumps * QUEST_REWARD_PER_JUMP) *
       m *
       rng.nextFloat(0.9, 1.2),
   );
-  const experience = Math.round(credits * 0.4);
-  // Deadline = BASE + jumps × PER_JUMP + a small buffer, off the REAL (undirected)
-  // jump count — bounded but always enough to make the trip for that distance.
-  // 1-jump → 37-42 days, 2-jump → 53-58, 3-jump → 69-74 (see balance.ts).
+  const credits = Math.round(baseCredits * questRewardEraMult(day));
+  const experience = Math.round(baseCredits * 0.4);
   const buffer = rng.nextInt(
     QUEST_DEADLINE_BUFFER_MIN_DAYS,
     QUEST_DEADLINE_BUFFER_MAX_DAYS,
@@ -798,14 +613,14 @@ function buildRoutineQuest(
   planetId: string,
   bucket: number,
   i: number,
-  _day: number,
+  day: number,
   origin: StarSystem | null,
   isElite = false,
 ): GeneratedQuest {
   const id = slotId(planetId, bucket, i);
   const targetPlanetId = pickTargetPlanet(target);
   const where = `${target.name} (${jumps} прыж.)`;
-  const { credits, experience, deadline } = economics(type, jumps, rng);
+  const { credits, experience, deadline } = economics(type, jumps, rng, day);
   const issuer = pickIssuer(rng, type);
   const reward = {
     credits,
@@ -974,7 +789,6 @@ function buildRoutineQuest(
     }
   }
 
-  // Elite quests: ×2 reward, minReputation=50, minRank=3, title prefix.
   const finalReward = isElite
     ? {
         ...reward,
@@ -1013,7 +827,6 @@ function buildRoutineQuest(
   };
 }
 
-/** A chain quest (one part of a 3-part chain + finale). */
 function buildChainQuest(
   rng: SeededRNG,
   type: QuestType,
@@ -1022,7 +835,7 @@ function buildChainQuest(
   planetId: string,
   bucket: number,
   i: number,
-  _day: number,
+  day: number,
   chainId: string,
   chainPart: number,
   origin: StarSystem | null,
@@ -1030,7 +843,7 @@ function buildChainQuest(
   const id = `${slotId(planetId, bucket, i)}_chain${chainPart}`;
   const targetPlanetId = pickTargetPlanet(target);
   const where = `${target.name} (${jumps} прыж.)`;
-  const { credits, experience, deadline } = economics(type, jumps, rng);
+  const { credits, experience, deadline } = economics(type, jumps, rng, day);
   const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const reward = {
     credits,
@@ -1091,7 +904,6 @@ function buildChainQuest(
   };
 }
 
-/** The chain finale quest, appearing after all 3 parts are done. */
 function buildFinaleQuest(
   rng: SeededRNG,
   chainId: string,
@@ -1100,7 +912,7 @@ function buildFinaleQuest(
   planetId: string,
   bucket: number,
   i: number,
-  _day: number,
+  day: number,
   origin: StarSystem | null,
 ): GeneratedQuest {
   const id = `${slotId(planetId, bucket, i)}_finale`;
@@ -1110,6 +922,7 @@ function buildFinaleQuest(
     QuestType.DELIVERY,
     jumps,
     rng,
+    day,
   );
   const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const cargo = pickCargo(rng);
@@ -1168,7 +981,6 @@ function buildFinaleQuest(
   };
 }
 
-/** A relaxed, local delivery used when nothing reachable exists. */
 function buildLocalDelivery(
   rng: SeededRNG,
   planetId: string,
@@ -1181,29 +993,14 @@ function buildLocalDelivery(
   const id = slotId(planetId, bucket, i);
   const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const cargo = pickCargo(rng);
-  // Target a genuine *habitable* neighbour — a different inhabited planet in the
-  // same system than the issuing planet — so the contract is a real courier run,
-  // not "buy here, deliver here" and never a dead-end to a barren world.
-  // `excludeId = planetId` (the issuer) is skipped and `habitableOnly` keeps the
-  // destination inhabited; null only when origin is unknown (tests), where
-  // completion stays system-level. The slot is only reached when the matching
-  // guard already confirmed such a habitable neighbour exists.
   const targetPlanetId = pickTargetPlanet(origin, planetId, true);
-  // Always resolve to a real SYSTEM id. When `origin` is unknown we must fall
-  // back to `originSystemId` (the board's system id) — never `planetId`, which
-  // is a planet id and would make `checkDeliveryQuestCompletion` never match.
   const resolvedSystemId = origin?.id ?? originSystemId;
-  // Human-readable name for where the goods go: the target planet's name, then
-  // its id, then the origin system name — so the copy can name the destination.
   const targetPlanetName =
     origin?.planets.find((p) => p.id === targetPlanetId)?.name ??
     targetPlanetId ??
     origin?.name ??
     "месте выдачи";
-  // Compute the cargo amount once so the objective and the reward stay in sync.
   const targetAmount = rng.nextInt(4, 10);
-  // Anchor the payout to the goods' base cost so buying the cargo on the market
-  // and delivering it always nets a profit (margin) rather than a loss.
   const goodsCost = RESOURCE_BASE_PRICES[cargo.resource] * targetAmount;
   const rewardCredits = Math.round(goodsCost * LOCAL_DELIVERY_REWARD_MARGIN);
   return {
@@ -1248,20 +1045,23 @@ function buildLocalDelivery(
   };
 }
 
-/** A branching text-quest stub backed by a real QuestScript. */
 function buildTextQuest(
   rng: SeededRNG,
   planetId: string,
   bucket: number,
   i: number,
-  _day: number,
+  day: number,
   origin: StarSystem | null,
 ): GeneratedQuest {
   const id = slotId(planetId, bucket, i);
-  const { credits, experience } = economics(QuestType.TEXT_ADVENTURE, 0, rng);
+  const { credits, experience } = economics(
+    QuestType.TEXT_ADVENTURE,
+    0,
+    rng,
+    day,
+  );
   const issuer = pickIssuer(rng, QuestType.TEXT_ADVENTURE);
 
-  // Pick a script deterministically for this board slot.
   const script =
     ALL_QUEST_SCRIPTS[rng.nextInt(0, ALL_QUEST_SCRIPTS.length - 1)];
 
@@ -1445,13 +1245,6 @@ function pickDefenseDesc(
   return templates[rng.nextInt(0, templates.length - 1)];
 }
 
-/**
- * Test-facing view onto the per-`QuestType` flavor-text pickers (Task 16). Each
- * renders one of ≥ 4 seeded phrasing variants with the given interpolation
- * inputs. Exported for `questBoardTextVariety.test.ts` (variant coverage /
- * broken-interpolation checks) — production quest generation calls the module
- * helpers directly, never through this record.
- */
 export const __questDescPickers = {
   delivery: (rng: SeededRNG) =>
     pickDeliveryDesc(rng, "Логист Вега", "медикаменты", "Гамма", 4200),

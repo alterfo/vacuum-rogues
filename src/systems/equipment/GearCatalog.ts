@@ -1,13 +1,3 @@
-/**
- * Ship gear catalog (EPIC-007, US-070..074): the static set of hulls, weapons
- * and standard equipment the game can sell, with our own names (no proprietary
- * terms). Parameters follow canon §11.3 — items have a tech level (T1–T8) and a
- * size; smaller + higher-tech is dearer (priced via {@link gearMarketPrice}).
- *
- * Pure data + helpers (no PixiJS/DOM/persistence). Player-installed gear, slots
- * and stat recomputation come later in EPIC-007; this is the searchable
- * "what exists" catalog that the shop generator and info center (EPIC-009) use.
- */
 import {
   HullClass,
   ModuleCategory,
@@ -23,24 +13,20 @@ export enum GearKind {
   EQUIPMENT = "EQUIPMENT",
 }
 
-/** Weapon operating principle (canon §11.3): energy / fragment / missile. */
 export enum WeaponClass {
   ENERGY = "ENERGY",
   FRAGMENT = "FRAGMENT",
   MISSILE = "MISSILE",
 }
 
-/** Standard equipment families that occupy a ship slot. */
 export enum EquipmentClass {
   ENGINE = "ENGINE",
   FUEL_TANK = "FUEL_TANK",
   RADAR = "RADAR",
   SCANNER = "SCANNER",
   REPAIR_DROID = "REPAIR_DROID",
-  /** Boarding grapple: locks onto a disabled hull for capture. `potency` = capture strength. */
   GRAPPLE = "GRAPPLE",
   SHIELD = "SHIELD",
-  /** Gravity tractor: auto-pickup of nearby space loot. `potency` = pickup range in px. */
   GRAV_TRACTOR = "GRAV_TRACTOR",
 }
 
@@ -50,29 +36,9 @@ interface GearBase {
   readonly techLevel: number; // 1..8
   readonly size: number; // capacity units the item occupies
   readonly basePrice: number; // baseline credits before market modifiers
-  /**
-   * Mass the item adds to the ship's load (SR-canon МАССА/СВОБОДНО). Installed
-   * gear sums against the hull's {@link HullSpec.massCapacity}; a hull's own
-   * `mass` is its frame weight and is *not* counted (the hull is the ship, not a
-   * slotted item — see {@link ShipLoadout.derivedStats}).
-   */
   readonly mass: number;
   readonly upgrades?: number; // 0-2, present only on upgraded copies
-  /**
-   * Marks the **rare, high-end top tier** (see {@link isRareGear}): the apex
-   * hull/engine/weapon a long credit climb earns. Rare gear sits at the ceiling
-   * of the endgame price band and is stocked far less often than common gear —
-   * only the richest, high-end markets field it ({@link ShopGenerator}). Optional:
-   * absent ⇒ common (the implicit default for every mid/low-tech item).
-   */
   readonly rare?: boolean;
-  /**
-   * Earliest in-game day this item may be stocked by any shop
-   * ({@link ShopGenerator}) — a calendar gate on top of the tech-level and
-   * stock-chance filters. Optional: absent ⇒ available whenever tech allows
-   * (the implicit default for every item except the apex engine, which sets
-   * `APEX_ENGINE_MIN_DAY` so its 2× cruise speed stays a ~year-3 payoff).
-   */
   readonly minDay?: number;
 }
 
@@ -84,18 +50,10 @@ export interface HullSpec extends GearBase {
   readonly weaponSlots: number;
   readonly equipmentSlots: number;
   readonly cargo: number; // hold capacity
-  /** Total mass budget (МАССА): Σ installed gear mass must not exceed this. */
   readonly massCapacity: number;
-  /**
-   * Number of hull micromodule slots (1–4): bounds `ShipLoadout.hullMicromoduleIds`.
-   * Bigger hulls carry more. Optional so synthetic test hulls validate; every
-   * catalog hull sets it explicitly and `ShipLoadout` falls back to
-   * {@link DEFAULT_HULL_MICROMODULE_SLOTS} for any hull that omits it.
-   */
   readonly micromoduleSlots?: number;
 }
 
-/** Hull micromodule slot count assumed for a hull that omits `micromoduleSlots`. */
 export const DEFAULT_HULL_MICROMODULE_SLOTS = 1;
 
 export interface WeaponSpec extends GearBase {
@@ -115,17 +73,8 @@ export interface EquipmentSpec extends GearBase {
 
 export type Gear = HullSpec | WeaponSpec | EquipmentSpec;
 
-/** The four canon slot banks a piece of gear can occupy (SR-canon §11.3). */
 export type SlotCategory = "weapon" | "engine" | "radar" | "equipment";
 
-/**
- * Which categorized slot bank this gear occupies. Weapons fill the weapon bank;
- * the engine takes its single "Система движения" slot; the radar takes its
- * single "Система отслеживания" slot; every other equipment family (fuel tank,
- * shield, repair droid, scanner, grav-tractor, grapple) shares the "additional
- * equipment" bank. A hull is the ship itself, not a slottable item, so it has no
- * category.
- */
 export function slotCategoryFor(gear: Gear): SlotCategory | undefined {
   if (gear.kind === GearKind.HULL) return undefined;
   if (gear.kind === GearKind.WEAPON) return "weapon";
@@ -149,11 +98,6 @@ const HULLS: HullSpec[] = [
     size: 8,
     basePrice: 1200,
     mass: 9,
-    // Light fighter — fragile by design (oddity sweep, Task 4). The cheapest hull
-    // used to be the most HP-efficient of the lineup (90 HP ÷ 1200 = 0.075 HP/cr,
-    // beating every pricier hull) — a value inversion that punished spending up.
-    // Trimmed so the workhorse «Корвет» (140 ÷ 3000 ≈ 0.047) is now the best
-    // HP-per-credit and the scout is a genuinely weaker budget stepping-stone.
     hp: 55,
     slots: 4,
     weaponSlots: 2,
@@ -186,13 +130,6 @@ const HULLS: HullSpec[] = [
     hullClass: HullClass.TRANSPORT,
     techLevel: 3,
     size: 10,
-    // Priced level with the «Корвет» (oddity sweep, Task 4): the courier used to
-    // be *cheaper* (2500 < 3000) **and** roomier (cargo 45 > 30) than the corvette
-    // — a strict price+cargo advantage. At an equal 3000 it is now a genuine role
-    // *choice* against the corvette, not a dominant pick: more cargo + equipment
-    // slots (the hauler) traded against the corvette's HP + second weapon slot
-    // (the fighter). (Both stay in the locked tech-3/4 price band 2000–5000 and the
-    // mid-hull median stays 3000, so the apex «Бастион» 12000 holds its ≥4× gap.)
     basePrice: 3000,
     mass: 12,
     hp: 120,
@@ -227,19 +164,6 @@ const HULLS: HullSpec[] = [
     hullClass: HullClass.HEAVY_FREIGHTER,
     techLevel: 4,
     size: 16,
-    // Autopilot-combat-coverage / campaign-pacing plan (2026-07-25, Task 2b):
-    // the freighter (180 hp) is the campaign agent's designated battle-ready hull
-    // (`BATTLE_READY_MAX_HULL = 180`), yet the "second-hull-tier affordability
-    // wall" (`docs/plans/20260713-campaign-winrate-100pct.md`'s "Diagnostic
-    // resolved" trace) kept it out of reach: after the one early corvette buy the
-    // wallet plateaus at ~1000–2000cr, but the net upgrade needs
-    // `price − corvette-trade-in (0.4×3000=1200) + MILITARY_SPEND_TRADE_RESERVE
-    // (1000)` = 4300cr at the old 4500 price. Trimmed 4500→3900 to lower that wall
-    // to 3700cr — the deepest cut that still preserves every gear-curve invariant:
-    // it stays strictly above the corvette (3000, so it never *dominates* it —
-    // `gearCurve.test.ts` `hullDominates`) and keeps the corvette the best HP/cr
-    // hull (180/3900 = 0.0462 < 140/3000 = 0.0467), inside the locked tech-3/4
-    // 2000–5000 price band (`economyBalance.test.ts`).
     basePrice: 3900,
     mass: 28,
     hp: 180,
@@ -257,7 +181,6 @@ const HULLS: HullSpec[] = [
     hullClass: HullClass.CRUISER,
     techLevel: 6,
     size: 13,
-    // Sits at the top of the tech-5/6 price band (5500-9000, `economyBalance.test.ts`).
     basePrice: 8800,
     mass: 30,
     hp: 280,
@@ -267,12 +190,6 @@ const HULLS: HullSpec[] = [
     cargo: 45,
     massCapacity: 85,
     micromoduleSlots: 3,
-    // Gear-catalog & garrison-power-ceiling plan (2026-07-19): a stepping stone
-    // between the common «Страж» (T5, 220hp, 7000cr) and the apex «Бастион»
-    // (T7, 360hp, 12000cr) — the old lineup jumped straight from a freely
-    // stocked mid-tier hull to a `RARE_TECH_THRESHOLD`-gated apex with nothing
-    // between. Explicit `rare: true` even though techLevel (6) already implies
-    // it via `isRareGear` — same documentation convention as «Бастион».
     rare: true,
   },
   {
@@ -291,9 +208,45 @@ const HULLS: HullSpec[] = [
     cargo: 50,
     massCapacity: 95,
     micromoduleSlots: 4,
-    // The apex hull: ≥4× the mid-tier «Корвет» (3000) and the steepest step in
-    // the curve. Rare — only the wealthiest field it (see `isRareGear`).
     rare: true,
+  },
+  {
+    id: "hull_dreadnought",
+    name: "Каркас «Дредноут»",
+    kind: GearKind.HULL,
+    hullClass: HullClass.DESTROYER,
+    techLevel: 7,
+    size: 16,
+    basePrice: 68000,
+    mass: 44,
+    hp: 700,
+    slots: 11,
+    weaponSlots: 5,
+    equipmentSlots: 6,
+    cargo: 60,
+    massCapacity: 140,
+    micromoduleSlots: 4,
+    rare: true,
+    minDay: 540,
+  },
+  {
+    id: "hull_liberator",
+    name: "Каркас «Освободитель»",
+    kind: GearKind.HULL,
+    hullClass: HullClass.DESTROYER,
+    techLevel: 8,
+    size: 18,
+    basePrice: 240000,
+    mass: 52,
+    hp: 1200,
+    slots: 13,
+    weaponSlots: 6,
+    equipmentSlots: 7,
+    cargo: 70,
+    massCapacity: 190,
+    micromoduleSlots: 5,
+    rare: true,
+    minDay: 900,
   },
 ];
 
@@ -468,6 +421,68 @@ const WEAPONS: WeaponSpec[] = [
     cooldownTurns: 4,
     rare: true,
   },
+  {
+    id: "wpn_lance_array",
+    name: "Лансовая батарея",
+    kind: GearKind.WEAPON,
+    techLevel: 7,
+    size: 5,
+    basePrice: 36000,
+    mass: 11,
+    weaponClass: WeaponClass.ENERGY,
+    damage: 70,
+    range: 400,
+    ability: WeaponAbility.NONE,
+    cooldownTurns: 2,
+    minDay: 540,
+  },
+  {
+    id: "wpn_aft_shredder",
+    name: "Кормовой шреддер",
+    kind: GearKind.WEAPON,
+    techLevel: 7,
+    size: 5,
+    basePrice: 52000,
+    mass: 10,
+    weaponClass: WeaponClass.FRAGMENT,
+    damage: 48,
+    range: 330,
+    ability: WeaponAbility.BURST,
+    cooldownTurns: 1,
+    minDay: 600,
+  },
+  {
+    id: "wpn_nova_driver",
+    name: "Нова-драйвер",
+    kind: GearKind.WEAPON,
+    techLevel: 8,
+    size: 6,
+    basePrice: 98000,
+    mass: 14,
+    weaponClass: WeaponClass.FRAGMENT,
+    damage: 110,
+    range: 380,
+    ability: WeaponAbility.NONE,
+    cooldownTurns: 2,
+    rare: true,
+    minDay: 840,
+  },
+  {
+    id: "wpn_annihilator",
+    name: "Аннигилятор",
+    kind: GearKind.WEAPON,
+    techLevel: 8,
+    size: 7,
+    basePrice: 210000,
+    mass: 18,
+    weaponClass: WeaponClass.ENERGY,
+    damage: 180,
+    range: 420,
+    ability: WeaponAbility.NONE,
+    cooldownTurns: 3,
+    rare: true,
+    minDay: 960,
+  },
 ];
 
 const EQUIPMENT: EquipmentSpec[] = [
@@ -494,12 +509,6 @@ const EQUIPMENT: EquipmentSpec[] = [
     potency: 1.4,
   },
   {
-    // Apex engine: the rare, very-expensive top tier. Its tech-7 cruise speed
-    // (0.066 + 7×0.022 = 0.22 px/ms, exactly 2× the starter's 0.11) still
-    // out-runs the interceptor tier (`npcSpeed` 0.2), though the margin is now
-    // thin (10%) — flagged for a balance follow-up if escapes feel too slow.
-    // Priced at the ceiling of the tech-7/8 band (≤ 14000), stocked only by
-    // high-end markets, and calendar-gated (`minDay`) to a ~year-3 payoff.
     id: "eq_engine_v",
     name: "Двигатель Тип-V",
     kind: GearKind.EQUIPMENT,
@@ -513,10 +522,6 @@ const EQUIPMENT: EquipmentSpec[] = [
     minDay: APEX_ENGINE_MIN_DAY,
   },
   {
-    // Light budget engine (Task 2 gear-variety wave): same tech tier as
-    // eq_engine_i (identical derived speed — engine speed is tech-driven, not
-    // potency-driven), but far cheaper and half the mass. A genuine tradeoff
-    // on the mass-budget axis for tight scout/corvette fits, not a stat clone.
     id: "eq_engine_light",
     name: "Двигатель Тип-L (облегчённый)",
     kind: GearKind.EQUIPMENT,
@@ -528,13 +533,6 @@ const EQUIPMENT: EquipmentSpec[] = [
     potency: 0.8,
   },
   {
-    // A second, un-gated rare tier below the calendar-locked apex — a rare
-    // T6 alternative players can field well before APEX_ENGINE_MIN_DAY.
-    // Engine speed is purely tech-level-driven (see derivedStats), so this
-    // MUST sit below eq_engine_v's techLevel (7) or it would deliver the
-    // apex's exact top speed for free, voiding the calendar gate — the
-    // heavier-mass/cheaper-than-apex tradeoff is the deliberately slower
-    // cruise speed this tier level buys.
     id: "eq_engine_iv",
     name: "Двигатель Тип-IV (форсированный)",
     kind: GearKind.EQUIPMENT,
@@ -568,8 +566,6 @@ const EQUIPMENT: EquipmentSpec[] = [
     potency: 90,
   },
   {
-    // Heavy long-haul tank: much more fuel, but the mass cost is steep — a
-    // real tradeoff against the light hulls' tight mass budgets.
     id: "eq_tank_iii",
     name: "Топливный танк Тип-III",
     kind: GearKind.EQUIPMENT,
@@ -712,8 +708,6 @@ const EQUIPMENT: EquipmentSpec[] = [
     equipmentClass: EquipmentClass.SHIELD,
     potency: 150,
   },
-  // Boarding grapples (Task 2 gear-variety wave): the missing GRAPPLE family —
-  // potency encodes capture strength/range for a future boarding consumer.
   {
     id: "eq_grapple_i",
     name: "Абордажный крюк Тип-I",
@@ -747,9 +741,6 @@ const EQUIPMENT: EquipmentSpec[] = [
     equipmentClass: EquipmentClass.GRAPPLE,
     potency: 180,
   },
-  // Gravity tractors (Task 10): potency encodes the auto-pickup range in px.
-  // Tech levels track the economy price bands (economyBalance.test.ts); they do
-  // not affect range, which is the potency field.
   {
     id: "grav_tractor_1",
     name: "Гравитяга Тип-I",
@@ -784,18 +775,54 @@ const EQUIPMENT: EquipmentSpec[] = [
     potency: 250,
     rare: true, // apex grav-tractor — rare, high-end stock only
   },
+  {
+    id: "eq_engine_vi",
+    name: "Двигатель Тип-VI (курьерский)",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 8,
+    size: 4,
+    basePrice: 95000,
+    mass: 12,
+    equipmentClass: EquipmentClass.ENGINE,
+    potency: 2.2,
+    rare: true,
+    minDay: 840,
+  },
+  {
+    id: "eq_shield_fortress",
+    name: "Крепостной барьер",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 8,
+    size: 6,
+    basePrice: 88000,
+    mass: 15,
+    equipmentClass: EquipmentClass.SHIELD,
+    potency: 300,
+    rare: true,
+    minDay: 810,
+  },
+  {
+    id: "eq_droid_swarm",
+    name: "Рой ремонтных дронов",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 8,
+    size: 5,
+    basePrice: 120000,
+    mass: 10,
+    equipmentClass: EquipmentClass.REPAIR_DROID,
+    potency: 12,
+    rare: true,
+    minDay: 900,
+  },
 ];
 
-/** The full catalog (read-only). */
 export const GEAR_CATALOG: readonly Gear[] = [
   ...HULLS,
   ...WEAPONS,
   ...EQUIPMENT,
 ];
 
-/** 12 micromodule definitions: 4 categories × 3 tiers. Sold at CRAFT_CENTER stations. */
 export const MICRO_MODULES: readonly MicroModule[] = [
-  // ENGINE — boosts derived speed
   {
     id: "mm_eng_1",
     name: "Форсаж ур.1",
@@ -817,7 +844,6 @@ export const MICRO_MODULES: readonly MicroModule[] = [
     bonusType: "speed",
     bonusTier: 3,
   },
-  // WEAPON — boosts weapon damage
   {
     id: "mm_wpn_1",
     name: "Усилитель урона ур.1",
@@ -839,7 +865,6 @@ export const MICRO_MODULES: readonly MicroModule[] = [
     bonusType: "damage",
     bonusTier: 3,
   },
-  // SHIELD — boosts shield HP
   {
     id: "mm_shld_1",
     name: "Усиление щита ур.1",
@@ -861,7 +886,6 @@ export const MICRO_MODULES: readonly MicroModule[] = [
     bonusType: "shieldHp",
     bonusTier: 3,
   },
-  // EQUIPMENT — boosts generic equipment potency (radar, droid, etc.)
   {
     id: "mm_eq_1",
     name: "Оптимизатор ур.1",
@@ -889,23 +913,7 @@ export function microModuleById(id: string): MicroModule | undefined {
   return MICRO_MODULES.find((m) => m.id === id);
 }
 
-/**
- * Hull micromodules (install/micromodule overhaul Task 4): a distinct family fitted
- * into a hull's own micromodule slots (`HullSpec.micromoduleSlots`), not onto a piece
- * of gear. Kept **separate** from {@link MICRO_MODULES} (the 4-category gear modules)
- * so each catalog stays single-purpose. The {@link MicroModule.bonusType} picks the
- * effect; {@link ShipLoadout.derivedStats} turns it into a global multiplier:
- * - `defense`      → maxHull (boost defense)
- * - `cargo`        → hold capacity (boost cargo)
- * - `energyWeapon` → total weapon damage (redirect energy to weapons)
- * - `energyEngine` → engine speed (redirect energy to the engine — "engine-targeted")
- *
- * The magnitude is the same tiered bonus as any micromodule (tier 1 strongest), so a
- * hull module reuses `micromoduleBonus(bonusTier)` in the loadout. Sold at CRAFT_CENTER
- * stations alongside {@link MICRO_MODULES}.
- */
 export const HULL_MICRO_MODULES: readonly MicroModule[] = [
-  // DEFENSE — boosts derived maxHull
   {
     id: "mm_hull_armor_1",
     name: "Броневой набор ур.1",
@@ -927,7 +935,6 @@ export const HULL_MICRO_MODULES: readonly MicroModule[] = [
     bonusType: "defense",
     bonusTier: 3,
   },
-  // CARGO — boosts hold capacity
   {
     id: "mm_hull_hold_1",
     name: "Расширитель трюма ур.1",
@@ -949,7 +956,6 @@ export const HULL_MICRO_MODULES: readonly MicroModule[] = [
     bonusType: "cargo",
     bonusTier: 3,
   },
-  // ENERGY → WEAPON — redirect reactor output to weapon damage
   {
     id: "mm_hull_pwr_wpn_1",
     name: "Перенаправление энергии: орудия ур.1",
@@ -964,7 +970,6 @@ export const HULL_MICRO_MODULES: readonly MicroModule[] = [
     bonusType: "energyWeapon",
     bonusTier: 2,
   },
-  // ENERGY → ENGINE — redirect reactor output to engine speed (engine-targeted)
   {
     id: "mm_hull_pwr_eng_1",
     name: "Перенаправление энергии: двигатель ур.1",
@@ -981,24 +986,16 @@ export const HULL_MICRO_MODULES: readonly MicroModule[] = [
   },
 ];
 
-/** Lookup a hull micromodule by id (the {@link HULL_MICRO_MODULES} family). */
 export function hullMicroModuleById(id: string): MicroModule | undefined {
   return HULL_MICRO_MODULES.find((m) => m.id === id);
 }
 
-/** Which derived ship stat a hull micromodule's multiplier lands on. */
 export type HullMicromoduleEffectKind =
   | "defense"
   | "cargo"
   | "weapon"
   | "engine";
 
-/**
- * Classify a hull-slot micromodule by the derived stat it boosts. A non-hull or
- * unknown id fitted in a hull slot falls back to `"defense"` (maxHull) — the
- * pre-Task-4 behaviour, where *any* micromodule on the hull simply scaled its HP —
- * so legacy saves and generic amplifiers keep working unchanged.
- */
 export function hullMicromoduleEffectKind(
   id: string,
 ): HullMicromoduleEffectKind {
@@ -1015,47 +1012,22 @@ export function hullMicromoduleEffectKind(
   }
 }
 
-/** Lookup by id. */
 export function gearById(id: string): Gear | undefined {
   return GEAR_CATALOG.find((g) => g.id === id);
 }
 
-/** Lazily-built display-name → gear-id index (first id wins on a collision). */
 let GEAR_ID_BY_NAME: Map<string, string> | undefined;
 
-/**
- * Aliases for the **legacy NPC `loadoutSummary` display strings** (`ROLE_LOADOUT`
- * in `NpcSimulator`) that don't match a catalog gear name verbatim. These are the
- * human-readable labels shown by the contact scan — kept stable for the scan UI —
- * so combat loot drops carrying them still resolve to the right catalog gear
- * instead of falling through to metal salvage. Engine tiers map ур.1/2/3 →
- * Тип-I/III/V (the only three engine tiers). Keep every `ROLE_LOADOUT` token
- * resolvable (guarded by `lootTokenResolution.test.ts`).
- */
 const LOADOUT_NAME_ALIASES: Record<string, string> = {
   "Двигатель ур.1": "eq_engine_i",
   "Двигатель ур.2": "eq_engine_iii",
   "Двигатель ур.3": "eq_engine_v",
   "Импульсная пушка": "wpn_pulse",
   "Балистическая пушка": "wpn_scatter",
-  // OVERMIND hive craft scan label — resolves to the energy beam emitter.
   "Плазменная пушка": "wpn_beam",
   Радар: "eq_radar",
 };
 
-/**
- * Resolve a loot/drop token to a catalog gear id, or `undefined` when it is not
- * recognisable gear (e.g. the junk-salvage fallbacks `salvaged_plating` /
- * `spare_capacitor` / `scrap_thruster` in `DEFAULT_LOOT_MODULES`, intentionally
- * non-gear so they salvage to metal).
- *
- * Accepts a catalog gear **id** (a real drop like `eq_tank` / `grav_tractor_1`),
- * a gear **display name** (NPC `loadoutSummary` entries are human-readable names
- * like «Топливный бак»), or a legacy `ROLE_LOADOUT` label that diverges from the
- * catalog name ({@link LOADOUT_NAME_ALIASES}, e.g. «Импульсная пушка» → the
- * pulse laser). This lets combat loot land the actual gear in the player's
- * inventory instead of being salvaged to metal.
- */
 export function gearIdForToken(token: string): string | undefined {
   if (!token) return undefined;
   if (gearById(token)) return token; // already a catalog id
@@ -1068,36 +1040,17 @@ export function gearIdForToken(token: string): string | undefined {
   return GEAR_ID_BY_NAME.get(token) ?? LOADOUT_NAME_ALIASES[token];
 }
 
-/**
- * Whether a piece of gear is the **rare, high-end top tier** — the apex
- * hull/engine/weapon a long credit climb earns. True when the item carries the
- * explicit `rare: true` flag *or* sits at/above {@link RARE_TECH_THRESHOLD}, so a
- * new high-tech item is rare by default without needing the flag. Rare gear is
- * stocked far less often ({@link ShopGenerator}) — only the wealthiest markets
- * field it — which is how "homogeneous-but-expensive" tech keeps the top tier
- * scarce instead of randomly outclassing the player.
- */
 export function isRareGear(gear: Gear): boolean {
   return gear.rare === true || gear.techLevel >= RARE_TECH_THRESHOLD;
 }
 
-/**
- * Artifact cost per upgrade tier: first upgrade costs 2, second costs 3 more (5 total).
- * Max upgrades per item: 2. Values indexed by currentUpgrades (0 or 1).
- */
 export const ARTIFACT_UPGRADE_COSTS = [2, 3] as const;
 
-/** Returns the artifact cost for the next upgrade, or Infinity if already maxed. */
 export function artifactUpgradeCost(currentUpgrades: number): number {
   if (currentUpgrades >= 2) return Infinity;
   return ARTIFACT_UPGRADE_COSTS[currentUpgrades];
 }
 
-/**
- * Apply one artifact upgrade to a gear piece.
- * Validates cost and upgrade cap; throws GameBusinessException on failure.
- * Returns a new gear object (does NOT mutate the catalog).
- */
 export function applyArtifactUpgrade(
   gear: Gear,
   availableArtifacts: number,
@@ -1121,11 +1074,6 @@ export function applyArtifactUpgrade(
   return { ...gear, upgrades: current + 1, techLevel: gear.techLevel + 1 };
 }
 
-/**
- * Market price for an item: rises with tech level and falls with size (compact,
- * high-tech gear is dearer — canon §11.3). `priceFactor` lets a shop apply a
- * faction/economy modifier; deterministic given the same factor.
- */
 export function gearMarketPrice(gear: Gear, priceFactor = 1): number {
   const techMult = 1 + (gear.techLevel - 1) * 0.06; // higher tech → pricier
   const sizeMult = 1 + Math.max(0, 6 - gear.size) * 0.04; // smaller → pricier
