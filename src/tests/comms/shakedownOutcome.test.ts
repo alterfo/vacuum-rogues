@@ -18,27 +18,14 @@ import { PlayerService } from "@/core/services/PlayerService";
 import { FactionType } from "@/types";
 import type { Player } from "@/domain/Player";
 
-/**
- * Task 3 — resolving the shakedown. Pure outcomes (tribute size, flee escape
- * chance) plus the ABS contract for a tribute payment: a balanced player → pirate
- * bus transfer that moves `player.credits` by exactly `-tribute` and keeps the
- * ledger balanced.
- */
-
-// ---------------------------------------------------------------------------
-// shakedownTribute — pure demand size
-// ---------------------------------------------------------------------------
-
 describe("shakedownTribute", () => {
   it("demands the configured fraction of the player's purse", () => {
-    // 10_000 * 0.25 = 2_500, inside [min, max].
     expect(shakedownTribute(10_000)).toBe(
       Math.round(10_000 * SHAKEDOWN_OUTCOME.tributeFraction),
     );
   });
 
   it("floors the demand at minTribute for a modestly-funded player", () => {
-    // 200 * 0.25 = 50 < minTribute(100), but the player can afford 100.
     expect(shakedownTribute(200)).toBe(SHAKEDOWN_OUTCOME.minTribute);
   });
 
@@ -47,7 +34,6 @@ describe("shakedownTribute", () => {
   });
 
   it("never demands more than the player actually has", () => {
-    // Player has 50 < minTribute: empty them, don't put them in debt.
     expect(shakedownTribute(50)).toBe(50);
   });
 
@@ -63,10 +49,6 @@ describe("shakedownTribute", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// fleeEscapeChance — pure, by relative speed
-// ---------------------------------------------------------------------------
-
 describe("fleeEscapeChance", () => {
   it("a dead-in-the-water player can never escape", () => {
     expect(fleeEscapeChance(0, 0.2)).toBe(0);
@@ -78,7 +60,6 @@ describe("fleeEscapeChance", () => {
   });
 
   it("floors at fleeMinChance for a much slower player", () => {
-    // ratio well below fleeSlowRatio.
     expect(fleeEscapeChance(0.1, 1.0)).toBeCloseTo(
       SHAKEDOWN_OUTCOME.fleeMinChance,
       5,
@@ -86,7 +67,6 @@ describe("fleeEscapeChance", () => {
   });
 
   it("saturates at fleeMaxChance for a much faster player", () => {
-    // ratio well above fleeFastRatio.
     expect(fleeEscapeChance(1.0, 0.1)).toBeCloseTo(
       SHAKEDOWN_OUTCOME.fleeMaxChance,
       5,
@@ -104,10 +84,6 @@ describe("fleeEscapeChance", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// attemptFlee — seeded RNG roll
-// ---------------------------------------------------------------------------
-
 describe("attemptFlee", () => {
   it("is deterministic for a given seed", () => {
     const a = attemptFlee(0.2, 0.2, new SeededRNG("flee-seed"));
@@ -116,7 +92,6 @@ describe("attemptFlee", () => {
   });
 
   it("escapes at roughly the expected rate for an even match", () => {
-    // ratio 1.0 → chance is the midpoint of [min, max].
     const expected = fleeEscapeChance(0.2, 0.2);
     let yes = 0;
     const N = 400;
@@ -140,10 +115,6 @@ describe("attemptFlee", () => {
     expect(rateFor(0.3)).toBeGreaterThan(rateFor(0.12));
   });
 });
-
-// ---------------------------------------------------------------------------
-// payTribute — ABS contract (balanced player → pirate transfer)
-// ---------------------------------------------------------------------------
 
 interface Harness {
   bus: BankBus;

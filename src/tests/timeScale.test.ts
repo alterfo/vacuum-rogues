@@ -27,13 +27,11 @@ describe("ShipPhysics timeScale", () => {
     p2.setTarget(1000, 0);
     p2.update(dt);
 
-    // Speed scales linearly with timeScale (accel * dt * timeScale)
     expect(p1.currentSpeed).toBeGreaterThan(0);
     expect(p2.currentSpeed).toBeCloseTo(p1.currentSpeed * 2, 5);
   });
 
   it("timeScale=4 produces four times the currentSpeed of timeScale=1 after one frame", () => {
-    // Use dt=20 so effective_dt*4 = 80ms — well below the maxSpeed cap.
     const dt = 20;
 
     const p1 = new ShipPhysics(0, 0);

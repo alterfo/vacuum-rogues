@@ -1,10 +1,3 @@
-/**
- * Ship-death explosion emitter (2026-06-27, Task 2) — the pure radial-burst
- * sibling of `cometDustTail`. These assertions pin the burst read: one `spawn()`
- * seeds a bounded outward fan of sparks, they expand + fade over their lifetime,
- * the fixed pool is never exceeded under repeated bursts, and every spark expires
- * back to an empty pool. PixiJS-free, like `cometTailShape.test.ts`.
- */
 import { describe, it, expect } from "vitest";
 import {
   ShipDeathFx,
@@ -38,7 +31,6 @@ describe("ship-death explosion emitter (radial burst)", () => {
     expect(n).toBe(24);
     expect(fx.count).toBe(24);
     expect(fx.isActive()).toBe(true);
-    // Every fresh spark starts at the centre.
     for (const m of fx.slots) {
       if (!m.active) continue;
       expect(m.x).toBe(100);
@@ -51,7 +43,6 @@ describe("ship-death explosion emitter (radial burst)", () => {
     const fx = new ShipDeathFx(64, 48, half);
     fx.spawn(0, 0);
     fx.update(16);
-    // With an even angular fan some sparks must travel +x and some −x, +y and −y.
     let posX = false;
     let negX = false;
     let posY = false;
@@ -86,7 +77,6 @@ describe("ship-death explosion emitter (radial burst)", () => {
       fx.update(5); // tiny step — sparks survive, so bursts stack against the bound
       expect(fx.count).toBeLessThanOrEqual(32);
     }
-    // Repeated stacking fills the pool but cannot overflow it.
     expect(fx.count).toBe(32);
   });
 
@@ -101,7 +91,6 @@ describe("ship-death explosion emitter (radial burst)", () => {
     const fx = new ShipDeathFx(32, 24, half);
     fx.spawn(0, 0);
     expect(fx.count).toBeGreaterThan(0);
-    // One step past the max lifetime band prunes every spark.
     fx.update(1000);
     expect(fx.count).toBe(0);
     expect(fx.isActive()).toBe(false);
@@ -133,7 +122,6 @@ describe("explosion mote shading helpers", () => {
       0,
       6,
     );
-    // A recycled (life 0) slot reads fully faded — no NaN.
     expect(explosionMoteAlpha(mote({ age: 0, life: 0 }))).toBe(0);
   });
 
@@ -143,7 +131,6 @@ describe("explosion mote shading helpers", () => {
     const old = mote({ age: 1000, life: 1000, size: 1 });
     expect(explosionMoteScale(young)).toBeGreaterThan(explosionMoteScale(mid));
     expect(explosionMoteScale(mid)).toBeGreaterThan(explosionMoteScale(old));
-    // The deepened (×0.7) falloff thins a spent spark well below its birth size.
     expect(explosionMoteScale(old)).toBeLessThan(
       explosionMoteScale(young) * 0.5,
     );

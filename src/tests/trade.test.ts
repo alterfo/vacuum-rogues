@@ -233,7 +233,6 @@ describe("TradeSystem", () => {
     it("sell price is always strictly below buy price on the same planet", () => {
       const trade = new TradeSystem();
       const planet = createMockPlanet();
-      // Trader race with a sell bonus — must still not break the invariant.
       const player = createMockPlayer();
 
       for (const resource of ALL_RESOURCES) {

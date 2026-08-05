@@ -35,8 +35,6 @@ afterEach(() => {
 
 describe("CombatSystem.resolveVictory — Overmind artifact drops", () => {
   it("drops artifacts when isOvermindSystem=true and RNG < ARTIFACT_DROP_CHANCE", () => {
-    // First call is for gear drop (Math.random() < 0.3), second for artifact roll.
-    // We want gear drop to miss (0.5 >= 0.3) and artifact roll to hit (0.1 < 0.4).
     vi.spyOn(Math, "random")
       .mockReturnValueOnce(0.5) // gear drop: miss
       .mockReturnValueOnce(0.1) // artifact roll: hit

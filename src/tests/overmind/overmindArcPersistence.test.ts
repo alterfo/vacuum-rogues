@@ -9,16 +9,6 @@ import type { StarSystem } from "@/domain/StarSystem";
 import type { Player } from "@/domain/Player";
 import type { OvermindSpreadState } from "@/types";
 
-/**
- * Task 2 — persisted Overmind-arc state (`Galaxy.overmindArc`).
- *
- * The arc clock/threat snapshot is a new *persisted* field, so it follows the
- * schema + migration + version-bump lockstep. These tests pin the round-trip
- * (save → serialize → deserialize) and the old-save default path: a save made
- * before the field existed must load with a dormant default, never `undefined`.
- */
-
-/** Minimal Galaxy with `systemCount` linear systems (reused from overmind.test). */
 function makeGalaxy(systemCount = 6): Galaxy {
   const systems: StarSystem[] = Array.from({ length: systemCount }, (_, i) => ({
     id: `sys_${i}`,
@@ -43,7 +33,6 @@ function makeGalaxy(systemCount = 6): Galaxy {
   return new Galaxy("g_test", systems, new Overmind(), [], [], [], "sys_5");
 }
 
-/** A non-default arc state — the value the round-trip must preserve verbatim. */
 const ADVANCING_ARC: OvermindSpreadState = {
   dayZero: 4,
   lastSpreadDay: 12,
@@ -109,7 +98,6 @@ describe("Overmind-arc state — save/load round-trip", () => {
 });
 
 describe("Overmind-arc state — old saves default safely", () => {
-  /** Minimal raw save object at the prior version, with NO overmindArc. */
   function makeOldRawSave(): Record<string, unknown> {
     return {
       version: 27,
@@ -121,7 +109,6 @@ describe("Overmind-arc state — old saves default safely", () => {
         systems: [{ id: "sys_0" }, { id: "sys_1" }],
         overmindSystems: ["sys_1"],
         overmindCoreSystemId: "sys_1",
-        // NOTE: deliberately omits overmindArc to simulate a pre-arc save.
       },
       player: { id: "p", credits: 100 },
     };
@@ -139,7 +126,6 @@ describe("Overmind-arc state — old saves default safely", () => {
       overmindSystems: string[];
     };
     expect(gal.overmindArc).toEqual(initialOvermindSpreadState());
-    // The already-persisted captured set is untouched by the arc migration.
     expect(gal.overmindSystems).toEqual(["sys_1"]);
   });
 

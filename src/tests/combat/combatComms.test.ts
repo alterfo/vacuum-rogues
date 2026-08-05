@@ -48,8 +48,6 @@ describe("comms action catalog + i18n (Task 10)", () => {
   });
 
   it("comms category is distinct from the consumable/artifact naming", () => {
-    // Task 1 decision 1d: comms is its own concept, must not collide with the
-    // tactical-device category or the ARTIFACTS crafting currency.
     expect(COMBAT_COMMS_CATEGORY_KEY).not.toBe("combat.consumable.category");
     expect(ru[COMBAT_COMMS_CATEGORY_KEY as keyof typeof ru]).not.toBe(
       ru["combat.consumable.category" as keyof typeof ru],
@@ -96,7 +94,6 @@ describe("branch 2 — demand-surrender (role + hull-fraction gated)", () => {
   });
 
   it("a cowardly trader yields even at fairly high hull; a brave pirate does not", () => {
-    // trader threshold 0.6, pirate threshold 0.2
     expect(resolveSurrenderDemand("TRADER", 0.5).surrenders).toBe(true);
     expect(resolveSurrenderDemand("PIRATE", 0.5).surrenders).toBe(false);
   });
@@ -121,7 +118,6 @@ describe("branch 2 — demand-surrender (role + hull-fraction gated)", () => {
   });
 
   it("clamps out-of-range / non-finite hull fractions", () => {
-    // > 1 clamps to 1 (never surrenders), < 0 clamps to 0 (surrenders if role can)
     expect(resolveSurrenderDemand("TRADER", 2).surrenders).toBe(false);
     expect(resolveSurrenderDemand("TRADER", -1).surrenders).toBe(true);
     expect(resolveSurrenderDemand("TRADER", NaN).surrenders).toBe(false);

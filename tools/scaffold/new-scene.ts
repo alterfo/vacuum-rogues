@@ -1,25 +1,3 @@
-/**
- * new-scene — scaffold a new PixiJS scene across every registration file at once.
- *
- * Adding a scene in this codebase requires touching several files in lockstep
- * (see .claude/docs/adding-features.md "New Scene"):
- *   1. the scene class            — src/presentation/<Name>Scene.ts
- *   2. the SceneType enum         — src/types/index.ts
- *   3. the SceneFactory switch     — src/core/services/SceneFactory.ts (import + case)
- *   4. contextDependentScenes      — src/systems/GameEngine.ts (only if --context-dependent)
- *   5. the E2E Page Object         — e2e/page-objects/<Name>ScenePage.ts
- * Missing any one of these yields a scene that cannot be constructed, a blank
- * "Continue" screen, or an un-testable flow. This tool performs all five edits
- * atomically (and idempotently) from a single command.
- *
- * Usage:
- *   npx tsx tools/scaffold/new-scene.ts --name ResearchUpgrade --context-dependent
- *
- * Insertion is regex/brace-counting based (no AST) so it has no dependency on
- * the TypeScript compiler. The core logic is exported as `scaffoldScene` and
- * operates against an arbitrary root directory so tests can run it against a
- * temp fixture tree.
- */
 import {
   existsSync,
   readFileSync,
@@ -29,26 +7,19 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface SceneOptions {
-  /** PascalCase base name without the "Scene" suffix, e.g. "ResearchUpgrade". */
   name: string;
-  /** Register the scene in GameEngine.contextDependentScenes when true. */
   contextDependent?: boolean;
 }
 
 export interface ScaffoldResult {
-  /** Repo-relative paths that were created or modified. */
   changed: string[];
-  /** Files that already contained the registration (no-op, idempotent). */
   skipped: string[];
-  /** Non-fatal problems (missing file, missing anchor, …). */
   warnings: string[];
-  /** Manual follow-up steps the developer still needs to do. */
   checklist: string[];
 }
 
 const PASCAL = /^[A-Z][A-Za-z0-9]*$/;
 
-/** `ResearchUpgrade` -> `RESEARCH_UPGRADE`, `NPCRole` -> `NPC_ROLE`. */
 export function toScreamingSnake(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
@@ -59,10 +30,6 @@ export function toScreamingSnake(name: string): string {
 export const sceneClassName = (name: string): string => `${name}Scene`;
 export const pageObjectName = (name: string): string => `${name}ScenePage`;
 
-/**
- * Returns the index of the bracket matching the opener at `openIndex`.
- * Works for `{` / `}` and `[` / `]` — counts only the matching pair.
- */
 function matchingBracket(content: string, openIndex: number): number {
   const open = content[openIndex];
   const close = open === "{" ? "}" : "]";
@@ -78,13 +45,11 @@ function matchingBracket(content: string, openIndex: number): number {
   return -1;
 }
 
-/** Start index of the line containing `index`. */
 function lineStart(content: string, index: number): number {
   const nl = content.lastIndexOf("\n", index - 1);
   return nl === -1 ? 0 : nl + 1;
 }
 
-/** The class stub written to src/presentation/<Name>Scene.ts. */
 export function sceneFileTemplate(name: string): string {
   const cls = sceneClassName(name);
   return `import { Container } from "pixi.js";
@@ -135,7 +100,6 @@ export class ${cls} extends GameScene {
 `;
 }
 
-/** The Page Object stub written to e2e/page-objects/<Name>ScenePage.ts. */
 export function pageObjectTemplate(name: string): string {
   const cls = pageObjectName(name);
   return `import { type Page } from '@playwright/test';
@@ -154,10 +118,6 @@ export class ${cls} extends GamePageBase {
 `;
 }
 
-/**
- * Insert `  <ENUM> = "<ENUM>",` just before the closing brace of
- * `export enum SceneType { … }`. Idempotent within the enum block.
- */
 export function insertSceneType(
   content: string,
   enumValue: string,
@@ -183,11 +143,6 @@ export function insertSceneType(
   };
 }
 
-/**
- * Add the scene import and a `case SceneType.<ENUM>: return new <Class>(renderer);`
- * to SceneFactory. The import is inserted after the last `@/presentation` import;
- * the case is inserted just before the switch's `default:`. Idempotent on both.
- */
 export function insertFactoryCase(
   content: string,
   enumValue: string,
@@ -198,7 +153,6 @@ export function insertFactoryCase(
     return { content, skipped: true, found: true };
   }
 
-  // 1. Import — after the last `from "@/presentation/...";` line.
   let next = content;
   const importStr = `import { ${className} } from "@/presentation/${className}";`;
   if (!next.includes(importStr)) {
@@ -211,7 +165,6 @@ export function insertFactoryCase(
     next = next.slice(0, after) + `\n${importStr}` + next.slice(after);
   }
 
-  // 2. Case — before the switch `default:`.
   const defaultRe = /(\n[ \t]*)default:/;
   const dm = defaultRe.exec(next);
   if (!dm) return { content, skipped: false, found: false };
@@ -224,10 +177,6 @@ export function insertFactoryCase(
   return { content: next, skipped: false, found: true };
 }
 
-/**
- * Insert `      SceneType.<ENUM>,` before the closing `]` of the
- * `contextDependentScenes: SceneType[] = [ … ]` array. Idempotent.
- */
 export function insertContextDependent(
   content: string,
   enumValue: string,
@@ -253,11 +202,6 @@ export function insertContextDependent(
   };
 }
 
-/**
- * Apply all scene-registration edits against `root`. Returns a structured
- * result; does not throw on missing files/anchors — they surface as warnings
- * so the caller can decide what to do (the CLI prints them, tests assert them).
- */
 export function scaffoldScene(opts: SceneOptions, root: string): ScaffoldResult {
   const result: ScaffoldResult = {
     changed: [],
@@ -282,7 +226,6 @@ export function scaffoldScene(opts: SceneOptions, root: string): ScaffoldResult 
   const enumValue = toScreamingSnake(opts.name);
   const className = sceneClassName(opts.name);
 
-  // 1. Scene class file (created, never patched).
   const scenePath = `src/presentation/${className}.ts`;
   const sceneAbs = join(root, scenePath);
   if (existsSync(sceneAbs)) {
@@ -292,7 +235,6 @@ export function scaffoldScene(opts: SceneOptions, root: string): ScaffoldResult 
     result.changed.push(scenePath);
   }
 
-  // 2. SceneType enum.
   const typesPath = "src/types/index.ts";
   const typesAbs = join(root, typesPath);
   if (!existsSync(typesAbs)) {
@@ -310,7 +252,6 @@ export function scaffoldScene(opts: SceneOptions, root: string): ScaffoldResult 
     }
   }
 
-  // 3. SceneFactory import + case.
   const factoryPath = "src/core/services/SceneFactory.ts";
   const factoryAbs = join(root, factoryPath);
   if (!existsSync(factoryAbs)) {
@@ -330,7 +271,6 @@ export function scaffoldScene(opts: SceneOptions, root: string): ScaffoldResult 
     }
   }
 
-  // 4. GameEngine.contextDependentScenes (opt-in).
   const enginePath = "src/systems/GameEngine.ts";
   if (opts.contextDependent) {
     const engineAbs = join(root, enginePath);
@@ -352,7 +292,6 @@ export function scaffoldScene(opts: SceneOptions, root: string): ScaffoldResult 
     }
   }
 
-  // 5. E2E Page Object (created, never patched).
   const pagePath = `e2e/page-objects/${pageObjectName(opts.name)}.ts`;
   const pageAbs = join(root, pagePath);
   if (existsSync(pageAbs)) {
@@ -362,7 +301,6 @@ export function scaffoldScene(opts: SceneOptions, root: string): ScaffoldResult 
     result.changed.push(pagePath);
   }
 
-  // Manual follow-up this tool deliberately does NOT automate.
   result.checklist.push(
     `Implement ${className}.initialize/update/destroy — the stub only mounts an empty container.`,
   );
@@ -378,7 +316,6 @@ export function scaffoldScene(opts: SceneOptions, root: string): ScaffoldResult 
   return result;
 }
 
-/** Minimal `--key value` / `--key=value` / boolean `--flag` argv parser. */
 function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -424,12 +361,6 @@ function main(): void {
     process.stdout.write("\nManual follow-up:\n");
     for (const c of result.checklist) process.stdout.write(`  - ${c}\n`);
   }
-  // Exit codes signal lockstep integrity to automated callers (ralphex/CI/`&&`):
-  //   3 = partial apply — some files were created/edited, but a warning means at
-  //       least one required registration could not be (missing anchor/file), so
-  //       the scene is half-wired (e.g. class created but no SceneFactory case).
-  //   1 = nothing was applied at all.
-  //   0 = every required edit applied (or already present on an idempotent re-run).
   const didNothing = result.changed.length === 0 && result.skipped.length === 0;
   if (result.warnings.length > 0 && !didNothing) {
     process.exit(3);
@@ -439,7 +370,6 @@ function main(): void {
   }
 }
 
-// Run only when invoked directly (tsx), not when imported by tests.
 const invokedDirectly =
   typeof process !== "undefined" &&
   process.argv[1] !== undefined &&

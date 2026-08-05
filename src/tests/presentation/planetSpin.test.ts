@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { planetSpin } from "@/presentation/PlanetSprite";
 
-// Canonical visible band (longitude fraction per ms). Mirrors the constants in
-// PlanetSprite: one full rotation takes 1/speed ms, so the period lands in
-// roughly 12–60 s — slow enough to be tasteful, wide enough to read as varied.
 const SLOWEST = 1 / 60000; // ~60 s per rotation
 const FASTEST = 1 / 12000; // ~12 s per rotation
 
@@ -24,7 +21,6 @@ describe("planetSpin (varied per-planet axial rotation)", () => {
       const { speed } = planetSpin(`p-${i}`);
       expect(speed).toBeGreaterThanOrEqual(SLOWEST);
       expect(speed).toBeLessThanOrEqual(FASTEST);
-      // Equivalent period check for clarity.
       const periodSeconds = 1 / speed / 1000;
       expect(periodSeconds).toBeGreaterThanOrEqual(12 - 1e-6);
       expect(periodSeconds).toBeLessThanOrEqual(60 + 1e-6);
@@ -41,7 +37,6 @@ describe("planetSpin (varied per-planet axial rotation)", () => {
       if (direction > 0) prograde++;
       else retrograde++;
     }
-    // Both signs appear and neither dominates — some planets spin retrograde.
     expect(prograde).toBeGreaterThan(N * 0.3);
     expect(retrograde).toBeGreaterThan(N * 0.3);
   });
@@ -53,7 +48,6 @@ describe("planetSpin (varied per-planet axial rotation)", () => {
     );
     const min = Math.min(...speeds);
     const max = Math.max(...speeds);
-    // The fastest is multiple-x the slowest — clearly distinguishable planets.
     expect(max / min).toBeGreaterThan(3);
   });
 });

@@ -1,22 +1,8 @@
-/**
- * Equirectangular texture → rotating-sphere mesh (US-070 #4 / planets).
- *
- * Builds a textured mesh whose vertices lie on the orthographic projection of a
- * sphere's front hemisphere, so the texture compresses toward the limb and rolls
- * off the edge as the surface turns — a real rotating-sphere look, not a flat
- * scroll. Rotation is animated by shifting every vertex's longitude (u) via
- * {@link SphereMesh.advance}. Used for both the sun and (map-backed) planets.
- *
- * Pure presentation helper; uses only the built-in textured-mesh renderer (no
- * custom GLSL), so it's robust across PixiJS builds. Returns null on any API
- * mismatch so callers can fall back to a flat scroll.
- */
 import { Mesh, MeshGeometry } from "pixi.js";
 import type { Buffer, Texture } from "pixi.js";
 
 export interface SphereMesh {
   readonly mesh: Mesh;
-  /** Roll the surface by a longitude delta (fraction of a full turn; wraps). */
   advance(lonDelta: number): void;
 }
 
@@ -74,18 +60,6 @@ export function buildSphereMesh(
     const uvBuffer: Buffer | null = geometry.getBuffer("aUV");
     if (!uvBuffer) return null;
 
-    // Mirror-wrap horizontally so the longitude offset scrolls past the seam
-    // without a hard discontinuity even when the map's left/right edges don't
-    // tile (F4: plain "repeat" showed the mismatched edges as a seam meridian
-    // sweeping the rotating sun). Clamp vertically so the pole rows never
-    // blend with the opposite edge of the texture. This applies to BOTH bodies
-    // sharing this helper — the sun and map-backed planets: on planets the
-    // mirrored half of each rotation cycle is invisible on the procedural
-    // equirect maps, while the old hard seam meridian was not.
-    //
-    // Mutate the shared texture style only after geometry validation above, so
-    // a failed build (null return → TilingSprite fallback) has no side effects
-    // on other consumers of the same cached texture.
     try {
       const style = mapTex.source?.style as
         | { addressModeU?: string; addressModeV?: string }
@@ -103,10 +77,6 @@ export function buildSphereMesh(
     mesh.tint = tint;
     mesh.eventMode = "none";
 
-    // Longitude wraps with period 2, not 1: mirror-repeat addressing repeats
-    // the texture every TWO widths (image + its mirror), so wrapping at 1
-    // would snap the mirrored half back to the original mid-cycle — a visible
-    // pop. With period 2 the u offset is continuous across the whole cycle.
     let lon = 0;
     return {
       mesh,

@@ -11,7 +11,6 @@ import {
 import { ShipPhysics, SHIP_STOP_THRESHOLD } from "@/systems/ShipPhysics";
 import { COMBAT_ROUND_MS } from "@/config/balance";
 
-// A representative player motion profile: starter-ish cruise + the fixed turn rate.
 const profile: ShipMotionProfile = {
   maxSpeed: 0.11, // px/ms (starter engine tier)
   rotationSpeed: SHIP_ROTATION_SPEED,
@@ -35,7 +34,6 @@ describe("combatReach — trajectory line length scaled by engine potency (Task 
       COMBAT_ROUND_MS,
     );
     expect(fast).toBeGreaterThan(slow);
-    // Apex engine (0.22) is 2× the starter tier's reach at the same round.
     expect(fast).toBeCloseTo(
       2 *
         combatReach(
@@ -85,7 +83,6 @@ describe("clampDestinationToReach (Task 3)", () => {
       reach,
     ); // dist 500
     expect(reachable).toBe(false);
-    // On the ray (same direction), at exactly `reach` distance.
     const d = Math.sqrt(dest.x * dest.x + dest.y * dest.y);
     expect(d).toBeCloseTo(reach, 6);
     expect(dest.x / dest.y).toBeCloseTo(300 / 400, 6); // direction preserved
@@ -115,8 +112,6 @@ describe("previewTrajectory — arc-radius constraint honored (Task 3)", () => {
   }
 
   it("never turns faster than the min-turn-radius rate between consecutive segments", () => {
-    // Destination directly BEHIND the ship (heading +x, target at -x): a straight
-    // line is impossible; the preview must curve within the bounded turn rate.
     const pts = previewTrajectory(
       profile,
       { x: 0, y: 0 },
@@ -142,8 +137,6 @@ describe("previewTrajectory — arc-radius constraint honored (Task 3)", () => {
       { x: -400, y: 0 },
       reach,
     );
-    // The first segment heading is close to the ship's initial heading (0), not
-    // flipped ~π toward the target — proving the arc, not a pivot.
     const firstSeg = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
     expect(Math.abs(firstSeg)).toBeLessThanOrEqual(maxTurnPerStep + 1e-9);
   });
@@ -170,7 +163,6 @@ describe("previewTrajectory — arc-radius constraint honored (Task 3)", () => {
     expect(Math.hypot(last.x - dest.x, last.y - dest.y)).toBeLessThanOrEqual(
       SHIP_STOP_THRESHOLD + profile.maxSpeed * 50,
     );
-    // Straight ahead ⇒ y stays ~0 the whole way.
     for (const p of pts) expect(Math.abs(p.y)).toBeLessThan(1);
   });
 
@@ -195,7 +187,6 @@ describe("applyPlannedMovement — confirmed course handed to ShipPhysics (Task 
     const physics = new ShipPhysics(0, 0, 0.11, 0);
     const dest = { x: 150, y: -80 };
     expect(applyPlannedMovement(dest, physics)).toBe(true);
-    // The single-point path makes the destination the ship's target.
     expect(physics.getTargetX()).toBe(150);
     expect(physics.getTargetY()).toBe(-80);
     expect(physics.isMoving).toBe(true);
@@ -205,7 +196,6 @@ describe("applyPlannedMovement — confirmed course handed to ShipPhysics (Task 
     const physics = new ShipPhysics(0, 0, 0.11, 0);
     const dest = { x: 120, y: 60 };
     applyPlannedMovement(dest, physics);
-    // Simulate flight until arrival (bounded).
     for (let i = 0; i < 4000 && physics.isMoving; i++) physics.update(50);
     expect(
       Math.hypot(physics.shipX - dest.x, physics.shipY - dest.y),

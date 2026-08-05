@@ -1,13 +1,3 @@
-/**
- * Manifest key-parity baseline (WebP conversion, Task 1).
- *
- * The WebP conversion (`tools/optimize-assets.ts`) is only safe because the
- * manifest keys by path WITHOUT the extension, so swapping `x.png` → `x.webp`
- * must leave the EXACT same key set. `manifestKeys.snapshot.json` captures that
- * key set as the pre-conversion baseline; this test asserts the live manifest
- * still exposes every snapshotted key (and no extras). It must stay green
- * before AND after conversion — a diff here means a caller would break.
- */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

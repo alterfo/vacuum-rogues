@@ -10,16 +10,6 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { NpcShip } from "@/domain/NpcShip";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
 
-/**
- * Focused unit tests for the OVERMIND-core final-boss cluster extracted from
- * {@link NpcShipManager} (plan Task 4). The controller is exercised directly
- * against a fake {@link OvermindBossControllerDeps} bundle — no real
- * GameEngine — so the prompt open/close, font-scale rebuild and combatant
- * spawn/idempotency are verified in isolation. The real-engine suite
- * `combat/overmindCoreInflight.test.ts` remains the integration oracle (real
- * NpcShipManager + a genuine CombatModule win condition).
- */
-
 function makeNpcShip(id: string): NpcShip {
   let hostile = false;
   return {
@@ -109,13 +99,6 @@ function makeHarness(opts: { noEngine?: boolean } = {}): Harness {
   };
 }
 
-/**
- * Locate the attack/retreat buttons on the most recently opened overlay
- * (fixed addChild order: bg, border, title, desc, attack, retreat). Reads the
- * *last* uiLayer child, not the first — a closed overlay's destroy is
- * deferred to a microtask, so re-opening the prompt can leave a stale closed
- * overlay still sitting in `uiLayer.children`.
- */
 function buttons(uiLayer: Container): {
   attack: Container;
   retreat: Container;

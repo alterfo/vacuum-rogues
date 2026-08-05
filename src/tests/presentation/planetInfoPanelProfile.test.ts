@@ -1,10 +1,3 @@
-/**
- * Task 9 (quest-and-hub polish pass): the flight-hover `PlanetInfoPanel` must
- * surface the four social attributes SOURCE-OF-TRUTH §11.1 requires —
- * population, economy type, political system and player attitude — none of
- * which rendered before. A lightweight `pixi.js` mock records every `Text`
- * string so the rendered lines are directly inspectable without a canvas.
- */
 import { describe, it, expect, vi } from "vitest";
 import { EconomyType, PoliticalSystem } from "@/types";
 
@@ -56,7 +49,6 @@ vi.mock("pixi.js", () => {
   return { Container, Graphics, Text };
 });
 
-// Imported AFTER the mock so the panel sees the fake pixi.
 import { PlanetInfoPanel } from "@/presentation/PlanetInfoPanel";
 
 function habitablePlanet(
@@ -99,7 +91,6 @@ describe("PlanetInfoPanel social profile (Task 9)", () => {
     expect(texts.some((t) => t.startsWith("Население: "))).toBe(true);
     expect(texts).toContain("Экономика: Промышленная");
     expect(texts).toContain("Строй: Республика");
-    // Reputation 55 ⇒ "Союзник" (getRepLabel).
     expect(texts).toContain("Отношение: Союзник");
   });
 
@@ -122,7 +113,6 @@ describe("PlanetInfoPanel social profile (Task 9)", () => {
     expect(texts).toContain("Население: 2.4 млн");
     expect(texts).toContain("Экономика: Смешанная");
     expect(texts).toContain("Строй: Демократия");
-    // Reputation 0 ⇒ "Нейтральный".
     expect(texts).toContain("Отношение: Нейтральный");
   });
 
@@ -141,7 +131,6 @@ describe("PlanetInfoPanel social profile (Task 9)", () => {
 
     expect(texts).toContain("Экономика: —");
     expect(texts).toContain("Строй: —");
-    // Still shows a population line (deterministic id fallback).
     expect(texts.some((t) => t.startsWith("Население: "))).toBe(true);
   });
 

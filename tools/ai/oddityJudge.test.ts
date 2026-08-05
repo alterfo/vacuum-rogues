@@ -1,12 +1,3 @@
-/**
- * Tests for the offline LLM oddity-judge (Task 3). Everything is deterministic
- * and free: the {@link FakeLlmClient} returns canned model replies, so the prompt
- * assembly, the report parser, and the end-to-end glue are all asserted with **no
- * live API call and no key**. The judge's value (catching open-ended semantic
- * oddities) is exercised by planting an oddity in a transcript and asserting the
- * (faked) verdict parses into a flagged report; the parser's robustness is
- * exercised by feeding malformed replies and asserting it degrades, never throws.
- */
 import { describe, it, expect } from "vitest";
 import { SceneType } from "@/types";
 import { FakeLlmClient } from "./llmClient";
@@ -22,7 +13,6 @@ import type {
   TranscriptStep,
 } from "../../src/tests/playtest/letsplay/transcript";
 
-/** A minimal but valid transcript, overridable per field. */
 function mkTranscript(over: Partial<SessionTranscript> = {}): SessionTranscript {
   const summary: SessionSummary = {
     steps: 1,
@@ -67,7 +57,6 @@ describe("buildJudgePrompt", () => {
     expect(system).toBe(ODDITY_RUBRIC);
     expect(messages).toHaveLength(1);
     expect(messages[0].role).toBe("user");
-    // The whole serialised transcript rides in the user message.
     expect(messages[0].content).toContain('"seed": "ABC"');
     expect(messages[0].content).toContain("TRANSCRIPT:");
   });
@@ -187,7 +176,6 @@ describe("parseOddityReport", () => {
 
 describe("judgeTranscript (end-to-end against FakeLlmClient)", () => {
   it("flags a planted oddity in a transcript", async () => {
-    // A transcript with a kill that paid nothing — the unrewarded-combat class.
     const transcript = mkTranscript({
       steps: [
         {
@@ -226,7 +214,6 @@ describe("judgeTranscript (end-to-end against FakeLlmClient)", () => {
     expect(report.findings[0].evidence).toEqual([5]);
     expect(report.findings[0].severity).toBe("high");
 
-    // The prompt actually carried the rubric + the transcript to the client.
     expect(fake.calls).toHaveLength(1);
     expect(fake.calls[0].opts?.system).toBe(ODDITY_RUBRIC);
     expect(fake.calls[0].messages[0].content).toContain('"killPoints": 1');

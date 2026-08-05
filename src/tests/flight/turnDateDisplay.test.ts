@@ -1,19 +1,3 @@
-/**
- * Task 2 (docs/plans/20260620-turn-date-not-advancing.md) added a sub-day HH:MM
- * clock to the HUD date read-out so time visibly moved within a turn.
- *
- * SUPERSEDED by Bug 3b (HUD-clutter playtest pass 2026-07-06/07): the clock was
- * itself reported as clutter and removed. `updateDayCounter` renders
- * `formatGameDate(day)` again (whole day only) — the scene still pushes its
- * fractional `currentDay` (= gameDays + distanceTraveled/DISTANCE_PER_DAY +
- * waitDayAccum) into the HUD via `setDayProvider`, so a whole-day boundary
- * crossed mid-turn still shows up immediately, but sub-day progress within one
- * calendar day is no longer visible in the label. These tests drive a real
- * `FlightHud` (real PixiJS Container/Text in jsdom, no WebGL — mirrors
- * fontScaleRestyle.test.ts) and pin that behaviour for the adjacent cases the
- * original plan called out: a moving turn, a wait turn, a whole-day roll, and
- * a post-combat resume.
- */
 import { describe, it, expect } from "vitest";
 import { Container, Text } from "pixi.js";
 import type { Renderer } from "@/presentation/Renderer";
@@ -45,7 +29,6 @@ function buildHud() {
   } as unknown as GameEngine;
   const hud = new FlightHud(makeRenderer(), gameEngine, uiLayer);
   hud.initialize();
-  /** The date string the player actually sees in the top-left HUD label. */
   const shownDate = () =>
     (hud as unknown as { dayCounterText: Text }).dayCounterText.text;
   return { hud, galaxy, shownDate };
@@ -54,8 +37,6 @@ function buildHud() {
 describe("FlightHud date read-out is clock-free (Bug 3b)", () => {
   it("a moving turn within one calendar day does not change the displayed date", () => {
     const { hud, shownDate } = buildHud();
-    // The scene's currentDay rises continuously as distanceTraveled accrues; the
-    // ship hasn't crossed a whole day, so gameDays stays at 5.
     let day = 5.0;
     hud.setDayProvider(() => day);
 
@@ -95,7 +76,6 @@ describe("FlightHud date read-out is clock-free (Bug 3b)", () => {
 
     hud.update(16, 0);
     expect(shownDate()).toBe(formatGameDate(5));
-    // advanceGalaxyDay bumped gameDays and reset the sub-day fraction.
     day = 6.05;
     hud.update(16, 0);
     expect(shownDate()).toBe(formatGameDate(6));
@@ -109,13 +89,9 @@ describe("FlightHud date read-out is clock-free (Bug 3b)", () => {
 
     hud.update(16, 0);
     const frozen = shownDate();
-    // While combat is paused the scene's currentDay does not advance (updateShip
-    // early-returns), so repeated frames render the same date — the freeze is
-    // intended, not a display glitch.
     hud.update(16, 0);
     hud.update(16, 0);
     expect(shownDate()).toBe(frozen);
-    // Fight ends → the turn resumes → currentDay crosses into day 6 → the date moves.
     day = 6.05;
     hud.update(16, 0);
     expect(shownDate()).not.toBe(frozen);

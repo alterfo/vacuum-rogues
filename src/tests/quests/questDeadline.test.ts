@@ -1,11 +1,3 @@
-/**
- * Task 3 regressions: quest deadline formula + expiry feedback.
- *
- * Deadline formula: old formula gave 4-6 days for a 1-jump quest;
- * new formula guarantees at least 30 days for any jump count.
- * Expiry feedback: QuestManager.checkExpiredQuests() must return the
- * newly-failed quests so callers can surface notifications.
- */
 import { describe, it, expect } from "vitest";
 import type { StarSystem } from "@/domain/StarSystem";
 import { generateQuestBoard } from "@/systems/quests/QuestGenerator";
@@ -235,7 +227,6 @@ describe("QuestManager expiry feedback", () => {
     qm["activeQuests"].set(quest.id, quest);
 
     const expired = qm.checkExpiredQuests(10, playerStub());
-    // Simulate what GameEngine does with the returned quests
     const notifications = expired.map((q) => `Квест просрочен: «${q.title}»`);
 
     expect(notifications).toHaveLength(1);

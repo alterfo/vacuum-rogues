@@ -1,17 +1,3 @@
-/**
- * Regression (review fix) — the live in-flight position capture must NOT run
- * while a hyperjump is mid-flight.
- *
- * `performWarp` clears `liveFlightShipPos` and sets the NEW `currentSystemId`, but
- * the ship sprite stays at the OLD system's edge coords until the scene transition
- * completes. The per-frame `recordAndMaybeAutosaveFlight` (called from `update`)
- * would otherwise re-capture those stale coords and tag them with the new system
- * id — so a reload right after a jump would spawn at the wrong in-system position
- * instead of the warp entry edge. The capture is gated on `!warpInProgress`.
- *
- * Bare `SpaceFlightScene` driven through the real `update()` (the orbitsDuringCombat
- * harness pattern), stubbing only the per-frame collaborators it touches.
- */
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@/presentation/PlanetSprite", async () => {

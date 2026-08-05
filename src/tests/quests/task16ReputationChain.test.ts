@@ -11,8 +11,6 @@ import { QuestManager } from "@/systems/QuestManager";
 import { Player } from "@/domain/Player";
 import type { QuestLog, Journal } from "@/types";
 
-// ── helpers ────────────────────────────────────────────────────────────────
-
 function sys(id: string, name: string, toIds: string[]): StarSystem {
   return {
     id,
@@ -66,11 +64,8 @@ function makePlayer(): Player {
   );
 }
 
-// ── elite quest filtering ──────────────────────────────────────────────────
-
 describe("Task 16: Elite quest reputation filtering", () => {
   it("generates some elite quests with minReputation=50 and doubled reward", () => {
-    // Force no text/chain quests and a large board to see elites consistently.
     const board = generateQuestBoard(
       baseOpts({
         count: 200,
@@ -83,7 +78,6 @@ describe("Task 16: Elite quest reputation filtering", () => {
     const normals = board.filter((q) => (q.template.minReputation ?? 0) === 0);
     expect(elites.length).toBeGreaterThan(0);
     expect(normals.length).toBeGreaterThan(0);
-    // Elite reward must be at least the non-elite minimum (they're doubled).
     for (const eq of elites) {
       expect(eq.template.reward.credits).toBeGreaterThan(0);
     }
@@ -100,13 +94,10 @@ describe("Task 16: Elite quest reputation filtering", () => {
   });
 
   it("filters elite quests when player reputation is below threshold", () => {
-    // Board with all quests being either elite or normal.
     const board = generateQuestBoard(
       baseOpts({ count: 50, textRatio: 0, chainRatio: 0, eliteRatio: 1.0 }),
     );
-    // All are elite (minReputation=50).
     const player = makePlayer();
-    // reputation["OUTLANDERS"] is 0 by default → all elite quests should be filtered.
     const faction = "OUTLANDERS";
     const filtered = board.filter((q) => {
       const minRep = q.template.minReputation ?? 0;
@@ -129,8 +120,6 @@ describe("Task 16: Elite quest reputation filtering", () => {
     expect(filtered.length).toBe(board.length);
   });
 });
-
-// ── quest chain completion ─────────────────────────────────────────────────
 
 describe("Task 16: Quest chain completion", () => {
   let manager: QuestManager;
@@ -170,7 +159,6 @@ describe("Task 16: Quest chain completion", () => {
         "planet-A",
         0,
       );
-      // Force objectives done so completeQuest succeeds.
       manager.updateQuestProgress({
         type: "VISIT_LOCATION",
         locationId: "A",
@@ -222,7 +210,6 @@ describe("Task 16: Quest chain completion", () => {
 
   it("does NOT duplicate chainId in completedQuestChains", () => {
     const chainId = "chain-test-003";
-    // Complete chain once.
     for (let part = 0; part < 3; part++) {
       const id = `chain-dedup-${part}`;
       manager.acceptQuestFromTemplate(
@@ -257,15 +244,12 @@ describe("Task 16: Quest chain completion", () => {
       });
       manager.completeQuest(id, player);
     }
-    // Manually trigger again (shouldn't add duplicate).
     manager.completeQuest("non-existent", player);
     expect(
       player.completedQuestChains.filter((c) => c === chainId).length,
     ).toBe(1);
   });
 });
-
-// ── chain generation on board ─────────────────────────────────────────────
 
 describe("Task 16: Chain quest board generation", () => {
   it("emits chain quests with chainId and chainPart 0..2", () => {
@@ -297,8 +281,6 @@ describe("Task 16: Chain quest board generation", () => {
     expect(finales.length).toBeGreaterThanOrEqual(1);
   });
 });
-
-// ── TEXT_ADVENTURE ratio (pre-existing, verify still works) ──────────────
 
 describe("Task 16: TEXT_ADVENTURE ratio unchanged", () => {
   it("text-quests are emitted at ~QUEST_TEXT_RATIO", () => {

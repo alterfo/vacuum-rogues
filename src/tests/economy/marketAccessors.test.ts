@@ -40,7 +40,6 @@ describe("Market resource-keyed accessors", () => {
       [1.0, 1.0],
       [1.0, 1.0],
     );
-    // Mutate the LUXURY slot (index 1) and read it back by key.
     m.applyTradeImpact(ResourceType.LUXURY, 0.5);
     expect(m.multiplierFor(ResourceType.LUXURY)).toBeCloseTo(1.5);
     expect(m.multiplierFor(ResourceType.FUEL)).toBeCloseTo(1.0);

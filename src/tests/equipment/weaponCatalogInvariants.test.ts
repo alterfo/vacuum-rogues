@@ -6,13 +6,6 @@ import {
   type WeaponSpec,
 } from "@/systems/equipment/GearCatalog";
 
-/**
- * Gear variety expansion (Task 3): the weapon ladder must fill out with real
- * (non-clone) tiers across T1–T8 and every WeaponClass before the hangar ring
- * rework lands. Pins the shape of the catalog, not exact numbers, so later
- * tuning doesn't churn this file.
- */
-
 const WEAPONS = GEAR_CATALOG.filter(
   (g): g is WeaponSpec => g.kind === GearKind.WEAPON,
 );

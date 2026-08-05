@@ -11,23 +11,8 @@ import {
   type ScenarioMixEntry,
 } from "./exportBcData";
 
-/**
- * Task 4 of the pure-TS MLP plan: the **behavioural-cloning data-gen** exporter.
- *
- * The exporter runs the teacher policy on the *real* engine and logs
- * `(featurize(obs), actionIndex)` rows — the supervised dataset
- * `tools/ai/train_player.py` fits. These assertions pin the *shape* of that
- * dataset (so a malformed row can never reach the trainer) and its
- * **determinism by seed** (so a training run is reproducible), without training
- * anything: well-formed feature width, every value in [0,1], legal action
- * indices, and identical output for the same seed.
- *
- * Real `GameEngine` / scene wiring — only PixiJS is stubbed (the mock here is what
- * lets the test-free exporter boot the real harness headlessly).
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** Assert one row is well-formed: right width, normalised, legal action index. */
 function expectWellFormed(row: BcRow): void {
   expect(row.features).toHaveLength(FEATURE_LENGTH);
   for (const v of row.features) {
@@ -50,7 +35,6 @@ describe("collectBcDataset (BC data-gen)", () => {
     expect(rows).toHaveLength(12);
     for (const row of rows) expectWellFormed(row);
 
-    // Non-degenerate: the teacher actually played — not every label is "wait".
     const waitIdx = ACTION_ORDER.indexOf("wait");
     const nonWait = rows.filter((r) => r.action !== waitIdx);
     expect(nonWait.length).toBeGreaterThan(0);
@@ -131,11 +115,6 @@ describe("collectScenarioMixDataset (stratified CJM mix)", () => {
 
 describe("18-action label space (campaign Task 10)", () => {
   it("emits labels over the full 18-action vocabulary, incl. the new arm-up/liberate slots", () => {
-    // The exporter labels via `ACTION_ORDER.indexOf(action.kind)` and drops any
-    // index < 0. Before Task 10, `arm-up`/`liberate` were OUT of ACTION_ORDER, so
-    // the teacher's slayer/arm-up steps were silently dropped from the dataset.
-    // Now they are in-vocabulary (indices 16/17), so a teacher that emits them is
-    // captured — the schema the trainer fits spans all 18 heads.
     expect(ACTION_ORDER).toHaveLength(18);
     expect(ACTION_ORDER.indexOf("arm-up")).toBe(16);
     expect(ACTION_ORDER.indexOf("liberate")).toBe(17);

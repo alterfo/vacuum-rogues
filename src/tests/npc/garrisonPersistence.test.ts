@@ -9,7 +9,6 @@ import { StarType, NpcRole, NpcState } from "@/types";
 import { Faction } from "@/types/faction";
 import { OVERMIND_GARRISON_POWER_MAX_DISCOUNT } from "@/config/balance";
 
-/** Two-system galaxy: sys_a (will be captured) ←→ sys_b (friendly escape route). */
 function makeGalaxy(): Galaxy {
   const sysA = new StarSystem(
     "sys_a",
@@ -42,7 +41,6 @@ function makeGalaxy(): Galaxy {
 
 describe("garrison persistence across save/load", () => {
   it("re-derives the garrison hold set so standing ships do not scatter after a load", () => {
-    // --- Pre-save session: a captured system gets its standing garrison. ---
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_a");
     const before = new NpcSimulator();
@@ -51,25 +49,15 @@ describe("garrison persistence across save/load", () => {
     const originalIds = npcsPresentInSystem(galaxy, "sys_a")
       .filter((n) => n.id.startsWith("garrison_"))
       .map((n) => n.id);
-    // No campaign-power source is attached here, so the win-rate architecture
-    // plan's downward discount applies at its full (power-0) magnitude —
-    // today's fixed floor of 5 is no longer guaranteed, only the discounted one.
     expect(originalIds.length).toBeGreaterThanOrEqual(
       5 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
     );
 
-    // --- Save→load: the ships persist on the galaxy, but the simulator's
-    // transient hold sets (garrisonIds, dwell countdowns) are gone. A FRESH
-    // NpcSimulator models exactly that (fresh GameEngine + loaded galaxy). ---
     const afterLoad = new NpcSimulator();
     for (let day = 0; day < 40; day++) {
       afterLoad.tick(galaxy, new SeededRNG(`post_load_${day}`));
     }
 
-    // Every original garrison ship must still be holding sys_a — not wandered
-    // off into friendly space via the random-departure roll. Without the
-    // reconciliation these PATROLLING ships (dwell countdown also reset on load)
-    // are subject to DEPART_CHANCE every tick and scatter within a few days.
     for (const id of originalIds) {
       const ship = galaxy.npcShips.find((n) => n.id === id);
       expect(ship, `garrison ship ${id} vanished`).toBeDefined();
@@ -78,7 +66,6 @@ describe("garrison persistence across save/load", () => {
       expect(ship!.state).not.toBe(NpcState.DEAD);
     }
 
-    // sys_a stays a hostile, fully defended system and is never auto-liberated.
     expect(galaxy.isHostileSystem("sys_a")).toBe(true);
     const hostile = npcsPresentInSystem(galaxy, "sys_a").filter(
       (n) => n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE,
@@ -87,9 +74,6 @@ describe("garrison persistence across save/load", () => {
       5 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
     );
 
-    // No standing-garrison ship leaked into the friendly neighbour (regular
-    // wandering NPCs from normal population replenishment may be there — that is
-    // expected galaxy life; only garrison_* ships must never escape).
     const leaked = npcsPresentInSystem(galaxy, "sys_b").filter((n) =>
       n.id.startsWith("garrison_"),
     );

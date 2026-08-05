@@ -93,15 +93,10 @@ describe("NpcSimulator", () => {
     const galaxy = makeGalaxy();
     new NpcSimulator().spawnInitial(galaxy, new SeededRNG("seed"));
 
-    // round(2 systems * 4 per system) = 8
     expect(galaxy.npcShips).toHaveLength(8);
     const systemIds = new Set(galaxy.systems.map((s) => s.id));
     for (const npc of galaxy.npcShips) {
       expect(systemIds.has(npc.currentSystemId)).toBe(true);
-      // Ships spawn dwelling (PATROLLING), never IDLE: an IDLE ship departs on
-      // the very next tick, so an IDLE initial population mass-departed on day 1
-      // and left every system full of non-interactive departing sprites
-      // (playtest 2026-06-10 finding ② — NPC ships dead to hover/click).
       expect(npc.state).toBe(NpcState.PATROLLING);
     }
   });
@@ -115,9 +110,6 @@ describe("NpcSimulator", () => {
 
     sim.tick(galaxy, new SeededRNG("dwell_tick"));
 
-    // Dwelling ships leave at DEPART_CHANCE (15%)/day. The IDLE-spawn bug sent
-    // ~100% of the population TRAVELING on the first day, emptying the player's
-    // starting system of every interactive NPC after one turn.
     const traveling = galaxy.npcShips.filter(
       (n) => n.state === NpcState.TRAVELING,
     ).length;
@@ -141,12 +133,9 @@ describe("NpcSimulator", () => {
     sim.spawnInitial(galaxy, new SeededRNG("seed"));
     const rng = new SeededRNG("ticks");
     const npc = galaxy.npcShips[0];
-    // Force the purposeless state: an IDLE ship looks for somewhere to go on
-    // the very next tick (spawned ships dwell as PATROLLING instead).
     npc.state = NpcState.IDLE;
     const origin = npc.currentSystemId;
 
-    // First tick: idle NPC picks a goal and departs.
     sim.tick(galaxy, rng);
     expect(npc.state).toBe(NpcState.TRAVELING);
     expect(npc.destinationSystemId).not.toBe(origin);
@@ -155,7 +144,6 @@ describe("NpcSimulator", () => {
     const destination = npc.destinationSystemId!;
     const days = npc.daysToArrival;
 
-    // Advancing the remaining days lands the NPC in the destination system.
     for (let i = 0; i < days; i++) sim.tick(galaxy, rng);
     expect(npc.currentSystemId).toBe(destination);
     expect(npc.state).not.toBe(NpcState.TRAVELING);
@@ -165,7 +153,6 @@ describe("NpcSimulator", () => {
     const galaxy = makeGalaxy();
     const sim = new NpcSimulator();
 
-    // 50 rangers traveling to sys_a, all arrive on tick 1.
     const arrivalIds: string[] = [];
     for (let i = 0; i < 50; i++) {
       const id = `arr_${i}`;
@@ -186,10 +173,6 @@ describe("NpcSimulator", () => {
       ),
     ).toBe(true);
 
-    // Without a minimum-dwell fix, DEPART_CHANCE (15%) would send ~7–8 of 50
-    // back into TRAVELING on the very next day — the "fly in and immediately out"
-    // bug reported in playtest (2026-06-15). With MIN_DWELL_DAYS enforced,
-    // none of the freshly arrived ships may depart.
     sim.tick(galaxy, new SeededRNG("arr_t2"));
     const departedDay1 = justArrived.filter(
       (n) => n.state === NpcState.TRAVELING,
@@ -282,7 +265,6 @@ describe("NpcSimulator", () => {
       const rng = new SeededRNG("replenish");
       for (let i = 0; i < 40; i++) sim.tick(galaxy, rng, "elsewhere");
 
-      // round(1 system * 4) = 4 ships maintained despite losses
       expect(galaxy.npcShips.length).toBe(4);
     });
   });
@@ -323,7 +305,6 @@ describe("NPC trader cargo", () => {
   }
 
   it("trader NPCs are spawned with cargo", () => {
-    // Use 10 systems (40 NPCs) to make it near-certain at least one trader spawns.
     const systems = Array.from({ length: 10 }, (_, i) =>
       makeSystemWithMarket(`sys_t${i}`),
     );
@@ -355,9 +336,6 @@ describe("NPC trader cargo", () => {
   });
 
   it("trader cargo increases supply of sold goods after arrival", () => {
-    // sysB has CRYSTALS at high supply (price ≈ 20) and METALS at normal supply
-    // (price ≈ 100). When the trader sells METALS and then buys goods, it will
-    // prefer cheap CRYSTALS — leaving METALS supply higher than the initial value.
     const sysA = makeSystemWithMarket("sys_a2");
     const sysB = makeSystemWithMarket("sys_b2", [1.0, 5.0, 5.0]);
     sysA.connections.push(new WarpPath("sys_a2", "sys_b2", 2));
@@ -368,8 +346,6 @@ describe("NPC trader cargo", () => {
     const metalsIdx = market.availableResources.indexOf(ResourceType.METALS);
     const initialMetalsSupply = market.supplyVector[metalsIdx]; // 1.0
 
-    // Large qty (50) so sell adds 1.0 to supply; even if buyer buys the same
-    // good at max qty (20), net METALS supply is 2.0 - 0.4 = 1.6 > 1.0 initial.
     const trader = new NpcShip({
       id: "trader1",
       name: "Trader",
@@ -394,12 +370,10 @@ describe("NPC trader cargo", () => {
 
     new NpcSimulator().tick(galaxy, new SeededRNG("trade_tick"));
 
-    // Sell adds 50*0.02=1.0; worst-case buy-back of 20 units removes only 0.4.
     expect(market.supplyVector[metalsIdx]).toBeGreaterThan(initialMetalsSupply);
   });
 
   it("price decreases when supply increases after NPC sells cargo", () => {
-    // Market with CRYSTALS at high supply so buyer prefers CRYSTALS.
     const sys = makeSystemWithMarket("sys_price", [1.0, 5.0, 5.0]);
     const galaxy = new Galaxy("g3", [sys], new Overmind(), [], []);
 
@@ -407,7 +381,6 @@ describe("NPC trader cargo", () => {
     const metalsIdx = market.availableResources.indexOf(ResourceType.METALS);
     const priceBefore = market.getPrice(ResourceType.METALS);
 
-    // Large qty so sell effect (qty*0.02=1.0) dominates any buy-back.
     const trader = new NpcShip({
       id: "t2",
       name: "Trader2",
@@ -521,9 +494,6 @@ describe("NPC off-screen questing (Task 13)", () => {
   });
 
   it("pirate cargo raid clears trader cargo and emits PIRATE_ATTACK event", () => {
-    // 1 system, target NPC count = round(1 * 4) = 4. Populate exactly 4 NPCs
-    // so pruneAndReplenish never spawns additional traders that could confuse
-    // which trader's cargo was cleared.
     const galaxy = new Galaxy(
       "g_raid",
       [
@@ -581,8 +551,6 @@ describe("NPC off-screen questing (Task 13)", () => {
       credits: 100,
       reputation: 0,
     });
-    // Two extra rangers to reach the target count (4) so pruneAndReplenish
-    // never spawns extra traders that would confuse the cargo check.
     const pad1 = new NpcShip({
       id: "pad1",
       name: "Pad1",
@@ -623,10 +591,6 @@ describe("NPC off-screen questing (Task 13)", () => {
     });
     galaxy.npcShips.push(trader, pirate, pad1, pad2);
 
-    // Run many ticks until the specific trader's cargo is cleared by a raid.
-    // Seed-sensitive: off-screen combat can kill the pirate/trader before any
-    // raid fires, so the prefix must yield a raid-first trajectory (rechecked
-    // after the dwell-at-spawn change shifted RNG draw alignment).
     const sim = new NpcSimulator();
     let raidEvents: NewsEvent[] = [];
     for (let i = 0; i < 200 && trader.cargo.length > 0; i++) {

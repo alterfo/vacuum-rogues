@@ -13,20 +13,8 @@ import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE, SYSTEM_GEOMETRY } from "@/config/balance";
 
-/**
- * Focused unit tests for the combat steering / orbit / chase-state cluster
- * extracted from {@link NpcShipManager} (plan Task 2). The controller is
- * exercised directly against a fake {@link CombatPursuitDeps} bundle — no
- * PixiJS — so launch/decision/orbit/break-off/star-avoidance/crossfire are
- * verified in isolation. Existing manager-level suites (`combatOrbit`,
- * `combatOrbitAntiSpin`, `combatBreakoff`, `chaseSteering.*`,
- * `crossFactionCombat`) remain the integration oracle.
- */
-
 const WR = GAME_BALANCE.weaponRange;
 const ORBIT = WR * 0.6;
-
-// --- fakes -----------------------------------------------------------------
 
 function makeNpc(
   id: string,
@@ -55,7 +43,6 @@ interface FakeSprite {
   isGone(): boolean;
 }
 
-/** Minimal engine with a live player ship — the pre-combat resolver bails without one. */
 function engineWithShip(): GameEngine {
   return { player: { ship: {} } } as unknown as GameEngine;
 }
@@ -168,8 +155,6 @@ function makeHarness(
   } as Harness;
 }
 
-// --- launchCombatWithNpc -----------------------------------------------------
-
 describe("CombatPursuitController.launchCombatWithNpc", () => {
   it("engages combat and clears the chase/approach/break-off state", () => {
     const npc = makeNpc("n1");
@@ -196,8 +181,6 @@ describe("CombatPursuitController.launchCombatWithNpc", () => {
     expect(h.combatStarted).toEqual([]);
   });
 });
-
-// --- updateCombat decision cluster ------------------------------------------
 
 describe("CombatPursuitController.updateCombat (pre-combat chase resolver)", () => {
   it("is idle with no follow target and no physics", () => {
@@ -250,8 +233,6 @@ describe("CombatPursuitController.updateCombat (pre-combat chase resolver)", () 
   });
 });
 
-// --- breakOffCombatPursuit --------------------------------------------------
-
 describe("CombatPursuitController.breakOffCombatPursuit", () => {
   it("suspends the auto-pursuit until the player's route completes", () => {
     const npc = makeNpc("bo1");
@@ -267,24 +248,18 @@ describe("CombatPursuitController.breakOffCombatPursuit", () => {
     h.ctrl.breakOffCombatPursuit();
     expect(h.ctrl.pursuitSuspended).toBe(true);
 
-    // While the player's manual route is still flying, the orbit yields —
-    // the physics target is untouched by the pursuit.
     physics.setTarget(999, 999);
     h.ctrl.updateCombat(50);
     expect(physics.getTargetX()).toBe(999);
     expect(physics.getTargetY()).toBe(999);
     expect(h.ctrl.pursuitSuspended).toBe(true);
 
-    // Once the route completes (ship stops), pursuit resumes and re-takes the
-    // helm (the orbit steer overwrites the stale manual target).
     physics.stop();
     h.ctrl.updateCombat(50);
     expect(h.ctrl.pursuitSuspended).toBe(false);
     expect(physics.getTargetX()).not.toBe(999);
   });
 });
-
-// --- combat orbit / anti-spin -----------------------------------------------
 
 describe("CombatPursuitController real-time combat orbit", () => {
   it("circle-strafes (tangential steer) at the orbit standoff", () => {
@@ -308,8 +283,6 @@ describe("CombatPursuitController real-time combat orbit", () => {
       dot /
       ((Math.hypot(steerX, steerY) || 1) * (Math.hypot(awayX, awayY) || 1));
     const deg = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
-    // Near-perpendicular to the radial ⇒ a tangential strafe, not a straight
-    // approach/retreat.
     expect(deg).toBeGreaterThan(60);
   });
 
@@ -334,15 +307,10 @@ describe("CombatPursuitController real-time combat orbit", () => {
       dot /
       ((Math.hypot(steerX, steerY) || 1) * (Math.hypot(awayX, awayY) || 1));
     const deg = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
-    // Radial-dominated escape: within ~30° of straight away from the target.
     expect(deg).toBeLessThan(30);
   });
 
   it("clamps the orbit carrot to the system boundary near the edge", () => {
-    // Ship sits just inside the boundary (2700 of 2800), facing straight away
-    // from the star center (angle 0), target coincident with the ship (dist<1e-3
-    // branch) so the steer is purely radial — the raw 2000px carrot would land
-    // at 4700, well past the 2800 boundary.
     const npc = makeNpc("edge1");
     const sprite = makeSprite(npc, 2700, 0);
     const physics = new ShipPhysics(2700, 0, 0.5, 0);
@@ -365,9 +333,6 @@ describe("CombatPursuitController real-time combat orbit", () => {
   });
 
   it("clamps BOTH queued orbit waypoints (carrot AND the ×2 far point) to the boundary", () => {
-    // getTargetX/Y only reads the first path point — capture the full setPath
-    // arg so the far point (COMBAT_ORBIT_CARROT × 2, the leg WAYPOINT_SWITCH
-    // can promote before any re-steer) is asserted in-bounds too.
     const npc = makeNpc("edge2");
     const sprite = makeSprite(npc, 2700, 0);
     const physics = new ShipPhysics(2700, 0, 0.5, 0);
@@ -395,12 +360,6 @@ describe("CombatPursuitController real-time combat orbit", () => {
   });
 
   it("keeps the clamped waypoints DISTINCT so the non-final-leg cruise contract survives", () => {
-    // Ship pinned at the wall heading outward, the clamped leg inside
-    // ShipPhysics' STOP_THRESHOLD arrival window (2795 of 2800 → tExit 5):
-    // the leftover distance slides along the boundary arc — carrot and the
-    // ×2 far point must NOT collapse onto the ship's own position, where
-    // setPath([P, P]) is an instant arrival and the strafe parks dead at the
-    // edge.
     const npc = makeNpc("edge3");
     const sprite = makeSprite(npc, 2795, 0);
     const physics = new ShipPhysics(2795, 0, 0.5, 0);
@@ -422,18 +381,10 @@ describe("CombatPursuitController real-time combat orbit", () => {
     const last = paths[paths.length - 1];
     expect(last.length).toBe(2);
     const gap = Math.hypot(last[1].x - last[0].x, last[1].y - last[0].y);
-    // Comfortably above ShipPhysics.WAYPOINT_SWITCH (48px), so the far point
-    // can never be promoted-and-arrived in the same steer frame.
     expect(gap).toBeGreaterThan(100);
   });
 
   it("keeps strafing along the edge (never parks) when the orbit circle pokes past the boundary", () => {
-    // Real ShipPhysics driven over ~48s of frames against a stationary target
-    // whose orbit circle crosses the boundary — the exact edge-fight scenario
-    // of 20260709-combat-feel-fixes Task 1. The pre-arc-slide clamp collapsed
-    // carrot === far here and the ship sat motionless (0px travelled for 38s)
-    // while being shot; the arc slide degrades the orbit into an
-    // edge-following strafe instead.
     const npc = makeNpc("edge4");
     const targetX = SYSTEM_GEOMETRY.boundaryRadius - ORBIT / 2;
     const sprite = makeSprite(npc, targetX, 0);
@@ -463,11 +414,6 @@ describe("CombatPursuitController real-time combat orbit", () => {
       py = physics.shipY;
     }
 
-    // The SHIP stays bounded by the fight's own geometry — the orbit may
-    // legitimately swing past the edge by up to COMBAT_ORBIT_RANGE (0.6 × WR)
-    // plus momentum (ShipPhysics never clamps position; the excursion
-    // re-enters on the next orbit pass). The pre-fix failure mode was the
-    // opposite: travelled = 0 — parked dead at the wall for the whole sim.
     expect(maxR).toBeLessThanOrEqual(
       SYSTEM_GEOMETRY.boundaryRadius + ORBIT + 60,
     );
@@ -475,12 +421,6 @@ describe("CombatPursuitController real-time combat orbit", () => {
   });
 
   it("re-enters promptly (no runaway) when pushed marginally outside the boundary", () => {
-    // A ship at/past the boundary is deliberately UNclamped (caging it at its
-    // current radius collapses the orbit-hold on a target cruising past the
-    // edge — see combatOrbit.test.ts). The excursion must instead be
-    // self-correcting: pushed outside too close to an edge target (radial
-    // push pointing further out), the orbit's pull keeps the ship bounded and
-    // brings it back inside within a few seconds.
     const npc = makeNpc("edge5");
     const sprite = makeSprite(npc, SYSTEM_GEOMETRY.boundaryRadius, 0);
     const start = SYSTEM_GEOMETRY.boundaryRadius + 50;
@@ -502,11 +442,6 @@ describe("CombatPursuitController real-time combat orbit", () => {
       maxR = Math.max(maxR, r);
       if (r <= SYSTEM_GEOMETRY.boundaryRadius) everInside = true;
     }
-    // Bounded by the fight's own geometry: orbiting an ON-boundary target
-    // legitimately swings out to boundary + COMBAT_ORBIT_RANGE (0.6 × WR) +
-    // momentum — a runaway carrot would blow thousands of px past this. The
-    // ship also re-enters the boundary (the excursion is an orbit pass, not a
-    // departure).
     expect(maxR).toBeLessThanOrEqual(
       SYSTEM_GEOMETRY.boundaryRadius + ORBIT + 60,
     );
@@ -514,10 +449,6 @@ describe("CombatPursuitController real-time combat orbit", () => {
   });
 
   it("leaves the orbit unclamped when the ship is well inside the boundary", () => {
-    // Same geometry as the "circle-strafes" case above, but with a realistic
-    // near star center instead of the far test sentinel — the un-clamped
-    // carrot (0,-2000) already sits well inside the 2800 boundary, so the
-    // clamp must not alter it.
     const npc = makeNpc("orb3");
     const sprite = makeSprite(npc, ORBIT, 0);
     const physics = new ShipPhysics(0, 0, 0.5);
@@ -535,8 +466,6 @@ describe("CombatPursuitController real-time combat orbit", () => {
   });
 });
 
-// --- smoothed chase steering + star avoidance -------------------------------
-
 describe("CombatPursuitController smoothed chase steering (star avoidance)", () => {
   it("plots a fresh curved route, then re-plots when the direct shot becomes blocked, then nudges directly once clear", () => {
     const npc = makeNpc("star1");
@@ -547,15 +476,10 @@ describe("CombatPursuitController smoothed chase steering (star avoidance)", () 
       inCombat: true,
       combatTargetId: "star1",
       sprites: [sprite],
-      // No star configured yet — the ship is stopped, so this first tick takes
-      // the "fresh leg" branch (curved re-plot via aimRoute).
     });
     h.ctrl.updateCombat(50);
     expect(h.routes.length).toBe(1);
 
-    // Re-run with a star placed directly between the ship and the target: the
-    // direct lead-line is now blocked — expect a star-avoidance re-plot
-    // (another aimRoute call, the clear→blocked transition fires immediately).
     const blocked = makeHarness({
       physics,
       inCombat: true,
@@ -564,15 +488,9 @@ describe("CombatPursuitController smoothed chase steering (star avoidance)", () 
       starCenter: { x: WR / 2, y: 0 },
       starAvoidRadius: 200,
     });
-    // Reuse the same controller instance isn't possible across harnesses
-    // (deps differ), so drive a fresh controller sharing the moving physics —
-    // the "fresh leg" branch only applies while stopped, and physics is
-    // already moving from the previous tick.
     blocked.ctrl.updateCombat(50);
     expect(blocked.routes.length).toBe(1); // its own harness's route log
 
-    // Now the path is clear again: the controller should steer directly
-    // (physics.setTarget), NOT via the aimRoute callback.
     const clear = makeHarness({
       physics,
       inCombat: true,
@@ -583,8 +501,6 @@ describe("CombatPursuitController smoothed chase steering (star avoidance)", () 
     expect(clear.routes.length).toBe(0); // no curved re-plot — direct nudge only
   });
 });
-
-// --- rememberFlightPos -------------------------------------------------------
 
 describe("CombatPursuitController.rememberFlightPos", () => {
   it("stashes the live ship position on the GameEngine", () => {
@@ -602,8 +518,6 @@ describe("CombatPursuitController.rememberFlightPos", () => {
     expect(engine.lastFlightShipPos).toBeNull();
   });
 });
-
-// --- nearestNpcEnemy ---------------------------------------------------------
 
 describe("CombatPursuitController.nearestNpcEnemy", () => {
   it("picks the nearest mutually-hostile Overmind-involving sprite in scanner range", () => {
@@ -652,8 +566,6 @@ describe("CombatPursuitController.nearestNpcEnemy", () => {
   });
 });
 
-// --- resolveNpcVsNpcCombat ---------------------------------------------------
-
 describe("CombatPursuitController.resolveNpcVsNpcCombat", () => {
   it("trades mutual damage between an Overmind sprite and a co-present pirate once the fire interval elapses", () => {
     const overmind = makeNpc("ov2", {
@@ -671,9 +583,6 @@ describe("CombatPursuitController.resolveNpcVsNpcCombat", () => {
     const pirateSprite = makeSprite(pirate, 10, 0);
     const h = makeHarness({ sprites: [ovSprite, pirateSprite] });
 
-    // overmindCombatTargets only generates OVERMIND-attacker engagements: the
-    // pirate's damage lands on the overmind, and the overmind's damage lands
-    // on the pirate.
     h.ctrl.resolveNpcVsNpcCombat(GAME_BALANCE.combatFireIntervalMs);
     expect(overmind.hullHP).toBe(280); // 300 - pirate.damage(20)
     expect(pirate.hullHP).toBe(50); // 100 - overmind.damage(50)
@@ -727,9 +636,6 @@ describe("CombatPursuitController.resolveNpcVsNpcCombat", () => {
   });
 });
 
-// --- tickAggressor (Task 6: per-frame garrison/pirate aggressor loop) -------
-
-/** Fake sprite carrying the extra members `tickAggressor` reads/writes. */
 interface FakeAggressorSprite extends FakeSprite {
   cruiseSpeed: number;
   pursuitTargets: { x: number; y: number; speed: number }[];
@@ -760,16 +666,10 @@ function makeAggressorSprite(
   };
 }
 
-/** Parked player physics at the origin (not moving) — position-only checks. */
 function parkedPlayerPhysics(maxSpeed: number): ShipPhysics {
   return new ShipPhysics(0, 0, maxSpeed);
 }
 
-/**
- * A player physics body actively cruising fast enough to out-run `pursuerSpeed`
- * (`canOutrun` requires `isMoving`) — ticked just enough to clear the speed
- * threshold, not far enough to matter for the caller's own distance math.
- */
 function fastMovingPlayerPhysics(maxSpeed: number): ShipPhysics {
   const p = new ShipPhysics(0, 0, maxSpeed);
   p.setTarget(1_000_000, 0);
@@ -898,8 +798,6 @@ describe("CombatPursuitController.tickAggressor", () => {
     h.ctrl.tickAggressor(sprite as unknown as NpcShipSprite, physics);
     h.ctrl.tickAggressor(sprite as unknown as NpcShipSprite, physics);
 
-    // Already-evaluated pirates never re-roll — a second positive roll would
-    // still not re-fire (guarded below by never flipping shakedownRoll true).
     expect(h.hailedNpcs).toEqual([]);
   });
 
@@ -908,8 +806,6 @@ describe("CombatPursuitController.tickAggressor", () => {
     const physics = fastMovingPlayerPhysics(0.5); // fast player — out-runs the NPC
     expect(physics.canOutrun(0.05)).toBe(true);
     const escapeDist = GAME_BALANCE.combatEscapeRange + 50;
-    // Position relative to the physics body's actual (post-acceleration) spot so
-    // the escape-range math is exact regardless of how far it cruised getting there.
     const sprite = makeAggressorSprite(
       npc,
       physics.shipX + escapeDist,
@@ -957,16 +853,6 @@ describe("CombatPursuitController.tickAggressor", () => {
     expect(h.combatStarted).toEqual([]);
   });
 
-  // --- ambush-during-an-existing-route (round-budget hardening) -------------
-  // `beginWindow`'s "continuing course" round-budget exemption
-  // (`combatExecution.ts`) needs `pursuitSuspended` to be true ONLY while the
-  // ship is genuinely still trying to get away. A hostile that ambushes an
-  // ALREADY-in-flight ship engages through this exact path (`startInFlightCombat`
-  // called from here, not `launchCombatWithNpc`) — before this fix,
-  // `pursuitSuspended` was left untouched (still false), so the fresh
-  // engagement's own auto-orbit would silently hijack the pre-existing route
-  // via `updateCombatPursuit`'s unconditional `setPath` calls.
-
   it("suspends pursuit when a fresh ambush engages a ship already mid-flight on a plotted route", () => {
     const npc = makeNpc("ambush1", { role: NpcRole.TRADER });
     const sprite = makeAggressorSprite(npc, WR - 10, 0);
@@ -1000,9 +886,6 @@ describe("CombatPursuitController.tickAggressor", () => {
   it("does NOT suspend pursuit on ambush when a fight is already active (mid-fight second joiner, not the opening ambush)", () => {
     const npc = makeNpc("ambush3", { role: NpcRole.TRADER });
     const sprite = makeAggressorSprite(npc, WR - 10, 0);
-    // Simulate an already-active fight (a different combatant already
-    // engaged) — isInCombat=true means this joiner is NOT the one opening the
-    // engagement, so it must not touch pursuit state.
     const h = makeAggressorHarness({ isInCombat: true });
     const physics = new ShipPhysics(0, 0, 0.5);
     physics.setPath([{ x: 100_000, y: 0 }]);

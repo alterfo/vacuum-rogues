@@ -1,9 +1,3 @@
-/**
- * Unit tests for the pure key-remapping module
- * (`src/presentation/input/keymap.ts`, accessibility pass Task 3): defaults
- * resolve byte-for-byte like the old hard-coded handler, a rebind persists, and
- * conflicting rebinds are rejected.
- */
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_KEYMAP,
@@ -22,7 +16,6 @@ import {
   type KeymapStore,
 } from "@/presentation/input/keymap";
 
-/** A pure in-memory `KeymapStore` so persistence tests don't touch globals. */
 function memStore(initial: Record<string, string> = {}): KeymapStore {
   const data = new Map<string, string>(Object.entries(initial));
   return {
@@ -71,7 +64,6 @@ describe("keymap — rebind + conflict detection (pure)", () => {
     if (res.ok) {
       expect(res.map.journal).toBe("q");
       expect(resolveFlightAction(ev("q"), res.map)).toBe("journal");
-      // old key no longer fires journal
       expect(resolveFlightAction(ev("j"), res.map)).toBeNull();
     }
     expect(DEFAULT_KEYMAP).toEqual(before); // input untouched
@@ -103,7 +95,6 @@ describe("keymap — rebind + conflict detection (pure)", () => {
 
   it("rebinds onto Space and resolves it by code afterwards", () => {
     const res = rebind(DEFAULT_KEYMAP, "journal", " ");
-    // Space is held by runTurn → conflict.
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.conflict).toBe("runTurn");
   });
@@ -124,7 +115,6 @@ describe("keymap — persistence (injectable store, defaults intact)", () => {
     const loaded = currentKeymap(store);
     expect(loaded.inventory).toBe("b");
     expect(resolveFlightAction(ev("b"), loaded)).toBe("inventory");
-    // unchanged actions keep their defaults
     expect(loaded.cancel).toBe("Escape");
     expect(loaded.runTurn).toBe(" ");
   });
@@ -184,7 +174,6 @@ describe("keymap — handler resolution after a rebind", () => {
     })();
     expect(resolveFlightAction(ev("v"), map)).toBe("inventory");
     expect(resolveFlightAction(ev("i"), map)).toBeNull();
-    // other defaults untouched
     expect(resolveFlightAction(ev("Escape"), map)).toBe("cancel");
   });
 });

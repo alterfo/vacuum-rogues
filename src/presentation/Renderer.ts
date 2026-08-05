@@ -23,7 +23,6 @@ export class Renderer {
       autoDensity: true,
     });
 
-    // Check for Canvas2D fallback (PixiJS v8 uses string type)
     const rendererType = (this.app.renderer as unknown as { type?: string })
       .type;
     if (rendererType === "canvas") {
@@ -52,11 +51,6 @@ export class Renderer {
     while (this.gameLayer.children.length > 0) {
       const child = this.gameLayer.children[0];
       this.gameLayer.removeChild(child);
-      // children: true — PixiJS v8 destroy() with default options removes but
-      // does NOT destroy children, so nested wrapper Containers (e.g. the
-      // combat _gridContainer) would orphan their Graphics/Sprites undisposed.
-      // Textures stay alive (texture option off) — they are shared via the
-      // texture cache.
       child.destroy({ children: true });
     }
   }

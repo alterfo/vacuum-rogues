@@ -8,11 +8,6 @@ import {
 import type { Renderer } from "@/presentation/Renderer";
 import type { Planet } from "@/domain/Planet";
 
-// Regression: GovernmentScene used to call `deterministicPopulation(id)`
-// directly, ignoring a planet's seeded `population` — so its number disagreed
-// with the planet HUD, which routes through `resolvePopulation`. Both must now
-// resolve through the single-source-of-truth helper.
-
 function makeRenderer(): Renderer {
   return {
     app: { screen: { width: 800, height: 600 } },
@@ -38,7 +33,6 @@ function makePlanet(id: string, population: number): Planet {
   } as unknown as Planet;
 }
 
-/** Collect every text string handed to the mocked pixi `Text` constructor. */
 function renderedTexts(): string[] {
   return (Text as unknown as Mock).mock.calls
     .map((call) => (call[0] as { text?: string } | undefined)?.text)

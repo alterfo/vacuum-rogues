@@ -166,11 +166,9 @@ describe("MigrationPipeline v21→v22 — isPendingReturn backfill", () => {
               issuedDay: 0,
               deadline: 10,
               failurePenalty: null,
-              // No isPendingReturn field — old save
             },
           ],
           completedQuests: [],
-          // No pendingReturnQuests — old save
         },
       } as unknown as SaveState["player"],
     } as unknown as SaveState;
@@ -208,7 +206,6 @@ describe("MigrationPipeline v21→v22 — isPendingReturn backfill", () => {
     ).questLog;
     questLog.pendingReturnQuests = [{ id: "q_existing" }];
     MigrationPipeline.migrate(state);
-    // Already an array, should not be reset
     const result = (
       state.player as unknown as {
         questLog: { pendingReturnQuests: unknown[] };

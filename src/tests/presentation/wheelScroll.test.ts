@@ -1,9 +1,3 @@
-/**
- * Unit coverage for the reusable wheel-scroll helper (plan
- * 20260617-shop-scroll-and-sell-gear, Task 1). Pins the pure direction mapping
- * and the attach/detach lifecycle so every scrollable scene can rely on a single
- * window-level listener instead of an unreliable federated PixiJS handler.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   wheelDirection,

@@ -73,22 +73,6 @@ vi.mock("pixi.js", () => ({
   BlurFilter: vi.fn().mockImplementation(() => ({})),
 }));
 
-/**
- * Reload-position cluster (red) —
- * `docs/plans/20260625-combat-orbit-and-flight-persistence-fix.md`.
- *
- * Playtest bug: free flight has no continuous autosave. `liveFlightShipPos` is
- * captured only at a discrete route-turn end (`endFlightTurn`); between turns,
- * and when the page is hidden/reloaded mid-flight (no turn completed), nothing
- * persists the *live* position — so a reload restores the stale system-entry
- * (edge) position instead of where the ship actually is.
- *
- * Task 4 added a continuous live-position capture (`recordLiveFlightPos`) plus a
- * page-hide flush (`flushFlightAutosave`) so a reload resumes the live position.
- * These tests assert that capability and are GREEN now that Task 4 wired it in.
- * They probe via casts (the seams are optional on the cast type) so the file
- * stays decoupled from the engine surface.
- */
 describe("flight reload position — live in-flight persistence (Task 4)", () => {
   let diDeps: GameEngineDIDependencies;
   let engine: GameEngine;
@@ -119,7 +103,6 @@ describe("flight reload position — live in-flight persistence (Task 4)", () =>
     engine.player.currentSystemId = systemId;
   }
 
-  /** Continuous live-position capture seam Task 4 adds (probed via cast). */
   function recordLive(x: number, y: number): void {
     const rec = (
       engine as unknown as {
@@ -129,7 +112,6 @@ describe("flight reload position — live in-flight persistence (Task 4)", () =>
     rec?.call(engine, x, y);
   }
 
-  /** Page-hide flush seam Task 4 adds (probed via cast). */
   async function flushOnHide(): Promise<void> {
     const flush = (
       engine as unknown as { flushFlightAutosave?: () => Promise<void> }
@@ -137,19 +119,13 @@ describe("flight reload position — live in-flight persistence (Task 4)", () =>
     await flush?.call(engine);
   }
 
-  // GREEN since Task 4 wired `recordLiveFlightPos` / `flushFlightAutosave`
-  // (was a Task-1 `it.fails` reproduction; the seams now exist so the assertions
-  // pass and these run as plain `it`).
   it("continuous capture: recordLiveFlightPos folds the live position into the next save", async () => {
     await seedGame("sys-1");
     engine.currentSceneType = SceneType.SPACE_FLIGHT;
 
-    // Ship enters at the edge; that becomes the last persisted position.
     recordLive(40, 40);
     await engine.saveGame("auto");
 
-    // Player flies deep into the system — no route-turn ends, but the live
-    // position must keep tracking the ship.
     recordLive(620, 410);
     await engine.saveGame("auto");
 
@@ -165,7 +141,6 @@ describe("flight reload position — live in-flight persistence (Task 4)", () =>
     await seedGame("sys-1");
     engine.currentSceneType = SceneType.SPACE_FLIGHT;
 
-    // System entry autosave at the edge.
     recordLive(40, 40);
     await engine.saveGame("auto");
     expect((await diDeps.saveService.read("auto"))!.flightShipPos).toEqual({
@@ -174,7 +149,6 @@ describe("flight reload position — live in-flight persistence (Task 4)", () =>
       systemId: "sys-1",
     });
 
-    // Fly into the system, then the tab is hidden / reloaded WITHOUT a turn-end.
     recordLive(620, 410);
     await flushOnHide();
 
@@ -188,14 +162,12 @@ describe("flight reload position — live in-flight persistence (Task 4)", () =>
 
   it("page-hide flush is inert outside flight (a landed/menu save is not overwritten)", async () => {
     await seedGame("sys-1");
-    // Not in flight — a stale live capture must not leak into a non-flight save.
     engine.currentSceneType = SceneType.PLANET;
     recordLive(620, 410);
 
     await flushOnHide();
 
     const saved = await diDeps.saveService.read("auto");
-    // No flight save should have been written by the hide flush.
     expect(saved?.flightShipPos).toBeUndefined();
   });
 });

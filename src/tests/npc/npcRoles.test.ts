@@ -69,7 +69,6 @@ function makeTwoSystemGalaxy(
 }
 
 function makeContestedGalaxy(): Galaxy {
-  // friendly → contested: sys_a (friendly) connected to sys_b (hostile/pirate)
   const sysA = new StarSystem(
     "sys_a",
     "Alpha",
@@ -130,7 +129,6 @@ describe("NPC roles — trader trade-run goal selection", () => {
     const rng = new SeededRNG("trade_seed2");
     const goal = brain.decideGoal(trader, galaxy, rng);
 
-    // Falls back to any system — sys_b is the only choice
     expect(goal.targetSystemId).toBe("sys_b");
   });
 
@@ -142,7 +140,6 @@ describe("NPC roles — trader trade-run goal selection", () => {
     const brain = new RuleBasedNpcBrain();
     const ranger = makeNpc("r1", "sys_a", NpcState.IDLE, NpcRole.RANGER);
 
-    // Ranger uses same pool regardless — just picks a neighbour
     const goal = brain.decideGoal(ranger, galaxy, new SeededRNG("r_seed"));
     expect(["sys_a", "sys_b"]).toContain(goal.targetSystemId);
   });
@@ -153,7 +150,6 @@ describe("NPC roles — PATROL convoy assembly", () => {
     const galaxy = makeContestedGalaxy();
     const sim = new NpcSimulator();
 
-    // Add 3 PATROL ships in the friendly system (sys_a)
     for (let i = 0; i < 3; i++) {
       const npc = makeNpc(
         `patrol_${i}`,
@@ -164,18 +160,8 @@ describe("NPC roles — PATROL convoy assembly", () => {
       galaxy.npcShips.push(npc);
     }
 
-    // This test exercises convoy assembly, not garrison-discount economics —
-    // pin the ratcheted power at max (win-rate-100pct plan's Task 2/3 raised
-    // the discount ceiling) so sys_b's pirate garrison stays at today's
-    // undiscounted [5,10] baseline instead of the new, much smaller
-    // zero-power range. Without this, sys_b's thinner garrison sometimes gets
-    // fully wiped by ordinary wandering-NPC skirmishes before day 30, which
-    // permanently empties `assembleConvoys`' only possible contested border
-    // in this 2-system galaxy (no more hostile neighbour ⇒ no convoy ever) —
-    // collateral from the discount retune, not a convoy-logic regression.
     sim.attachCampaignPeakPower(() => 1);
 
-    // Advance to day 30 (triggers convoy assembly)
     const rng = new SeededRNG("convoy_seed");
     for (let d = 0; d < 30; d++) {
       galaxy.gameDays++;
@@ -190,14 +176,12 @@ describe("NPC roles — PATROL convoy assembly", () => {
     const galaxy = makeContestedGalaxy();
     const sim = new NpcSimulator();
 
-    // 5 patrol ships so that even if some depart on the assembly tick, ≥2 remain.
     for (let i = 0; i < 5; i++) {
       galaxy.npcShips.push(
         makeNpc(`patrol_${i}`, "sys_a", NpcState.PATROLLING, NpcRole.PATROL),
       );
     }
 
-    // Jump to day 29 so the very next tick fires convoy assembly (day 30 % 30 === 0).
     galaxy.gameDays = 29;
     const rng = new SeededRNG("convoy_dest_seed");
     galaxy.gameDays++;
@@ -215,7 +199,6 @@ describe("NPC roles — PATROL convoy assembly", () => {
   });
 
   it("no convoy is assembled when there are no contested borders (all systems friendly)", () => {
-    // Galaxy with no hostile systems — nothing to send a convoy toward.
     const galaxy = makeTwoSystemGalaxy();
     const sim = new NpcSimulator();
 
@@ -261,9 +244,6 @@ describe("NPC roles — PATROL convoy assembly", () => {
 
 describe("NPC roles — convoy V-formation spawn positions", () => {
   it("convoy members have different spawn offsets (perpendicular to entry angle)", () => {
-    // Direct test of the offset logic used in NpcShipManager.addNpcSprite:
-    // perpOffset array is [0, 30, -30] indexed by convoy member count.
-    // Verify they produce different x,y for the same base angle.
     const offsets = [0, 30, -30];
     const angle = Math.PI / 4; // 45°
     const perpAngle = angle + Math.PI / 2;
@@ -275,15 +255,11 @@ describe("NPC roles — convoy V-formation spawn positions", () => {
       y: baseY + Math.sin(perpAngle) * off,
     }));
 
-    // All three positions are distinct
     expect(positions[0].x).not.toBeCloseTo(positions[1].x, 1);
     expect(positions[0].x).not.toBeCloseTo(positions[2].x, 1);
-    // The non-offset member is exactly at base
     expect(positions[0].x).toBeCloseTo(baseX, 5);
     expect(positions[0].y).toBeCloseTo(baseY, 5);
-    // Second member is offset by +30px
     expect(positions[1].x).toBeCloseTo(baseX + Math.cos(perpAngle) * 30, 3);
-    // Third member is offset by -30px
     expect(positions[2].x).toBeCloseTo(baseX + Math.cos(perpAngle) * -30, 3);
   });
 });

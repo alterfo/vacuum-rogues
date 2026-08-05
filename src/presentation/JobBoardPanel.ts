@@ -17,11 +17,6 @@ export interface JobBoardCallbacks {
   onClose: () => void;
 }
 
-/**
- * Localized board label for a quest type (e.g. «Доставка» / "Delivery"). Live-
- * resolved per active language via the i18n layer, so callers must invoke it at
- * render time rather than caching a module-load snapshot.
- */
 export function questTypeLabel(type: QuestType): string {
   return t(`quest.type.${type}`);
 }
@@ -36,50 +31,29 @@ const TYPE_COLOR: Record<QuestType, number> = {
   [QuestType.DEFENSE]: 0xff4422,
 };
 
-/** Maximum number of quests a player can hold simultaneously. */
 export const MAX_ACTIVE_QUESTS = 3;
 
-/**
- * Planet job board (EPIC-008 US-080): lists the quests a planet currently
- * offers. Each row has an explicit "Принять" button. The button is disabled
- * when the player already has MAX_ACTIVE_QUESTS active quests or has already
- * accepted this quest. Follows the CLAUDE.md PixiJS rules (stopPropagation on
- * interactive elements, text eventMode='none' over clickable areas).
- */
 export class JobBoardPanel {
   public readonly container: Container;
-  /** Rendered panel height (capped to the screen) — exposed for tests. */
   public panelHeight = 0;
   private readonly callbacks: JobBoardCallbacks;
 
-  /** Masked container holding the available-offer rows (the scrollable area). */
   private offersContainer: Container | null = null;
-  /** Hit-area clipping the offers to the visible window (a mask clips render only). */
   private offersHitArea: Rectangle | null = null;
-  /** Panel-y of the top of the offers window (for hit-area scroll tracking). */
   private offerAreaTopPx = 0;
-  /** How many rows the offer list is currently scrolled down by. */
   private offerScrollOffset = 0;
   private scrollUpBtn: Text | null = null;
   private scrollDownBtn: Text | null = null;
-  /** Detaches the window-level wheel listener; run in `destroy()`. */
   private detachWheel: (() => void) | null = null;
 
   private static readonly W = 520;
   private static readonly HEAD = 48;
-  /** Reserved bottom bar for the scroll arrows when the list overflows. */
   private static readonly SCROLL_BAR_H = 26;
-  /** Row-to-row gap added on top of each row's own (dynamic) content height. */
   private static readonly ROW_GAP = 6;
-  /** Historical fixed offer-row height — floor so a short quest keeps the old size. */
   private static readonly MIN_OFFER_ROW_H = 124;
-  /** Historical fixed active-row height — floor so a short title keeps the old size. */
   private static readonly MIN_ACTIVE_ROW_H = 54;
-  /** Shared offer-row wrap width for title/description — clearance before the reward badge. */
   private static readonly OFFER_WRAP_WIDTH = JobBoardPanel.W - 120;
-  /** Active-row title wrap width — clearance before the right-aligned countdown badge. */
   private static readonly ACTIVE_WRAP_WIDTH = JobBoardPanel.W - 140;
-  /** Cumulative y offsets (within the offers container) of each rendered offer row. */
   private offerRowOffsets: number[] = [];
 
   constructor(
@@ -87,15 +61,10 @@ export class JobBoardPanel {
     screenWidth: number,
     screenHeight: number,
     callbacks: JobBoardCallbacks,
-    /** How many active quests the player currently holds. */
     activeQuestCount = 0,
-    /** IDs of quests already accepted (so their Принять button is grayed). */
     acceptedQuestIds: ReadonlySet<string> = new Set(),
-    /** Active quests to display with countdown (US-074). */
     activeQuests: Quest[] = [],
-    /** Current game day (for countdown calculation). */
     currentDay = 0,
-    /** Player's current rank for minRank gating. */
     playerRank = 0,
   ) {
     this.callbacks = callbacks;
@@ -115,15 +84,12 @@ export class JobBoardPanel {
       (sum, l) => sum + l.contentHeight + JobBoardPanel.ROW_GAP,
       0,
     );
-    // An empty offer list still reserves one row's worth of space for the
-    // "нет заданий" message (mirrors the historical `max(quests.length, 1)`).
     const offersHeight =
       quests.length > 0
         ? offerSlotSum
         : JobBoardPanel.MIN_OFFER_ROW_H + JobBoardPanel.ROW_GAP;
     const fullH = JobBoardPanel.HEAD + activeSection + offersHeight + 16;
 
-    // Never let the board overflow the screen — cap it and scroll the offers.
     const h = Math.min(fullH, screenHeight - 16);
     this.panelHeight = h;
     this.container.x = Math.round((screenWidth - JobBoardPanel.W) / 2);
@@ -141,7 +107,6 @@ export class JobBoardPanel {
     );
   }
 
-  /** Pure per-quest row layout for an offer row — see `jobBoardRowLayout.ts`. */
   private static offerRowLayout(q: GeneratedQuest): RowLayout {
     return computeRowLayout(
       {
@@ -163,7 +128,6 @@ export class JobBoardPanel {
     );
   }
 
-  /** Pure per-quest row layout for an active-quest row — see `jobBoardRowLayout.ts`. */
   private static activeRowLayout(q: Quest): RowLayout {
     return computeRowLayout(
       {
@@ -231,7 +195,6 @@ export class JobBoardPanel {
 
     let y = JobBoardPanel.HEAD;
 
-    // Active quests section with countdown
     if (activeQuests.length > 0) {
       this.label(
         t("jobBoard.activeQuests"),
@@ -249,7 +212,6 @@ export class JobBoardPanel {
         this.addActiveRow(q, y, W, currentDay, layout);
         y += layout.contentHeight + JobBoardPanel.ROW_GAP;
       });
-      // Divider
       const divider = new Graphics();
       divider.rect(10, y + 2, W - 20, 1).fill({ color: 0x334466, alpha: 0.9 });
       this.container.addChild(divider);
@@ -280,11 +242,8 @@ export class JobBoardPanel {
       return;
     }
 
-    // ---- Scrollable offers area ----------------------------------------
     const offerAreaTop = y;
     const bottomPad = 8;
-    // Row heights vary with content now, so track each row's own slot height
-    // (content + gap) and its cumulative offset instead of a fixed step.
     const offerSlots = offerLayouts.map(
       (l) => l.contentHeight + JobBoardPanel.ROW_GAP,
     );
@@ -299,11 +258,8 @@ export class JobBoardPanel {
     let offerAreaHeight = h - offerAreaTop - bottomPad;
     const overflows = contentHeight > offerAreaHeight;
     if (overflows) {
-      // Reserve a strip at the bottom for the scroll arrows.
       offerAreaHeight -= JobBoardPanel.SCROLL_BAR_H;
     }
-    // How many TRAILING rows fit within the visible window — generalises the
-    // old `floor(offerAreaHeight / ROW_H_OFFER)` to variable row heights.
     let visibleRows = 1;
     if (offerSlots.length > 0) {
       let sum = 0;
@@ -317,8 +273,6 @@ export class JobBoardPanel {
     }
     const maxScroll = Math.max(0, quests.length - visibleRows);
 
-    // Mask sits on the panel (parent), so it stays fixed while the offers
-    // container scrolls underneath it (PixiJS 8 mask rule — see EquipmentShop).
     const mask = new Graphics();
     mask
       .rect(10, offerAreaTop, W - 20, offerAreaHeight)
@@ -330,10 +284,6 @@ export class JobBoardPanel {
     this.container.addChild(offers);
     this.offersContainer = offers;
 
-    // A PixiJS 8 mask clips RENDERING only, not hit-testing — without an
-    // explicit hitArea the scrolled-out rows' "Принять" buttons stay clickable
-    // through the header/active section (presentation/CLAUDE.md Rule 3a). Clip
-    // hits to the same visible window; scrollOffers keeps it aligned.
     this.offerAreaTopPx = offerAreaTop;
     this.offersHitArea = new Rectangle(
       10,
@@ -363,21 +313,12 @@ export class JobBoardPanel {
 
     if (maxScroll > 0) {
       this.addScrollControls(W, offerAreaTop + offerAreaHeight + 2, maxScroll);
-      // Window-level wheel listener scrolls the offers. A federated
-      // `container.on("wheel")` is unreliable: PixiJS dispatches `wheel` only to
-      // the object under the pointer, and the rows on top swallow it. `render`
-      // runs once (constructor), so capturing `maxScroll` here is safe; detached
-      // in `destroy()`.
       this.detachWheel = attachWheelScroll((dir) =>
         this.scrollOffers(dir, maxScroll),
       );
     }
   }
 
-  /**
-   * Scroll the offer list by `delta` rows, clamped to `[0, maxOffset]`.
-   * Public so the scroll arrows, wheel handler and tests can drive it.
-   */
   public scrollOffers(delta: number, maxOffset: number): void {
     const next = Math.max(
       0,
@@ -387,10 +328,7 @@ export class JobBoardPanel {
     this.offerScrollOffset = next;
     const offsetPx = this.offerRowOffsets[next] ?? 0;
     if (this.offersContainer) {
-      // `|| 0` normalises the `-0` you'd otherwise get at offset 0.
       this.offersContainer.y = -offsetPx || 0;
-      // Keep the hit window fixed on screen as the content scrolls under it, so
-      // masked-out rows stay un-clickable (mask clips render only).
       if (this.offersHitArea) {
         this.offersHitArea.y = this.offerAreaTopPx + offsetPx;
       }
@@ -398,7 +336,6 @@ export class JobBoardPanel {
     this.updateScrollArrows(maxOffset);
   }
 
-  /** Up/down arrow buttons shown in the reserved bottom strip. */
   private addScrollControls(W: number, barY: number, maxScroll: number): void {
     const makeArrow = (glyph: string, dx: number, dir: number): Text => {
       const t = scaledText(glyph, 16, 0x66ccff, { fontWeight: "bold" });
@@ -417,8 +354,6 @@ export class JobBoardPanel {
     this.scrollUpBtn = makeArrow("▲", -52, -1);
     this.scrollDownBtn = makeArrow("▼", 52, 1);
 
-    // Footer hint: the old 0x668899 blue-gray was the dimmest text on the panel;
-    // scaledText lifts it to the readability floor and scales it with the setting.
     const hint = scaledText(t("jobBoard.scrollHint"), 10, 0x668899);
     hint.anchor.set(0.5);
     hint.x = W / 2;
@@ -429,7 +364,6 @@ export class JobBoardPanel {
     this.updateScrollArrows(maxScroll);
   }
 
-  /** Dim arrows that can't scroll further in their direction. */
   private updateScrollArrows(maxScroll: number): void {
     if (this.scrollUpBtn) {
       this.scrollUpBtn.alpha = this.offerScrollOffset > 0 ? 1 : 0.3;
@@ -467,7 +401,6 @@ export class JobBoardPanel {
       true,
     );
 
-    // Word-wrapped — no more character-count truncation (`slice(0,27)+"…"`).
     const titleT = scaledText(q.title, 12, 0xdddddd, {
       fontWeight: "bold",
       wordWrap: true,
@@ -478,7 +411,6 @@ export class JobBoardPanel {
     titleT.y = y + layout.titleY;
     this.container.addChild(titleT);
 
-    // Countdown
     let countdownText: string;
     let countdownColor: number;
     if (q.deadline === 0) {
@@ -505,8 +437,6 @@ export class JobBoardPanel {
     cd.eventMode = "none";
     cd.anchor.set(1, 0);
     cd.x = W - 16;
-    // Shares the type-tag's line (TOP_PAD), not the title's, for the same
-    // reason as the offer row's reward badge (see `addRow`).
     cd.y = y + TOP_PAD;
     this.container.addChild(cd);
   }
@@ -531,12 +461,9 @@ export class JobBoardPanel {
     row.eventMode = "static";
     parent.addChild(row);
 
-    // Type tag
     const tag = questTypeLabel(tpl.type);
     this.label(tag, 20, y + TOP_PAD, 11, color, false, parent, true);
 
-    // Title — word-wrapped — no more character-count truncation
-    // (`slice(0,35)+"…"`), so the full title is always readable.
     const titleT = scaledText(tpl.title, 12, 0xffffff, {
       fontWeight: "bold",
       wordWrap: true,
@@ -547,7 +474,6 @@ export class JobBoardPanel {
     titleT.y = y + layout.titleY;
     parent.addChild(titleT);
 
-    // Issuer line: who posted the job (e.g. "— Снабженец Маклай").
     if (q.issuerName) {
       const issuer = q.issuerTitle
         ? `— ${q.issuerTitle} ${q.issuerName}`
@@ -555,9 +481,6 @@ export class JobBoardPanel {
       this.label(issuer, 20, y + layout.issuerY, 10, 0x77aacc, false, parent);
     }
 
-    // Description (full text, grey, small, wrapped). Routed through scaledText:
-    // the old dim 0x889aaa blue-gray was sub-AA on the dark panel; the readability
-    // floor lifts it to a legible level and it now tracks the S/M/L setting.
     if (tpl.description) {
       const descText = scaledText(tpl.description, 13, 0x889aaa, {
         wordWrap: true,
@@ -569,7 +492,6 @@ export class JobBoardPanel {
       parent.addChild(descText);
     }
 
-    // Highlight tags: [Груз: медикаменты]  [Система: Альфа]  [Выдан: планета X]
     if (q.highlights.length > 0) {
       const hy = y + layout.highlightsY;
       const tagSpacing = 140;
@@ -587,7 +509,6 @@ export class JobBoardPanel {
       }
     }
 
-    // Reward / deadline / jumps on the right side of info area
     const deadlineDays =
       tpl.deadline > 0
         ? `  ${t("jobBoard.daysLeft", { days: tpl.deadline })}`
@@ -598,13 +519,9 @@ export class JobBoardPanel {
     m.eventMode = "none";
     m.anchor.set(1, 0);
     m.x = W - 90;
-    // Shares the type-tag's line (TOP_PAD), not the title's — the title is
-    // now word-wrapped to its full length, so a long title's first line would
-    // otherwise run directly into this right-anchored badge.
     m.y = y + TOP_PAD;
     parent.addChild(m);
 
-    // "Принять" button on the right
     const btnW = 74;
     const btnH = rowH - 8;
     const btnX = W - 86;
@@ -692,12 +609,6 @@ export class JobBoardPanel {
     this.container.addChild(x);
   }
 
-  /**
-   * Panel label routed through `scaledText` so the S/M/L setting reaches it.
-   * `raw` preserves the given fill verbatim (for semantic accent colors — type
-   * tags, alerts, gold reward); omit it for neutral/dim text so the readability
-   * floor lifts near-background blue-grays to a legible level.
-   */
   private label(
     text: string,
     x: number,

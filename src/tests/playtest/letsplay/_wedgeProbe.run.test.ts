@@ -1,16 +1,3 @@
-/**
- * Wedge probe — an env-gated DIAGNOSTIC, not a gate (inert unless
- * `WEDGE_PROBE=1`; asserts nothing beyond "steps happened"). Replays a seeded
- * session on the real engine and prints, per step: the action transcript tail,
- * an action histogram, and a per-step world line (system id, held sets, active
- * quests, neighbour flags, hostile hull/damage). This is the tool that
- * diagnosed every Task 6 campaign wedge (flee↔back-out ping-pong, quest-into-
- * pirate-den, orphaned pendingWarp, unaffordable-repair loop) — keep it for
- * the Task 7–9 wedge burn-down.
- *
- * Usage: `WEDGE_PROBE=1 WEDGE_SEED=<seed> WEDGE_MODE=GOD|NORMAL
- * WEDGE_STEPS=<n> npx vitest --run src/tests/playtest/letsplay/_wedgeProbe.run.test.ts`
- */
 import { describe, it, expect, vi } from "vitest";
 import { FactionType, SceneType, type GameMode } from "@/types";
 import { RealEngineHarness } from "../realEngineHarness";
@@ -62,7 +49,7 @@ describe("wedge probe (temp)", () => {
           t.push(...res.steps.map((s) => ({ ...s, index: i })));
           if (harness.currentSceneType() === SceneType.GAME_OVER) break;
         }
-        // eslint-disable-next-line no-console
+         
         console.log(sys.map((s, i) => `@${i} ${s}`).join("\n"));
       } finally {
         harness.dispose();
@@ -75,14 +62,14 @@ describe("wedge probe (temp)", () => {
           `fuel=${v?.fuel} cargo=${v?.cargoUsed}`
         );
       });
-      // eslint-disable-next-line no-console
+       
       console.log(lines.join("\n"));
       const hist: Record<string, number> = {};
       for (const s of t.slice(-300)) {
         const k = `${String(s.scene)}:${s.action.kind}:${s.action.reason ?? ""}`;
         hist[k] = (hist[k] ?? 0) + 1;
       }
-      // eslint-disable-next-line no-console
+       
       console.log(
         Object.entries(hist)
           .sort((a, b) => b[1] - a[1])

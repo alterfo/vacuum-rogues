@@ -12,16 +12,6 @@ import {
 import { LoadoutPresetSchema, SaveStateSchema } from "@/validation/schemas";
 import { ModuleCategory, type LoadoutPreset } from "@/types";
 
-/**
- * Task 6 (gear-variety-and-hangar): КОМПЛЕКТАЦИЯ 1/2/3 loadout presets.
- * `captureLoadoutPreset`/`applyLoadoutPreset` are pure over `Player`/
- * `ShipLoadout` — presets store gear ids (+ micromodule ids), never copies;
- * applying re-installs each slot from whatever is owned *now* through the
- * normal `ShipLoadout.install` path, so the engine's slot/mass rules are
- * never bypassed and a sold/missing item is skipped, not force-fitted.
- */
-
-/** Minimal Player stand-in — the GearBridge helpers only touch `.inventory`. */
 function playerWith(inventory: Inventory): Player {
   return { inventory } as unknown as Player;
 }
@@ -90,7 +80,6 @@ describe("applyLoadoutPreset — round-trip", () => {
 
     const preset = captureLoadoutPreset("1", loadout);
 
-    // Swap to a completely different fitting.
     installOwnedGear(player, loadout, "eq_radar");
     installOwnedGear(player, loadout, "eq_tank");
     expect(loadout.installedGearIds().sort()).toEqual(
@@ -104,8 +93,6 @@ describe("applyLoadoutPreset — round-trip", () => {
     expect(loadout.installedGearIds().sort()).toEqual(
       ["eq_engine_i", "wpn_pulse"].sort(),
     );
-    // The gear the preset didn't need came back to the owned/bag stores, not
-    // vanished — radar/tank should be recoverable somewhere in the inventory.
     const stillOwned =
       inv.ownedGearIds.includes("eq_radar") ||
       inv.modules.some((m) => m.id === "eq_radar");
@@ -137,10 +124,6 @@ describe("applyLoadoutPreset — round-trip", () => {
     const preset = captureLoadoutPreset("1", loadout);
     expect(preset.slots[0].upgrades).toBe(2);
 
-    // Simulate the exact upgraded copy having been sold and a fresh,
-    // un-upgraded copy bought back before re-applying the preset — the
-    // preset's own captured upgrade count must still be restored, not
-    // silently reset to 0 just because the original bag object is gone.
     loadout.removeAt(0);
     inv.modules.length = 0;
     inv.addOwnedGear("wpn_pulse");
@@ -160,8 +143,6 @@ describe("applyLoadoutPreset — round-trip", () => {
     loadout.install("eq_engine_i");
     const preset = captureLoadoutPreset("1", loadout);
 
-    // Sell the engine out of the bag entirely (unfit round-trip put it in
-    // player.inventory.modules — drop it to simulate a sale before applying).
     applyLoadoutPreset(player, loadout, {
       name: "1",
       slots: [],
@@ -183,10 +164,6 @@ describe("applyLoadoutPreset — round-trip", () => {
     loadout.applyMicromodule("hull_corvette", "mm_hull_armor_1");
     const preset = captureLoadoutPreset("1", loadout);
 
-    // Swap hulls to lose the (unremovable) hull micromodule, then apply the
-    // preset on the fresh hull, which still has a free hull-micromodule slot.
-    // Restoring a destroyed hull micromodule must spend a fresh, owned,
-    // uninstalled copy — it is a non-refundable purchase, never conjured.
     const fresh = new ShipLoadout("hull_corvette");
     expect(fresh.hullMicromodules()).toEqual([]);
     inv.micromodules.push({
@@ -211,8 +188,6 @@ describe("applyLoadoutPreset — round-trip", () => {
     loadout.applyMicromodule("hull_corvette", "mm_hull_armor_1");
     const preset = captureLoadoutPreset("1", loadout);
 
-    // Hull swap destroyed the micromodule and no fresh copy was bought back —
-    // applying the preset on the new hull must NOT resurrect it for free.
     const fresh = new ShipLoadout("hull_corvette");
 
     const result = applyLoadoutPreset(player, fresh, preset);
@@ -249,7 +224,6 @@ describe("applyLoadoutPreset — round-trip", () => {
       "mm_hull_armor_1",
     ]);
 
-    // Hull swap destroys both; only one replacement copy was bought back.
     const fresh = new ShipLoadout("hull_bastion");
     inv.micromodules.push({
       id: "mm_hull_armor_1",
@@ -284,7 +258,6 @@ describe("applyLoadoutPreset — round-trip", () => {
 
     const result = applyLoadoutPreset(player, loadout, preset);
 
-    // Exactly one weapon slot exists — the second copy is skipped, not forced in.
     expect(loadout.installedGearIds()).toEqual(["wpn_pulse"]);
     expect(result.applied).toEqual(["wpn_pulse"]);
     expect(result.skipped).toEqual(["wpn_pulse"]);

@@ -7,13 +7,6 @@ import {
   type MicromoduleDropOutcome,
 } from "@/systems/equipment/GearBridge";
 
-/**
- * Task 6 (install/micromodule overhaul): drag-and-drop fitting. The pure drop
- * decision routes the canonical fit rules (category match, slot occupancy, hull
- * slot limits, faction) into a structured reason so the UI can reject a bad drop
- * with a clear hint. No new fit logic — it composes the existing accessors.
- */
-
 const WEAPON = "wpn_pulse";
 const ENGINE = "eq_engine_i";
 const MM_WEAPON = "mm_wpn_1"; // WEAPON-category gear micromodule
@@ -21,7 +14,6 @@ const MM_ENGINE = "mm_eng_1"; // ENGINE-category gear micromodule
 const MM_HULL_ARMOR = "mm_hull_armor_1"; // HULL defense micromodule
 const MM_HULL_HOLD = "mm_hull_hold_1"; // HULL cargo micromodule
 
-/** Corvette: weapon+equipment banks, 2 hull micromodule slots. */
 function corvetteWithWeaponAndEngine(): ShipLoadout {
   const loadout = new ShipLoadout("hull_corvette");
   expect(loadout.install(WEAPON)).toBe(true); // slot 0 = weapon
@@ -168,7 +160,6 @@ describe("micromoduleDropHint", () => {
     for (const o of outcomes) {
       expect(micromoduleDropHint(o).length).toBeGreaterThan(0);
     }
-    // Reject hints are distinct from one another (clear, specific messaging).
     const rejectHints = outcomes
       .filter((o) => o !== "ok")
       .map((o) => micromoduleDropHint(o));

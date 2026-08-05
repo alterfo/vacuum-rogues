@@ -10,14 +10,6 @@ import {
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
 
-/**
- * Task 1 — traveling tracer bolt. Each fired shot used to draw a static
- * full-length beam (ambiguous direction); it now renders as a bolt that
- * interpolates shooter→target over {@link TRACER_TRAVEL_MS}, with a muzzle flash
- * at the source and an impact flash blooming at the target on arrival. These
- * tests cover the deterministic motion/lifecycle; the *look* is verified by GIF.
- */
-
 function makeSprite(name: string, hullHP = 100, maxHull = 100): NpcShipSprite {
   return {
     x: 0,
@@ -43,17 +35,10 @@ function makeHud(): { hud: CombatHud; gameLayer: Container } {
   return { hud, gameLayer };
 }
 
-/** The flashLayer is the last child added in open() (after the marker layer). */
 function flashLayerOf(gameLayer: Container): Container {
   return gameLayer.children[gameLayer.children.length - 1] as Container;
 }
 
-/**
- * Recorded draw-instruction actions on a tracer Graphics (CPU-side, no renderer
- * needed in PixiJS 8). Lets a test prove `drawFlash` actually emitted geometry
- * rather than trusting the parallel `tracerStates` bookkeeping — a no-op draw
- * would otherwise leave every motion test green.
- */
 function drawActions(child: unknown): string[] {
   const instr = (child as { context?: { instructions?: { action: string }[] } })
     .context?.instructions;
@@ -88,13 +73,11 @@ describe("traveling tracer — position interpolates over travel", () => {
     hud.open(makeSprite("a"));
     hud.flashShot(0, 0, 100, 200, false);
 
-    // Fresh: head at the source, phase=travel.
     let [t] = hud.tracerStates;
     expect(t.pos.x).toBeCloseTo(0);
     expect(t.pos.y).toBeCloseTo(0);
     expect(t.phase).toBe("travel");
 
-    // Halfway through travel: head at the midpoint.
     hud.update(TRACER_TRAVEL_MS / 2);
     [t] = hud.tracerStates;
     expect(t.pos.x).toBeCloseTo(50);
@@ -108,9 +91,7 @@ describe("traveling tracer — position interpolates over travel", () => {
     expect(tracerBoltPos(from, to, 0).x).toBeCloseTo(0);
     expect(tracerBoltPos(from, to, TRACER_TRAVEL_MS / 2).x).toBeCloseTo(50);
     expect(tracerBoltPos(from, to, TRACER_TRAVEL_MS).x).toBeCloseTo(100);
-    // Past arrival the head stays pinned to the target (no overshoot).
     expect(tracerBoltPos(from, to, TRACER_TRAVEL_MS * 3).x).toBeCloseTo(100);
-    // Before launch (age < 0) the head clamps to the source (low clamp).
     expect(tracerBoltPos(from, to, -100).x).toBeCloseTo(0);
   });
 });
@@ -121,16 +102,12 @@ describe("traveling tracer — drawFlash emits geometry (not a no-op)", () => {
     hud.open(makeSprite("a"));
     hud.flashShot(0, 0, 100, 0, true);
 
-    // Travel phase: the bolt streak (stroke) + head/muzzle glow (fill) are
-    // actually recorded — proves drawFlash ran, not just the bookkeeping.
     const bolt = flashLayerOf(gameLayer).children[0];
     expect(hud.tracerStates[0].phase).toBe("travel");
     const travel = drawActions(bolt);
     expect(travel).toContain("stroke");
     expect(travel).toContain("fill");
 
-    // Impact phase: the same Graphics is cleared and redrawn as the target
-    // bloom, so the other drawFlash branch is exercised too.
     hud.update(TRACER_TRAVEL_MS + 1);
     expect(hud.tracerStates[0].phase).toBe("impact");
     const impact = drawActions(bolt);

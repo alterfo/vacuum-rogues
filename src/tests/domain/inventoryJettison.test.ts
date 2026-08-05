@@ -3,11 +3,6 @@ import { Inventory } from "@/domain/Inventory";
 import { ResourceType } from "@/types";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 
-/**
- * Bug 2: jettison-to-space for cargo. `removeResource` is the domain mutation
- * the InventoryScene jettison action routes through — no credit refund
- * (selling is the separate paid path in the equipment shop/hangar).
- */
 describe("Inventory.removeResource", () => {
   it("partially removes a stack, leaving the remainder", () => {
     const inv = new Inventory();

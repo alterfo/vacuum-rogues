@@ -9,25 +9,16 @@ import {
   type HostilityContext,
 } from "./factionHostility";
 
-/**
- * Decides the next goal for an NPC whose current goal is done (or who is IDLE).
- * Default implementation is a deterministic rule-based state machine; an
- * ONNX-backed brain can be swapped in later without touching NpcSimulator
- * (mirrors CombatSystem's EnemyAIController extension point).
- */
 export interface NpcBrain {
   decideGoal(npc: NpcShip, galaxy: Galaxy, rng: SeededRNG): NpcGoal;
 }
 
-/** Map an NPC role to the kind of goal it pursues while travelling. */
 function roleToGoalKind(role: NpcRole): NpcGoalKind {
   switch (role) {
     case NpcRole.TRADER:
       return NpcGoalKind.TRADE;
     case NpcRole.PIRATE:
       return NpcGoalKind.HUNT;
-    // OVERMIND garrison craft patrol their captured system — the same goal
-    // they pursued while flying a borrowed PATROL role.
     case NpcRole.PATROL:
     case NpcRole.OVERMIND:
       return NpcGoalKind.PATROL;
@@ -37,12 +28,6 @@ function roleToGoalKind(role: NpcRole): NpcGoalKind {
   }
 }
 
-/**
- * Deterministic rule-based brain. Picks a destination system (prefers warp
- * neighbours, falls back to any other system) and a goal kind by role.
- * TRADER NPCs prefer neighbours with a different economy type to simulate
- * purposeful trade routes.
- */
 export class RuleBasedNpcBrain implements NpcBrain {
   decideGoal(npc: NpcShip, galaxy: Galaxy, rng: SeededRNG): NpcGoal {
     const current = galaxy.systems.find((s) => s.id === npc.currentSystemId);
@@ -57,8 +42,6 @@ export class RuleBasedNpcBrain implements NpcBrain {
             .map((s) => s.id)
             .filter((id) => id !== npc.currentSystemId);
 
-    // Traders prefer neighbours with a different economy type so their routes
-    // simulate purposeful cargo runs between complementary systems.
     if (npc.role === NpcRole.TRADER && current && neighbours.length > 0) {
       const differentEconomy = neighbours.filter((id) => {
         const sys = galaxy.systems.find((s) => s.id === id);
@@ -76,82 +59,39 @@ export class RuleBasedNpcBrain implements NpcBrain {
   }
 }
 
-/**
- * ONNX extension point (Feature 8 hook). Wraps a model registry and falls back
- * to the rule-based brain until a tactical/strategic model is wired in.
- */
 export class OnnxNpcBrain implements NpcBrain {
   private readonly fallback = new RuleBasedNpcBrain();
 
   decideGoal(npc: NpcShip, galaxy: Galaxy, rng: SeededRNG): NpcGoal {
-    // TODO(Feature 8): query an ONNX policy model; fall back for now.
     return this.fallback.decideGoal(npc, galaxy, rng);
   }
 }
 
-// ---------------------------------------------------------------------------
-// Pirate shakedown decision ("Кошелёк или жизнь" —
-// docs/plans/20260619-universal-comms-and-pirate-encounters.md, Task 2)
-// ---------------------------------------------------------------------------
-
-/**
- * Tuning for the pure {@link wantsToShakedown} decision. A bully picks on the
- * weak: the demand chance ramps with the pirate's strength relative to the
- * player and is zero for a pirate the player clearly out-guns.
- */
 export const SHAKEDOWN = {
-  /** Weight applied to a ship's per-shot damage when scoring its strength. */
   damageWeight: 4,
-  /** Below this pirate:player strength ratio a pirate won't bother — chance 0. */
   minRatio: 0.8,
-  /** At/above this ratio the demand chance saturates at {@link maxChance}. */
   strongRatio: 1.6,
-  /** The most likely a passing pirate is to open a shakedown hail. */
   maxChance: 0.5,
 } as const;
 
-/** The minimal combat-stat shape {@link shipCombatStrength} scores. */
 export interface ShipCombatStats {
   hullHP: number;
   shields: number;
   damage: number;
 }
 
-/**
- * A single combat-strength scalar for a ship: survivability (hull + shields)
- * plus weighted offence (per-shot damage). Used to gauge how a passing pirate
- * sizes up the player before deciding whether to demand tribute. Pure — no RNG,
- * no I/O. Negative inputs are floored at 0 so a wrecked ship never scores below
- * an unarmed one.
- */
 export function shipCombatStrength(stats: ShipCombatStats): number {
   const survivability = Math.max(0, stats.hullHP) + Math.max(0, stats.shields);
   const offence = Math.max(0, stats.damage) * SHAKEDOWN.damageWeight;
   return survivability + offence;
 }
 
-/**
- * A candidate prey for a pirate's target selection: its {@link FactionKind} (so
- * the matrix can rule out pack-mates and a good-rep player) plus the combat stats
- * that gauge how weak — i.e. how attractive — a mark it is.
- */
 export interface PirateTargetCandidate {
   readonly id: string;
   readonly kind: FactionKind;
   readonly stats: ShipCombatStats;
 }
 
-/**
- * Pick the prey a pirate goes after: the **weakest** hostile candidate (a bully
- * picks on the weak — lowest {@link shipCombatStrength}). Pure — no RNG, no I/O.
- *
- * Candidates the pirate is not hostile to are skipped via the {@link isHostile}
- * matrix — pack-mates (other pirates) and a **good-rep player** are never targeted
- * — so the good-pirate-rep exemption is enforced by the single source of truth
- * rather than re-derived here. Ties resolve to the earliest candidate in input
- * order (callers pass a stable order). Returns `null` when no candidate is a valid
- * target.
- */
 export function selectPirateTarget(
   candidates: ReadonlyArray<PirateTargetCandidate>,
   ctx: HostilityContext,
@@ -169,13 +109,6 @@ export function selectPirateTarget(
   return best;
 }
 
-/**
- * Probability (0–1) that this pirate opens a "кошелёк или жизнь" shakedown hail,
- * given the player's combat strength. Pure: zero for a pirate weaker than
- * {@link SHAKEDOWN.minRatio} of the player, ramping linearly to
- * {@link SHAKEDOWN.maxChance} at/above {@link SHAKEDOWN.strongRatio}. A helpless
- * player (strength ≤ 0) always draws the maximum demand chance.
- */
 export function shakedownChance(npc: NpcShip, playerStrength: number): number {
   const pirateStrength = shipCombatStrength(npc);
   if (playerStrength <= 0) return SHAKEDOWN.maxChance;
@@ -188,13 +121,6 @@ export function shakedownChance(npc: NpcShip, playerStrength: number): number {
   return t * SHAKEDOWN.maxChance;
 }
 
-/**
- * Decide whether an already-hostile passing pirate opens a shakedown hail
- * instead of attacking outright. Pure + deterministic given the RNG: only an
- * aggressive PIRATE can demand tribute, and the roll is gated by
- * {@link shakedownChance} (relative strength). Non-pirates, non-hostile ships,
- * and pirates the player out-guns always return false.
- */
 export function wantsToShakedown(
   npc: NpcShip,
   playerStrength: number,
@@ -206,17 +132,6 @@ export function wantsToShakedown(
   return rng.next() < chance;
 }
 
-/**
- * Good-rep-aware variant of {@link wantsToShakedown} for the human player. A
- * player at/above the shared good-pirate-rep threshold is **left alone** — no
- * shakedown is even rolled — because the {@link isHostile} matrix (the single
- * source of truth for the exemption) reports the pirate as non-hostile to a
- * good-rep player. Below the threshold this defers entirely to
- * {@link wantsToShakedown} (role + aggression + relative-strength gating). Pure +
- * deterministic given the RNG; the production seam (`NpcShipManager.rollShakedown`)
- * threads the player's pirate reputation through here so a friendly player is
- * never shaken down.
- */
 export function wantsToShakedownPlayer(
   npc: NpcShip,
   playerStrength: number,
@@ -227,41 +142,16 @@ export function wantsToShakedownPlayer(
   return wantsToShakedown(npc, playerStrength, rng);
 }
 
-// ---------------------------------------------------------------------------
-// Shakedown resolution — pay / refuse / flee
-// (docs/plans/20260619-universal-comms-and-pirate-encounters.md, Task 3)
-// ---------------------------------------------------------------------------
-
-/**
- * Tuning for the pure shakedown *outcome* helpers below. Kept separate from the
- * {@link SHAKEDOWN} demand-decision tuning so the tribute size and flee odds can
- * be tuned without touching the "does a pirate demand?" gate.
- */
 export const SHAKEDOWN_OUTCOME = {
-  /** Fraction of the player's purse a pirate demands as tribute. */
   tributeFraction: 0.25,
-  /** Floor on the demand (a pirate won't bother shaking you down for pennies). */
   minTribute: 100,
-  /** Cap on the demand so a rich player is never crippled by one hail. */
   maxTribute: 5000,
-  /** Escape chance for a much slower ship (the speed ratio is fully unfavourable). */
   fleeMinChance: 0.1,
-  /** Escape chance for a much faster ship (the speed ratio is fully favourable). */
   fleeMaxChance: 0.9,
-  /** At/below this player:pirate speed ratio the escape chance floors out. */
   fleeSlowRatio: 0.6,
-  /** At/above this player:pirate speed ratio the escape chance saturates. */
   fleeFastRatio: 1.4,
 } as const;
 
-/**
- * The tribute a pirate demands given the player's current purse. Pure: a fixed
- * fraction of the player's credits, clamped to [{@link SHAKEDOWN_OUTCOME.minTribute},
- * {@link SHAKEDOWN_OUTCOME.maxTribute}] — but never more than the player actually
- * has (a broke player can be emptied, not put into debt). Zero for a penniless
- * player. The result is whole credits (rounded) so the move onto a current account
- * stays save-safe.
- */
 export function shakedownTribute(playerCredits: number): number {
   if (playerCredits <= 0) return 0;
   const demand = Math.round(playerCredits * SHAKEDOWN_OUTCOME.tributeFraction);
@@ -272,14 +162,6 @@ export function shakedownTribute(playerCredits: number): number {
   return Math.min(bounded, Math.floor(playerCredits));
 }
 
-/**
- * Probability (0–1) that the player out-runs a shaking-down pirate by fleeing.
- * Pure function of the two ships' speeds: ramps linearly from
- * {@link SHAKEDOWN_OUTCOME.fleeMinChance} at/below {@link SHAKEDOWN_OUTCOME.fleeSlowRatio}
- * to {@link SHAKEDOWN_OUTCOME.fleeMaxChance} at/above {@link SHAKEDOWN_OUTCOME.fleeFastRatio}
- * of the player:pirate speed ratio. A dead-in-the-water player (speed ≤ 0) can
- * never escape; a motionless pirate (speed ≤ 0) is always escaped.
- */
 export function fleeEscapeChance(
   playerSpeed: number,
   pirateSpeed: number,
@@ -299,11 +181,6 @@ export function fleeEscapeChance(
   );
 }
 
-/**
- * Roll whether the player escapes a shakedown by fleeing — pure + deterministic
- * given the RNG, gated by {@link fleeEscapeChance}. A failed roll means the pirate
- * runs the player down and the fight begins.
- */
 export function attemptFlee(
   playerSpeed: number,
   pirateSpeed: number,
@@ -312,44 +189,16 @@ export function attemptFlee(
   return rng.next() < fleeEscapeChance(playerSpeed, pirateSpeed);
 }
 
-// ---------------------------------------------------------------------------
-// Player hire / ally offers
-// (docs/plans/20260619-universal-comms-and-pirate-encounters.md, Task 4)
-// ---------------------------------------------------------------------------
-
-/**
- * Tuning for the pure {@link hireFee} / {@link acceptsHire} merc-contract
- * decision. A hired ship sizes up the job: it wants a flat {@link baseFee} just
- * for taking the contract, plus a risk premium proportional to how dangerous the
- * named target is ({@link riskFactor} × the target's combat strength).
- */
 export const HIRE = {
-  /** Flat fee a hired ship demands just for taking the contract. */
   baseFee: 200,
-  /** Risk premium per point of the target's combat strength. */
   riskFactor: 1.5,
 } as const;
 
-/**
- * The fee a ship demands to be hired against {@link target}: a flat
- * {@link HIRE.baseFee} plus a risk premium proportional to the target's combat
- * strength (a tougher mark costs more). Pure; whole credits (rounded) so the
- * payment onto a current account stays save-safe.
- */
 export function hireFee(target: ShipCombatStats): number {
   const risk = shipCombatStrength(target) * HIRE.riskFactor;
   return Math.round(HIRE.baseFee + risk);
 }
 
-/**
- * Decide whether a ship accepts the player's offer of `offer` credits to attack
- * `target` (hire) or aid against it in a fight (ally). Pure — no RNG, no I/O. A
- * ship:
- *  - won't take the coin while it is itself openly hostile to the player
- *    ({@link NpcShip.isAggressive}),
- *  - won't turn its guns on its own faction (no betraying allies), nor on itself,
- *  - otherwise accepts iff the offer meets its {@link hireFee} asking price.
- */
 export function acceptsHire(
   npc: NpcShip,
   offer: number,
@@ -361,12 +210,6 @@ export function acceptsHire(
   return offer >= hireFee(target);
 }
 
-/**
- * The goal a freshly-hired ship adopts: HUNT the contracted target's system.
- * Pure — the manager assigns the result to the hired NPC's `goal` so the merc
- * breaks off and heads after the mark (the goal persists via the existing save
- * schema, so no new persistence is needed for the contract to survive a reload).
- */
 export function hireGoal(target: NpcShip): NpcGoal {
   return { kind: NpcGoalKind.HUNT, targetSystemId: target.currentSystemId };
 }

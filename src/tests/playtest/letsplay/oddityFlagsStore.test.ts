@@ -12,15 +12,6 @@ import {
 import type { Observation } from "@/tests/playtest/letsplay/observe";
 import type { Action } from "@/tests/playtest/letsplay/PlayerPolicy";
 
-/**
- * Task 7: the pure oddity-flag store. `flagOddity`/`readFlags`/`clearFlags`/
- * `exportFlags` persist a rolling, capped list of `{timestamp, step, scene,
- * obs, lastAction, note?}` entries through an injectable store — mirroring
- * the `keymap.ts`/`fontScale.ts` pattern so these tests never touch the real
- * `localStorage`.
- */
-
-/** A pure in-memory `OddityFlagStore` so persistence tests don't touch globals. */
 function memStore(initial: Record<string, string> = {}): OddityFlagStore {
   const map = new Map(Object.entries(initial));
   return {
@@ -34,7 +25,6 @@ function memStore(initial: Record<string, string> = {}): OddityFlagStore {
   };
 }
 
-/** A store whose every method throws — simulates a full/blocked browser store. */
 function throwingStore(): OddityFlagStore {
   const boom = (): never => {
     throw new Error("storage blocked");
@@ -105,7 +95,6 @@ describe("oddityFlags — flagOddity/readFlags (injectable store)", () => {
 
     const flags = readFlags(store);
     expect(flags).toHaveLength(MAX_ODDITY_FLAGS);
-    // The oldest 5 (steps 0..4) rolled off; the surviving window starts at 5.
     expect(flags[0].step).toBe(5);
     expect(flags[flags.length - 1].step).toBe(MAX_ODDITY_FLAGS + 4);
   });

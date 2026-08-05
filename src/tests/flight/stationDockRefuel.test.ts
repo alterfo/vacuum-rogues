@@ -1,21 +1,5 @@
-/**
- * Task 7 of the smart-autopilot plan (game oddity): station docking must
- * refuel the ship exactly like `SpaceFlightScene.onLandOnPlanet` does on
- * landing. Before this fix `onDockAtStation` transitioned to `StationScene`
- * without touching `ship.energy` at all — an inconsistent, player-visible
- * oddity (land refuels for free, dock doesn't).
- *
- * Mirrors the prototype-invocation pattern in `landingGate.test.ts`: the real
- * `onDockAtStation` method is called off `SpaceFlightScene.prototype` against a
- * minimal `this` carrying only the fields it touches, so no full scene/renderer
- * construction is needed.
- */
 import { describe, it, expect, vi } from "vitest";
 
-// Mock pixi.js + the presentation helpers SpaceFlightScene imports at load time
-// so the module resolves in jsdom without a real WebGL context (mirrors the
-// pixi mock block in landingGate.test.ts). We never construct the scene — the
-// real method is invoked off its prototype against a minimal `this`.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -127,7 +111,6 @@ const onDockAtStation = (
   SpaceFlightScene.prototype as unknown as { onDockAtStation: DockFn }
 ).onDockAtStation;
 
-/** A minimal scene `this` carrying only the fields `onDockAtStation` touches. */
 function makeScene(energy: number, maxEnergy = 100) {
   const transitionTo = vi.fn().mockResolvedValue(undefined);
   const clearPlannedRoute = vi.fn();

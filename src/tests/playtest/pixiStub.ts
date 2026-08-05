@@ -1,23 +1,3 @@
-/**
- * Comprehensive headless PixiJS stub for the real-engine playtest harness.
- *
- * The scattered per-file `vi.mock("pixi.js")` blocks across the unit tests only
- * stub the handful of classes a single scene touches. The playtest harness needs
- * the *real* scenes to construct and run their lifecycle with no GPU, so this
- * stub covers every `pixi.js` export used across `src/` (collected from the
- * import sites) with just enough behaviour that scene construction + a frame of
- * `update()` never throw. Art falls back to `Graphics` (textures resolve to
- * harmless stubs), exactly as production does when an asset is missing.
- *
- * Use it from a playtest test file:
- *
- *   vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
- *
- * It deliberately depends on nothing from `vitest` so the same module can be
- * imported by the harness itself.
- */
-
-/** A 2D vector with the chainable `.set()` PixiJS display objects expose. */
 class Vec2 {
   x = 0;
   y = 0;
@@ -33,7 +13,6 @@ class Vec2 {
   }
 }
 
-/** Shared base for every Container-like display object (Container/Graphics/…). */
 class DisplayObjectStub {
   children: unknown[] = [];
   filters: unknown[] | null = [];
@@ -212,7 +191,6 @@ class GraphicsStub extends DisplayObjectStub {
   cut(): this {
     return this;
   }
-  // Legacy v7 drawing names still referenced in a few spots.
   lineStyle(): this {
     return this;
   }
@@ -540,7 +518,6 @@ const AssetsStub = {
   },
 };
 
-/** The `pixi.js` module namespace as the harness sees it. */
 export function makePixiStub(): Record<string, unknown> {
   return {
     Application: ApplicationStub,

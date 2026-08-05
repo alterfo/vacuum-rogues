@@ -1,11 +1,3 @@
-/**
- * Asset-manifest integration verification (ART Task 9).
- *
- * The manifest is auto-discovering (Vite `import.meta.glob`), so generated art
- * is wired in by filename alone — no code edit. These tests guard the naming
- * conventions the rest of the engine relies on: the nebula parallax palettes,
- * the star surface maps, the landing panoramas, and the CC BY 4.0 planet maps.
- */
 import { describe, it, expect } from "vitest";
 import { allTextures, texture } from "@/assets/manifest";
 
@@ -92,7 +84,6 @@ describe("asset manifest — planet surface maps", () => {
     ]) {
       expect(names.some((n) => n.startsWith(`${type}_0`))).toBe(true);
     }
-    // Earth daymap + Jupiter are the canonical CC BY references.
     expect(texture("planet_maps/terrestrial_04")).toBeDefined();
     expect(texture("planet_maps/gas_04")).toBeDefined();
   });

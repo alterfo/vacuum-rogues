@@ -1,24 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A locked-room whodunit aboard the sealed research station «Гелиос».
-// A scientist is dead in a bolted lab; only three others were aboard. The
-// station's airlock realigns on a timer — when it opens the killer walks free,
-// so a `time` budget bleeds with every step (a `critMin` redirect to
-// ending_escaped — the deduction clock). The puzzle: gather enough physical
-// evidence (`clues`) AND name the correct suspect. The evidence points at the
-// station medic; a conviction needs BOTH the right accusation and clues >= 5.
-// Choice points:
-//   1. First examination — the body (+2), the airlock logs (+2), or a full
-//      forensic sweep (+3, but slow).
-//   2. Gather once more (+2, costs time) vs move to interrogation.
-//   3. Press a suspect (roll: crack for +2 clues, or stonewall and waste time)
-//      vs go straight to the accusation.
-//   4. The accusation — medic (correct), engineer, or comms officer.
-// Outcomes:
-//   - ending_solved   (right suspect, clues >= 5 — airtight conviction)  SUCCESS
-//   - ending_walks    (right suspect, too little proof — killer freed)   FAILURE
-//   - ending_wrong    (innocent condemned)                               FAILURE
-//   - ending_escaped  (airlock opened, killer slipped away)              FAILURE
 export const lockedRoomScript: QuestScript = {
   id: "locked-room",
   title: "Убийство на «Гелиосе»",

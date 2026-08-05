@@ -28,9 +28,6 @@ describe("seedMarket — deterministic market population", () => {
   it("differs between planets (per-planet jitter)", () => {
     const a = seedMarket(EconomyType.MIXED, "alpha");
     const b = seedMarket(EconomyType.MIXED, "beta");
-    // On MIXED every baseline is 1.0, so any difference is purely the jitter —
-    // proves the per-planet seed actually varies BOTH vectors (demand jitter is
-    // a separate rng draw, so it must vary independently of supply).
     expect(b.supplyVector).not.toEqual(a.supplyVector);
     expect(b.demandVector).not.toEqual(a.demandVector);
   });
@@ -52,8 +49,6 @@ describe("seedMarket — deterministic market population", () => {
 
   it("AGRICULTURAL: food is abundant, tech is scarce", () => {
     const v = seedMarket(EconomyType.AGRICULTURAL, "agri-world");
-    // ORGANICS baseline 0.7 (cheap) ⇒ more supply, less demand than
-    // ELECTRONICS baseline 1.4 (dear). Jitter ±15% can't flip this.
     expect(supplyOf(v, ResourceType.ORGANICS)).toBeGreaterThan(
       supplyOf(v, ResourceType.ELECTRONICS),
     );
@@ -64,7 +59,6 @@ describe("seedMarket — deterministic market population", () => {
 
   it("INDUSTRIAL: tech is abundant, food is scarce", () => {
     const v = seedMarket(EconomyType.INDUSTRIAL, "forge-world");
-    // ELECTRONICS baseline 0.7 (cheap) ⇒ more supply than ORGANICS baseline 1.3.
     expect(supplyOf(v, ResourceType.ELECTRONICS)).toBeGreaterThan(
       supplyOf(v, ResourceType.ORGANICS),
     );
@@ -75,7 +69,6 @@ describe("seedMarket — deterministic market population", () => {
 
   it("MIXED: no economy bias — supply and demand sit near parity", () => {
     const v = seedMarket(EconomyType.MIXED, "neutral");
-    // baseline 1.0 ⇒ both supply and demand land in the jitter band [0.85, 1.15].
     for (const s of v.supplyVector) {
       expect(s).toBeGreaterThanOrEqual(0.85);
       expect(s).toBeLessThanOrEqual(1.15);

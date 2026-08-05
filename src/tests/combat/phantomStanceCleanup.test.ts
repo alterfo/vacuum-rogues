@@ -13,26 +13,6 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Task 9 (vi) — the phantom combat stance is cleaned up even while frozen.
- *
- * The user's primary hypothesis for the win-rate plateau: the ship "freezes in a
- * combat stance — attack radius drawn, NO hostile ships nearby — and just
- * stands." Root cause: {@link CombatModule.update} early-returns on the active
- * pause BEFORE it prunes/ends the fight, so a combatant whose sprite was
- * destroyed by a non-combat path (hyperjumped out / day-tick despawn) leaves a
- * phantom combatant in the set — `isActive` stays true, the HUD attack radius
- * stays drawn, and the ship is frozen on a fight with nothing to fight. Nothing
- * resumes it because the policy sees no hostile to attack/flee.
- *
- * The fix: while frozen, drop destroyed-sprite combatants (fires no weapons, so
- * it is safe under the pause) and end an emptied fight; the host resumes the
- * pause on combat end so the ship isn't left frozen. This reconstructs the exact
- * scene wiring (real module + real controller) — a distance-disengaged LIVE
- * combatant is a paused player's live choice and must NOT be dropped, but a gone
- * sprite must.
- */
-
 const ESCAPE = GAME_BALANCE.combatEscapeRange;
 
 function makePhysics(x = 0, y = 0): ShipPhysics {
@@ -46,7 +26,6 @@ function makePhysics(x = 0, y = 0): ShipPhysics {
   } as unknown as ShipPhysics;
 }
 
-/** A sprite with a togglable `container.destroyed` (the despawn signal). */
 function makeSprite(
   id: string,
   x: number,
@@ -68,7 +47,6 @@ interface Host {
   pauseReason: () => PauseReason | null;
 }
 
-/** Wire a real module + controller exactly as `SpaceFlightScene` does. */
 function makeHost(): Host {
   let endedCount = 0;
   let reason: PauseReason | null = null;
@@ -92,7 +70,6 @@ function makeHost(): Host {
     onTargetLost: (npc) => controller.loseTarget(npc),
     onCombatEnded: () => {
       endedCount += 1;
-      // The scene's exact wiring: resume if paused, then re-arm the debounce.
       if (controller.paused) controller.resume();
       controller.reset();
     },
@@ -113,22 +90,15 @@ describe("phantom combat stance is cleaned up while frozen (Task 9 vi)", () => {
     host.module.addCombatant(a);
     expect(host.module.isActive).toBe(true);
 
-    // Freeze the fight (an incoming shot raised the active pause).
     host.controller.requestPause("incoming-attack");
     expect(host.controller.paused).toBe(true);
 
-    // While frozen, a LIVE combatant is a paused player's live choice — a frozen
-    // update must NOT end the fight (the stance is legitimate).
     host.module.update(16);
     expect(host.module.isActive).toBe(true);
     expect(host.controller.paused).toBe(true);
 
-    // The combatant's sprite despawns (hyperjumped out / day-tick refresh). Now
-    // the stance is phantom: nothing to fight, but the world is frozen.
     a.container.destroyed = true;
 
-    // A frozen update must clean the phantom up: end the fight and resume so the
-    // ship isn't stranded in a combat stance with no hostiles.
     host.module.update(16);
     expect(host.module.isActive).toBe(false);
     expect(host.endedCount()).toBe(1);
@@ -141,14 +111,11 @@ describe("phantom combat stance is cleaned up while frozen (Task 9 vi)", () => {
     host.module.addCombatant(a);
     host.controller.requestPause("incoming-attack");
 
-    // The combatant drifts beyond escape range but its sprite is alive — under a
-    // pause this is a live standoff the player is choosing about, not a phantom.
     a.x = ESCAPE + 500;
     host.module.update(16);
     expect(host.module.isActive).toBe(true); // still engaged while frozen
     expect(host.controller.paused).toBe(true);
 
-    // Once resumed (unfrozen), the normal distance prune ends it cleanly.
     host.controller.resume();
     host.module.update(16);
     expect(host.module.isActive).toBe(false);
@@ -165,7 +132,6 @@ describe("phantom combat stance is cleaned up while frozen (Task 9 vi)", () => {
 
     a.container.destroyed = true;
     host.module.update(16);
-    // `a` gone, `b` alive → still an active fight, still frozen (not a phantom).
     expect(host.module.isActive).toBe(true);
     expect(host.module.combatants.has(a)).toBe(false);
     expect(host.module.combatants.has(b)).toBe(true);

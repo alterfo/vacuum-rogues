@@ -1,18 +1,5 @@
-/**
- * Flight & Shop Polish — Task 1: the planned dashed course (RouteRenderer.drawRoute)
- * must be the exact polyline the ship flies (ShipPhysics.setPath), including the
- * star-avoidance bow and the planet spiral-in.
- *
- * Regression: most execute callers (Ход / second click → onPlayPause) re-fire a
- * planned course WITHOUT threading the `landing` spiral hint, so executeRouteTo
- * used to recompute the path and silently drop the spiral/bow — the ship beelined
- * a path the preview never drew. These pin "drawn == flown" by driving the scene's
- * private route methods directly (running the full initialize() in jsdom isn't
- * practical), capturing what is handed to drawRoute vs setPath.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Minimal pixi.js stub so SpaceFlightScene can be imported & constructed.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -173,7 +160,6 @@ function makeHarness(
   s.shipPhysics = shipPhysics;
   s.playerShip = { finishTakeoff: vi.fn() };
   s.routeRenderer = {
-    // Capture the exact polyline the renderer is told to draw.
     drawRoute: vi.fn((p: Pt[]) => drawn.push(p)),
     drawLandingMarker: vi.fn(),
     drawNavigationMarker: vi.fn(),
@@ -187,7 +173,6 @@ function makeHarness(
   };
   s.npcManager = { followNpcId: null };
   s.isTurnRunning = false;
-  // Avoid touching the HUD/cursor plumbing the real method walks.
   s.updateInteractiveCursors = vi.fn();
 
   const setPathSpy = vi.spyOn(shipPhysics, "setPath");
@@ -208,8 +193,6 @@ function makeHarness(
           executeRouteTo(x: number, y: number, l?: object): void;
         }
       ).executeRouteTo(x, y, landing),
-    // The drawn polyline includes the ship-start point as element 0; the flown
-    // path (setPath) is everything after it. Compare drawn.slice(1) to setPath.
     lastDrawn: () => drawn[drawn.length - 1],
     lastSetPath: () =>
       setPathSpy.mock.calls[setPathSpy.mock.calls.length - 1][0] as Pt[],
@@ -222,20 +205,17 @@ describe("Task 1: drawn route == flown path (single source)", () => {
   let h: Harness;
 
   beforeEach(() => {
-    // Ship due-west of the star; a route due-east crosses the star → bow.
     h = makeHarness({ x: 100, y: 300 }, STAR);
   });
 
   it("a star-crossing route is drawn and flown along the identical bowed polyline", () => {
     h.plan(700, 300);
     const drawnPlan = h.lastDrawn();
-    // A genuine bow: more than just [ship, destination].
     expect(drawnPlan.length).toBeGreaterThan(2);
 
     h.execute(700, 300);
     const flown = h.lastSetPath();
 
-    // The drawn line's first point is the ship start; the rest is the flown path.
     expect(flown).toEqual(drawnPlan.slice(1));
   });
 
@@ -251,19 +231,13 @@ describe("Task 1: drawn route == flown path (single source)", () => {
   });
 
   it("a planet landing executed via Ход (no landing hint) still flies the drawn spiral", () => {
-    // Ship + planet on the same side, well clear of the star → straight shot,
-    // so computeFlightPath takes the spiral-in branch (the divergence case).
     const hp = makeHarness({ x: 100, y: 100 }, STAR);
     const landing = { planetX: 250, planetY: 150, planetRadius: 40 };
 
-    // Plan WITH the spiral hint (what a planet click does).
     hp.plan(250, 150, landing);
     const drawnPlan = hp.lastDrawn();
-    // Spiral-in is a curve, not a 1-segment beeline.
     expect(drawnPlan.length).toBeGreaterThan(2);
 
-    // Execute WITHOUT the hint (what Ход / onPlayPause does) — must still fly the
-    // drawn spiral, not a recomputed straight line.
     hp.execute(250, 150);
     const flown = hp.lastSetPath();
 
@@ -271,15 +245,10 @@ describe("Task 1: drawn route == flown path (single source)", () => {
   });
 
   it("resuming a paused mid-route flight re-bows from the ship's CURRENT position (no stale backtrack)", () => {
-    // Plan a star-crossing route — a genuine multi-waypoint bow from the origin.
     h.plan(700, 300);
     const planned = h.lastDrawn();
     expect(planned.length).toBeGreaterThan(2);
 
-    // The ship has flown past the star to the east side; the turn then paused
-    // there (endTurn leaves plannedRoute + the original routePath intact). A
-    // resume must NOT replay that origin-side path (whose early waypoints are now
-    // behind the ship → the ship would fly backward toward the star).
     const sp = h.s.shipPhysics as ShipPhysics;
     sp.shipX = 560;
     sp.shipY = 300;
@@ -288,17 +257,11 @@ describe("Task 1: drawn route == flown path (single source)", () => {
     h.execute(700, 300); // resume (no landing hint, like Ход / onPlayPause)
     const flown = h.lastSetPath();
 
-    // From (560,300) the shot to (700,300) is clear of the star, so the flown
-    // path is a single forward segment — proof it re-derived from the current
-    // position instead of replaying the stale origin-side bow (which would aim
-    // the ship back at a waypoint it already passed → flying backward).
     expect(flown).toEqual([{ x: 700, y: 300 }]);
   });
 });
 
 describe("Task 3: one-day-travel marker on the planned route", () => {
-  // A star well off the horizontal path so the route stays a straight
-  // beeline — keeps the expected day-marker point simple arithmetic.
   const FAR_STAR = { centerX: 400, centerY: 2000, avoidRadius: 120 };
 
   it("draws a day marker once, DISTANCE_PER_DAY (500px) along a route longer than one day", () => {
@@ -330,8 +293,6 @@ describe("Task 3: one-day-travel marker on the planned route", () => {
       drawDayMarker: ReturnType<typeof vi.fn>;
     };
 
-    // Exactly 500px — pointAlongPath's strict `<` reports done:true at the
-    // total length, so the boundary case draws no mid-route marker.
     h.plan(600, 300);
 
     expect(dayMarker.drawDayMarker).not.toHaveBeenCalled();

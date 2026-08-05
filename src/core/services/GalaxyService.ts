@@ -3,10 +3,6 @@ import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
 import { GalaxySimulator } from "@/systems/GalaxySimulator";
 
-/**
- * Service responsible for galaxy generation and queries.
- * Follows SRP: delegates generation to GalaxySimulator, provides query methods.
- */
 export class GalaxyService implements IGalaxyService {
   private readonly simulator = new GalaxySimulator();
 

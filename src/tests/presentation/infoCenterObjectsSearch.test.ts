@@ -1,11 +1,3 @@
-/**
- * UI bug fix (playtest, 2026-06-15): the Infocenter's "ОБЪЕКТЫ" search field
- * ignored typed input. `onKeyDown` only accepted characters when the private
- * `objectsInputFocused` flag was true, but that flag was unreliable — the user
- * had to click the input box separately after switching to the tab. This pins
- * the robust behaviour: as soon as the objects tab is active, typing updates
- * the query and Enter runs the search, no extra click required.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -63,8 +55,6 @@ type SceneInternals = {
   runObjectsSearch: () => void;
 };
 
-// Each InfoCenterScene registers a window "keydown" listener in its constructor;
-// destroy() removes it. Track instances so the suite doesn't leak listeners.
 const createdScenes: { destroy: () => void }[] = [];
 
 async function makeScene(): Promise<SceneInternals> {
@@ -92,7 +82,6 @@ describe("InfoCenterScene objects search", () => {
   it("does not require a separate input-focus click (fresh tab accepts typing)", async () => {
     const scene = await makeScene();
     scene.activeTab = "objects";
-    // objectsQuery defaults to "" and the input box was never clicked.
     scene.onKeyDown({ key: "x" });
     expect(scene.objectsQuery).toBe("x");
   });
@@ -141,9 +130,6 @@ describe("InfoCenterScene objects search", () => {
   });
 });
 
-// Bug 6: the search index only covered NPC-ship + planet names, so a query
-// for a star-system name silently returned "Ничего не найдено" even though
-// the system exists and is reachable.
 describe("InfoCenterScene objects search — star systems (Bug 6)", () => {
   type SceneWithRegistry = SceneInternals & {
     gameEngine: unknown;

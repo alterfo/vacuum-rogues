@@ -21,7 +21,6 @@ import { statementRows } from "@/presentation/bankSceneView";
 import { PlayerShip } from "@/domain/PlayerShip";
 import { SkillTree } from "@/domain/SkillTree";
 
-/** A minimal galaxy view with the three systems the helper reads. */
 function fakeGalaxy(opts: {
   overmind?: string[];
   pirate?: string[];
@@ -36,7 +35,6 @@ function fakeGalaxy(opts: {
   };
 }
 
-/** A lightweight Player stand-in — applyEncounterOutcome only touches these. */
 function fakePlayer(level = 1, credits = 1000): Player {
   const reputation: Record<string, number> = {};
   return {
@@ -169,7 +167,6 @@ describe("applyEncounterOutcome", () => {
   });
 
   it("clamps a hazard cost to available credits (never goes negative)", () => {
-    // Charge bigger than the balance would brick the save (credits is min(0)).
     const player = fakePlayer(1, 100);
     const outcome: EncounterOutcome = {
       kind: "hazard",
@@ -208,7 +205,6 @@ describe("applyEncounterOutcome", () => {
       enc,
       outcome,
     );
-    // Only 1 unit of the 3 fits (4 used of 5), so the hold tops out at capacity.
     const total = player.inventory.resources.reduce((s, r) => s + r.amount, 0);
     expect(total).toBe(5);
     expect(
@@ -234,7 +230,6 @@ describe("applyEncounterOutcome", () => {
   });
 });
 
-/** A real, bank-wired Player so the booked ledger reason can be inspected. */
 function makeBankedPlayer(credits = 1000): {
   player: Player;
   service: BankingService;

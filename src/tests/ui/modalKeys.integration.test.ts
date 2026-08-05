@@ -1,18 +1,3 @@
-/**
- * Task 3 (docs/plans/20260619-keyboard-controls-turn-modals-map-jump.md):
- * "Apply Enter/Esc to the modal set."
- *
- * Representative modals route their confirm/close through the shared
- * `bindModalKeys` helper:
- *  - DialogueScene confirms its primary (first) response on Enter and closes
- *    (returns to the previous scene) on Esc.
- *  - NpcContactPanel — a multi-button hail window — closes on Esc. It wires no
- *    Enter primary (the helper is intentionally not for multi-button forms:
- *    talk/trade/attack/scan has no single default action).
- *
- * Both detach their window keydown listener on teardown so nothing leaks across
- * scenes. PixiJS is mocked so the scene/panel construct headless in jsdom.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -121,7 +106,6 @@ describe("modal keys integration (Enter confirm / Esc cancel)", () => {
   });
 
   afterEach(() => {
-    // Tear everything down so each test's listeners are detached.
     scenes.forEach((s) => s.destroy());
     panels.forEach((p) => p.destroy());
     document.body.innerHTML = "";

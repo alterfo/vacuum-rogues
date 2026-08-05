@@ -13,19 +13,6 @@ import {
 } from "@/systems/encounters/encounterFlight";
 import { ENCOUNTER_CONFIG } from "@/config/balance";
 
-/**
- * Task 3 (exploration-encounters): the pure generator/resolver wired into the
- * **real** engine. Boots a genuine `GameEngine` (real player, banking АБС,
- * galaxy) and drives the live `NpcShipManager` encounter seam — the prompt, the
- * payoff applied through `adjustPlayerCredits` / `Inventory.addResource` /
- * `Player.adjustReputation`, and an ambush spilling into the real `CombatModule`.
- * Only PixiJS is stubbed (same harness as `journeys.test.ts`/`combatEscape`).
- *
- * The manager is constructed standalone over the booted engine + renderer (the
- * scene's own `npcManager` is private), wired to a real CombatModule via the
- * `startInFlightCombat`/`isInCombat` deps — so the combat branch is genuine, not
- * a stub.
- */
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
 function makeEncounter(
@@ -57,10 +44,6 @@ describe("Exploration encounters over the real engine (Task 3)", () => {
     localStorage.clear();
   });
 
-  /**
-   * A standalone NpcShipManager over the booted engine + renderer, wired to a
-   * real CombatModule so the ambush branch genuinely engages a fight.
-   */
   function buildManager(): { mgr: NpcShipManager; combat: CombatModule } {
     const engine = harness.engine;
     const physics = new ShipPhysics(0, 0, 0.1);
@@ -109,13 +92,11 @@ describe("Exploration encounters over the real engine (Task 3)", () => {
     const before = player.credits;
     const enc = makeEncounter("derelict", player.currentSystemId, 0);
 
-    // Engage with a high roll so the encounter resolves good (not a trap).
     const outcome = mgr.applyEncounterChoice(enc, "engage", () => 0.99);
 
     expect(outcome.kind).toBe("salvage");
     expect(player.credits).toBe(before + (outcome.credits ?? 0));
     expect(outcome.credits).toBeGreaterThan(0);
-    // The looted cargo landed in the hold.
     const looted = outcome.cargo![0];
     const stack = player.inventory.resources.find(
       (r) => r.type === looted.type,
@@ -129,12 +110,10 @@ describe("Exploration encounters over the real engine (Task 3)", () => {
     const player = harness.player()!;
     const enc = makeEncounter("distress", player.currentSystemId, 0);
 
-    // danger 0 ⇒ badChance 0.1; a high roll resolves to a rescue, not an ambush.
     const outcome = mgr.applyEncounterChoice(enc, "engage", () => 0.99);
 
     expect(outcome.kind).toBe("rescue");
     expect(outcome.reputationDelta).toBeGreaterThan(0);
-    // Some faction's reputation moved (the system owner / fallback BASTIONS).
     const repMoved = Object.values(player.reputation).some((v) => v > 0);
     expect(repMoved).toBe(true);
     expect(harness.errors()).toEqual([]);
@@ -147,7 +126,6 @@ describe("Exploration encounters over the real engine (Task 3)", () => {
     const enc = makeEncounter("distress", player.currentSystemId, 1);
 
     expect(combat.isActive).toBe(false);
-    // danger 1 ⇒ badChance 0.7; a zero roll forces the ambush branch.
     const outcome = mgr.applyEncounterChoice(enc, "engage", () => 0);
 
     expect(outcome.kind).toBe("ambush");
@@ -180,8 +158,6 @@ describe("Exploration encounters over the real engine (Task 3)", () => {
     const galaxy = engine.galaxy!;
     const systemId = player.currentSystemId;
 
-    // Find a (system, day) the deterministic roll actually fires on, so the test
-    // exercises the dedupe guard rather than a roll that happened to miss.
     let firingDay = -1;
     for (let day = 0; day < 500; day++) {
       const enc = rollEncounter(
@@ -202,9 +178,6 @@ describe("Exploration encounters over the real engine (Task 3)", () => {
     mgr.initialize();
     expect(mgr.isEncounterPromptOpen).toBe(true); // fires on first entry
 
-    // Player leaves the prompt; a re-entry into the SAME system on the SAME day
-    // (land→take-off / star-map round trip / in-session reload) must NOT re-offer
-    // the identical encounter — otherwise a good salvage is a repeatable faucet.
     mgr.closeEncounterPrompt();
     expect(mgr.isEncounterPromptOpen).toBe(false);
 

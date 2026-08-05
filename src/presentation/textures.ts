@@ -1,22 +1,10 @@
-/**
- * Presentation-layer texture cache.
- *
- * Bridges the pure {@link module:@/assets/manifest asset manifest} (URL keys
- * discovered by Vite glob) to live PixiJS {@link Texture} objects. Call
- * {@link preloadTextures} once at engine start; afterwards scenes/sprites look
- * textures up synchronously with {@link tex} / {@link pickVariant} and fall back
- * to procedural Graphics when a key is absent (e.g. art not generated yet, or in
- * unit tests where pixi is mocked and nothing is preloaded).
- */
 import { Assets, Texture } from "pixi.js";
 import { textures as manifest, allTextures } from "@/assets/manifest";
 import { logger } from "@/utils/logger";
 
-/** key (`category/name`) → loaded Texture. Empty until {@link preloadTextures}. */
 const cache: Record<string, Texture> = {};
 let loadPromise: Promise<void> | null = null;
 
-/** Categories excluded from eager preload — loaded on demand instead. */
 const LAZY_PREFIXES = [
   "panoramas/",
   "surfaces/",
@@ -28,12 +16,6 @@ const LAZY_PREFIXES = [
   "overmind_mood/",
 ];
 
-/**
- * Load every manifest asset into the texture cache, skipping large lazy
- * categories (panoramas, planet_maps, star_maps, stars, nebula). Idempotent: repeated calls
- * return the same promise. Failures are logged but never reject (missing art
- * must not break boot).
- */
 export function preloadTextures(): Promise<void> {
   if (loadPromise) return loadPromise;
   const entries = Object.entries(manifest).filter(
@@ -55,10 +37,6 @@ export function preloadTextures(): Promise<void> {
   return loadPromise;
 }
 
-/**
- * Lazily load a single texture by manifest key. Returns cached Texture if
- * already loaded. Safe to call multiple times — deduplicates via cache.
- */
 export async function loadTextureAsync(
   key: string,
 ): Promise<Texture | undefined> {
@@ -74,37 +52,22 @@ export async function loadTextureAsync(
   }
 }
 
-/** Resolve a loaded texture by its exact manifest key, or undefined. */
 export function tex(key: string): Texture | undefined {
   return cache[key];
 }
 
-/** Resolve the resolved asset URL for a manifest key, or undefined. Used for
- *  CSS cursors, which need a url() rather than a PixiJS Texture. */
 export function texUrl(key: string): string | undefined {
   return manifest[key];
 }
 
-/**
- * Resolve a panorama asset URL for the given key (without the `panoramas/`
- * prefix), e.g. `panoramaUrl("terrestrial_01")` → hashed URL.
- * Returns undefined if the panorama is not in the manifest (art not yet
- * generated). Callers should fall back to a procedural background.
- */
 export function panoramaUrl(key: string): string | undefined {
   return manifest[`panoramas/${key}`];
 }
 
-/**
- * Resolve a loaded panorama Texture for the given key. Returns undefined
- * when the asset is absent or not yet loaded. Use {@link loadTextureAsync}
- * with key `panoramas/<key>` to load on demand before calling this.
- */
 export function panoramaTex(key: string): Texture | undefined {
   return cache[`panoramas/${key}`];
 }
 
-/** Tiny deterministic string hash (FNV-1a) for stable variant selection. */
 function hash(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
@@ -114,15 +77,6 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-/**
- * Pick one loaded texture deterministically from a category, restricted to keys
- * starting with `category/prefix` (the prefix selects the concept — e.g. a star
- * type or planet type — and `seed` selects which numbered variant of it).
- * Returns undefined when no matching texture is loaded.
- *
- *   pickVariant("planets", "ice", planet.id)  → planets/ice_02 (say)
- *   pickVariant("stars", "yellow", systemId)  → stars/yellow_01
- */
 export function pickVariant(
   category: string,
   prefix: string,
@@ -137,13 +91,6 @@ export function pickVariant(
   return cache[keys[hash(seed) % keys.length]];
 }
 
-/**
- * Deterministically pick a manifest KEY for a category/prefix, whether or not it
- * is loaded yet. Mirrors {@link pickVariant}'s selection but does not require the
- * texture to be cached — use with {@link loadTextureAsync} to lazily warm a
- * large/lazy category (e.g. `planet_maps`, `star_maps`) and then upgrade the
- * render once it arrives. Returns undefined when no manifest entry matches.
- */
 export function pickVariantKey(
   category: string,
   prefix: string,

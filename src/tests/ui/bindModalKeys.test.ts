@@ -1,12 +1,3 @@
-/**
- * Task 2 (docs/plans/20260619-keyboard-controls-turn-modals-map-jump.md):
- * "Shared modal-key helper (Enter confirm / Esc cancel)."
- *
- * `bindModalKeys({onConfirm, onCancel})` attaches one window `keydown` listener
- * mapping Enter→confirm and Esc→cancel, and returns a cleanup that removes it.
- * It ignores keys while a text input is focused, drops OS auto-repeat, and the
- * cleanup is idempotent so repeated bind/unbind can't leak listeners.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { bindModalKeys } from "@/presentation/ui/bindModalKeys";
 

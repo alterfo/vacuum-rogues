@@ -5,15 +5,6 @@ import type { Station } from "@/domain/Station";
 import { StationType, QuestType } from "@/types";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 
-/**
- * Task 2 (military-base quest board): the StationScene «Задания» action must
- * OFFER quests at a MILITARY_BASE — the unconditional "only at military bases"
- * toast was the bug (a military base refused its own quests). These tests drive
- * the real StationScene through a fake-pixi mock (same pattern as
- * shopHangar.test.ts) and assert the branch: a military base opens the
- * JobBoardPanel; any other station type shows the wrong-place toast.
- */
-
 interface FakeNode {
   text: string;
   handlers: Record<string, (e: unknown) => void>;
@@ -103,7 +94,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scene + panel see the fake pixi.
 import { StationScene } from "@/presentation/StationScene";
 
 const renderer = {
@@ -205,7 +195,6 @@ describe("StationScene — «Задания» action", () => {
 
     await quests(scene);
 
-    // The board opened — the quest surface, not the dead-end toast.
     expect(jobBoard(scene)).not.toBeNull();
     expect(engine.getQuestBoard).toHaveBeenCalledWith("base-1");
     expect(toastText(scene)).not.toBe(
@@ -213,7 +202,6 @@ describe("StationScene — «Задания» action", () => {
     );
 
     scene.destroy();
-    // Closing the board on destroy clears it.
     expect(jobBoard(scene)).toBeNull();
   });
 
@@ -234,10 +222,6 @@ describe("StationScene — «Задания» action", () => {
     scene.destroy();
   });
 
-  // Regression: a station-issued return-requiring quest (planetId = station.id)
-  // must be claimable by re-docking at that station. Before the fix, only
-  // PlanetScene claimed return quests, so station-issued ones (BOUNTY/ESCORT/…)
-  // were stuck in pending-return forever and silently dropped off the board.
   it("claims a pending-return quest issued at THIS station on dock", () => {
     const claim = vi.fn(() => true);
     const engine = makeEngine({

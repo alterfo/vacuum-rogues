@@ -18,13 +18,6 @@ import type { NarratorContext } from "@/ai/adapters/QuestNarrator";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
 
-/**
- * Derive a fresh, still-reproducible seed for a quest restart. Mixing in the
- * attempt counter means a failed run replays with different random rolls
- * (no foreknowledge exploit), while staying derivable from the original seed
- * + attempt for debugging/log reproduction. `attempt` 0 returns the base seed
- * unchanged so the very first run is unaffected.
- */
 export function deriveRestartSeed(
   baseSeed: number | string,
   attempt: number,
@@ -32,12 +25,6 @@ export function deriveRestartSeed(
   return attempt <= 0 ? String(baseSeed) : `${baseSeed}:${attempt}`;
 }
 
-/**
- * Typewriter reveal speed for quest narration (Task 2). A short per-character
- * delay, but capped so a long paragraph never types slower than
- * {@link REVEAL_MAX_MS} in total — the effect adds reading rhythm without ever
- * becoming a chore. Bypassed entirely under reduced motion.
- */
 const REVEAL_MS_PER_CHAR = 16;
 const REVEAL_MAX_MS = 2200;
 
@@ -64,14 +51,8 @@ export class TextQuestScene extends GameScene {
   private narrationText: Text | null = null;
   private choiceContainer: Container | null = null;
 
-  // QuestVM path
   private vm: QuestVM | null = null;
   private vmSeed: number | string = 0;
-  /**
-   * Restart counter mixed into the seed on «Начать заново» so a failed run
-   * does not replay with full foreknowledge of every random roll. Kept
-   * derivable from `vmSeed` + attempt so a specific retry stays reproducible.
-   */
   private restartAttempt = 0;
   private questScript: QuestScript | null = null;
   private questId: string | null = null;
@@ -81,34 +62,18 @@ export class TextQuestScene extends GameScene {
   private autoExecuteTimer: ReturnType<typeof setTimeout> | null = null;
   private successTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // ── Typewriter reveal state (Task 2) ───────────────────────────────────────
-  /** Full narration text currently being (or already) revealed. */
   private revealTarget = "";
-  /** How many characters of {@link revealTarget} are shown so far. */
   private revealShown = 0;
-  /** Milliseconds elapsed into the current reveal (accumulated in `update`). */
   private revealElapsed = 0;
-  /** True while the narration is still typing out character-by-character. */
   private revealing = false;
-  /**
-   * Continuation run once the current node's text has fully revealed (or been
-   * skipped): renders the auto-advance beat / handles a finished quest. Manual
-   * choice nodes render their buttons immediately, so they pass `null`.
-   */
   private onRevealComplete: (() => void) | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so it sits above the panel and survives the
-   * scene's layout rebuilds.
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -188,12 +153,6 @@ export class TextQuestScene extends GameScene {
     if (this.revealShown >= len) this.finishReveal();
   }
 
-  /**
-   * Begin the typewriter reveal of `fullText`. Under reduced motion (or empty
-   * text) it snaps to the full string and runs `onComplete` synchronously —
-   * matching the project's accessibility convention. Otherwise the narration
-   * types out over `update` ticks and `onComplete` fires on the last character.
-   */
   private startReveal(fullText: string, onComplete: (() => void) | null): void {
     this.onRevealComplete = onComplete;
     this.revealTarget = fullText;
@@ -212,13 +171,11 @@ export class TextQuestScene extends GameScene {
     if (this.vmNarrationText) this.vmNarrationText.text = "";
   }
 
-  /** Snap the narration to full text and fire the continuation (click-to-skip). */
   private completeReveal(): void {
     if (!this.revealing) return;
     this.finishReveal();
   }
 
-  /** Shared tail of a completed reveal: pin full text, then run the continuation. */
   private finishReveal(): void {
     this.revealShown = this.revealTarget.length;
     this.revealing = false;
@@ -226,7 +183,6 @@ export class TextQuestScene extends GameScene {
     this.fireRevealComplete();
   }
 
-  /** Run the pending reveal continuation exactly once. */
   private fireRevealComplete(): void {
     const cb = this.onRevealComplete;
     this.onRevealComplete = null;
@@ -267,8 +223,6 @@ export class TextQuestScene extends GameScene {
     this.currentNode = null;
   }
 
-  // ── QuestVM Layout & Rendering ───────────────────────────────────────────────
-
   private buildVmLayout(): void {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
@@ -284,7 +238,6 @@ export class TextQuestScene extends GameScene {
     this.uiContainer = ui;
     this.renderer.uiLayer.addChild(ui);
 
-    // Title
     const title = scaledText(this.questScript?.title ?? "", 18, 0xff99ff, {
       rawColor: true,
       fontWeight: "bold",
@@ -300,7 +253,6 @@ export class TextQuestScene extends GameScene {
     sep.fill({ color: 0xff99ff, alpha: 0.3 });
     ui.addChild(sep);
 
-    // Description panel (top 60% of content area, below title)
     const contentTop = 48;
     const contentH = h - contentTop - 8;
     const descH = Math.floor(contentH * 0.58);
@@ -330,10 +282,6 @@ export class TextQuestScene extends GameScene {
     this.vmNarrationText = narText;
     ui.addChild(narText);
 
-    // Click-to-skip catcher over the description panel (Task 2): a click/tap
-    // while the narration is still typing snaps it to full text. It sits over
-    // the description area only (not the button area below), so choice buttons
-    // stay a single, direct click. Harmless no-op when nothing is revealing.
     const skipCatcher = new Graphics();
     skipCatcher.rect(8, contentTop, CONTENT_W - 16, descH);
     skipCatcher.fill({ color: 0x000000, alpha: 0.001 });
@@ -346,7 +294,6 @@ export class TextQuestScene extends GameScene {
     });
     ui.addChild(skipCatcher);
 
-    // Button area (bottom 40%)
     const btnAreaY = contentTop + descH + 8;
     const choiceArea = new Container();
     choiceArea.x = 8;
@@ -354,7 +301,6 @@ export class TextQuestScene extends GameScene {
     this.vmChoiceContainer = choiceArea;
     ui.addChild(choiceArea);
 
-    // Right panel — parameters
     const paramBg = new Graphics();
     paramBg.rect(w - RIGHT_W, 0, RIGHT_W, h);
     paramBg.fill({ color: 0x040c18, alpha: 0.92 });
@@ -377,7 +323,6 @@ export class TextQuestScene extends GameScene {
 
     this.refreshVmParamPanel();
 
-    // Permanent action buttons at the bottom of the right panel
     const btnPanelW = RIGHT_W - 16;
     const restartBtn = this.makeRightPanelButton(
       "Начать заново",
@@ -400,12 +345,6 @@ export class TextQuestScene extends GameScene {
     ui.addChild(quitBtn);
   }
 
-  /**
-   * Lazy quest illustration behind the description panel (Task 18). One
-   * image per `QuestScript` id (`quest_art/<id>` — no numeric suffix, always
-   * exactly one variant). Graceful no-art fallback: with no matching manifest
-   * key the panel renders exactly as before (opaque dark fill, no image).
-   */
   private mountQuestIllustration(
     ui: Container,
     descBg: Graphics,
@@ -432,14 +371,10 @@ export class TextQuestScene extends GameScene {
       mask.eventMode = "none";
       sp.mask = mask;
 
-      // Insert sp first, then mask at the same index: addChildAt shifts sp to
-      // idx+1, so the final order is mask(idx) behind sp(idx+1) — the opaque
-      // mask rect must render BEHIND the sprite it clips, not on top of it.
       const idx = ui.getChildIndex(descBg);
       ui.addChildAt(sp, idx);
       ui.addChildAt(mask, idx);
 
-      // Lighten the scrim so the art reads through while text stays legible.
       descBg.clear();
       descBg.rect(rect.x, rect.y, rect.w, rect.h);
       descBg.fill({ color: 0x05101c, alpha: 0.6 });
@@ -525,9 +460,6 @@ export class TextQuestScene extends GameScene {
       nameT.y = yOff;
       nameT.eventMode = "none";
       this.vmParamPanel.addChild(nameT);
-      // Steps by the name line's own font-scale line height so the value line
-      // below it never overlaps at "L" (Task 3: the fixed +16 offset assumed
-      // the "M"-scale ~14 px name-line height).
       yOff += lineStepFor(scaledFont(11));
 
       const valT = scaledText(String(value), 13, 0xeeeeff, {
@@ -538,12 +470,8 @@ export class TextQuestScene extends GameScene {
       valT.y = yOff;
       valT.eventMode = "none";
       this.vmParamPanel.addChild(valT);
-      // Steps by the value line's own font-scale line height so the progress
-      // bar / next param never overlaps at "L" (Task 3: the fixed +18 offset
-      // assumed the "M"-scale ~16 px value-line height).
       yOff += lineStepFor(scaledFont(13));
 
-      // Progress bar if min/max range is meaningful
       if (param.max > param.min) {
         const barW = panelW - 4;
         const barBg = new Graphics();
@@ -574,7 +502,6 @@ export class TextQuestScene extends GameScene {
     const fullText = this.vm.interpolate(this.vm.currentLocationText());
     this.refreshVmParamPanel();
 
-    // Clear old buttons
     while (this.vmChoiceContainer.children.length > 0) {
       const c = this.vmChoiceContainer.children[0];
       this.vmChoiceContainer.removeChild(c);
@@ -582,9 +509,6 @@ export class TextQuestScene extends GameScene {
     }
 
     if (this.vm.isFinished()) {
-      // Reveal the ending prose (cosmetic); resolve win/fail synchronously as
-      // before — the terminal isn't part of a rapid chain, so its toast/return
-      // timing is unchanged.
       this.startReveal(fullText, null);
       this.handleVmFinished();
       return;
@@ -598,13 +522,6 @@ export class TextQuestScene extends GameScene {
     const btnH = 36;
     const gap = 8;
 
-    // Auto-execute: all available transitions are auto (routing/branching nodes).
-    // Arm the 800 ms beat, then reveal the text. In a live render loop the actual
-    // advance is deferred until the reveal has fully typed out (or been skipped),
-    // so a chain of routing nodes no longer flashes past unread (the auction's 8
-    // auto-executing lots, Task 2). Order matters: schedule the beat *before*
-    // startReveal so the reduced-motion (synchronous) reveal-complete callback
-    // still sees a pending timer and lets the 800 ms beat run, not an instant hop.
     const autoT = transitions.find((t) => t.autoExecute);
     if (autoT && transitions.every((t) => t.autoExecute)) {
       this.scheduleAutoExecute(autoT.id);
@@ -612,13 +529,9 @@ export class TextQuestScene extends GameScene {
       return;
     }
 
-    // Manual choices: type the narration out but render the buttons immediately
-    // so they stay a single click while the text reveals (the description area
-    // above is click-to-skip).
     this.startReveal(fullText, null);
 
     const limit = Math.min(transitions.length, 8);
-    // Switch to a 2-column grid when there are more buttons than fit single-column
     const useTwoCols = limit > 4;
     const colW = useTwoCols ? Math.floor((btnW - 8) / 2) : btnW;
     for (let i = 0; i < limit; i++) {
@@ -637,14 +550,6 @@ export class TextQuestScene extends GameScene {
     }
   }
 
-  /**
-   * Show the auto-advance beat and arm the 800 ms minimum-beat timer. When it
-   * fires it advances immediately UNLESS a live render loop is still typing the
-   * node's text (`revealing` with `revealElapsed > 0`) — in that case the
-   * advance is deferred to {@link onAutoRevealDone}, so the player never loses a
-   * routing node to a blind timer. In a headless/no-`update` context (tests,
-   * `revealElapsed === 0`) the beat advances at 800 ms exactly as before.
-   */
   private scheduleAutoExecute(transitionId: string): void {
     if (this.vmChoiceContainer) {
       const ellipsis = scaledText("...", 16, 0x6688aa, { rawColor: true });
@@ -656,23 +561,15 @@ export class TextQuestScene extends GameScene {
 
     this.autoExecuteTimer = setTimeout(() => {
       this.autoExecuteTimer = null;
-      // Live render loop still typing the text out → wait for the reveal to
-      // finish (or be skipped); onAutoRevealDone will advance.
       if (this.revealing && this.revealElapsed > 0) return;
       this.doAutoAdvance(transitionId);
     }, 800);
   }
 
-  /**
-   * The node's reveal just finished (or was skipped). Advance now only if the
-   * 800 ms beat has already elapsed (`autoExecuteTimer` cleared); otherwise the
-   * still-pending beat timer will advance, preserving the minimum pause.
-   */
   private onAutoRevealDone(transitionId: string): void {
     if (this.autoExecuteTimer === null) this.doAutoAdvance(transitionId);
   }
 
-  /** Execute an auto transition and render the next node (single entry point). */
   private doAutoAdvance(transitionId: string): void {
     if (this.autoExecuteTimer !== null) {
       clearTimeout(this.autoExecuteTimer);
@@ -753,10 +650,6 @@ export class TextQuestScene extends GameScene {
     this.renderVmLocation();
   }
 
-  /**
-   * Restart the current VM quest with a freshly-derived seed so a failed run
-   * cannot be replayed with foreknowledge of every random outcome (Task 1).
-   */
   private restartVm(): void {
     if (this.successTimer !== null) {
       clearTimeout(this.successTimer);
@@ -798,8 +691,6 @@ export class TextQuestScene extends GameScene {
     }
   }
 
-  // ── Layout ──────────────────────────────────────────────────────────────────
-
   private buildLayout(): void {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
@@ -813,7 +704,6 @@ export class TextQuestScene extends GameScene {
     this.uiContainer = ui;
     this.renderer.uiLayer.addChild(ui);
 
-    // Title
     const title = scaledText(this.quest?.title ?? "", 20, 0xff99ff, {
       rawColor: true,
       fontWeight: "bold",
@@ -824,13 +714,11 @@ export class TextQuestScene extends GameScene {
     title.eventMode = "none";
     ui.addChild(title);
 
-    // Separator
     const sep = new Graphics();
     sep.rect(w * 0.05, 48, w * 0.9, 1);
     sep.fill({ color: 0xff99ff, alpha: 0.3 });
     ui.addChild(sep);
 
-    // Narration area (top 60%)
     const narAreaH = Math.floor(h * 0.52);
     const narAreaBg = new Graphics();
     narAreaBg.rect(w * 0.05, 56, w * 0.9, narAreaH);
@@ -850,13 +738,11 @@ export class TextQuestScene extends GameScene {
     this.narrationText = narText;
     ui.addChild(narText);
 
-    // Choice container (bottom 40%)
     const choiceArea = new Container();
     choiceArea.y = Math.floor(h * 0.62);
     this.choiceContainer = choiceArea;
     ui.addChild(choiceArea);
 
-    // Exit button
     const exitY = h - 36;
     this.addExitButton(ui, w / 2, exitY);
   }
@@ -883,8 +769,6 @@ export class TextQuestScene extends GameScene {
     });
     parent.addChild(t);
   }
-
-  // ── Narration loading ───────────────────────────────────────────────────────
 
   private loadNodeText(node: QuestNode): void {
     if (!this.narrationText) return;
@@ -920,11 +804,8 @@ export class TextQuestScene extends GameScene {
     }
   }
 
-  // ── Choice rendering ────────────────────────────────────────────────────────
-
   private renderChoices(node: QuestNode): void {
     if (!this.choiceContainer) return;
-    // Clear old choices
     while (this.choiceContainer.children.length > 0) {
       const child = this.choiceContainer.children[0];
       this.choiceContainer.removeChild(child);
@@ -1029,8 +910,6 @@ export class TextQuestScene extends GameScene {
     parent.addChild(btn);
   }
 
-  // ── Choice handling ─────────────────────────────────────────────────────────
-
   private onChoiceClick(
     nodeId: string,
     choiceIdx: number,
@@ -1052,7 +931,6 @@ export class TextQuestScene extends GameScene {
     const choice = choices[choiceIdx];
 
     if (nextNode === null) {
-      // Terminal node — apply outcome and show result
       const outcome = choice.outcome;
       if (outcome) {
         this.runtime.applyOutcome(outcome, player, this.gameEngine?.bank);
@@ -1063,19 +941,15 @@ export class TextQuestScene extends GameScene {
       return;
     }
 
-    // Non-terminal: load next node
     this.currentNode = nextNode;
     this.loadNodeText(nextNode);
   }
-
-  // ── Result panel ────────────────────────────────────────────────────────────
 
   private showResultPanel(outcome: QuestOutcome): void {
     if (!this.uiContainer) return;
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    // Dim overlay
     const overlay = new Container();
     const dimBg = new Graphics();
     dimBg.rect(0, 0, w, h);
@@ -1084,7 +958,6 @@ export class TextQuestScene extends GameScene {
     dimBg.on("pointerdown", (e) => e.stopPropagation());
     overlay.addChild(dimBg);
 
-    // Result box
     const boxW = 420;
     const boxH = 220;
     const boxX = (w - boxW) / 2;
@@ -1129,7 +1002,6 @@ export class TextQuestScene extends GameScene {
       lineY += 22;
     }
 
-    // Continue button
     const continueBtnY = boxY + boxH - 46;
     const contBtnW = 260;
     const contBtn = new Container();
@@ -1163,8 +1035,6 @@ export class TextQuestScene extends GameScene {
     overlay.addChild(contBtn);
     this.uiContainer.addChild(overlay);
   }
-
-  // ── Helpers ─────────────────────────────────────────────────────────────────
 
   private getConditionFailReason(
     choice: QuestChoice,
@@ -1238,10 +1108,6 @@ export class TextQuestScene extends GameScene {
       .transitionTo(this.returnScene, {
         gameEngine: this.gameEngine,
         ...this.returnContext,
-        // Exiting the quest (win / «Сдаться» / «Выйти» / Esc) must NOT bounce
-        // straight back in: tell the destination scene to skip its auto-resume
-        // of the still-active TEXT_ADVENTURE quest for this one return. A genuine
-        // fresh landing carries no flag and resumes as before.
         resumeTextQuest: false,
       })
       .catch((e) =>

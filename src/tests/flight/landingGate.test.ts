@@ -1,26 +1,5 @@
-/**
- * Task 2 — Captured-system landing gate (docs/plans/20260620-captured-system-
- * landing-gating.md). The pure predicate `canLandOnPlanet` (Task 1) is wired
- * into the landing flow via `PlanetManager.landingDenial`, consulted by the
- * single choke point every landing path funnels through —
- * `SpaceFlightScene.onLandOnPlanet` (info-panel land button, mid-flight
- * auto-land, arrival land).
- *
- * Two layers are covered here:
- *  - `PlanetManager.landingDenial` — the real access decision: overmind-captured
- *    → "overmind"; pirate-captured → "pirate-rep" below the threshold, allowed
- *    at/above; uncaptured → allowed.
- *  - `SpaceFlightScene.onLandOnPlanet` — the wiring: a denial blocks the PLANET
- *    transition, shows a clear message and clears the route (so the ship isn't
- *    stranded); no denial transitions as before.
- * The predicate's own boundary cases live in galaxy/landingAccess.test.ts.
- */
 import { describe, it, expect, vi } from "vitest";
 
-// Mock pixi.js + the presentation helpers SpaceFlightScene / PlanetManager import
-// at load so the modules resolve in jsdom without a real WebGL context (mirrors
-// the pixi mock block in waitTurnPause.test.ts). We never construct the scene —
-// the real methods are invoked off their prototypes against minimal `this`es.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -137,11 +116,6 @@ import { Faction } from "@/types/faction";
 
 type Captured = { capturedBy: string | null };
 
-// ---------------------------------------------------------------------------
-// PlanetManager.landingDenial — the real access decision (no planet sprites
-// needed; it reads only gameEngine.player + planet.capturedBy).
-// ---------------------------------------------------------------------------
-
 const landingDenial = (
   PlanetManager.prototype as unknown as {
     landingDenial(p: Captured): LandingDenialReason | null;
@@ -172,13 +146,6 @@ describe("PlanetManager.landingDenial (captured-system access)", () => {
     expect(denialFor(null, 0)).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// PlanetManager.landingDenial — the *production* capture source: capture is
-// tracked per-system on the galaxy (`overmindSystems` / `pirateSystems`), NOT on
-// `planet.capturedBy` (which is typed FactionType, has no Overmind/Pirate member,
-// and is never written). The gate must read the system the player is in.
-// ---------------------------------------------------------------------------
 
 function denialForSystem(opts: {
   overmind?: string[];
@@ -234,17 +201,11 @@ describe("PlanetManager.landingDenial (galaxy per-system capture source)", () =>
   });
 });
 
-// ---------------------------------------------------------------------------
-// SpaceFlightScene.onLandOnPlanet — the wiring: consult landingDenial, then
-// block (no transition + message + route cleared) or land (transition).
-// ---------------------------------------------------------------------------
-
 type LandFn = (planet: unknown) => Promise<void>;
 const onLandOnPlanet = (
   SpaceFlightScene.prototype as unknown as { onLandOnPlanet: LandFn }
 ).onLandOnPlanet;
 
-/** A minimal scene `this` carrying only the fields `onLandOnPlanet` touches. */
 function makeScene(denial: LandingDenialReason | null) {
   const transitionTo = vi.fn().mockResolvedValue(undefined);
   const showMessage = vi.fn();
@@ -258,7 +219,6 @@ function makeScene(denial: LandingDenialReason | null) {
     hud: { showMessage },
     planetManager: {
       landingDenial: vi.fn().mockReturnValue(denial),
-      // ship has no physics in this harness, so shipReachedPlanet is never hit.
       shipReachedPlanet: vi.fn().mockReturnValue(true),
     },
     shipPhysics: null,
@@ -282,10 +242,7 @@ describe("SpaceFlightScene.onLandOnPlanet (captured-system gate wiring)", () => 
       landingDenialMessage("overmind"),
       expect.any(Number),
     );
-    // Route cleared so the auto-land can't re-fire and the player isn't stranded.
     expect(clearPlannedRoute).toHaveBeenCalled();
-    // Turn ended so the parked ship doesn't drop into the wait-turn calendar
-    // burn (the arrival-land path calls us with the turn still running).
     expect(endTurn).toHaveBeenCalled();
   });
 

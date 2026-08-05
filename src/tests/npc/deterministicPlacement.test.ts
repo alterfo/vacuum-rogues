@@ -36,11 +36,6 @@ function makeNpc(id: string, role: NpcRole = NpcRole.TRADER): NpcShip {
   });
 }
 
-/**
- * Minimal NpcShipManager harness with a seeded galaxy id, so deterministic
- * placement resolves from a real seed. Star centre is fixed so a sprite's
- * screen position maps directly to its stored offset (offset = sprite − centre).
- */
 function makeHarness(
   npcs: NpcShip[],
   galaxyId = "galaxy-seed",
@@ -88,7 +83,6 @@ function makeHarness(
   return { manager, gameLayer };
 }
 
-/** Screen position of the first spawned sprite. */
 function firstSpritePos(manager: NpcShipManager): { x: number; y: number } {
   const sprite = (
     manager as unknown as { npcSprites: Array<{ x: number; y: number }> }
@@ -107,7 +101,6 @@ describe("NpcShipManager deterministic placement", () => {
     expect(pos.x).toBeCloseTo(STAR_CENTER.x + offset.x, 5);
     expect(pos.y).toBeCloseTo(STAR_CENTER.y + offset.y, 5);
 
-    // The resolved offset is written back so the next entry reuses it.
     expect(npc.hasWorldPosition()).toBe(true);
     expect(npc.worldX).toBeCloseTo(offset.x, 5);
     expect(npc.worldY).toBeCloseTo(offset.y, 5);
@@ -123,7 +116,6 @@ describe("NpcShipManager deterministic placement", () => {
     const first = firstSpritePos(manager);
     manager.destroy();
 
-    // Re-enter the same system (the npc now carries a stored position).
     manager.initialize();
     const second = firstSpritePos(manager);
     manager.destroy();
@@ -133,8 +125,6 @@ describe("NpcShipManager deterministic placement", () => {
   });
 
   it("is identical across independent managers (deterministic, not random)", () => {
-    // Two separate galaxies/managers with fresh ships of the same id + seed must
-    // place the ship at the same spot — proving Math.random was removed.
     const a = makeNpc("npc_7");
     const b = makeNpc("npc_7");
     const h1 = makeHarness([a]);
@@ -181,7 +171,6 @@ describe("NpcShipManager deterministic placement", () => {
     expect(pos.x).toBe(STAR_CENTER.x + 123);
     expect(pos.y).toBe(STAR_CENTER.y - 45);
 
-    // The stored position is untouched (not overwritten by a seed-derived one).
     expect(npc.worldX).toBe(123);
     expect(npc.worldY).toBe(-45);
 

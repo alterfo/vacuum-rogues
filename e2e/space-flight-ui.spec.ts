@@ -3,16 +3,7 @@ import { SpaceFlightPage } from './page-objects/space-flight.page';
 import { MainMenuPage } from './page-objects/main-menu.page';
 import { applyMockHeavySystems, waitForScene } from './fixtures/mockHeavySystems';
 
-/**
- * Camera / mini-map / navigation tests for SpaceFlightScene.
- *
- * Everything is driven through the scene's __DEBUG__ e2e* hooks (camera + ship
- * state) and real wheel/drag input — never canvas pixel clicks or canvas-text
- * assertions (the scene is WebGL, so page.getByText never matches in-game text).
- * applyMockHeavySystems stubs ONNX/audio and hides the heavy nebula background.
- */
 
-/** Boot a new game and wait until SpaceFlightScene is active. */
 async function enterSpaceFlight(page: Page): Promise<SpaceFlightPage> {
   const spaceFlightPage = new SpaceFlightPage(page);
   const mainMenuPage = new MainMenuPage(page);
@@ -27,7 +18,6 @@ async function enterSpaceFlight(page: Page): Promise<SpaceFlightPage> {
   return spaceFlightPage;
 }
 
-/** Resolve once the ship has moved more than `minDist` px from (fromX, fromY). */
 async function waitForShipToMove(
   page: Page,
   fromX: number,
@@ -57,8 +47,6 @@ test.describe('Space Flight UI - Camera Controls', () => {
   test('should initialize camera centered on the ship at default zoom', async () => {
     const camera = await spaceFlightPage.getCameraState();
 
-    // The system is larger than the viewport, so the camera centers on the
-    // ship at spawn (pan is non-zero) rather than sitting at the world origin.
     expect(camera.zoom).toBe(1.0);
     expect(Number.isFinite(camera.panX)).toBe(true);
     expect(Number.isFinite(camera.panY)).toBe(true);
@@ -122,7 +110,6 @@ test.describe('Space Flight UI - Camera Controls', () => {
     await spaceFlightPage.wheelZoom(-100);
     const zoomedShip = await spaceFlightPage.getShipPosition();
 
-    // Ship world position should not jump when the camera zooms.
     expect(Math.abs(zoomedShip.x - initialShip.x)).toBeLessThan(50);
     expect(Math.abs(zoomedShip.y - initialShip.y)).toBeLessThan(50);
   });

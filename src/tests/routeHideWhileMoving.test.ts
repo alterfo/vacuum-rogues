@@ -1,10 +1,3 @@
-/**
- * SpaceFlightScene.plotRoute() must clear the route overlay while the turn is
- * running (isTurnRunning=true) and draw it only when paused.
- *
- * Behaviour added in response to user request: "Маршрут во время движения
- * можно не показывать" — the route is a planning aid, not a live tracker.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("pixi.js", () => {

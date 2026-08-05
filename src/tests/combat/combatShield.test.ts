@@ -67,12 +67,10 @@ describe("combatShield — shield-vs-hull damage ordering (Task 12)", () => {
     });
 
     it("round-trips with Task 9's applyShieldRestore (same [0,max] pool semantics)", () => {
-      // Drain, then a shield cell restores toward max — the two agree on what a shield value means.
       const drained = resolveShieldedDamage(100, 60).shields; // 40
       expect(drained).toBe(40);
       const restored = applyShieldRestore(drained, 100, 30); // 70, clamped to max, never reduced
       expect(restored).toBe(70);
-      // A full restore can't exceed max.
       expect(applyShieldRestore(drained, 100, 1000)).toBe(100);
     });
   });

@@ -1,20 +1,3 @@
-/**
- * CombatModule × adaptive hostile scaling (three-year-campaign Task 4) — the
- * production consumer the OVERMIND_COMBAT_*_MULT levers lacked since the hex
- * CombatScene removal.
- *
- * Locked here:
- *  - fights inside an Overmind/pirate-held system scale incoming NPC damage by
- *    `hostileScaling(...).damageMult` and the enemy's effective HP by
- *    `hpMult` (the player's landed damage divides by it) — weak player ≈ 0.5×
- *    (win-rate-100pct plan, Task 5; was ≈0.9×), maxed player = the full 1.5×
- *    levers;
- *  - fights in neutral systems, and legacy DI sites that don't wire the new
- *    deps, are byte-identical to before (neutral 1.0 scaling);
- *  - incoming damage stays routed through `applyDamageWithMode`: the GOD floor
- *    still catches a scaled lethal volley (downed, never dead);
- *  - HARD composes its config multiplier (never at the call site).
- */
 import { describe, it, expect } from "vitest";
 import {
   CombatModule,
@@ -63,7 +46,6 @@ function makeSprite(
   } as unknown as NpcShipSprite;
 }
 
-/** CombatModule with the campaign scaling deps wired (or omitted for legacy). */
 function makeModule(
   ship: { hullHP: number; maxHull: number },
   opts: {
@@ -271,12 +253,6 @@ describe("CombatModule — scaled damage stays on the god-mode path (Task 4)", (
   });
 
   it("GOD: the engagement ENDS once the ship is downed (no eternal pounding)", () => {
-    // Task 7 campaign wedge: a fight against a permanently-downed GOD ship
-    // used to run forever — the downed ship can't fire, can't die (floor),
-    // and an active fight pins the galaxy calendar (US-070 #5), freezing the
-    // world for the rest of the session (even a live player is soft-locked;
-    // their only out is load-save). A downed ship is not a combatant: the
-    // engagement is decided, so the module must end it.
     const floor = hullFloorFor("GOD", MAX_HULL);
     const ship = { hullHP: 15, maxHull: MAX_HULL };
     const { module, deaths } = makeModule(ship, {

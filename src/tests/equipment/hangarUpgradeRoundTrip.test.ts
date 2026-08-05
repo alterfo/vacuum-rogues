@@ -5,15 +5,6 @@ import { slotToBagModule } from "@/systems/equipment/GearBridge";
 import { gearById } from "@/systems/equipment/GearCatalog";
 import { ShipModuleSchema } from "@/validation/schemas";
 
-/**
- * Regression: a research-upgraded item that is unequipped in the hangar and then
- * re-fitted must keep its artifact-upgrade levels (and the micromodule). Before
- * the fix the hangar bagged the removed slot via a projection that copied only
- * the micromodule id, silently destroying `slot.upgrades` (and the artifacts
- * spent on it). The hangar's unequip → bag → re-install round-trip is driven
- * through `slotToBagModule` + `ShipLoadout.setSlotUpgrades`, exercised here
- * without a PixiJS scene.
- */
 describe("hangar unequip → re-fit preserves artifact upgrades", () => {
   it("slotToBagModule carries both micromodule and upgrade count off a slot", () => {
     const gear = gearById("wpn_pulse")!;
@@ -40,20 +31,16 @@ describe("hangar unequip → re-fit preserves artifact upgrades", () => {
     loadout.setSlotUpgrades(loadout.installedGearIds().length - 1, 2);
     const upgradedRange = loadout.derivedStats().radarRange;
 
-    // Unequip: read the slot, drop it, bag it (the hangar's unequip handler).
     const slot = loadout.installedSlots()[0];
     expect(slot.upgrades).toBe(2);
     expect(loadout.removeAt(0)).toBe(true);
     const bagged = slotToBagModule(gearById(slot.gearId)!, slot);
 
-    // Re-install: fit it back and restore the carried upgrades (re-install handler).
     expect(eq.installGear(loadout, bagged.id)).toBe(true);
     const last = loadout.installedGearIds().length - 1;
     if (bagged.upgrades) loadout.setSlotUpgrades(last, bagged.upgrades);
 
     expect(loadout.installedSlots()[0].upgrades).toBe(2);
-    // The upgrade raises the radar's effective tech level → strictly longer range
-    // than an un-upgraded copy, and the round-trip preserves it exactly.
     const baseline = new ShipLoadout("hull_corvette");
     baseline.install("eq_radar");
     expect(upgradedRange).toBeGreaterThan(baseline.derivedStats().radarRange);

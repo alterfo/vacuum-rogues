@@ -12,12 +12,6 @@ import {
   type LoanDefaultPolicy,
 } from "@/systems/banking/loanDefault";
 
-/**
- * Task 3 — the pure loan-default state machine. A banking rule lives or dies on the
- * numbers, so every transition (open, on-time, one miss, penalty active, defaulted,
- * recovery) is pinned down here. No money, no ledger — just the small state struct.
- */
-
 describe("loanDefault state machine (pure)", () => {
   it("a freshly granted loan opens current: no misses, no penalty, not defaulted", () => {
     const s = newLoanDefaultState(11);
@@ -57,9 +51,7 @@ describe("loanDefault state machine (pure)", () => {
   it("the penalty rate bumps the base daily rate by the policy multiplier, only while overdue", () => {
     const current = newLoanDefaultState(11);
     const overdue = recordMissedDue(current);
-    // Current: rate unchanged.
     expect(penaltyDailyRate(0.002, current)).toBeCloseTo(0.002, 9);
-    // Overdue: rate × penalty multiplier.
     expect(penaltyDailyRate(0.002, overdue)).toBeCloseTo(
       0.002 * LOAN_PENALTY_MULTIPLIER,
       9,
@@ -74,7 +66,6 @@ describe("loanDefault state machine (pure)", () => {
       expect(s.defaulted).toBe(false); // not yet
       expect(s.penaltyActive).toBe(true);
     }
-    // The threshold-th consecutive miss tips it into default.
     s = recordMissedDue(s);
     expect(s.missedPayments).toBe(LOAN_DEFAULT_THRESHOLD);
     expect(s.defaulted).toBe(true);
@@ -96,7 +87,6 @@ describe("loanDefault state machine (pure)", () => {
     expect(recovered.missedPayments).toBe(0);
     expect(recovered.penaltyActive).toBe(false);
     expect(recovered.defaulted).toBe(false);
-    // Due date keeps advancing from where it was (one period past the last due).
     expect(recovered.nextDueDate).toBe(s.nextDueDate + 1);
   });
 
@@ -110,16 +100,13 @@ describe("loanDefault state machine (pure)", () => {
 
   it("enteredDefault fires only on the false→true crossing (the one reputation moment)", () => {
     let s = newLoanDefaultState(11);
-    // Climb to one short of default — never reports entering default.
     for (let i = 1; i < LOAN_DEFAULT_THRESHOLD; i++) {
       const next = recordMissedDue(s);
       expect(enteredDefault(s, next)).toBe(false);
       s = next;
     }
-    // The crossing miss reports the default event exactly once.
     const defaulted = recordMissedDue(s);
     expect(enteredDefault(s, defaulted)).toBe(true);
-    // A further miss while already defaulted does not re-report it.
     const stillDefaulted = recordMissedDue(defaulted);
     expect(enteredDefault(defaulted, stillDefaulted)).toBe(false);
   });
@@ -130,7 +117,6 @@ describe("loanDefault state machine (pure)", () => {
     expect(s.defaulted).toBe(true);
     const recovered = recordScheduledPayment(s);
 
-    // Fall into default a second time.
     let again = recovered;
     for (let i = 1; i < LOAN_DEFAULT_THRESHOLD; i++)
       again = recordMissedDue(again);
@@ -144,7 +130,6 @@ describe("loanDefault state machine (pure)", () => {
       defaultThreshold: 1,
     };
     const s = recordMissedDue(newLoanDefaultState(11), policy);
-    // Threshold of 1 ⇒ a single miss defaults immediately.
     expect(s.defaulted).toBe(true);
     expect(penaltyDailyRate(0.002, s, policy)).toBeCloseTo(0.004, 9);
   });

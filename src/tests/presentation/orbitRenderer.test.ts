@@ -4,12 +4,6 @@ import { OrbitRenderer } from "@/presentation/flight/OrbitRenderer";
 import type { Renderer } from "@/presentation/Renderer";
 import type { Galaxy } from "@/domain/Galaxy";
 
-/**
- * Build a minimal Renderer stand-in backed by a real PixiJS Container. The
- * orbit renderer reads `app.screen` dimensions for the field centre and mounts
- * its graphics on the injected game layer, so a real Container exercises the
- * actual scene-graph wiring without a WebGL context.
- */
 function makeRenderer(gameLayer: Container): Renderer {
   return {
     app: { screen: { width: 800, height: 600 } },
@@ -17,7 +11,6 @@ function makeRenderer(gameLayer: Container): Renderer {
   } as unknown as Renderer;
 }
 
-/** Galaxy stub with a single system carrying planets at given orbital radii. */
 function makeGalaxy(systemId: string, radii: number[]): Galaxy {
   return {
     systems: [
@@ -36,7 +29,6 @@ describe("OrbitRenderer (extracted FlightModule)", () => {
   it("draws orbit circles + boundary ring on the game layer on initialize()", () => {
     const gameLayer = new Container();
     const renderer = makeRenderer(gameLayer);
-    // Two planets share one radius → one unique orbit-graphics + one boundary.
     const galaxy = makeGalaxy("sys-1", [1000, 2000, 1000]);
     const orbits = new OrbitRenderer(renderer, gameLayer, galaxy, "sys-1");
 
@@ -44,9 +36,7 @@ describe("OrbitRenderer (extracted FlightModule)", () => {
 
     orbits.initialize();
 
-    // A single container is mounted on the game layer...
     expect(gameLayer.children.length).toBe(1);
-    // ...holding the orbit-graphics object + the boundary ring.
     expect((gameLayer.children[0] as Container).children.length).toBe(2);
 
     orbits.destroy();
@@ -61,7 +51,6 @@ describe("OrbitRenderer (extracted FlightModule)", () => {
 
     orbits.initialize();
 
-    // No orbit circles (no planets) but the boundary ring is always drawn.
     expect(gameLayer.children.length).toBe(1);
     expect((gameLayer.children[0] as Container).children.length).toBe(1);
 
@@ -99,8 +88,6 @@ describe("OrbitRenderer (extracted FlightModule)", () => {
   it("does not highlight the system edge — the boundary ring is hidden", () => {
     const gameLayer = new Container();
     const renderer = makeRenderer(gameLayer);
-    // Null galaxy → the container's single child is the boundary ring itself,
-    // so we can assert it is created-but-hidden (no edge highlight).
     const orbits = new OrbitRenderer(renderer, gameLayer, null, "sys-1");
 
     orbits.initialize();

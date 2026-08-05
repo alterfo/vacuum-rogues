@@ -40,7 +40,6 @@ describe("planetApproachPoint", () => {
         offset,
       );
       const distToCenter = Math.hypot(pt.x - planet.x, pt.y - planet.y);
-      // Endpoint must be on or beyond the planet surface
       expect(distToCenter).toBeGreaterThanOrEqual(radius - 0.001);
     }
   });
@@ -60,16 +59,13 @@ describe("planetApproachPoint", () => {
       offset,
     );
 
-    // On horizontal approach, endpoint should be on the x-axis
     expect(pt.y).toBeCloseTo(0);
-    // Endpoint is between ship and planet (on the ship-facing side)
     expect(pt.x).toBeGreaterThan(ship.x);
     expect(pt.x).toBeLessThan(planet.x);
   });
 
   it("handles degenerate case where ship is at planet center", () => {
     const pt = planetApproachPoint(100, 100, 100, 100, 50, 80);
-    // Falls back to a point offset in +x direction
     const distToCenter = Math.hypot(pt.x - 100, pt.y - 100);
     expect(distToCenter).toBeCloseTo(50 + 80);
   });

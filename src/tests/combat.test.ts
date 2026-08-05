@@ -54,14 +54,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// --- Shield damage ---
 describe("CombatSystem — shield damage (Task 9)", () => {
   it("damage goes to shield first, remainder spills to hull", () => {
     const system = makeSystem();
     const enemy = makeEnemy(100, 10, 1);
     startCombat(system, enemy);
 
-    // 20 damage, 10 shield → shield = 0, hull takes 10 overflow
     system.applyDamageToEnemy(enemy, 20);
 
     expect(enemy.shields).toBe(0);
@@ -73,7 +71,6 @@ describe("CombatSystem — shield damage (Task 9)", () => {
     const enemy = makeEnemy(100, 50, 1);
     startCombat(system, enemy);
 
-    // 20 damage, 50 shield → shield absorbs all, hull untouched
     system.applyDamageToEnemy(enemy, 20);
 
     expect(enemy.shields).toBe(30);
@@ -103,7 +100,6 @@ describe("CombatSystem — shield damage (Task 9)", () => {
   });
 });
 
-// --- Auto-retreat at ≤ 30% HP ---
 describe("CombatSystem — auto-retreat condition (Task 9)", () => {
   it("isAutoRetreatTriggered returns false when player HP is above 30%", () => {
     const system = makeSystem();
@@ -178,7 +174,6 @@ describe("CombatSystem — auto-retreat condition (Task 9)", () => {
   });
 });
 
-// --- Loot drop ---
 describe("CombatSystem — loot drop on enemy death (Task 9)", () => {
   it("resolveVictory returns loot when Math.random() < 0.3", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.1); // always drop

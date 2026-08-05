@@ -10,10 +10,6 @@ import { SeededRNG } from "@/utils/seededRNG";
 import { NpcState, NpcRole, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 
-/**
- * Build a pirate NPC with the given combat stats. Hostile by default (pirates
- * spawn hostile in NpcSimulator), so it is a valid shakedown candidate.
- */
 function makePirate(
   stats: { hullHP?: number; shields?: number; damage?: number } = {},
   hostile = true,
@@ -43,7 +39,6 @@ function makePirate(
 
 describe("shipCombatStrength", () => {
   it("combines survivability (hull + shields) with weighted offence", () => {
-    // 100 hull + 50 shields + 20 damage * 4 = 230
     expect(shipCombatStrength({ hullHP: 100, shields: 50, damage: 20 })).toBe(
       150 + 20 * SHAKEDOWN.damageWeight,
     );
@@ -70,7 +65,6 @@ describe("shakedownChance — relative-strength gating", () => {
   it("saturates at maxChance once the pirate is strong enough", () => {
     const pirate = makePirate({ hullHP: 100, shields: 50, damage: 20 });
     const pirateStrength = shipCombatStrength(pirate);
-    // Player so weak the ratio is past strongRatio.
     const playerStrength = pirateStrength / (SHAKEDOWN.strongRatio + 0.5);
     expect(shakedownChance(pirate, playerStrength)).toBeCloseTo(
       SHAKEDOWN.maxChance,
@@ -86,7 +80,6 @@ describe("shakedownChance — relative-strength gating", () => {
   it("ramps monotonically between minRatio and strongRatio", () => {
     const pirate = makePirate({ hullHP: 100, shields: 50, damage: 20 });
     const ps = shipCombatStrength(pirate);
-    // Three player strengths giving increasing pirate:player ratios.
     const weakPlayer = shakedownChance(pirate, ps / 1.5);
     const evenPlayer = shakedownChance(pirate, ps / 1.0);
     const strongPlayer = shakedownChance(pirate, ps / 0.85);
@@ -99,7 +92,6 @@ describe("shakedownChance — relative-strength gating", () => {
 describe("wantsToShakedown — decision gating", () => {
   it("never demands from a non-pirate role", () => {
     const trader = makePirate({}, true, NpcRole.TRADER);
-    // Helpless player → maxChance, yet a trader still never shakes down.
     for (let i = 0; i < 20; i++) {
       expect(wantsToShakedown(trader, 0, new SeededRNG(`t${i}`))).toBe(false);
     }
@@ -134,8 +126,6 @@ describe("wantsToShakedown — decision gating", () => {
   });
 
   it("demands at roughly the expected rate against a helpless player", () => {
-    // chance == maxChance (0.5). Over many seeds the positive rate should land
-    // near 0.5 — proves the RNG actually gates the decision.
     const pirate = makePirate();
     let yes = 0;
     const N = 400;
@@ -159,7 +149,6 @@ describe("wantsToShakedown — decision gating", () => {
       }
       return yes / N;
     };
-    // Stronger player (smaller ratio) → fewer demands than a weaker player.
     const vsStrong = rateFor(ps / 0.9); // ratio ~0.9, just above minRatio
     const vsWeak = rateFor(ps / 1.6); // ratio ~1.6, saturated
     expect(vsWeak).toBeGreaterThan(vsStrong);

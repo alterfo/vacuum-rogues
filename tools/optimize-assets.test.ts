@@ -1,17 +1,3 @@
-/**
- * WebP conversion tool (Task 1) — pure option selection + a real round-trip.
- *
- * Guards the two testable pieces of `tools/optimize-assets.ts`:
- *   (a) `webpOptionsFor(category)` picks lossy ~q80 for photoreal categories
- *       and lossless for ui/icons (alpha always preserved);
- *   (b) a fixture PNG → WebP conversion yields a valid WebP that is smaller
- *       and keeps the source dimensions, then removes the original.
- *
- * Lives under `tools/` (not `src/tests/`) like the other tool tests
- * (`scaffold/domain-field.test.ts`) because importing a `tools/` module from
- * `src/` would violate the build's `rootDir: src`. Vitest's tools glob
- * (see vitest.config `include`) picks it up, so it runs with the suite.
- */
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,7 +12,6 @@ import {
   webpOptionsFor,
 } from "./optimize-assets";
 
-/** First image-data chunk fourcc of a RIFF/WebP file: "VP8L" = lossless, "VP8 " = lossy. */
 function webpImageChunks(path: string): string[] {
   const b = readFileSync(path);
   const chunks: string[] = [];
@@ -85,10 +70,6 @@ describe("convertFile — fixture PNG → WebP round-trip", () => {
 
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "webp-fixture-"));
-    // mulberry32 PRNG → genuinely incompressible RGB noise: PNG (lossless) must
-    // store it all (large) while lossy WebP discards the imperceptible detail
-    // (smaller) — a deterministic "smaller" assertion. (An LCG's low byte cycles
-    // with a short period and compresses well, defeating the test.)
     let s = 0x9e3779b9 >>> 0;
     const rnd = (): number => {
       s = (s + 0x6d2b79f5) >>> 0;
@@ -115,29 +96,21 @@ describe("convertFile — fixture PNG → WebP round-trip", () => {
     expect(res).toBeDefined();
     if (!res) return;
 
-    // Output exists, source removed.
     expect(existsSync(res.dest)).toBe(true);
     expect(res.dest.endsWith(".webp")).toBe(true);
     expect(existsSync(src)).toBe(false);
 
-    // Valid WebP, dimensions preserved.
     const meta = await sharp(res.dest).metadata();
     expect(meta.format).toBe("webp");
     expect(meta.width).toBe(WIDTH);
     expect(meta.height).toBe(HEIGHT);
 
-    // The on-disk file is byte-for-byte the verified buffer (destBytes). A
-    // regression guard against re-encoding the buffer on write (which would
-    // make the file size diverge from destBytes and discard the chosen encode).
     expect(statSync(res.dest).size).toBe(res.destBytes);
 
-    // Materially smaller.
     expect(res.destBytes).toBeLessThan(res.srcBytes);
   });
 
   it("writes a LOSSLESS WebP for the ui category (not a lossy re-encode)", async () => {
-    // Regression: the writer must preserve webpOptionsFor("ui").lossless. A
-    // re-encode through sharp on write would silently emit a lossy "VP8 " chunk.
     const W = 16;
     const H = 16;
     const raw = Buffer.alloc(W * H * 4);
@@ -163,7 +136,6 @@ describe("convertFile — fixture PNG → WebP round-trip", () => {
   });
 
   it("preserves the alpha channel through conversion", async () => {
-    // A semi-transparent RGBA square; lossless ui preset must keep alpha.
     const W = 32;
     const H = 32;
     const raw = Buffer.alloc(W * H * 4);
@@ -187,7 +159,6 @@ describe("convertFile — fixture PNG → WebP round-trip", () => {
   });
 
   it("dry-run writes nothing and deletes nothing", async () => {
-    // The tool deletes originals; --dry-run must be a true no-op on disk.
     const W = 16;
     const H = 16;
     const raw = Buffer.alloc(W * H * 3);
@@ -201,7 +172,6 @@ describe("convertFile — fixture PNG → WebP round-trip", () => {
     expect(res).toBeDefined();
     if (!res) return;
 
-    // Source intact, no .webp written, but destBytes is still the real size.
     expect(existsSync(src)).toBe(true);
     expect(existsSync(res.dest)).toBe(false);
     expect(res.destBytes).toBeGreaterThan(0);

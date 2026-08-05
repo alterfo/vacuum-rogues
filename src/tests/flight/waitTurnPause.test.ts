@@ -1,32 +1,5 @@
-/**
- * Regression: "Wait-turn pause stops working after a while"
- * (docs/plans/20260619-wait-turn-pause-stops-working.md).
- *
- * Standing still and pressing Play with no course runs a *wait* turn: the ship
- * holds position while the calendar advances one game-day per real second
- * (`advanceWaitTime`, MS_PER_WAIT_DAY = 1000). Pressing Pause must always be able
- * to halt that turn.
- *
- * Root cause (empirically confirmed): `advanceWaitTime(deltaTime)` feeds the
- * **raw, unclamped** per-frame `deltaTime` into `waitDayAccum`, while
- * `ShipPhysics.update` already caps its own dt at 100 ms (ShipPhysics.ts:163).
- * So if the tab is backgrounded — or the loop hitches — for "a while",
- * `requestAnimationFrame` resumes with a single huge `deltaTime` and the
- * `while (waitDayAccum >= 1)` loop flushes hundreds of game-days in ONE frame.
- * The wait turn "runs away": days blow past faster than the player can react, so
- * Pause effectively no longer stops it at a useful point. Each frame must advance
- * at most one wait-day so the turn always stays haltable.
- *
- * Fix (Task 2): `advanceWaitTime` clamps the per-frame dt to one wait-day
- * (`Math.min(deltaTime, MS_PER_WAIT_DAY)`), mirroring the dt cap in
- * `ShipPhysics.update`. The baseline test proves the harness is sound (normal
- * wait → Pause → stop works); the former-red repro is now green, alongside the
- * adjacent edge cases (large dt + Pause, N-days elapsed, post-combat latch).
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock pixi.js + presentation helpers so SpaceFlightScene constructs in jsdom
-// (mirrors pauseFinishesDay.test.ts).
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -173,7 +146,6 @@ function makeMockRenderer(): Renderer {
   } as unknown as Renderer;
 }
 
-/** A parked ship: a course-less wait turn never moves it (isMoving stays false). */
 function makeWaitingPhysics() {
   return {
     shipX: 0,
@@ -228,7 +200,6 @@ describe("Wait-turn pause stays haltable after a while", () => {
     };
   });
 
-  /** Start a course-less wait turn (the "stand still and press Play" path). */
   function startWaitTurn(): void {
     s.plannedRoute = null;
     s.isTurnRunning = false;
@@ -236,9 +207,6 @@ describe("Wait-turn pause stays haltable after a while", () => {
     expect(s.isTurnRunning).toBe(true); // sanity: a wait turn is now running
   }
 
-  // Baseline (GREEN): proves the harness is sound — under normal frame pacing a
-  // wait turn pauses at the next day boundary. If this ever fails the fixture is
-  // broken, not the bug.
   it("normal pacing: Pause stops the wait turn at the next day boundary", () => {
     startWaitTurn();
     onPlayPause(); // request pause
@@ -248,11 +216,6 @@ describe("Wait-turn pause stays haltable after a while", () => {
     expect(s.isTurnRunning).toBe(false);
   });
 
-  // GREEN after the Task-2 fix (was the Task-1 red repro, committed as `it.fails`):
-  // the tab is backgrounded for ~10 minutes, then RAF resumes with one enormous
-  // deltaTime. `advanceWaitTime` now clamps the per-frame dt to one wait-day, so a
-  // single frame advances at most one game-day instead of flushing ~600 at once —
-  // the turn can no longer run away faster than the player can react.
   it("a backgrounded tab must not flush an unbounded number of wait-days in one frame", () => {
     startWaitTurn();
 
@@ -261,9 +224,6 @@ describe("Wait-turn pause stays haltable after a while", () => {
     expect(advanceGalaxyDay.mock.calls.length).toBeLessThanOrEqual(1);
   });
 
-  // Edge case (large dt + Pause): even after a huge resume-frame, the turn is
-  // still running (only one day passed) and a subsequent Pause halts it at the
-  // very next day boundary — the latch is never stranded by the big frame.
   it("after a huge resume-frame, Pause still stops the wait turn promptly", () => {
     startWaitTurn();
 
@@ -275,8 +235,6 @@ describe("Wait-turn pause stays haltable after a while", () => {
     expect(s.isTurnRunning).toBe(false);
   });
 
-  // Edge case (N days elapsed): a wait turn that has run for many days is just as
-  // haltable as a fresh one — running "for a while" must not desync the latch.
   it("a wait turn that has run for many days still stops on Pause", () => {
     startWaitTurn();
 
@@ -289,12 +247,6 @@ describe("Wait-turn pause stays haltable after a while", () => {
     expect(s.isTurnRunning).toBe(false);
   });
 
-  // Edge case (post-combat): Pause is requested, then a fight starts mid-wait.
-  // The wait gate suppresses `advanceWaitTime` during combat (the calendar
-  // freezes), so the deferred latch is parked, not consumed — the turn keeps
-  // running. When combat clears, the next day boundary consumes the stale latch
-  // and the turn ends. The latch must survive a combat interval without
-  // stranding the turn.
   it("a deferred Pause survives a combat interval and fires once combat clears", () => {
     startWaitTurn();
     onPlayPause(); // request pause (latch set)

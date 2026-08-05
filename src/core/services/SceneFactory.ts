@@ -20,11 +20,6 @@ import { GameOverScene } from "@/presentation/GameOverScene";
 import { BankScene } from "@/presentation/BankScene";
 import { SaveLoadScene } from "@/presentation/SaveLoadScene";
 
-/**
- * Factory for creating scene instances.
- * Follows Creator GRASP: central place for scene instantiation.
- * Follows OCP: new scene types are added here without changing GameEngine.
- */
 export class SceneFactory implements ISceneFactory {
   createScene(type: SceneType, renderer: Renderer): GameScene | null {
     switch (type) {

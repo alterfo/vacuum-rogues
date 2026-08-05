@@ -9,7 +9,6 @@ import type {
   EncounterType,
 } from "@/systems/encounters/encounterGenerator";
 
-/** Build an encounter with explicit danger/reward for branch-driving. */
 function enc(
   type: EncounterType,
   danger = 0.5,
@@ -19,7 +18,6 @@ function enc(
   return { id, type, systemId: "sys", danger, rewardScale };
 }
 
-/** Fixed-value rng so the bad/good branch (and cargo pick) is deterministic. */
 const rng = (v: number) => () => v;
 
 describe("resolveEncounter — ignore is always neutral", () => {
@@ -88,7 +86,6 @@ describe("resolveEncounter — distress", () => {
 
 describe("resolveEncounter — danger scales the bad-outcome odds", () => {
   it("high danger trips the trap where low danger does not (same rng)", () => {
-    // rng = 0.3: above the floor (0.1) but below 0.1 + 0.6*danger once danger is high.
     const lowDanger = resolveEncounter(
       enc("derelict", 0.0),
       "engage",
@@ -104,7 +101,6 @@ describe("resolveEncounter — danger scales the bad-outcome odds", () => {
   });
 
   it("bad-outcome chance is clamped at maxBadChance", () => {
-    // rng just above the ceiling stays good even at danger 1.
     const justAbove = DEFAULT_ENCOUNTER_OUTCOME_CONFIG.maxBadChance + 0.01;
     const o = resolveEncounter(enc("derelict", 1.0), "engage", rng(justAbove));
     expect(o.kind).toBe("salvage");

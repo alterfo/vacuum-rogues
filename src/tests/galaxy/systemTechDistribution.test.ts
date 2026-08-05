@@ -12,17 +12,6 @@ import {
 } from "@/systems/galaxy/systemTechDistribution";
 import { GalaxySimulator } from "@/systems/GalaxySimulator";
 
-/**
- * Campaign Task 1 (tech-level generation fix): every system used to keep the
- * hardcoded `StarSystem.techLevel = 1`, and the only tech-1 gear item is a fuel
- * tank — so no weapon or hull was buyable anywhere and military progression
- * (arm-up → battle-ready → Overmind-slayer) was impossible in real sessions.
- * Generation now spreads weighted tech levels with a home-system floor and a
- * galaxy peak floor. These tests assert the *relationships* (shape, floors,
- * determinism, stream isolation) rather than exact magnitudes, so weight tuning
- * won't churn them.
- */
-
 function mkSystems(n: number): StarSystem[] {
   return Array.from(
     { length: n },
@@ -66,7 +55,6 @@ describe("pickSystemTechLevel (weighted draw)", () => {
     for (const [tech, weight] of SYSTEM_TECH_WEIGHTS) {
       const expected = weight / total;
       const actual = (counts.get(tech) ?? 0) / N;
-      // Every weighted tech appears, at roughly its configured share.
       expect(actual).toBeGreaterThan(0);
       expect(Math.abs(actual - expected)).toBeLessThan(0.05);
     }
@@ -83,9 +71,6 @@ describe("assignSystemTechLevels", () => {
   });
 
   it("draws each system from an INDEPENDENT per-system seed stream", () => {
-    // The contract that keeps the shared generation RNG byte-identical: each
-    // system's roll must come from `${seed}_tech_${i}`, not a shared stream.
-    // Verify every non-floored assignment equals that independent draw.
     const systems = mkSystems(40);
     assignSystemTechLevels(systems, "iso-seed");
     systems.forEach((system, i) => {
@@ -96,7 +81,6 @@ describe("assignSystemTechLevels", () => {
         (i === 0 && system.techLevel === HOME_SYSTEM_MIN_TECH) ||
         system.techLevel === GALAXY_MAX_TECH_FLOOR;
       if (!floored) expect(system.techLevel).toBe(independent);
-      // A floor only ever raises the roll, never lowers it.
       expect(system.techLevel).toBeGreaterThanOrEqual(independent);
     });
   });
@@ -110,8 +94,6 @@ describe("assignSystemTechLevels", () => {
   });
 
   it("never lowers a home-system roll that already beats the floor", () => {
-    // Find a seed whose independent home draw exceeds the floor, and check the
-    // assignment preserves it instead of clamping down.
     for (let i = 0; i < 200; i++) {
       const roll = pickSystemTechLevel(new SeededRNG(`high_${i}_tech_0`));
       if (roll > HOME_SYSTEM_MIN_TECH) {
@@ -138,7 +120,6 @@ describe("assignSystemTechLevels", () => {
     assignSystemTechLevels(systems, "varied-galaxy");
     const distinct = new Set(systems.map((s) => s.techLevel));
     expect(distinct.size).toBeGreaterThan(1);
-    // Weapon-stocking tech (≥ 3) exists somewhere — gear is actually buyable.
     expect(systems.some((s) => s.techLevel >= 3)).toBe(true);
   });
 
@@ -164,8 +145,6 @@ describe("GalaxySimulator seeds varied tech levels", () => {
     expect(a.systems.map((s) => s.techLevel)).toEqual(
       b.systems.map((s) => s.techLevel),
     );
-    // The shared generation stream is untouched: coordinates, star types and
-    // economy assignments reproduce exactly alongside the tech pass.
     expect(a.systems.map((s) => s.coordinates)).toEqual(
       b.systems.map((s) => s.coordinates),
     );

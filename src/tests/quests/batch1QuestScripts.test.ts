@@ -17,17 +17,6 @@ import type { StarSystem } from "@/domain/StarSystem";
 import { QuestType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
 
-// Task 14 — batch 1 of new branching text-quests. Four distinct puzzle genres:
-//   evacuation       — logistics routing under a draining evac window
-//   locked-room      — deduction/whodunit under an airlock clock
-//   life-support     — resource optimisation against a fixed oxygen budget
-//   boarding-standoff — negotiation under pressure (tension + leverage)
-// The parametrised graph suite (questScriptGraph.test.ts) already re-checks the
-// structural invariants over the whole registry; here we drive the best / worst
-// / mixed paths per script so every branch reaches its intended terminal with
-// the right rewards, and verify board issuance + dedup.
-
-// Advance through all autoExecute transitions until a manual choice or finished.
 function advanceAuto(vm: QuestVM): void {
   const MAX = 50;
   let steps = 0;
@@ -121,8 +110,6 @@ describe("Evacuation quest (logistics routing)", () => {
     }
   });
 
-  // Task 20 (B): the second-run scene is no longer path-blind — each dock leads
-  // to its own second_run node with dock-specific prose.
   it("branches the second-run scene per dock chosen", () => {
     const med = new QuestVM(evacuationScript, 1);
     med.execute("dock_medward");
@@ -138,9 +125,7 @@ describe("Evacuation quest (logistics routing)", () => {
     const medText = med.currentLocationText();
     const habText = hab.currentLocationText();
     const vipText = vip.currentLocationText();
-    // Three distinct scenes, not one shared line.
     expect(new Set([medText, habText, vipText]).size).toBe(3);
-    // Each still exposes the same second-run choices with matching effects.
     for (const vm of [med, hab, vip]) {
       const ids = vm.availableTransitions().map((t) => t.id);
       expect(ids).toContain("grab_more");
@@ -148,8 +133,6 @@ describe("Evacuation quest (logistics routing)", () => {
     }
   });
 
-  // Task 20 (D): the debris-route roll now resolves into its own narrated
-  // outcome node (clear vs hit) instead of a silent jump straight to lift-off.
   it("narrates the fast-route roll with distinct clear/hit outcome scenes", () => {
     const clear = new QuestVM(evacuationScript, 1);
     clear.execute("dock_habblock"); // time 10, saved 14
@@ -170,12 +153,10 @@ describe("Evacuation quest (logistics routing)", () => {
     expect(hit.getParam("time")).toBe(2);
     const hitText = hit.currentLocationText();
 
-    // Two different narratives, each non-empty.
     expect(clearText.length).toBeGreaterThan(0);
     expect(hitText.length).toBeGreaterThan(0);
     expect(clearText).not.toBe(hitText);
 
-    // Both outcome scenes still funnel back to lift-off and reach an ending.
     advanceAuto(clear);
     expect(clear.isSuccess()).toBe(true);
     advanceAuto(hit);
@@ -327,13 +308,10 @@ describe("Locked-room whodunit quest", () => {
     vm.execute("examine_body");
     vm.execute("go_interrogate");
     const text = vm.currentLocationText();
-    // engineer: build + a gesture
     expect(text).toContain("Инженер");
     expect(text).toContain("мозолистыми");
-    // comms officer: build + a nervous tell
     expect(text).toContain("Связистка");
     expect(text).toContain("вздрагивает");
-    // medic: posture + the "too calm" tell
     expect(text).toContain("Медик");
     expect(text).toContain("слишком спокойный");
   });
@@ -406,8 +384,6 @@ describe("Life-support resource-allocation quest", () => {
     expect(vm.getParam("oxygen")).toBe(4);
   });
 
-  // Task 25 — (A) real risk earlier: the medbay is an early gamble, so the run
-  // is a bet from the first move, not just at the late scrubber coin-flip.
   it("(A) a lucky medbay patch saves four for almost no air", () => {
     const vm = new QuestVM(lifeSupportScript, 1);
     vm.execute("air_medbay"); // oxygen 8, roll randomised
@@ -432,16 +408,12 @@ describe("Life-support resource-allocation quest", () => {
     const medbay = lifeSupportScript.locations.find(
       (l) => l.id === "medbay_check",
     )!;
-    // A conditional branch plus an unconditioned fallback — mirrors the scrubber
-    // gate, so a roll can never strand the player at a choiceless screen.
     expect(medbay.transitions.some((t) => t.condition === "roll >= 5")).toBe(
       true,
     );
     expect(medbay.transitions.some((t) => !t.condition)).toBe(true);
   });
 
-  // Task 25 — (D) the scrubber roll is no longer silent: success and failure
-  // route through distinct narrative beats before final_seal.
   it("(D) a lucky scrubber restart shows a distinct 'restored' beat", () => {
     const vm = new QuestVM(lifeSupportScript, 1);
     vm.execute("air_hold"); // oxygen 4, saved 6
@@ -475,8 +447,6 @@ describe("Life-support resource-allocation quest", () => {
     }
   });
 
-  // Task 25 — (G) the fix_scrubber label discloses the -2 failure penalty, not
-  // just the -1 purge cost and +5 upside.
   it("(G) the scrubber-restart label discloses the failure penalty", () => {
     const alloc = lifeSupportScript.locations.find(
       (l) => l.id === "allocate2",
@@ -487,8 +457,6 @@ describe("Life-support resource-allocation quest", () => {
     expect(fix.label).toContain("−1");
   });
 
-  // Task 25 — (B) the collapsed low-saved range is split: 4-5 gets its own
-  // ending distinct from the <4 handful.
   it("(B) saving a fair handful (4-5) reaches a distinct 'few_more' ending", () => {
     const vm = new QuestVM(lifeSupportScript, 1);
     vm.execute("air_medbay");
@@ -593,11 +561,7 @@ describe("Boarding-standoff negotiation quest", () => {
     }
   });
 
-  // --- Task 16: branched resolve scene + qualitative labels + fixed ending ---
-
   it("the resolve scene branches by how the standoff got there (Task 16, B)", () => {
-    // Paying cargo, defiance, and a bluff each land on a DISTINCT resolve node
-    // instead of one shared "moment of truth" text.
     const paid = new QuestVM(boardingStandoffScript, 1);
     paid.execute("hands_up");
     paid.execute("offer_cargo");
@@ -620,7 +584,6 @@ describe("Boarding-standoff negotiation quest", () => {
       defiant.currentLocation().text,
       bluffed.currentLocation().text,
     ] as string[];
-    // All three moment-of-truth scenes read differently.
     expect(new Set(texts).size).toBe(3);
   });
 
@@ -644,8 +607,6 @@ describe("Boarding-standoff negotiation quest", () => {
   });
 
   it("choice labels use qualitative risk language, not exact numeric deltas (Task 16, G)", () => {
-    // The two player-facing choice screens must no longer print "+2 к позиции"
-    // style deltas — labels carry no digits at all.
     for (const id of ["airlock", "parley"]) {
       const loc = boardingStandoffScript.locations.find((l) => l.id === id)!;
       for (const t of loc.transitions) {
@@ -666,10 +627,6 @@ describe("Boarding-standoff negotiation quest", () => {
     expect(text).not.toContain("при деньгах");
   });
 });
-
-// ---------------------------------------------------------------------------
-// Registry + board integration
-// ---------------------------------------------------------------------------
 
 const NEW_IDS = [
   "evacuation",
@@ -725,9 +682,6 @@ describe("Batch 1 registry + board integration", () => {
   });
 
   it("makes every new script eligible for the TEXT_ADVENTURE board slot", () => {
-    // Mirror buildTextQuest's exact selection (uniform over ALL_QUEST_SCRIPTS);
-    // over enough draws every registered script — including the new four — is
-    // reachable, so the board can issue them.
     const seen = new Set<string>();
     const rng = new SeededRNG("board-draws");
     for (let i = 0; i < 2000; i++) {
@@ -747,19 +701,15 @@ describe("Batch 1 registry + board integration", () => {
       const textQuests = board.filter(
         (q) => q.template.type === QuestType.TEXT_ADVENTURE,
       );
-      // Every text quest's script id must resolve via the registry.
       for (const q of textQuests) {
         const scriptId = q.template.targetObjectId;
         expect(scriptId).toBeTruthy();
         expect(getQuestScript(scriptId as string)).toBeDefined();
         issuedScriptIds.add(scriptId as string);
       }
-      // Dedup holds: a single board never repeats the same script (its questKey
-      // is TEXT|<scriptId>, so duplicates would collapse).
       const keys = textQuests.map(questKey);
       expect(new Set(keys).size).toBe(keys.length);
     }
-    // The new scripts actually surface on real boards over the horizon.
     for (const id of NEW_IDS) expect(issuedScriptIds.has(id)).toBe(true);
   });
 });

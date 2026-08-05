@@ -1,8 +1,3 @@
-/**
- * Galaxy.systemForLocation() — resolves a quest objective locationId to the
- * star system that contains it. Needed for cross-system "Лететь к цели"
- * routing (SpaceFlightScene.navigateToQuestObjective).
- */
 import { describe, it, expect } from "vitest";
 import { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
@@ -54,8 +49,6 @@ describe("Galaxy.systemForLocation", () => {
   });
 
   it("prefers planet match over same-id system match", () => {
-    // sys_2 contains a planet whose id is "sys_1"; system sys_1 also exists.
-    // Planet match (find by planet id) fires first in the implementation.
     const g = makeGalaxy([
       makeSystem("sys_2", ["sys_1"]),
       makeSystem("sys_1", ["planet_a"]),

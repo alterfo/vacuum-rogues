@@ -1,19 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-/**
- * Task 5 (onboarding): the remaining gameplay scenes wire contextual help in
- * their `mountHelp()` seam — each requests its own help key (so the first-time
- * hint + «?» reopen are for the right screen) and mounts it on `renderer.stage`
- * (which survives the scene's own UI rebuilds). We assert against a fake
- * `mountSceneHelp` spy: building the scene via `Object.create` + calling the
- * private `mountHelp()` directly keeps the test off the heavy `initialize()`
- * render path (the scene only forwards the key to the helper).
- *
- * Mirrors `sceneHelpWiring.test.ts` (the Task 4 core-loop scenes).
- */
-
-// The scenes import pixi.js at module load (via scaledText/UiButton/panels);
-// a minimal constructable fake lets them import without a real renderer.
 vi.mock("pixi.js", () => {
   class FakeBase {
     children: unknown[] = [];
@@ -69,7 +55,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// The unit under test is the key each scene forwards — mock the helper to a spy.
 const mountSceneHelp = vi.fn((..._args: unknown[]): (() => void) => () => {});
 const showHelpOnce = vi.fn((..._args: unknown[]): (() => void) => () => {});
 vi.mock("@/presentation/ui/mountSceneHelp", () => ({
@@ -86,11 +71,9 @@ import { InventoryScene } from "@/presentation/InventoryScene";
 import { TextQuestScene } from "@/presentation/TextQuestScene";
 import type { HelpKey } from "@/systems/onboarding/helpContent";
 
-/** A stand-in renderer exposing only what `mountHelp()` reads: `stage`. */
 const fakeStage = { id: "stage" };
 const renderer = { stage: fakeStage } as unknown as never;
 
-/** Build a scene shell and invoke its private `mountHelp()` (no `initialize()`). */
 function mountHelpFor(SceneClass: { prototype: { mountHelp(): void } }): void {
   const scene = Object.create(SceneClass.prototype) as {
     renderer: unknown;
@@ -134,7 +117,6 @@ describe("Task 5 — remaining scenes wire contextual help", () => {
         HelpKey,
       ];
       expect(calledKey).toBe(key);
-      // Mounted above the UI on the persistent stage layer.
       expect(deps.container).toBe(fakeStage);
       expect(deps.renderer).toBe(renderer);
     });

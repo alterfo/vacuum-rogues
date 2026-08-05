@@ -89,7 +89,6 @@ describe("selectWeaponVfx — full variant dispatch", () => {
   });
 
   it("a rare apex missile keeps its base kind AND gets distortion", () => {
-    // Mirrors catalog wpn_singularity_lance (MISSILE, T8, rare).
     expect(
       selectWeaponVfx({
         weaponClass: WeaponClass.MISSILE,

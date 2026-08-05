@@ -1,19 +1,5 @@
-/**
- * Natural comet/asteroid rework (2026-06-20) — Task 1.
- *
- * The flat `Graphics` comet tail + polygon rocks are replaced by particle/
- * sprite rendering fed from two baked, cached procedural textures:
- *   - `dustParticleTexture()` — a soft alpha dot for the comet dust tail.
- *   - `rockTexture(seed)` — a small set of baked, shaded irregular grey rocks.
- *
- * Both must bake ONCE and be reused (no per-frame regeneration), produce
- * distinct rocks for distinct seeds, and be null-safe when no 2D canvas context
- * is available (jsdom) — exactly like the existing `softGlowTexture`.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Each `Texture.from(canvas)` returns a fresh object, so reference identity is a
-// faithful proxy for "same baked texture" vs "a different one".
 const hoisted = vi.hoisted(() => ({ counter: 0 }));
 
 vi.mock("pixi.js", () => ({
@@ -22,7 +8,6 @@ vi.mock("pixi.js", () => ({
   },
 }));
 
-/** A throwaway Canvas2D context covering only the calls the helpers make. */
 function mockCtx(): Record<string, unknown> {
   const grad = { addColorStop: vi.fn() };
   return {
@@ -50,8 +35,6 @@ const realGetContext = HTMLCanvasElement.prototype.getContext;
 
 describe("baked dust + rock textures (canvas available)", () => {
   beforeEach(() => {
-    // Fresh module instance per test → fresh module-level caches, so caching is
-    // observed within a test rather than leaking across them.
     vi.resetModules();
     hoisted.counter = 0;
     HTMLCanvasElement.prototype.getContext = vi.fn(() => mockCtx()) as never;
@@ -93,7 +76,6 @@ describe("baked dust + rock textures (canvas available)", () => {
   it("seeds wrap onto a bounded variant set (same variant → same texture)", async () => {
     const { rockTexture, ROCK_VARIANT_COUNT } =
       await import("@/presentation/gradientTexture");
-    // seed and seed+ROCK_VARIANT_COUNT map to the same baked variant.
     expect(rockTexture(0)).toBe(rockTexture(ROCK_VARIANT_COUNT));
   });
 
@@ -159,7 +141,6 @@ describe("baked dust + rock textures (canvas available)", () => {
     );
     expect(textures.has(null)).toBe(false);
     expect(textures.size).toBe(ROCK_VARIANT_COUNT);
-    // A seed one full cycle later wraps back onto the same baked variant.
     expect(rockTexture(2)).toBe(rockTexture(2 + ROCK_VARIANT_COUNT));
   });
 

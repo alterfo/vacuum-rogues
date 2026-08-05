@@ -1,41 +1,3 @@
-/**
- * Task 9 of the letsplay action-expansion + neural scale-up plan
- * (`docs/plans/20260701-letsplay-action-expansion-and-neural-scale.md`): the
- * `npm run dataset:export` driver for the stratified CJM dataset.
- *
- * Deviation from the plan's illustrative `npx tsx src/tests/playtest/letsplay/
- * exportBcData.ts` command: `exportBcData.ts` boots the real engine through
- * `src/assets/manifest.ts`'s `import.meta.glob` (a Vite-only API) and needs
- * PixiJS mocked (`vi.mock("pixi.js")`) — neither works under bare `tsx`/node
- * (verified: a plain `tsx` run throws `TypeError: (intermediate value).glob is
- * not a function` at the manifest import). Every other engine-bound driver in
- * this codebase (`letsplay:ci`, `letsplay:judge`) is therefore an env-gated
- * Vitest runner rather than a raw script — this follows the same shape, and
- * `--output` becomes an env var for the same reason `letsplay:judge`'s knobs are
- * `LETSPLAY_JUDGE_SESSIONS`/`_STEPS`/`_MODEL` rather than CLI flags.
- *
- * This is a **separate** driver from the older `exportDataset.run.test.ts`
- * (`GEN_BC=1`, from the superseded `20260627-letsplay-full-game-play-and-net-
- * retrain.md` plan this one supersedes): that file's goal vocabulary (free-
- * explore/max-rep/hoard) and `.letsplay/` output predate Task 4's CJM teacher
- * behaviors and Task 5's 50-wide featurize, so it is left untouched (its
- * always-on smoke assertion is not this plan's to touch) rather than repurposed.
- *
- * Env vars (all optional):
- *  - `LETSPLAY_EXPORT_MIX=1`        — gate; without it only the fast smoke test runs
- *  - `LETSPLAY_EXPORT_MIX_SESSIONS_SCALE` — multiplies every stratum's session count
- *    (default `1` = the full Task 9 mix, ~200 sessions)
- *  - `LETSPLAY_EXPORT_MIX_STEPS`    — overrides every stratum's steps uniformly
- *    (default: each stratum's own `steps`, 500 in {@link DEFAULT_SCENARIO_MIX})
- *  - `LETSPLAY_EXPORT_MIX_OUTPUT`   — output JSONL path (default
- *    `tools/ai/dataset/train.jsonl`)
- *  - `LETSPLAY_EXPORT_MIX_SEED_PREFIX` — seed prefix (default `"BC"`)
- *
- * Usage:
- *   npm run dataset:export
- *   LETSPLAY_EXPORT_MIX_SESSIONS_SCALE=0.5 LETSPLAY_EXPORT_MIX_STEPS=200 \
- *     npm run dataset:export   # a faster local/smoke-scale run
- */
 import { dirname, basename } from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import { logger } from "@/utils/logger";
@@ -51,19 +13,16 @@ import {
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** Parse a positive float env var, falling back to `fallback` on absent/NaN/≤0. */
 function posFloatEnv(raw: string | undefined, fallback: number): number {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-/** Parse a positive-integer env var, falling back to `fallback` on absent/NaN/≤0. */
 function posIntEnv(raw: string | undefined, fallback: number): number {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
 }
 
-/** Log a per-action-index row-count histogram — a dead head is a training red flag. */
 function logActionHistogram(rows: readonly BcRow[]): void {
   const counts = new Array(ACTION_ORDER.length).fill(0) as number[];
   for (const r of rows) counts[r.action] += 1;
@@ -122,7 +81,6 @@ describe.runIf(EXPORT_MIX)(
       const rows = await collectScenarioMixDataset(mix, seedPrefix);
       expect(rows.length).toBeGreaterThan(0);
 
-      // Shape guard — never let a malformed row reach the trainer.
       for (const row of rows) {
         expect(row.features).toHaveLength(FEATURE_LENGTH);
         expect(row.action).toBeGreaterThanOrEqual(0);

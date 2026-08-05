@@ -29,7 +29,6 @@ import { Faction } from "@/types/faction";
 
 const METALS = ResourceType.METALS;
 
-/** A planet whose market trades `resources` with the given seeded multipliers. */
 function makePlanet(
   id: string,
   resources: ResourceType[],
@@ -127,9 +126,6 @@ function makePlayer(): Player {
 
 describe("NPC trades move the SAME persistent balance (priceMultipliers)", () => {
   it("a TRADER selling its cargo at the destination lowers that market's persistent multiplier", () => {
-    // Destination trades five goods; METALS is by far the dearest (mult 2.5) so
-    // the trader's rebuy (the 1–3 *cheapest* goods) can never touch METALS — the
-    // sell impact on METALS is therefore isolated and unambiguous.
     const dest = makeSystem("D", [
       makePlanet(
         "Pd",
@@ -160,18 +156,14 @@ describe("NPC trades move the SAME persistent balance (priceMultipliers)", () =>
     const market = dest.planets[0].market;
     new NpcSimulator().tick(galaxy, new SeededRNG("lever"));
 
-    // Sell impact landed on the persistent multiplier (not just supplyVector).
     const afterMetals = market.multiplierFor(METALS);
     expect(afterMetals).toBeLessThan(2.5);
-    // NPC-scaled: the per-trade nudge is capped like the player's lever.
     const drop = 2.5 - afterMetals;
     expect(drop).toBeGreaterThan(0);
     expect(drop).toBeLessThanOrEqual(
       GAME_BALANCE.marketImpactMaxPerTrade + 1e-9,
     );
 
-    // The goods the trader bought at the destination rose above neutral (buy
-    // depletes stock → price up).
     const boughtSomething = [
       ResourceType.CRYSTALS,
       ResourceType.ORGANICS,
@@ -182,9 +174,6 @@ describe("NPC trades move the SAME persistent balance (priceMultipliers)", () =>
   });
 
   it("player + NPC trading converges a seeded route's margin below the expiry threshold and closes the rumor", () => {
-    // Source (S1) trades only cheap METALS; destination (S2) trades dear METALS
-    // plus four other goods that exist nowhere else (so the ONLY cross-system
-    // route is METALS S1→S2, and the NPC rebuy at S2 never touches METALS).
     const source = makeSystem("S1", [makePlanet("Pmet", [METALS], [0.5])]);
     const dest = makeSystem("S2", [
       makePlanet(
@@ -225,7 +214,6 @@ describe("NPC trades move the SAME persistent balance (priceMultipliers)", () =>
       fromSystemId: string;
     }) => r.resource === METALS && r.fromSystemId === "S1";
 
-    // Day 0: the seeded ~400% spread opens a METALS S1→S2 rumor.
     updateRumors(galaxy, scanFn, 0, cfg);
     const opened = galaxy.activeRumors.find(isMetalsRoute);
     expect(opened).toBeDefined();
@@ -235,23 +223,17 @@ describe("NPC trades move the SAME persistent balance (priceMultipliers)", () =>
     let closed = false;
     let dayClosed = 0;
     for (let day = 1; day <= 60 && !closed; day++) {
-      // Player runs the route: buy at the cheap source (price up), carry, sell
-      // at the dear destination (price down). Two round-trips per day.
       for (let trip = 0; trip < 2; trip++) {
         trade.executeTrade(player, sourcePlanet, METALS, 20, true);
         trade.executeTrade(player, destPlanet, METALS, 20, false);
       }
 
-      // A wave of NPC traders arrives at the destination and dumps METALS,
-      // reinforcing the downward pressure on the sell side (fresh ships each
-      // day so cross-day NPC state never confounds the run).
       galaxy.npcShips.length = 0;
       for (let i = 0; i < 3; i++) {
         galaxy.npcShips.push(makeTrader(`t_${day}_${i}`, "S1", "S2"));
       }
       sim.tick(galaxy, rng);
 
-      // Daily mean-reversion of both markets toward neutral.
       sourcePlanet.market.advanceMarketDay(() => rng.next());
       destPlanet.market.advanceMarketDay(() => rng.next());
 
@@ -265,26 +247,17 @@ describe("NPC trades move the SAME persistent balance (priceMultipliers)", () =>
       }
     }
 
-    // Self-balancing: the rumor closed and its tracked margin shrank.
     expect(closed).toBe(true);
     expect(galaxy.activeRumors.find(isMetalsRoute)).toBeUndefined();
     expect(margins[margins.length - 1]).toBeLessThan(margins[0]);
 
-    // Isolate the TRADE lever from passive mean-reversion: with player + NPC
-    // trades driving it, this seeded route closes by day 3. Drift alone (no
-    // trades, same RNG) needs ~28 days to relax the 0.5↔2.5 spread back through
-    // the expiry band. Asserting a tight bound here means deleting the persistent
-    // applyMarketTradeImpact lever (the feature's core mechanism) would FAIL this
-    // test instead of silently passing ~25 days later inside the 60-day budget.
     expect(dayClosed).toBeLessThanOrEqual(8);
 
-    // The route's *recomputed* neutral spread is now at/below the expiry band.
     const fromPrice = trade.referenceMarketPrice(sourcePlanet, METALS);
     const toPrice = trade.referenceMarketPrice(destPlanet, METALS);
     const finalMargin = ((toPrice - fromPrice) / fromPrice) * 100;
     expect(finalMargin).toBeLessThanOrEqual(GAME_BALANCE.rumorMarginExpire);
 
-    // The lifecycle emitted the close-out news line exactly once.
     expect(
       galaxy.newsFeed.filter((n) => n.description.includes("акция закончилась"))
         .length,

@@ -153,7 +153,6 @@ describe("Daily market drift", () => {
     ];
     const market = new Market(resources, [1, 1, 1], [1, 1, 1]);
     market.economyType = EconomyType.AGRICULTURAL;
-    // Initialize to economy baselines
     market.priceMultipliers = resources.map((r) =>
       economyBaseline(EconomyType.AGRICULTURAL, r),
     );
@@ -175,7 +174,6 @@ describe("Daily market drift", () => {
   });
 
   it("prices drift toward the economy-type baseline over time", () => {
-    // Start price multipliers far from baseline and verify they converge
     const resources = [ResourceType.ORGANICS]; // AGRICULTURAL baseline = 0.7
     const market = new Market(resources, [1], [1]);
     market.economyType = EconomyType.AGRICULTURAL;
@@ -188,7 +186,6 @@ describe("Daily market drift", () => {
       market.advanceMarketDay(deterministicRng);
     }
 
-    // After 100 days, multiplier should be much closer to 0.7 than 2.4
     expect(market.priceMultipliers[0]).toBeLessThan(2.0);
   });
 });

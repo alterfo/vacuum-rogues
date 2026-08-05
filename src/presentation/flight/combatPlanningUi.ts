@@ -1,29 +1,3 @@
-/**
- * Live planning-phase UI for the pause-and-plan combat loop (Task 14.5b of
- * `docs/plans/20260713-tactical-pause-combat-rework.md`).
- *
- * Two pieces, both owned here so `SpaceFlightScene` stays a thin controller under
- * its line-count guard:
- *
- * - **{@link CombatPlanningUi}** — the visible planning surface: the per-weapon
- *   range rings (Task 5 `weaponRangeCircles`/`drawWeaponRangeCircles`, world-space
- *   on the game layer) and the bottom-centre weapon bar (one {@link UiButton} per
- *   fitted gun, tinted to match its ring). It drives the two-step
- *   click-a-weapon-then-click-a-target interaction through Task 5's
- *   {@link WeaponAssignmentController}, writing assignments into the planned-turn
- *   draft. Mounted on `onEnterPlanning`, torn down on confirm/round-start/fight-end.
- * - **{@link createCombatPlanningController}** — the scene's
- *   `CombatPlanningController` factory: binds the concrete `NpcShipSprite`/`WeaponSpec`
- *   handles, wires the planning toasts (through `t()` — the 14.5a hardcoded strings
- *   moved into the i18n dictionaries) and the UI mount/unmount side effects, and
- *   applies the confirmed movement via Task 3's {@link applyPlannedMovement}.
- *
- * Click routing (movement vs. weapon-assign) needs no mode toggle: an NPC sprite
- * click stops propagation and reaches {@link CombatPlanningUi.handleTargetClick}
- * via the scene's `selectCombatTarget` seam, while an empty-space click falls
- * through to the stage handler's `previewCombatCourse` movement branch.
- */
-
 import { Container, Graphics } from "pixi.js";
 import { t } from "@/i18n/i18n";
 import { currentFontScale, scaledFont } from "@/utils/fontScale";
@@ -43,21 +17,11 @@ import {
 } from "./combatWeaponTargeting";
 import { drawWeaponRangeCircles } from "./combatWeaponRangeOverlay";
 
-/** Weapon-bar button geometry (screen px, at the "M" font scale). */
 const BAR_BTN_W = 168;
 const BAR_BTN_H = 30;
 const BAR_GAP = 8;
-/** Action-row (afterburner/consumable/comms) button width — narrower than a gun's. */
 const ACTION_BTN_W = 132;
 
-/**
- * Button geometry scales with the "S"/"M"/"L" font setting (`fontScale.ts`) —
- * `UiButton`'s label text already tracks `scaledFont`, but a fixed pixel
- * `btnW`/`btnH` doesn't, so long labels ("Позвать на помощь", weapon names) ran
- * past the button box at "L" (real-play report 2026-07-18). Computed at mount
- * time (`enterPlanning`), same as every other fixed-pixel-vs-scaledFont fix in
- * this codebase (see presentation/CLAUDE.md).
- */
 function barButtonSize(): { w: number; h: number } {
   const scale = currentFontScale();
   return { w: Math.round(BAR_BTN_W * scale), h: Math.round(BAR_BTN_H * scale) };
@@ -66,18 +30,6 @@ function actionButtonWidth(): number {
   return Math.round(ACTION_BTN_W * currentFontScale());
 }
 
-/**
- * A proportionally-scaled box still clips the *longest* labels ("Требовать
- * сдаться" vs "Форсаж") — scaling alone assumes every label had equal
- * headroom at "M", which they didn't (real-play report 2026-07-18, follow-up:
- * the scaled box still clipped the widest comms label). Widen a button past
- * its scaled base width to fit its actual text, mirroring `questCardLayout`'s
- * `MONO_CHAR_WIDTH_RATIO` pixel-budget pattern (see presentation/CLAUDE.md).
- * `LABEL_X_OFFSET_PX` mirrors `UiButton`'s icon+label layout (label at x=32);
- * `MARKER_BUDGET_CHARS` reserves room for the "▶ "/"✓ "/"⛔ " prefix
- * `refreshLabels` adds post-mount, so a later marker never re-overflows a
- * button already sized to its bare label.
- */
 const LABEL_X_OFFSET_PX = 32;
 const LABEL_RIGHT_PAD_PX = 14;
 const MARKER_BUDGET_CHARS = 2;
@@ -90,8 +42,6 @@ function fitButtonWidth(baseWidth: number, label: string): number {
   );
 }
 
-/** The action-row button's base (unmarked) label text — shared by sizing
- *  (`buildActionRow`) and live refresh (`refreshLabels`) so they never drift. */
 function actionLabelText(key: string): string {
   if (key === "afterburner") return t("combat.planning.afterburner");
   const consumable = consumableById(key);
@@ -99,43 +49,25 @@ function actionLabelText(key: string): string {
   const comms = COMBAT_COMMS_ACTIONS.find((a) => a.id === key);
   return t(comms?.nameKey ?? key);
 }
-/** Bar baseline above the bottom HUD ХОД cluster + toast lane. */
 const BAR_BOTTOM_OFFSET = 150;
-/** Toast tint for planning-phase feedback (matches the 14.5a planning toasts). */
 const PLANNING_TINT = 0x66ccff;
 const WARNING_TINT = 0xffcc00;
 
-/** The scene state the planning UI reads (all closures — resolved live). */
 export interface CombatPlanningUiDeps {
   getUiLayer(): Container;
   getGameLayer(): Container;
   getScreenSize(): { width: number; height: number };
   getShipPos(): { x: number; y: number } | null;
-  /** The player's fitted guns (`CombatModule.fittedWeapons()` — catalog refs). */
   getFittedWeapons(): WeaponSpec[];
-  /** Only an engaged combatant is assignable (mirrors `selectTarget`'s guard). */
   isCombatant(sprite: NpcShipSprite): boolean;
-  /** The planned-turn draft the assignments land in (also the phase gate). */
   planning: CombatPlanningController<NpcShipSprite, WeaponSpec>;
   showMessage(text: string, color?: number): void;
-  /**
-   * The execute-window action row (14.5c): afterburner toggle, owned tactical
-   * devices, comms. OPTIONAL — absent (lightweight/legacy harnesses) mounts the
-   * weapon bar exactly as before, so the pre-14.5c layout contracts hold.
-   */
   actions?: {
-    /** The player's owned consumable ids (`Inventory.ownedConsumableIds`). */
     getOwnedConsumableIds(): readonly string[];
-    /** Whether the engine can still afterburn this fight (wear gate, Task 8). */
     canAfterburn(): boolean;
   };
 }
 
-/**
- * The planning-phase surface: per-weapon range rings + the weapon-assignment bar.
- * All mount/unmount is idempotent — `enterPlanning` rebuilds from the live loadout
- * each round, so a mid-fight refit or a killed assignment never leaves stale UI.
- */
 export class CombatPlanningUi {
   private readonly deps: CombatPlanningUiDeps;
   private readonly assign: WeaponAssignmentController<
@@ -155,22 +87,18 @@ export class CombatPlanningUi {
     this.assign = new WeaponAssignmentController(deps.planning);
   }
 
-  /** True while the planning surface is mounted. */
   get isOpen(): boolean {
     return this.bar !== null;
   }
 
-  /** True while the 14.5c action row (afterburner/devices/comms) is mounted. */
   get actionsOpen(): boolean {
     return this.actionsBar !== null;
   }
 
-  /** The gun armed by the first click, awaiting a target (null = none). */
   get armedWeapon(): WeaponSpec | null {
     return this.assign.selectedWeapon;
   }
 
-  /** Mount the range rings + weapon bar for a fresh planning round. */
   enterPlanning(): void {
     this.exitPlanning();
     const weapons = this.deps.getFittedWeapons();
@@ -216,19 +144,6 @@ export class CombatPlanningUi {
     this.refreshLabels();
   }
 
-  /**
-   * Re-anchor the mounted weapon bar + action row to a new screen size. The
-   * bar's position is computed once at `enterPlanning()` time and otherwise
-   * never touched again — unlike `FlightHud`'s «Ход» button, which re-anchors
-   * on every window resize (`SpaceFlightScene.handleResize`). Without this, a
-   * window resize (DevTools opened, un-maximize, orientation change) mid-
-   * PLANNING leaves the stale, differently-positioned bar sitting wherever
-   * «Ход» has since moved to — PixiJS gives the later-mounted bar the top
-   * z-order, so it silently swallows the click with no message/sound, reading
-   * to the player as a dead button (live bug report 2026-07-24). No-op while
-   * planning isn't open; button widths/labels are unchanged by a resize, only
-   * their anchor position.
-   */
   reposition(width: number, height: number): void {
     if (this.bar) {
       const { h: btnH } = barButtonSize();
@@ -257,8 +172,6 @@ export class CombatPlanningUi {
     }
   }
 
-  /** Build the 14.5c action row (afterburner / owned devices / comms) above the
-   *  weapon bar — only when the host wired the `actions` deps. */
   private buildActionRow(
     screen: { width: number; height: number },
     y: number,
@@ -303,11 +216,6 @@ export class CombatPlanningUi {
     this.actionsBar = row;
   }
 
-  /**
-   * Toggle a planned execute-window action (public per the SettingsPanel
-   * testability convention): the afterburner flag, a ≤1 tactical device, or a
-   * ≤1 comms action. Re-clicking the active one clears it.
-   */
   toggleAction(key: string): void {
     const plan = this.deps.planning.plan;
     if (key === "afterburner") {
@@ -320,7 +228,6 @@ export class CombatPlanningUi {
     this.refreshLabels();
   }
 
-  /** Tear down the planning surface (confirm / round start / fight end). */
   exitPlanning(): void {
     this.assign.clearSelection();
     if (this.rings) {
@@ -344,12 +251,6 @@ export class CombatPlanningUi {
     this.actionWidths = [];
   }
 
-  /**
-   * Second click of the two-step assignment: an NPC sprite clicked during
-   * PLANNING. Assigns the armed weapon to it (out-of-range is flagged, not
-   * rejected — Task 5's recorded decision) and reports whether the click was
-   * consumed; unconsumed clicks fall through to the legacy target-select.
-   */
   handleTargetClick(sprite: NpcShipSprite): boolean {
     if (!this.isOpen || !this.assign.selectedWeapon) return false;
     if (!this.deps.isCombatant(sprite)) return false;
@@ -374,11 +275,6 @@ export class CombatPlanningUi {
     this.exitPlanning();
   }
 
-  /**
-   * First click of the two-step assignment: arm (or toggle off) a gun. Public
-   * (the weapon-bar buttons call it) so it unit-tests without PixiJS pointer
-   * events — the same convention as `SettingsPanel.selectFont` et al.
-   */
   armWeapon(weapon: WeaponSpec): void {
     const armed = this.assign.selectWeapon(weapon);
     if (armed) {
@@ -390,7 +286,6 @@ export class CombatPlanningUi {
     this.refreshLabels();
   }
 
-  /** Reflect armed/assigned state in the bar labels (▶ armed, ✓ assigned). */
   private refreshLabels(): void {
     const targets = this.deps.planning.plan.weaponTargets;
     for (const { weapon, button } of this.buttons) {
@@ -417,40 +312,15 @@ export class CombatPlanningUi {
   }
 }
 
-/** The scene members the planning-controller factory reads (all lazy closures). */
 export interface CombatPlanningHost {
-  /** Structural `ShipPhysics` subset so tests fake it (see `PathFollower`). */
   getShipPhysics(): PathFollower | null;
-  /** The planning surface — null until the scene's `initialize()` builds it. */
   getUi(): CombatPlanningUi | null;
   showMessage(text: string, color?: number): void;
-  /** Fight over → restore the pre-combat route overlay (or clear the preview). */
   onFightEnd(): void;
-  /**
-   * A turn was confirmed (14.5c): the execute-window orchestrator resolves the
-   * one-shot planned actions (afterburner/consumable/comms). Optional so
-   * lightweight harnesses keep the movement-only confirm.
-   */
   onConfirmPlan?(plan: PlannedTurn<NpcShipSprite, WeaponSpec>): void;
-  /**
-   * Yield the combat auto-pursuit so a confirmed planned destination actually
-   * flies (the same `breakOffCombatPursuit` seam `executeRouteTo` uses) —
-   * without it `updateCombatPursuit` re-`setPath`s the orbit carrot every
-   * unfrozen frame and clobbers the planned course (review 2026-07-15). The
-   * override self-clears when the course completes; with no destination the
-   * orbit-strafe deliberately stays the movement primitive. Optional so
-   * lightweight harnesses need not model the pursuit.
-   */
   breakOffPursuit?(): void;
 }
 
-/**
- * Build the scene's `CombatPlanningController` with the live UI + toast side
- * effects wired (extracted from the `SpaceFlightScene` field initializer for the
- * line guard). The confirmed destination flies via Task 3's
- * {@link applyPlannedMovement}; per-weapon fire reads the confirmed draft through
- * `CombatModuleDeps` (Task 6), not through this factory.
- */
 export function createCombatPlanningController(
   host: CombatPlanningHost,
 ): CombatPlanningController<NpcShipSprite, WeaponSpec> {

@@ -16,15 +16,6 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-// ---------------------------------------------------------------------------
-// Task 2: Reliable engagement + fire once per "ход".
-// End-to-end wiring of NpcShipManager (which decides WHEN an aggressor engages)
-// into a real CombatModule (which resolves the per-turn fire exchange). Proves
-// the integration the unit suites test in isolation: an in-range aggressor
-// reliably enters combat, STAYS engaged while it orbits, and both ships fire
-// exactly once per combatFireIntervalMs.
-// ---------------------------------------------------------------------------
-
 const FIRE = GAME_BALANCE.combatFireIntervalMs; // 2500 ms — one "ход"
 const PULSE_DAMAGE = 14; // wpn_pulse, range 240
 
@@ -54,7 +45,6 @@ function makeNpc(
   });
 }
 
-/** Sprites are private; expose them for white-box positioning (test-only seam). */
 function spriteOf(manager: NpcShipManager): NpcShipSprite & {
   x: number;
   y: number;
@@ -63,11 +53,6 @@ function spriteOf(manager: NpcShipManager): NpcShipSprite & {
     .npcSprites[0] as NpcShipSprite & { x: number; y: number };
 }
 
-/**
- * Build an arena: a real NpcShipManager wired to a real CombatModule (the scene
- * mediates this in production via the `startInFlightCombat`/`isInCombat`/
- * `selectCombatTarget` deps). One OVERMIND garrison NPC, flagged aggressive.
- */
 function makeArena(
   opts: { playerHull?: number; npcHull?: number; npcDamage?: number } = {},
 ): {
@@ -180,10 +165,6 @@ describe("In-flight combat engagement (Task 2)", () => {
     manager.update(16, 0); // engage
     expect(combat.isActive).toBe(true);
 
-    // Drive the dogfight: the manager orbits the sprite, the combat module
-    // prunes anything that drifts beyond scanner range. After many frames the
-    // aggressor must still be engaged and circling at range — never tail-rammed
-    // onto the player nor lost out to scanner range.
     for (let i = 0; i < 80; i++) {
       manager.update(50, 0);
       combat.update(50);
@@ -210,7 +191,6 @@ describe("In-flight combat engagement (Task 2)", () => {
     expect(ship.hullHP).toBe(1000);
     expect(npc.hullHP).toBe(100);
 
-    // Hold the sprite in range and run N full turns through the combat module.
     sprite.x = 100;
     sprite.y = 0;
     for (let i = 0; i < N; i++) combat.update(FIRE);

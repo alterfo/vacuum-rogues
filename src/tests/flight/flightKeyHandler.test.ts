@@ -1,15 +1,3 @@
-/**
- * Direct unit tests for the pure flight-scene key router
- * (`src/presentation/flight/flightKeyHandler.ts`), extracted from
- * `SpaceFlightScene.onKeyDown` precisely so its routing is testable without the
- * PixiJS scene.
- *
- * `spaceRunsTurn.test.ts` exercises the Space branch through the live scene but
- * only covers the *terminal* Esc branch (cancel a planned route). The Esc
- * handler is a 5-way priority chain (combat pause → contact panel → quest
- * journal → planet info → route cancel); a reorder or a dropped branch would
- * ship green without these tests. This file pins each branch + the ordering.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   handleFlightKey,
@@ -219,9 +207,6 @@ describe("handleFlightKey — Space launch guards", () => {
   });
 
   it("does not launch the turn while the OVERMIND-core overlay is open (hasOpenModal, no contact panel)", () => {
-    // `hasOpenModal()` is true while the OVERMIND overlay is up even though the
-    // contact panel is closed — the Space guard must mirror the mouse-click
-    // `isBlockingModalOpen` guard, which gates on `hasOpenModal()`.
     const ctx = makeCtx({
       plannedRoute: { x: 5, y: 5 },
       npcManager: {
@@ -319,10 +304,6 @@ describe("handleFlightKey — Space launch guards", () => {
 });
 
 describe("handleFlightKey — combat-planning confirm is modal-guarded (review 2026-07-15)", () => {
-  // Space during PLANNING confirms the combat turn — but never behind an open
-  // panel: the confirm used to run BEFORE the modal guard, so a player reading
-  // the quest journal (opened via `j` mid-plan) could silently start an enemy
-  // volley behind it.
   function planningCtx(overrides: Partial<Ctx> = {}) {
     const confirm = vi.fn();
     const ctx = makeCtx({

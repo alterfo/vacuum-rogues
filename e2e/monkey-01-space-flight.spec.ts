@@ -9,9 +9,6 @@ type EngineHandle = {
   transitionTo: (scene: string, ctx?: object) => Promise<void>;
 };
 
-// Each Playwright mouse action takes ~500ms due to PixiJS event processing.
-// Keep action counts low enough to stay within the 60s test budget (after ~18s setup).
-// 40 actions × 500ms ≈ 20s; total ≈ 38s — well under 120s.
 
 test.describe('Monkey 01: SpaceFlightScene resilience', () => {
   test.setTimeout(120_000);
@@ -49,7 +46,6 @@ test.describe('Monkey 01: SpaceFlightScene resilience', () => {
       { timeout: 10_000 },
     );
 
-    // Verify engine still has a valid scene (game didn't crash)
     const sceneName = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       return engine?.currentScene?.constructor?.name ?? null;
@@ -63,7 +59,6 @@ test.describe('Monkey 01: SpaceFlightScene resilience', () => {
     const errorCollector = new ErrorCollector(page);
     const monkey = new MonkeyTester(page, 7);
 
-    // Start a turn
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: { handlePlayPause?: () => void } | null;
@@ -71,10 +66,8 @@ test.describe('Monkey 01: SpaceFlightScene resilience', () => {
       engine.currentScene?.handlePlayPause?.();
     });
 
-    // Spam left clicks while the turn may be running
     await monkey.run(15, { delayMs: 0, types: ['leftClick'] });
 
-    // Wait for turn to finish if it was running
     await page.waitForFunction(
       () => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
@@ -85,7 +78,6 @@ test.describe('Monkey 01: SpaceFlightScene resilience', () => {
       { timeout: 60_000 },
     );
 
-    // plannedRoute should not be corrupted by clicks during turn
     const routeOk = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: { plannedRoute?: { x: number; y: number } | null } | null;

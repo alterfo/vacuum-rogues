@@ -1,18 +1,5 @@
-/**
- * Task 4 (docs/plans/20260709-overmind-ship-identity-and-balance.md): unify the
- * Overmind faction label. Four surfaces used to disagree — the canonical
- * `FACTION_LABEL` map said «Сверхразум», `GovernmentScene`/`PlanetScene` each
- * carried a private hardcoded copy, and `NpcContactPanel` resolved i18n
- * `faction.OVERMIND` to a divergent «Предтечи»/"Precursors". All must converge
- * on `FACTION_LABEL`'s «Сверхразум» (EN: "Overmind") while the contact panel
- * stays i18n-aware for EN.
- */
 import { describe, it, expect, vi } from "vitest";
 
-// PixiJS mocked with lightweight class stubs so the panel constructs headless
-// (same pattern as overmindContactPanel.test.ts): real classes keep
-// `instanceof Text` working and addChild tracks children so rendered labels
-// can be inspected.
 vi.mock("pixi.js", () => {
   class Container {
     children: unknown[] = [];
@@ -104,7 +91,6 @@ function makeOvermindNpc(): NpcShip {
   return npc;
 }
 
-/** Visible text labels rendered in the panel (stat readouts + button captions). */
 function panelLabels(panel: NpcContactPanel): string[] {
   return (panel.container.children as unknown[])
     .filter((c): c is Text => c instanceof Text)
@@ -152,11 +138,8 @@ describe("Overmind faction label converges on FACTION_LABEL across surfaces", ()
   });
 
   it("all three surfaces render the identical string for Faction.OVERMIND", () => {
-    // Contact panel path (i18n, RU default in a storage-less test runtime).
     const contactPanelLabel = translate("ru", "faction.OVERMIND");
-    // GovernmentScene / PlanetScene path (shared helper over FACTION_LABEL).
     const sceneLabel = factionDisplayLabel(Faction.OVERMIND);
-    // Canonical map (StarMapScene / PlanetInfoPanel path).
     const canonical = FACTION_LABEL[Faction.OVERMIND];
     expect(contactPanelLabel).toBe(canonical);
     expect(sceneLabel).toBe(canonical);

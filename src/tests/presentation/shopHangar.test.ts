@@ -3,16 +3,6 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { Renderer } from "@/presentation/Renderer";
 import { PlanetType } from "@/types";
 
-/**
- * Task 4 (shared hangar in the equipment shop): the planet Верфь mounts the same
- * `HangarPanel` the station uses, on a new АНГАР tab — one fitting surface, no
- * duplicate controls. These tests drive the real `EquipmentShopScene` through the
- * scene→panel path (the way the station's `hangarLayout.test.ts` does), asserting
- * the shop renders the shared hangar, that fitting from the shop mutates the same
- * canonical `ShipLoadout`, and that the gear tab no longer carries its own
- * uninstall control (it moved into the hangar).
- */
-
 interface FakeNode {
   text: string;
   handlers: Record<string, (e: unknown) => void>;
@@ -93,7 +83,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scene + scaledText + panel see the fake pixi.
 import { EquipmentShopScene } from "@/presentation/EquipmentShopScene";
 
 const renderer = {
@@ -165,7 +154,6 @@ function findButton(label: string): FakeNode | undefined {
   return created.find((n) => n.text === label);
 }
 
-/** Switch to the АНГАР tab and re-render (clears the recorded texts first). */
 function openHangar(scene: EquipmentShopScene): void {
   created.length = 0;
   (scene as unknown as { activeTab: string }).activeTab = "hangar";
@@ -201,8 +189,6 @@ describe("EquipmentShopScene — shared hangar on the АНГАР tab", () => {
     expect(
       all.some((t) => t.includes("ОБОРУДОВАНИЕ") && t.includes("0/2")),
     ).toBe(true);
-    // The hangar's own hull banner — proof it is the shared panel, not the
-    // shop's own loadout strip.
     expect(all.some((t) => t.includes("Корпус:"))).toBe(true);
 
     scene.destroy();
@@ -222,7 +208,6 @@ describe("EquipmentShopScene — shared hangar on the АНГАР tab", () => {
     expect(installBtn).toBeDefined();
     installBtn!.handlers.pointerdown(fakeEvent);
 
-    // The fit routed through the canonical loadout (same model the station uses).
     expect(loadout.installedGearIds()).toContain("eq_radar");
 
     scene.destroy();
@@ -233,13 +218,10 @@ describe("EquipmentShopScene — shared hangar on the АНГАР tab", () => {
     loadout.install("eq_radar"); // something fitted to list in УСТАНОВЛЕНО
 
     const scene = new EquipmentShopScene(renderer);
-    // Default gear tab on init: the УСТАНОВЛЕНО strip is now read-only — no
-    // standalone «Снять» control (fitting lives only in the hangar tab).
     scene.initialize({ gameEngine: makeEngine(loadout), planet });
     const gearTabTexts = texts();
     expect(gearTabTexts).toContain("[ АНГАР ]"); // the new tab is offered
     expect(gearTabTexts.some((t) => t === "Снять")).toBe(false);
-    // The installed item still shows for at-a-glance comparison.
     expect(gearTabTexts.some((t) => t.includes("УСТАНОВЛЕНО"))).toBe(true);
 
     scene.destroy();

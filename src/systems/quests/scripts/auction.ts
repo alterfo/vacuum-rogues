@@ -1,23 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: Maelon scrap auction. 8 lots, budget 800cr.
-// Each lot has a class (2–4, random). Value = class × 100. Class 1 excluded —
-// premium Maelon scrap only; a class-1 win at bid_low yields zero profit.
-// The lot's true value is HIDDEN under mesh-cloth until the hammer falls in your
-// favour — the reveal happens on the pw_bid_c* screens, NOT on lot_screen, so a
-// bid_high is a genuine blind gamble (−50 on class 2 … +150 on class 4).
-// Player per lot: skip | bid_low (100cr) | bid_high (250cr, guaranteed win).
-// Bot responses after bid_low:
-//   - Aggressive bot (budget 600cr, bids +100): outbids until broke (3 lots max).
-//   - Random bot (roll 0/1 per lot): 50% chance outbids bid_low.
-// A LOST bid_low forfeits a 50cr auction fee (profit -= 50): the stake is
-// refunded but the paddle deposit is not — so skip is genuinely non-dominated
-// (skipping a lot the solvent aggressive bot will surely take avoids a −50).
-// Lot 5 is a different decision shape: a rival offers a 150cr bribe to stand
-// down (guaranteed profit, no risk) vs. bidding for a possibly-bigger haul.
-// Win condition: profit >= 500 after all 8 lots.
-// Strategy: pay to drain the aggressive bot on a few early lots, then reap the
-// cheap late ones — or buy outright with blind bid_high.
 export const auctionScript: QuestScript = {
   id: "auction",
   title: "Аукцион",
@@ -54,7 +36,6 @@ export const auctionScript: QuestScript = {
       initial: 0,
       showInUI: false,
     },
-    // Lot classes (random 1–4); value = class × 100
     {
       id: "lot_1_class",
       name: "Лот 1",
@@ -119,7 +100,6 @@ export const auctionScript: QuestScript = {
       initial: "random",
       showInUI: false,
     },
-    // Staging: class of current lot, bid level chosen by player (1=low, 2=high)
     {
       id: "lot_class_current",
       name: "Класс лота",
@@ -136,7 +116,6 @@ export const auctionScript: QuestScript = {
       initial: 0,
       showInUI: false,
     },
-    // Aggressive bot budget (600 = 3 lots × 200cr per lot it wins)
     {
       id: "bot_agg_budget",
       name: "Бот-агр. бюджет",
@@ -145,7 +124,6 @@ export const auctionScript: QuestScript = {
       initial: 600,
       showInUI: false,
     },
-    // Random bot roll (0 or 1) re-rolled each lot in prepare_lot_N
     {
       id: "random_bot_roll",
       name: "Случайный бот",
@@ -157,7 +135,6 @@ export const auctionScript: QuestScript = {
   ],
   startLocation: "prepare_lot_1",
   locations: [
-    // --- Lot preparation (copy class to staging, re-roll random bot) ---
     {
       id: "prepare_lot_1",
       text: "Молоток аукциониста бьёт по кафедре. «Лот первый — на подиум!» Прожекторы вспыхивают над помостом.",
@@ -295,10 +272,6 @@ export const auctionScript: QuestScript = {
       ],
     },
 
-    // --- Lot 5 variant: a rival's bribe (a different decision shape, F-fix) ---
-    // Reached from prepare_lot_5 instead of lot_screen: the choice here is
-    // "guaranteed 150cr for standing down" vs. "bid for a possibly-bigger haul"
-    // vs. "walk with nothing" — not the usual low/high/skip bid war.
     {
       id: "rival_approach",
       text:
@@ -340,7 +313,6 @@ export const auctionScript: QuestScript = {
       ],
     },
 
-    // --- Main auction screen (shared for the other 7 lots) ---
     {
       id: "lot_screen",
       text:
@@ -375,8 +347,6 @@ export const auctionScript: QuestScript = {
       ],
     },
 
-    // --- Bot response after bid_low ---
-    // Aggressive bot outbids if it has budget left (≥200cr); otherwise random bot may snipe
     {
       id: "bot_response",
       text: "Твои 100 кр повисают в дыму. Аукционист выжидает — соперники переглядываются...",
@@ -398,7 +368,6 @@ export const auctionScript: QuestScript = {
         },
       ],
     },
-    // Aggressive bot wins: refund player bid, deduct bot budget
     {
       id: "bot_agg_bids",
       text: "«Двести!» — рявкает толстосум слева, не дав тебе и вздохнуть. Молоток падает: лот ушёл ему. Ставку в 100 кр возвращают, но 50 кр аукционного сбора за пустой торг дом удержит.",
@@ -412,7 +381,6 @@ export const auctionScript: QuestScript = {
         },
       ],
     },
-    // Random bot check (after aggressive bot passed)
     {
       id: "random_bot_check",
       text: "Богач молчит — денег у него не осталось. Но в тени кто-то поглаживает подбородок...",
@@ -434,7 +402,6 @@ export const auctionScript: QuestScript = {
         },
       ],
     },
-    // Random bot wins: refund player
     {
       id: "random_bot_bids",
       text: "Шальной покупатель вдруг вскидывает табличку и перебивает тебя! Молоток бьёт — лот не твой. Ставку возвращают, а 50 кр сбора за пустой торг тебе уже не вернуть.",
@@ -449,8 +416,6 @@ export const auctionScript: QuestScript = {
       ],
     },
 
-    // --- Player wins the lot: compute profit via 2-level staging ---
-    // Level 1: dispatch by lot_class_current (1–4)
     {
       id: "player_wins",
       text: "«Продано!» — молоток бьёт в твою пользу. Лот {current_lot} твой, служители катят добычу к тебе.",
@@ -489,8 +454,6 @@ export const auctionScript: QuestScript = {
         },
       ],
     },
-    // Level 2 per class: dispatch by bid_result (1=100cr, 2=250cr)
-    // Class 1 (value 100): profit deltas → bid_low: +0, bid_high: -150
     {
       id: "pw_bid_c1",
       text: "Под тряпьём — дешёвый хлам класса 1, от силы 100 кр. Барыш едва покроет ставку.",
@@ -513,7 +476,6 @@ export const auctionScript: QuestScript = {
         },
       ],
     },
-    // Class 2 (value 200): bid_low: +100, bid_high: -50
     {
       id: "pw_bid_c2",
       text: "Груз класса 2 — крепкий товар на 200 кр перекупщику. Прибавка честная.",
@@ -536,7 +498,6 @@ export const auctionScript: QuestScript = {
         },
       ],
     },
-    // Class 3 (value 300): bid_low: +200, bid_high: +50
     {
       id: "pw_bid_c3",
       text: "Лакомый груз класса 3 — на рынке уйдёт за 300 кр. Есть чем поживиться.",
@@ -559,7 +520,6 @@ export const auctionScript: QuestScript = {
         },
       ],
     },
-    // Class 4 (value 400): bid_low: +300, bid_high: +150
     {
       id: "pw_bid_c4",
       text: "Жемчужина торгов — редкость класса 4, добрых 400 кр перекупщику. Ты сорвал куш.",
@@ -596,7 +556,6 @@ export const auctionScript: QuestScript = {
       ],
     },
 
-    // --- Next lot dispatcher (routes by current_lot 1–8) ---
     {
       id: "next_lot_dispatch",
       text: "Помост пустеет. Аукционист сверяется со списком — на очереди новый лот...",
@@ -667,7 +626,6 @@ export const auctionScript: QuestScript = {
       ],
     },
 
-    // --- Final verdict ---
     {
       id: "final_verdict",
       text: "Последний молоток отгремел, зал пустеет. В твоих руках {lots_won} из 8 лотов, в книге барыша — {profit} кр. Устоял ли ты порог в 500?",
@@ -690,7 +648,6 @@ export const auctionScript: QuestScript = {
       ],
     },
 
-    // --- Terminal locations ---
     {
       id: "quest_success",
       text:

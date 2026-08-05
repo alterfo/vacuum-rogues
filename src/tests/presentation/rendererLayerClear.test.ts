@@ -2,19 +2,8 @@ import { describe, it, expect } from "vitest";
 import { Container, Graphics } from "pixi.js";
 import { Renderer } from "@/presentation/Renderer";
 
-/**
- * Review finding (letsplay-fixes pass 2): PixiJS v8 `Container.destroy()` with
- * default options REMOVES children but does not destroy them. Since F5 nested
- * the combat hex grid and ship tokens inside a `_gridContainer`, every combat
- * teardown orphaned the grid Graphics (GPU geometry) and token sprites
- * undisposed — `clearGameLayer` only destroyed the top-level child. The same
- * applied to nested uiLayer containers (HP bars, outcome overlay).
- *
- * The layer-clear safety net must destroy recursively.
- */
 describe("Renderer layer clear destroys nested children (no GPU orphans)", () => {
   function makeRenderer(): Renderer {
-    // Constructor only builds the layer Containers; no app init needed.
     return new Renderer(document.createElement("div"));
   }
 

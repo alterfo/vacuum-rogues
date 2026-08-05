@@ -1,18 +1,3 @@
-/**
- * Task 3 regression: the Overmind-slayer decision tier.
- *
- * A battle-ready ship must (a) route TOWARD the front (`slayer-advance`, using
- * the frontward BFS picker), (b) STAND AND FIGHT a garrison — the ONE place
- * `flee-outmatched` is overridden — while healthy and standing in a held system,
- * (c) break off and let the survive block reclaim once genuinely hurt
- * (`SLAYER_RETREAT_HULL_FRACTION`), and (d) `liberate` a garrison-cleared held
- * system. Critically, a ship that is NOT battle-ready must still FLEE an
- * over-HP'd garrison (no death regression), and every survival tier
- * (present-hostile reaction, low-hull, fuel-critical) must outrank the advance.
- *
- * Pure decisions over hand-built fixtures, exactly as `overmindAvoidance.test.ts`
- * / `MemoryHeuristicPolicy.test.ts`, plus a unit test of the frontward BFS.
- */
 import { describe, it, expect } from "vitest";
 import { SceneType, FactionType, QuestType } from "@/types";
 import {
@@ -35,7 +20,6 @@ import {
 } from "./MemoryHeuristicPolicy";
 import { overmindFrontHopDistances } from "./engineQueries";
 
-/** A battle-ready starter fixture (maxHull + weaponDamage both clear thresholds). */
 function player(over: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
   return {
     credits: 1000,
@@ -113,7 +97,6 @@ function obs(opts: Opts = {}): Observation {
   };
 }
 
-/** An Overmind garrison ship whose hull far exceeds a starter's — always "outmatched". */
 function garrisonHostile(over: Partial<NpcSnapshot> = {}): NpcSnapshot {
   return {
     id: "overmind-1",
@@ -347,14 +330,11 @@ describe("decideWithMemory — survival tiers outrank the advance (Task 3)", () 
           hopsToOvermindFront: 1,
         },
       ],
-      // Not in a garrison (overmindHeldHere falsy) — a chance encounter en route.
       hostiles: [garrisonHostile()],
     });
 
     const action = decideWithMemory(here, createMemory());
 
-    // Battle-ready but not on a liberation mission here ⇒ the ordinary
-    // fight-or-flee-by-hull reaction applies, never `slayer-advance`.
     expect(action.reason).not.toContain("slayer-advance");
     expect(["attack", "flee"]).toContain(action.kind);
   });
@@ -387,9 +367,6 @@ describe("decideWithMemory — slayer-advance anti-ping-pong (Task 16b / F1)", (
   });
 
   it("a 3-system hub cycle (sys_22↔14↔23, the live-session finding) never repeats the same pick twice in a row", () => {
-    // Simulates standing at the hub with both spokes tied on hop count and
-    // BOTH already in the rolling history (the pathological case a single-step
-    // anti-backtrack can't escape) — the least-recently-visited of the two wins.
     const here = obs({
       neighbors: [
         {
@@ -406,12 +383,10 @@ describe("decideWithMemory — slayer-advance anti-ping-pong (Task 16b / F1)", (
         },
       ],
     });
-    // Just came from sys_23, and sys_22 before that.
     const mem = { ...createMemory(), recentSystemIds: ["sys_23", "sys_22"] };
 
     const action = decideWithMemory(here, mem);
 
-    // sys_22 is the least-recently-visited of the two tied candidates.
     expect(action.targetId).toBe("sys_22");
   });
 

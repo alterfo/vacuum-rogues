@@ -4,14 +4,6 @@ import { CombatHud } from "@/presentation/flight/CombatHud";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
 
-/**
- * Real-time combat HUD (Task 2): the modal weapon-selection panel and
- * Атаковать/Отступить buttons are gone — this is now a compact top-right status
- * overlay (target name + red hull bar, player green hull bar) plus the dashed
- * range circle. These tests replace the old freeze-model panel tests.
- */
-
-/** NpcShipSprite stand-in with just the fields the HUD reads. */
 function makeSprite(name: string, hullHP = 100, maxHull = 100): NpcShipSprite {
   return {
     x: 0,
@@ -20,7 +12,6 @@ function makeSprite(name: string, hullHP = 100, maxHull = 100): NpcShipSprite {
   } as unknown as NpcShipSprite;
 }
 
-/** A loadout with two weapons: wpn_pulse (range 240) then wpn_railgun (range 360). */
 function twoWeaponLoadout(): ShipLoadout {
   const loadout = new ShipLoadout("hull_warden");
   loadout.install("wpn_pulse");
@@ -130,10 +121,6 @@ describe("CombatHud HP bars (Task 2)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Engaged-enemy reticles (Task 4): a world-space bracket per combatant so the
-// auto-mode fight reads at a glance; the selected target is drawn distinct.
-// ---------------------------------------------------------------------------
 describe("CombatHud engaged-enemy markers (Task 4)", () => {
   it("syncMarkers draws one reticle per combatant", () => {
     const { hud } = makeHud();
@@ -171,10 +158,6 @@ describe("CombatHud engaged-enemy markers (Task 4)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Per-turn fire flashes (Task 4): a fading beam per shot so each exchanged "ход"
-// reads as a discrete event; advanced/cleared by update().
-// ---------------------------------------------------------------------------
 describe("CombatHud fire flashes (Task 4)", () => {
   it("flashShot spawns a beam that update() fades and removes", () => {
     const { hud } = makeHud();

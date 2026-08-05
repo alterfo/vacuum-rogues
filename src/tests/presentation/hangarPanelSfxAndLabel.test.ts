@@ -11,15 +11,6 @@ import type { EquipmentSystem } from "@/systems/EquipmentSystem";
 import type { LoadoutPreset } from "@/types";
 import type { SfxKey } from "@/systems/AudioManager";
 
-/**
- * Task 8: the shared hangar had ZERO sound effects on any of its actions
- * (repair / sell / install / jettison / loadout presets), and its fitted-slot
- * micromodule control showed the misleading "[нет микромодулей]" label even for
- * gear that structurally can never take a micromodule. These tests drive the
- * real panel (fake PixiJS) and assert the right `SfxKey` fires per action, plus
- * pin the corrected label logic on the pure resolver.
- */
-
 interface FakeNode {
   text: string;
   handlers: Record<string, (e: unknown) => void>;
@@ -99,7 +90,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the panel + scaledText see the fake pixi.
 import { Container } from "pixi.js";
 
 const renderer = {

@@ -6,8 +6,6 @@ import type { StarSystem } from "@/domain/StarSystem";
 import type { NpcShip } from "@/domain/NpcShip";
 import { MigrationPipeline } from "@/data/MigrationPipeline";
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
 function makeGalaxy(): Galaxy {
   const systems: StarSystem[] = [];
   const npcShips: NpcShip[] = [];
@@ -22,8 +20,6 @@ function makeEvent(
 ): NewsEvent {
   return { type, systemId, day, description };
 }
-
-// ── Galaxy.addNewsEvent ───────────────────────────────────────────────────────
 
 describe("Galaxy.addNewsEvent", () => {
   it("appends events and keeps them in order", () => {
@@ -43,7 +39,6 @@ describe("Galaxy.addNewsEvent", () => {
       g.addNewsEvent(makeEvent("MARKET_SHIFT", "s", i, `event ${i}`));
     }
     expect(g.newsFeed.length).toBe(100);
-    // Oldest entries removed; newest (day 109) still present.
     expect(g.newsFeed[g.newsFeed.length - 1].day).toBe(109);
   });
 
@@ -63,8 +58,6 @@ describe("Galaxy.addNewsEvent", () => {
     expect(g.newsFeed[1].type).toBe("OVERMIND_EXPANSION");
   });
 });
-
-// ── Player.newsBookmarks ──────────────────────────────────────────────────────
 
 function makePlayer(): Player {
   return new Player(
@@ -110,20 +103,16 @@ describe("Player.newsBookmarks", () => {
 
   it("toggle: adds key if not present, removes if present", () => {
     const key = 42;
-    // Toggle on
     const idx1 = player.newsBookmarks.indexOf(key);
     if (idx1 >= 0) player.newsBookmarks.splice(idx1, 1);
     else player.newsBookmarks.push(key);
     expect(player.newsBookmarks).toContain(key);
-    // Toggle off
     const idx2 = player.newsBookmarks.indexOf(key);
     if (idx2 >= 0) player.newsBookmarks.splice(idx2, 1);
     else player.newsBookmarks.push(key);
     expect(player.newsBookmarks).not.toContain(key);
   });
 });
-
-// ── Migration 10→11 ───────────────────────────────────────────────────────────
 
 describe("Migration 10→11: newsBookmarks backfill", () => {
   it("adds newsBookmarks to player if missing", () => {
@@ -153,7 +142,6 @@ describe("Migration 10→11: newsBookmarks backfill", () => {
         contrabandGoods: [],
         completedQuestChains: [],
         activeTextQuestState: null,
-        // newsBookmarks intentionally absent
       },
       persistentDialogs: [],
     } as unknown as Parameters<typeof MigrationPipeline.migrate>[0];

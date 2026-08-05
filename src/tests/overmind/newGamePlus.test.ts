@@ -7,12 +7,6 @@ import {
 } from "@/systems/overmind/newGamePlus";
 import { FactionType } from "@/types";
 
-/**
- * Unit tests for the pure New-Game+ carry-over (Task 4 of
- * `20260625-overmind-endgame-living-galaxy`). The carry maps a won captain's
- * progress onto values the new-game path already seeds — no persisted field.
- */
-
 function source(over: Partial<NewGamePlusSource> = {}): NewGamePlusSource {
   return {
     credits: 10000,
@@ -38,7 +32,6 @@ describe("nextCycleGameMode — difficulty escalates one notch toward HARD", () 
 describe("newGamePlusCarry", () => {
   it("carries a capped fraction of credits (a head-start, not the full pile)", () => {
     const carry = newGamePlusCarry(source({ credits: 10000 }));
-    // 10000 * 0.5 = 5000, below the cap.
     expect(carry.credits).toBe(5000);
   });
 
@@ -48,7 +41,6 @@ describe("newGamePlusCarry", () => {
   });
 
   it("floors fractional credit shares to whole credits", () => {
-    // 999 * 0.5 = 499.5 → floored to 499 (whole-credit currency).
     const carry = newGamePlusCarry(source({ credits: 999 }));
     expect(carry.credits).toBe(499);
     expect(Number.isInteger(carry.credits)).toBe(true);
@@ -81,7 +73,6 @@ describe("newGamePlusCarry", () => {
       creditCarryFraction: 0.25,
       creditCarryCap: 2000,
     });
-    // 10000 * 0.25 = 2500, clamped to the 2000 cap.
     expect(carry.credits).toBe(2000);
   });
 });

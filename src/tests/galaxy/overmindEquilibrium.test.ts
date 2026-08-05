@@ -7,11 +7,6 @@ import {
 import { SeededRNG } from "@/utils/seededRNG";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Build a realistic N-node galaxy topology.
- * Uses the same wiring algorithm as GalaxySimulator: random axial coords,
- * each node connected to its 3 nearest neighbours.
- */
 function buildGalaxyTopology(
   seed: string,
   n: number,
@@ -37,7 +32,6 @@ function buildGalaxyTopology(
     };
   });
 
-  // 2 most distant from centre become overmind start (matches GalaxySimulator).
   const sorted = [...coords].sort(
     (a, b) => b.q ** 2 + b.r ** 2 - (a.q ** 2 + a.r ** 2),
   );
@@ -76,10 +70,6 @@ function runEquilibriumSim(
       overmind = r.overmindSystems;
       pirate = r.pirateSystems;
 
-      // Floor: mirror the GameEngine floor — the balance tick always maintains
-      // a minimum cosmic overmind presence (OVERMIND_FLOOR_MIN systems).
-      // This cannot drop below the floor through natural balance; only direct
-      // player combat (Task 4) can reduce below it.
       const totalHostile = overmind.length + pirate.length;
       if (totalHostile < GAME_BALANCE.OVERMIND_FLOOR_MIN) {
         const needed = GAME_BALANCE.OVERMIND_FLOOR_MIN - totalHostile;
@@ -120,7 +110,6 @@ describe("overmindEquilibrium: 2000-day self-balance simulation", () => {
 
     it(`[${seed}] rolling 200-day average stays in [${BAND_LOW * 100}%,${BAND_HIGH * 100}%] after warmup`, () => {
       const { dailyShares } = runEquilibriumSim(seed);
-      // Slide a 200-day window every 100 days from WARMUP to end.
       for (
         let start = WARMUP;
         start + 200 <= dailyShares.length;

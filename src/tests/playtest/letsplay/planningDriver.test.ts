@@ -1,10 +1,3 @@
-/**
- * Task 15 (`20260713-tactical-pause-combat-rework`): unit coverage for the
- * headless pause-and-plan driver — the assign-and-confirm the letsplay agent
- * runs whenever the tactical PLANNING freeze is open. Pure stub tier (no
- * engine, no PixiJS): the seam is structural, so a plain object stands in for
- * the live `SpaceFlightScene`.
- */
 import { describe, it, expect, vi } from "vitest";
 import { confirmPlanningIfOpen } from "./planningDriver";
 
@@ -88,12 +81,10 @@ describe("confirmPlanningIfOpen — headless assign-and-confirm (Task 15)", () =
   it("falls back preferred → live selection → nearest combatant", () => {
     const near = foe("npc_near", 10);
     const far = foe("npc_far", 900);
-    // Unknown preferred id + no selection ⇒ nearest to the ship wins.
     const { scene, assignWeapon } = makeScene({ combatants: [far, near] });
     confirmPlanningIfOpen(scene, { preferredTargetId: "npc_gone" });
     expect(assignWeapon.mock.calls[0][1]).toBe(near);
 
-    // A live selection that is still a combatant wins over nearest.
     const sel = makeScene({ combatants: [far, near], selectedTarget: far });
     confirmPlanningIfOpen(sel.scene);
     expect(sel.assignWeapon.mock.calls[0][1]).toBe(far);

@@ -19,15 +19,6 @@ import {
 import { decideWithMemory } from "./MemoryHeuristicPolicy";
 import type { ScenarioGoal } from "./goalBias";
 
-/**
- * Task 4 of the letsplay expansion plan: the CJM (Customer Journey Map)
- * teacher behaviors added to `MemoryHeuristicPolicy` plus the deadlock
- * detector. Each CJM is a self-contained goal-specific bias reachable through
- * the public `decideWithMemory(obs, mem, goal)` entry point (the branches
- * themselves are private), exercised here over hand-built fixtures — mirroring
- * `MemoryHeuristicPolicy.test.ts`'s pattern for the goal-less core.
- */
-
 const M = ResourceType.METALS;
 
 function playerFixture(over: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
@@ -74,11 +65,6 @@ interface ObsOpts {
   bestHullPrice?: number | null;
 }
 
-/**
- * Build a self-consistent observation whose `legalActions` come from the same
- * pure `legalActionsForScene` the real `observe()` uses, including the Task 2
- * shop/loan/sell-cargo legality context.
- */
 function obs(opts: ObsOpts = {}): Observation {
   const scene = opts.scene ?? SceneType.SPACE_FLIGHT;
   const planets = opts.planets ?? [];
@@ -352,14 +338,6 @@ describe("CJM-C bounty-hunter", () => {
   });
 
   it("does not instant-sell cargo just bought here at a loss (regression: buy/sell drain loop)", () => {
-    // A lot bought at THIS planet's own buy price, checked against this same
-    // planet's sell price, nets <= 0 (sell is always strictly below buy on one
-    // planet) — selling it right back here is a guaranteed loss, not looted
-    // profit. Blindly firing "sell-cargo" here (as opposed to holding the cargo
-    // for a better market) drained a fresh 1000-credit run to ~34 credits over
-    // 200 real-engine steps in oddity-hunting (Task 6) — the base sequencing's
-    // own "take-off, don't inspect-market with cargo in hand" candidate is the
-    // correct move once cargo is held, not an immediate same-spot dump.
     const mem = createMemory();
     mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
     const here = obs({

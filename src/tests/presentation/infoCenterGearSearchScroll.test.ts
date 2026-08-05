@@ -1,16 +1,3 @@
-/**
- * Playtest bug: the player couldn't find a more powerful fuel tank via the
- * InfoCenter equipment search. Two compounding truncations, both silent:
- *  1. `runGearSearch()` hard-capped `gearResults` at the top 20 hits — with
- *     the default cheapest-first sort, a pricier/more-powerful match past
- *     that cutoff never entered the result set at all, regardless of the UI.
- *  2. `renderGear()` additionally rendered only `.slice(0, VISIBLE)` rows
- *     with no way to scroll to the rest — a "показаны первые N из M" label
- *     with no scroll mechanism.
- * Fixed by removing the search-side cap and wrapping the results in the
- * shared `ScrollableList` (same design as the news tab) — every hit renders
- * and the list scrolls to reach any of them.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { setFontScale } from "@/utils/fontScale";
 import { GearKind } from "@/systems/equipment/GearCatalog";
@@ -105,8 +92,6 @@ function makeHit(i: number, price: number): EquipmentHit {
   return {
     gear: {
       id: `fuel_${i}`,
-      // Short and zero-padded so it always survives the row's char-budget
-      // truncation (unrelated to the bug under test) and stays unambiguous.
       name: `Бак${String(i).padStart(2, "0")}`,
       kind: GearKind.EQUIPMENT,
       techLevel: 1 + (i % 6),
@@ -132,18 +117,12 @@ describe("InfoCenterScene gear-search results are never silently truncated", () 
       render: () => void;
     };
     inner.activeTab = "gear";
-    // 30 hits, ascending price — a pricier one (the "more powerful" item) at
-    // the tail end, well past the old hard cap of 20 and well past a single
-    // screen's worth of rows.
     inner.gearResults = Array.from({ length: 30 }, (_, i) =>
       makeHit(i, 100 + i * 50),
     );
     inner.render();
 
     const texts = collectTexts(inner.mainContainer);
-    // Every one of the 30 rows' main line must have been BUILT (even if most
-    // are currently scrolled out of the masked viewport) — the ScrollableList
-    // contract is "no slicing", unlike the old `.slice(0, VISIBLE)` loop.
     for (let i = 0; i < 30; i++) {
       const label = `Бак${String(i).padStart(2, "0")}`;
       const found = texts.some((t) => t.text.includes(label));

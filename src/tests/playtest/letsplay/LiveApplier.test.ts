@@ -8,17 +8,6 @@ import {
 import { legalActionsForScene, type Observation } from "./observe";
 import type { Action } from "./PlayerPolicy";
 
-/**
- * Task 1 of the dev-only autopilot: the live-scene action applier.
- *
- * {@link applyLiveAction} is pure dispatch logic over a {@link LiveSceneController}
- * port, so it is tested against a **mocked** controller (no PixiJS, no real scene):
- *  - each legal {@link Action} kind drives exactly the expected controller verb;
- *  - the scene-aware two-step verbs (`move`/`trade`/`warp`) resolve by scene;
- *  - an action illegal for the current scene is a safe no-op (nothing driven).
- */
-
-/** A spy controller recording the verbs invoked, in order. */
 function makeController(): {
   controller: LiveSceneController;
   calls: ApplyCall[];
@@ -54,11 +43,6 @@ function makeController(): {
   return { controller, calls };
 }
 
-/**
- * Build an {@link Observation} whose `legalActions` come from the same pure
- * `legalActionsForScene` the real `observe` uses, so an action is filtered
- * against the exact legal set the engine would produce for that scene.
- */
 function makeObs(
   scene: SceneType,
   ctx: Partial<Parameters<typeof legalActionsForScene>[1]> = {},
@@ -70,9 +54,6 @@ function makeObs(
     hostileCount: 1,
     connectionCount: 1,
     availableQuestCount: 1,
-    // Deep pockets + a stocked shop so the affordability-gated STATION /
-    // EQUIPMENT_SHOP actions (buy-gear, upgrade-hull) are legal for the pure
-    // dispatch-routing rows below.
     credits: 1_000_000,
     cheapestGearPrice: 100,
     bestHullPrice: 100,
@@ -274,7 +255,6 @@ describe("applyLiveAction — legal actions drive the expected controller verb",
 describe("applyLiveAction — illegal actions are a safe no-op", () => {
   it("skips an action not in the current scene's legalActions", async () => {
     const { controller, calls } = makeController();
-    // "land" is not legal on the star map.
     const obs = makeObs(SceneType.STAR_MAP);
     expect(obs.legalActions).not.toContain("land");
 

@@ -28,16 +28,6 @@ import {
   CAMPAIGN_FEATURE_LENGTH,
 } from "./NeuralPolicy";
 
-/**
- * Task 3 of the partial-observability plan: belief-derived (memory) features.
- *
- * The memory features are **pure** projections of an {@link AgentMemory} (+ the
- * current {@link Observation}), so they're tested in isolation over hand-built
- * fixtures: each signal computes the right "best margin / profit-here /
- * affordability gap / route danger / goal progress", the vector is fixed-width and
- * `[0,1]`-normalised, and an empty notebook degrades every signal to a sane `0`.
- */
-
 function playerFixture(over: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
   return {
     credits: 1000,
@@ -84,12 +74,10 @@ function obs(over: Partial<Observation> = {}): Observation {
   };
 }
 
-/** A price-book entry helper (seenAt is irrelevant to the features). */
 function rec(buy: number, sell: number): PriceRecord {
   return { buy, sell, seenAt: 1 };
 }
 
-/** A notebook with one good priced at two planets: cheap@p1, dear@p2. */
 function twoPlanetBook(): AgentMemory {
   const mem = createMemory();
   mem.priceBook.set("p1", new Map([[ResourceType.METALS, rec(100, 80)]]));
@@ -100,7 +88,6 @@ function twoPlanetBook(): AgentMemory {
 describe("bestKnownMargin", () => {
   it("finds the best cross-planet buy→sell arbitrage", () => {
     const best = bestKnownMargin(twoPlanetBook());
-    // Buy METALS @ p1 (100), sell @ p2 (160) ⇒ 60 margin, 60/160 = 0.375.
     expect(best.good).toBe(ResourceType.METALS);
     expect(best.buyPlanet).toBe("p1");
     expect(best.sellPlanet).toBe("p2");
@@ -155,7 +142,6 @@ describe("profitIfSoldHere", () => {
         { resource: ResourceType.METALS, buy: 200, sell: 160 },
       ]),
     });
-    // (160 - 100) * 5 = 300.
     expect(profitIfSoldHere(here, mem)).toBe(300);
   });
 
@@ -227,7 +213,6 @@ describe("goalSystemId / routeDangerToGoal", () => {
     const mem = createMemory();
     mem.threatMap.set("sysZ", 4);
     expect(routeDangerToGoal(obs({ quests: [quest("sysZ")] }), mem)).toBe(4);
-    // Goal unknown to the threat map ⇒ 0.
     expect(routeDangerToGoal(obs(), mem)).toBe(0);
   });
 });
@@ -282,7 +267,6 @@ describe("memoryFeatures (the belief vector)", () => {
   it("encodes the affordability gap and saving progress for a known upgrade", () => {
     const mem = createMemory();
     mem.knownOffers = [{ item: "hull_b", price: 4000, location: "p2" }];
-    // Credits 1000 vs price 4000 ⇒ gap 3000/4000 = 0.75, progress 1000/4000 = 0.25.
     const v = memoryFeatures(
       obs({ player: playerFixture({ credits: 1000 }) }),
       mem,
@@ -290,7 +274,6 @@ describe("memoryFeatures (the belief vector)", () => {
     expect(v[3]).toBeCloseTo(0.75); // gap to afford
     expect(v[5]).toBeCloseTo(0.25); // saving progress
 
-    // Already affordable ⇒ no gap, full progress.
     const rich = memoryFeatures(
       obs({ player: playerFixture({ credits: 5000 }) }),
       mem,
@@ -307,14 +290,11 @@ describe("memoryFeatures (the belief vector)", () => {
   });
 
   it("sets slot 6 to 1 when holding cargo whose sell planet is in another system", () => {
-    // twoPlanetBook: buy@p1 (100), sell@p2 (160); default system has no planets
     const mem = twoPlanetBook();
     mem.inventoryLots = [{ good: ResourceType.METALS, qty: 3, buyPrice: 100 }];
 
-    // Sell planet (p2) is not in the current system → holdingForOtherSystem = 1
     expect(memoryFeatures(obs(), mem)[6]).toBe(1);
 
-    // When the sell planet IS present in the current system → 0
     const inSystem = obs({
       system: {
         id: "sysA",
@@ -326,17 +306,11 @@ describe("memoryFeatures (the belief vector)", () => {
     });
     expect(memoryFeatures(inSystem, mem)[6]).toBe(0);
 
-    // No inventory lots → 0 even though sell planet is elsewhere
     const noLots = twoPlanetBook();
     expect(memoryFeatures(obs(), noLots)[6]).toBe(0);
   });
 
   it("sets slot 6 to 1 when holding cargo but NO sell planet is known yet (early-game cycle-breaker)", () => {
-    // Only one planet recorded in the price book ⇒ bestKnownMargin can't find a
-    // cross-planet pair, so best.sellPlanet stays null. The BC teacher
-    // (MemoryHeuristicPolicy's holdingForOtherSystem) still treats this as
-    // "go warp to find a sell destination" — slot 6 must agree, or the net is
-    // trained against the very feature meant to explain that "warp" label.
     const mem = createMemory();
     mem.priceBook.set("p1", new Map([[ResourceType.METALS, rec(100, 80)]]));
     mem.inventoryLots = [{ good: ResourceType.METALS, qty: 3, buyPrice: 100 }];
@@ -357,10 +331,7 @@ describe("memoryFeatures (the belief vector)", () => {
       }),
       mem,
     );
-    // slot 0 = best margin fraction (160-100)/160 = 0.375; distinct from slot 2 so
-    // a swap of the two would fail this assertion.
     expect(v[0]).toBeCloseTo(0.375);
-    // slot 2 = profitIfSoldHere / CREDIT_SCALE = (160-100)*5 / 10000 = 0.03.
     expect(v[2]).toBeCloseTo(0.03);
   });
 });
@@ -377,8 +348,6 @@ describe("featurize (observation + memory blocks)", () => {
     expect(FEATURE_LENGTH).toBe(
       OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH + CAMPAIGN_FEATURE_LENGTH,
     );
-    // The memory block sits right after the obs block (the campaign block, Task
-    // 10, follows it) — so the [OBS, OBS+MEMORY) slice equals the standalone block.
     expect(
       full.slice(
         OBS_FEATURE_LENGTH,
@@ -406,14 +375,6 @@ describe("featurize (observation + memory blocks)", () => {
   });
 
   it("pins the concrete feature widths (lockstep with the trained weights JSON)", () => {
-    // These literals are a contract: the trained `*.weights.json` input width and
-    // `tools/ai/train_player.py`'s NUM_ACTIONS must match. Changing a width here is
-    // a deliberate act that forces a retrain + re-export — so pin the numbers, not
-    // just their sum (which is tautological). Bumped 16/7/23 → 30/20/50 by the
-    // Task 5 widening (20260701-letsplay-action-expansion-and-neural-scale.md),
-    // then 30/20/50 → 30/20/4/54 by the three-year-campaign Task 10 action-space
-    // expansion (appended a 4-wide campaign block + 2 output actions) —
-    // deliberately updated in lockstep with that widening, not a weakened pin.
     expect(OBS_FEATURE_LENGTH).toBe(30);
     expect(MEMORY_FEATURE_LENGTH).toBe(20);
     expect(CAMPAIGN_FEATURE_LENGTH).toBe(4);

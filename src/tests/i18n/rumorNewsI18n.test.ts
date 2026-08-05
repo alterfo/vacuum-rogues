@@ -1,17 +1,3 @@
-/**
- * Task 5 (`docs/plans/20260626-playtest-bugs-pause-help-infocenter-i18n.md`):
- * the Info Center rumor + news **text generators** now resolve through i18n, so
- * a rumor/news line renders in English under `language=en` and Russian under
- * `ru`, with params (system names, commodity, percent) interpolated correctly.
- *
- * Pins:
- *   • `describeRumor` / `resourceLabelRu` / `rumorMarginMasked` render per the
- *     active language (RU default stays byte-identical, EN is translated),
- *   • the rumor-panel header/empty + the RumorDirector "deal ended" line localize,
- *   • the news-feed re-mask regex stays language-robust (a margin baked under
- *     either language is still re-maskable), and
- *   • every new `rumor.*` / `news.*` key exists in BOTH catalogs (parity).
- */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createRumor,
@@ -36,7 +22,6 @@ function setLang(lang: "ru" | "en"): void {
   }
 }
 
-/** Minimal galaxy stub: describeRumor only reads systems[].id + .name. */
 function makeGalaxy(systems: { id: string; name: string }[]): Galaxy {
   return { systems } as unknown as Galaxy;
 }
@@ -110,9 +95,6 @@ describe("rumor/news i18n", () => {
   });
 
   it("the RumorDirector 'deal ended' line localizes (the exact t() call it emits)", () => {
-    // RumorDirector.updateRumors emits the expired line as
-    //   t("rumor.expired", { resource: resourceLabelRu(res), from, to })
-    // — pin that resolution in both tongues so the EN expired-news path is covered.
     setLang("ru");
     expect(
       t("rumor.expired", {
@@ -139,7 +121,6 @@ describe("rumor/news i18n", () => {
       { id: "S1", name: "Sol" },
       { id: "S2", name: "Vega" },
     ]);
-    // Both endpoints unknown → the player object reports nothing visited.
     const player = { hasVisited: () => false } as unknown as Player;
     const event = {
       type: "TRADE_OPPORTUNITY",
@@ -147,14 +128,12 @@ describe("rumor/news i18n", () => {
       toSystemId: "S2",
     };
 
-    // A description baked under RU, rendered under EN, is still masked.
     setLang("en");
     const ruBaked = "Везите Металлы из Sol в Vega: маржа ~70%";
     const out = maskTradeNewsMargin(ruBaked, event, galaxy, player);
     expect(out).toContain("margin ~?%");
     expect(out).not.toContain("~70%");
 
-    // And an EN-baked description is masked under EN too.
     const enBaked = "Ship Metals from Sol to Vega: margin ~70%";
     expect(maskTradeNewsMargin(enBaked, event, galaxy, player)).toBe(
       "Ship Metals from Sol to Vega: margin ~?%",

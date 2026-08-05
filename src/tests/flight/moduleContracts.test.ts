@@ -1,30 +1,9 @@
-/**
- * Task 12 (SOLID refactor): integration contract tests for the in-flight
- * FlightModules extracted from SpaceFlightScene.
- *
- * Each module is driven through its full lifecycle — construct → initialize() →
- * update(1/60, 100) → destroy() — and must (a) never throw and (b) leak no
- * display objects on the shared game layer after destroy(). A second guard
- * asserts SpaceFlightScene.ts does not grow back into a god object.
- *
- * Every module is exercised against a REAL PixiJS scene graph (real Container /
- * Graphics / Text — no WebGL is needed to construct those in jsdom), so the leak
- * assertion checks the actual scene graph rather than a stubbed counter. The two
- * modules that build heavyweight, texture-backed sub-objects (PlanetManager →
- * PlanetSprite / PlanetInfoPanel) are given lightweight stand-ins whose
- * `container` is a real PixiJS Container, so mount/teardown still flows through
- * the real game layer.
- */
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Container } from "pixi.js";
 
-// PlanetSprite / PlanetInfoPanel need WebGL textures in real play. Stub them with
-// lightweight stand-ins whose `container` is a real PixiJS Container so the
-// manager's mount (gameLayer.addChild) and teardown (sprite.destroy() removes
-// itself from its parent) exercise the real scene graph and the leak check.
 vi.mock("@/presentation/PlanetSprite", async () => {
   const { Container: PixiContainer, Graphics } = await import("pixi.js");
   return {
@@ -87,7 +66,6 @@ import { NpcShip } from "@/domain/NpcShip";
 import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 
-/** A present (in-system, non-travelling) NPC ship for the manager to spawn. */
 function makeNpc(id: string): NpcShip {
   return new NpcShip({
     id,
@@ -114,7 +92,6 @@ function makePlanet(id: string): Planet {
   return { id, name: id.toUpperCase() } as unknown as Planet;
 }
 
-/** A Renderer stand-in carrying real PixiJS layers and a fixed screen size. */
 function makeRenderer(
   gameLayer: Container,
   uiLayer: Container,
@@ -133,13 +110,6 @@ interface Harness {
   gameLayer: Container;
 }
 
-/**
- * One factory per extracted FlightModule. Each builds the module on a fresh set
- * of real PixiJS layers and returns the module plus the game layer the leak
- * check inspects. Modules that mount on the UI layer / stage instead of the game
- * layer (background, HUD) still satisfy the check — they simply never touch the
- * game layer, so it stays empty.
- */
 const MODULE_FACTORIES: { name: string; make: () => Harness }[] = [
   {
     name: "SpaceBackgroundLayer",
@@ -148,8 +118,6 @@ const MODULE_FACTORIES: { name: string; make: () => Harness }[] = [
       const uiLayer = new Container();
       const gameLayer = new Container();
       const skyContainer = new Container();
-      // The mid-ground container is inserted just above the sky, so the sky must
-      // already live in the stage for getChildIndex() to resolve.
       stage.addChild(skyContainer);
       const renderer = makeRenderer(gameLayer, uiLayer, stage);
       const camera: BackgroundCamera = { panX: 0, panY: 0, zoom: 1 };
@@ -199,7 +167,6 @@ const MODULE_FACTORIES: { name: string; make: () => Harness }[] = [
         new Container(),
         new Container(),
       );
-      // Null galaxy → the boundary ring is drawn, no orbit circles.
       const module = new OrbitRenderer(renderer, gameLayer, null, "sys_a");
       return { module, gameLayer };
     },
@@ -336,12 +303,6 @@ describe.each(MODULE_FACTORIES)("FlightModule contract: $name", ({ make }) => {
 });
 
 describe("SpaceFlightScene size guard", () => {
-  // The plan's original target was < 900 lines, but Task 11 established that the
-  // remaining genuine Controller responsibilities (initialize wiring, updateShip
-  // turn logic, route planning, performWarp, input handlers, landing/docking)
-  // floor the file at ~1800 lines in this heavily-commented codebase. This guard
-  // is right-sized per Task 11's note: it fails if the god object grows back,
-  // while tolerating the realistic Controller floor (1801 lines at extraction).
   const MAX_LINES = 1900;
 
   it(`keeps SpaceFlightScene.ts under ${MAX_LINES} lines (was 5200+)`, () => {
@@ -350,7 +311,6 @@ describe("SpaceFlightScene size guard", () => {
     const lineCount = readFileSync(scenePath, "utf8").split("\n").length;
 
     expect(lineCount).toBeLessThan(MAX_LINES);
-    // Sanity: it really did shrink far below the original god object.
     expect(lineCount).toBeLessThan(5200);
   });
 });

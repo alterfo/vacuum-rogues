@@ -66,7 +66,6 @@ describe("QuestGenerator ↔ QuestManager integration", () => {
     expect(quest).not.toBeNull();
     if (!quest) return;
 
-    // Drive the objectives via the manager's existing event matching.
     const collect = delivery.template.objectives.find(
       (o) => o.type === "COLLECT_ITEM",
     )!;
@@ -107,7 +106,6 @@ describe("QuestGenerator ↔ QuestManager integration", () => {
     const qm = new QuestManager();
     for (const q of board) qm.acceptQuestFromTemplate(q.template, "A_p1", 0);
 
-    // Every routine target is system B's planet → it shows up as a nav marker.
     const locations = qm.getActiveQuestLocations();
     expect(locations).toContain("B_p1");
   });

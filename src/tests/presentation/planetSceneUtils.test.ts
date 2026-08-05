@@ -1,7 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 
-// PlanetScene imports pixi.js at module load; mock it so the pure helpers can be
-// imported without a real renderer.
 vi.mock("pixi.js", () => ({
   Container: vi.fn(),
   Graphics: vi.fn(),
@@ -26,7 +24,6 @@ describe("clampPanoramaX (Task 6 panorama pan)", () => {
   });
 
   it("clamps a wide panorama to [screenWidth - panoramaWidth, 0]", () => {
-    // 4096px panorama on a 1280px screen → 2816px of pan range.
     expect(clampPanoramaX(0, 4096, 1280)).toBe(0); // left edge
     expect(clampPanoramaX(100, 4096, 1280)).toBe(0); // cannot pan past 0
     expect(clampPanoramaX(-5000, 4096, 1280)).toBe(1280 - 4096); // right edge
@@ -56,8 +53,6 @@ describe("skyGradientColors (Task 6 fallback sky)", () => {
 });
 
 describe("computePlanetMenuLayout (playtest2 ⑥ — menu must fit on-screen)", () => {
-  // statY at 1280×720 with the default planet/info/stat block ≈ 466 (see
-  // createUI). The eighth button «Взлёт» used to overflow below y=720.
   const CONTENT_BOTTOM = 466;
 
   const cases: Array<{ h: number; count: number }> = [
@@ -76,12 +71,9 @@ describe("computePlanetMenuLayout (playtest2 ⑥ — menu must fit on-screen)", 
         CONTENT_BOTTOM,
         count,
       );
-      // The last button's bottom edge must stay on-screen.
       const lastBottom = btnStartY + (count - 1) * btnStep + btnH;
       expect(lastBottom).toBeLessThanOrEqual(h);
-      // Consecutive buttons must not overlap (overlap steals clicks).
       expect(btnH).toBeLessThanOrEqual(btnStep);
-      // Buttons stay legible.
       expect(btnH).toBeGreaterThanOrEqual(20);
     });
   }
@@ -92,8 +84,6 @@ describe("computePlanetMenuLayout (playtest2 ⑥ — menu must fit on-screen)", 
     expect(btnH).toBeLessThanOrEqual(32);
   });
 
-  // Below ~700px the per-button step drops under the 20px legibility floor; the
-  // height must still never exceed the step or buttons overlap and steal clicks.
   const shortCases: Array<{ h: number; count: number }> = [
     { h: 690, count: 9 },
     { h: 660, count: 8 },
@@ -106,9 +96,7 @@ describe("computePlanetMenuLayout (playtest2 ⑥ — menu must fit on-screen)", 
         CONTENT_BOTTOM,
         count,
       );
-      // Hard invariant: the button height never exceeds its step (no overlap).
       expect(btnH).toBeLessThanOrEqual(btnStep);
-      // The last button's bottom edge still stays on-screen.
       const lastBottom = btnStartY + (count - 1) * btnStep + btnH;
       expect(lastBottom).toBeLessThanOrEqual(h);
     });
@@ -118,9 +106,6 @@ describe("computePlanetMenuLayout (playtest2 ⑥ — menu must fit on-screen)", 
 describe("computePlanetMenuLayout danger-row clearance (UX finding #11)", () => {
   const CONTENT_BOTTOM = 466;
 
-  // Same screen-height/button-count matrix the fit tests above cover, now with
-  // the danger-row count the production caller passes (1 = «Взлёт» only,
-  // 2 = «Взлёт» + «Взятка» when hostile).
   const cases: Array<{ h: number; count: number; dangerRows: number }> = [
     { h: 720, count: 8, dangerRows: 1 },
     { h: 720, count: 9, dangerRows: 2 },
@@ -138,19 +123,12 @@ describe("computePlanetMenuLayout danger-row clearance (UX finding #11)", () => 
         count,
         dangerRows,
       );
-      // A positive gap is reserved before each danger row.
       expect(dangerGap).toBeGreaterThan(0);
-      // The gap before the danger row is at least as large as the routine
-      // between-button gap (btnStep - btnH) — the last rows are no longer the
-      // most-cramped in the stack.
       const routineGap = btnStep - btnH;
       expect(dangerGap).toBeGreaterThanOrEqual(routineGap);
-      // The real last button (bottom-most danger row) still fits on-screen once
-      // every danger gap is applied.
       const lastBottom =
         btnStartY + (count - 1) * btnStep + dangerRows * dangerGap + btnH;
       expect(lastBottom).toBeLessThanOrEqual(h);
-      // No overlap between consecutive buttons.
       expect(btnH).toBeLessThanOrEqual(btnStep);
     });
   }
@@ -158,7 +136,6 @@ describe("computePlanetMenuLayout danger-row clearance (UX finding #11)", () => 
   it("reserves no danger gap when there are no danger rows (unchanged layout)", () => {
     const withRows = computePlanetMenuLayout(720, CONTENT_BOTTOM, 8, 0);
     expect(withRows.dangerGap).toBe(0);
-    // dangerRows omitted defaults to 0, matching the legacy 3-arg call.
     const legacy = computePlanetMenuLayout(720, CONTENT_BOTTOM, 8);
     expect(legacy.btnStep).toBe(withRows.btnStep);
     expect(legacy.btnH).toBe(withRows.btnH);
@@ -202,10 +179,8 @@ describe("planetInfoPanelLines (UX finding #4 — economy/type shown once)", () 
       .filter((l): l is string => l != null)
       .filter((l) => l.includes(typeWord)).length;
 
-    // The planet-type word appears exactly once across the whole card.
     expect(occurrences).toBe(1);
     expect(lines.subtitle).toContain(typeWord);
-    // Line 1 is the controlling faction alone — the old "type • faction" is gone.
     expect(lines.faction).toBe("Синдикат");
     expect(lines.faction).not.toContain(typeWord);
     expect(lines.faction).not.toContain("•");

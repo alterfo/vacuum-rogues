@@ -28,46 +28,25 @@ import {
 import type { FlightModule } from "./FlightModule";
 import { reducedMotion } from "../ui/reducedMotion";
 
-/** Per-comet hard cap on simultaneously-live dust motes (FPS bound). A denser
- * stream needs a bigger pool; 96 stays well within the ParticleContainer/
- * additive-overdraw budget (2 comets ⇒ ≤192 small batched sprites). */
 const MAX_TAIL_PARTICLES = 96;
-/** Base scale of the 64 px dust sprite (×{@link moteScale} per mote). */
 const TAIL_SPRITE_SCALE = 1.15;
-/** Global tail opacity multiplier (additive, on top of per-mote fade) — the
- * denser overlapping motes still accumulate, but each stays soft. */
 const TAIL_ALPHA = 0.5;
-/** Head→tail colour grade: a warm white coma fading to a cool blue tail tip. */
 const TAIL_HEAD_TINT = 0xfff0cf;
 const TAIL_TIP_TINT = 0x8fbcff;
-/** Outer coma halo: cometHeadTexture is 256 px (r 128); 0.72 → a ~92 px glow. */
 const HEAD_SCALE = 0.72;
-/** Bright inner nucleus core (smaller, near-white, sits inside the coma halo). */
 const CORE_SCALE = 0.26;
-/** Icy white-blue coma + warm-white core tints. */
 const HEAD_TINT = 0xd6ecff;
 const CORE_TINT = 0xfff4e0;
 const TAIL_TINT = 0xcfe4ff;
-/** Distance band (world px from the star) over which the comet fades in/out. */
 const TAIL_FULL = 1500;
 const TAIL_FADE = 2200;
 
-/**
- * Asteroid rock sprite: the baked 128 px {@link rockTexture} scaled down to a
- * ~36–80 px boulder, with per-asteroid scale variation so the field isn't
- * uniform.
- */
 const ROCK_BASE_SCALE = 0.28;
 const ROCK_SCALE_VAR = 0.34;
-/** Subtle per-rock tints (warm/cool stone hues) breaking the uniform grey. */
 const ROCK_TINTS = [0xffffff, 0xe8dccb, 0xcfc9bf, 0xd9c7ad, 0xbfc2c0, 0xe0d2bd];
 
-/** A single drifting rock or flyby comet in the foreground asteroid field. */
 interface AsteroidMote {
   graphics: Graphics;
-  // Baked, shaded rock sprite (asteroids only; null when no 2D canvas is
-  // available — jsdom / unit tests — so the asteroid falls back to its drawn
-  // polygon on `graphics` instead of throwing).
   rock: Sprite | null;
   x: number;
   y: number;
@@ -75,37 +54,18 @@ interface AsteroidMote {
   vy: number;
   spin: number; // rad/ms (asteroids only)
   comet: boolean;
-  // Hyperbolic flyby state — comets only. Unlike the old closed ellipse, a comet
-  // follows an OPEN hyperbola (e > 1): it enters at the field edge, sweeps past
-  // the star once, and leaves; a fresh flyby is built each pass (never periodic).
   flyby: CometFlyby | null; // hyperbola params + entry/exit sweep range
   theta: number; // current true anomaly along the sweep (rad), thetaStart→thetaEnd
   thetaSpeed: number; // rad/ms sweep rate (always advances toward thetaEnd)
   cometCooldown: number; // ms left offscreen before a fresh comet flies in (0 = active)
-  // Particle-comet visuals (comets only; null when no 2D canvas is available —
-  // jsdom / unit tests — so the module degrades without throwing).
   head: Sprite | null; // outer coma halo (cometHeadTexture sprite)
   core: Sprite | null; // bright inner nucleus core (cometHeadTexture sprite)
   tail: CometDustTail | null; // pure dust-tail emitter (PixiJS-free)
   particles: Particle[]; // pooled visuals, mirrored 1:1 with tail.slots
 }
 
-/**
- * Owns the occasional foreground asteroids/comets drifting through the system
- * (US-070 #1). They live in **world space** (the star's frame) so they pan and
- * zoom with the world rather than sliding across the screen as the ship moves —
- * they belong to the system, not the camera. A high zIndex keeps them reading
- * in front of the ship/planets ("foreground" flybys). The field stays sparse:
- * each one respawns at the system edge once it drifts past it.
- *
- * The field is centred on the system's star, which sits at the screen centre in
- * world coordinates (the same centre {@link StarRenderer} derives), so the
- * module computes its own centre from the renderer rather than coupling to the
- * star module.
- */
 export class AsteroidBelt implements FlightModule {
   private readonly gameLayer: Container;
-  /** World position of the star centre (the field is centred on the star). */
   private readonly centerX: number;
   private readonly centerY: number;
 
@@ -118,20 +78,11 @@ export class AsteroidBelt implements FlightModule {
     this.centerY = renderer.app.screen.height / 2;
   }
 
-  // ---------------------------------------------------------------------------
-  // FlightModule lifecycle
-  // ---------------------------------------------------------------------------
-
   initialize(): void {
     this.createAsteroids();
   }
 
   update(deltaTime: number, _bgElapsed: number): void {
-    // Accessibility: reduced motion (player setting OR OS `prefers-reduced-motion`)
-    // freezes the *autonomous* foreground motion — asteroid drift/spin and comet
-    // flybys (heavy dust-tail particles). The field's camera-driven parallax is
-    // the parent gameLayer's transform, so panning still reads; only the idle
-    // motion the preference targets stops. Mirrors `SpaceBackgroundLayer.update`.
     if (reducedMotion()) return;
     this.updateAsteroids(deltaTime);
   }
@@ -149,23 +100,10 @@ export class AsteroidBelt implements FlightModule {
     this.asteroids = [];
   }
 
-  /** Number of asteroids/comets currently in the field (test/inspection hook). */
   get count(): number {
     return this.asteroids.length;
   }
 
-  // ---------------------------------------------------------------------------
-  // Creation + drawing
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Spawn a few asteroids/comets that drift through the system (US-070 #1).
-   * They live in **world space** (the star's frame) so they pan and zoom with the
-   * world rather than sliding across the screen as the ship moves — they belong
-   * to the system, not the camera. A high zIndex keeps them reading in front of
-   * the ship/planets ("foreground" flybys). The field stays sparse: each one
-   * respawns at the system edge once it drifts past it.
-   */
   private createAsteroids(): void {
     this.asteroidContainer = new Container();
     this.asteroidContainer.eventMode = "none";
@@ -200,18 +138,9 @@ export class AsteroidBelt implements FlightModule {
       this.respawnAsteroid(a, true);
       this.asteroids.push(a);
     }
-    // World-space (moves with the system), above the ship/planets.
     this.gameLayer.addChild(this.asteroidContainer);
   }
 
-  /**
-   * Build the particle-comet visuals (head glow sprite + dust-tail emitter +
-   * pooled particle layer). Soft edges come from the baked `cometHeadTexture` /
-   * `dustParticleTexture` alpha — NOT a per-frame BlurFilter
-   * (`feedback-no-blur-filters-flight`). All three are null when no 2D canvas is
-   * available (jsdom / unit tests); the comet then falls back to a small drawn
-   * nucleus and the tail is simply absent — no throw.
-   */
   private setupCometVisuals(a: AsteroidMote): void {
     const container = this.asteroidContainer;
     if (!container) return;
@@ -219,7 +148,6 @@ export class AsteroidBelt implements FlightModule {
     const dustTex = dustParticleTexture();
     if (dustTex) {
       const layer = new ParticleContainer({
-        // x/y, scale (vertex) and alpha (color) all change per frame.
         dynamicProperties: { position: true, vertex: true, color: true },
       });
       layer.blendMode = "add";
@@ -237,14 +165,9 @@ export class AsteroidBelt implements FlightModule {
         layer.addParticle(part);
         a.particles.push(part);
       }
-      // Tail below the head: insert at the back of the field container.
       container.addChildAt(layer, 0);
     }
 
-    // Coma: two stacked additive glow sprites of the baked cometHeadTexture — a
-    // wide icy halo with a smaller, brighter near-white nucleus core inside it —
-    // give a real comet-head read (sharp pinpoint core + asymmetric coma, not
-    // another generic soft circle) with no per-frame BlurFilter.
     const headTex = cometHeadTexture();
     if (headTex) {
       const head = new Sprite(headTex);
@@ -267,14 +190,6 @@ export class AsteroidBelt implements FlightModule {
     }
   }
 
-  /**
-   * Build the baked rock sprite for a drifting asteroid (natural-rock rework,
-   * 2026-06-20). Replaces the flat `poly`+crater Graphics with a shaded
-   * {@link rockTexture} Sprite — its 3D read comes from baked top-left lighting,
-   * NOT a per-frame redraw. Per-asteroid scale/tint/rotation variation breaks
-   * the uniform look. `rockTexture` returns null with no 2D canvas (jsdom): the
-   * asteroid then keeps its drawn-polygon fallback (see drawAsteroid) — no throw.
-   */
   private setupAsteroidVisuals(a: AsteroidMote): void {
     const container = this.asteroidContainer;
     if (!container) return;
@@ -290,15 +205,10 @@ export class AsteroidBelt implements FlightModule {
     container.addChild(sprite);
   }
 
-  /** Draw an irregular grey rock (or the comet's fallback nucleus). */
   private drawAsteroid(a: AsteroidMote): void {
     const g = a.graphics;
     g.clear();
     if (a.comet) {
-      // The comet's glow + dust tail are particle/sprite-based (see
-      // setupCometVisuals + updateAsteroids). When no baked head texture is
-      // available (jsdom), draw a minimal icy nucleus so it still reads — no
-      // flat wedge/circle tail.
       if (!a.head) {
         const r = 13 + Math.random() * 5;
         g.circle(0, 0, r * 0.9).fill({ color: 0xcce4ff, alpha: 0.9 });
@@ -306,8 +216,6 @@ export class AsteroidBelt implements FlightModule {
       }
       return;
     }
-    // A baked rock sprite carries the visual (see setupAsteroidVisuals); the
-    // Graphics stays empty. Only the no-canvas (jsdom) fallback draws a polygon.
     if (a.rock) return;
     {
       const r = 9 + Math.random() * 14;
@@ -320,7 +228,6 @@ export class AsteroidBelt implements FlightModule {
       }
       g.poly(pts).fill({ color: 0x6b6256, alpha: 0.85 });
       g.poly(pts).stroke({ width: 1, color: 0x2a251f, alpha: 0.6 });
-      // a couple of craters
       g.circle(-r * 0.2, -r * 0.1, r * 0.22).fill({
         color: 0x4a443b,
         alpha: 0.7,
@@ -332,34 +239,21 @@ export class AsteroidBelt implements FlightModule {
     }
   }
 
-  /** Radius of the asteroid field around the star (world units). */
   private asteroidFieldRadius(): number {
     return SYSTEM_GEOMETRY.boundaryRadius * 1.1;
   }
 
-  /**
-   * Place an asteroid in world space: it enters at the system edge and drifts
-   * across toward the far side (passing near the star). `initial` instead
-   * scatters it somewhere inside the field so the first batch isn't all bunched
-   * at the rim.
-   */
   private respawnAsteroid(a: AsteroidMote, initial = false): void {
     const cx = this.centerX;
     const cy = this.centerY;
     const R = this.asteroidFieldRadius();
 
     if (a.comet) {
-      // Open hyperbolic flyby (e > 1): the comet enters at the field edge,
-      // sweeps once past the star (perihelion inside the field), and leaves —
-      // never a closed orbit. A fresh flyby is built each pass.
       const flyby = buildCometFlyby(cx, cy, R);
       a.flyby = flyby;
       const sweep = flyby.thetaEnd - flyby.thetaStart;
-      // Cross the whole entry→exit sweep over ~45–90 s (gentle, like the old orbit).
       a.thetaSpeed = sweep / (45000 + Math.random() * 45000);
       a.cometCooldown = 0;
-      // An initial (scene-start) comet starts somewhere mid-sweep so the first
-      // one isn't pinned to the rim; a respawn enters cleanly at the edge.
       a.theta = initial
         ? flyby.thetaStart + Math.random() * sweep
         : flyby.thetaStart;
@@ -389,8 +283,6 @@ export class AsteroidBelt implements FlightModule {
       a.rock.y = a.y;
     }
     if (a.comet) {
-      // A fresh flyby starts with an empty tail (old motes belonged to the prior
-      // pass, possibly across the field) and the head shown at the entry point.
       a.tail?.reset();
       this.hideTail(a);
       if (a.head) {
@@ -406,12 +298,10 @@ export class AsteroidBelt implements FlightModule {
     }
   }
 
-  /** Push every pooled dust particle to fully transparent (comet hidden). */
   private hideTail(a: AsteroidMote): void {
     for (const part of a.particles) part.alpha = 0;
   }
 
-  /** Mirror the pure emitter's live motes onto the pooled PixiJS particles. */
   private syncTail(a: AsteroidMote, fade: number): void {
     if (!a.tail) return;
     const slots = a.tail.slots;
@@ -426,8 +316,6 @@ export class AsteroidBelt implements FlightModule {
         part.scaleX = sc;
         part.scaleY = sc;
         part.alpha = moteAlpha(m) * fade * TAIL_ALPHA;
-        // Grade the colour along the trail: warm/white near the coma, cooling
-        // to blue toward the tapering tail tip.
         part.tint = lerpHex(TAIL_HEAD_TINT, TAIL_TIP_TINT, moteLifeFraction(m));
       } else {
         part.alpha = 0;
@@ -435,7 +323,6 @@ export class AsteroidBelt implements FlightModule {
     }
   }
 
-  /** Drift + spin the asteroids in world space, respawning past the field edge. */
   private updateAsteroids(deltaTime: number): void {
     if (this.asteroids.length === 0) return;
     const cx = this.centerX;
@@ -444,7 +331,6 @@ export class AsteroidBelt implements FlightModule {
     const limitSq = limit * limit;
     for (const a of this.asteroids) {
       if (a.comet) {
-        // Offscreen between passes: a fresh comet flies in once cooldown elapses.
         if (a.cometCooldown > 0) {
           a.cometCooldown -= deltaTime;
           if (a.cometCooldown <= 0) {
@@ -454,10 +340,8 @@ export class AsteroidBelt implements FlightModule {
           }
           continue;
         }
-        // Advance along the open hyperbola (Kepler-lite: uniform sweep rate).
         a.theta += a.thetaSpeed * deltaTime;
         if (!a.flyby || a.theta >= a.flyby.thetaEnd) {
-          // Swept past the exit edge: the comet leaves; a fresh one returns later.
           a.graphics.visible = false;
           if (a.head) a.head.visible = false;
           if (a.core) a.core.visible = false;
@@ -469,26 +353,20 @@ export class AsteroidBelt implements FlightModule {
         const p = hyperbolaPoint(a.flyby.params, a.theta);
         a.x = p.x;
         a.y = p.y;
-        // Anti-sunward unit vector (solar wind blows the dust away from the star).
         const sunDx = a.x - cx;
         const sunDy = a.y - cy;
         const dist = Math.hypot(sunDx, sunDy) || 1;
         const ux = sunDx / dist;
         const uy = sunDy / dist;
-        // Head/tail visible only in the inner system (orbit 2-3 zone). Fully
-        // visible inside 1500 px, faded out by 2200 px.
         const fade =
           dist <= TAIL_FULL
             ? 1
             : dist >= TAIL_FADE
               ? 0
               : 1 - (dist - TAIL_FULL) / (TAIL_FADE - TAIL_FULL);
-        // Glowing head follows the hyperbola (fallback nucleus on graphics too).
         a.graphics.x = a.x;
         a.graphics.y = a.y;
         a.graphics.alpha = fade;
-        // cometHeadTexture bakes its coma bulge offset along local +x, so rotate
-        // the sprite to point that bulge anti-sunward (same direction as the tail).
         const comaRotation = Math.atan2(uy, ux);
         if (a.head) {
           a.head.x = a.x;
@@ -500,12 +378,8 @@ export class AsteroidBelt implements FlightModule {
           a.core.x = a.x;
           a.core.y = a.y;
           a.core.rotation = comaRotation;
-          // The hot nucleus reads brighter than the surrounding halo.
           a.core.alpha = fade;
         }
-        // Dust tail: emit at the head while visible; motes drift anti-sunward in
-        // world space (the ParticleContainer sits at the field origin, so the
-        // trail is left behind as the head sweeps on).
         if (a.tail) {
           a.tail.update(deltaTime, a.x, a.y, ux, uy, fade > 0.04);
           this.syncTail(a, fade);
@@ -517,7 +391,6 @@ export class AsteroidBelt implements FlightModule {
         a.graphics.y = a.y;
         a.graphics.rotation += a.spin * deltaTime;
         if (a.rock) {
-          // Tumble: the baked rock sprite spins in world space as it drifts.
           a.rock.x = a.x;
           a.rock.y = a.y;
           a.rock.rotation += a.spin * deltaTime;

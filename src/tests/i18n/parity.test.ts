@@ -1,11 +1,3 @@
-/**
- * Dictionary parity guard (`docs/plans/20260625-localization-i18n.md`, Task 2).
- *
- * The RU and EN dictionaries must stay in lockstep — every key present in one
- * MUST exist in the other, so a migrated string is never missing a translation
- * (which would silently fall back to the other language or the bare key). This
- * test is the gate that fails the moment the two key sets diverge.
- */
 import { describe, expect, it } from "vitest";
 import { ru } from "@/i18n/ru";
 import { en } from "@/i18n/en";
@@ -26,7 +18,6 @@ describe("i18n dictionary parity (ru ⇄ en)", () => {
       missingInRu,
       `keys missing from ru.ts: ${missingInRu.join(", ")}`,
     ).toEqual([]);
-    // Stronger single assertion: the exact same sorted key arrays.
     expect(enKeys).toEqual(ruKeys);
   });
 
@@ -53,9 +44,6 @@ describe("i18n dictionary parity (ru ⇄ en)", () => {
   });
 
   it("each key's {param} placeholders are identical across ru and en", () => {
-    // A renamed/dropped placeholder in one language (e.g. ru has `{price}` but en
-    // typos it `{prise}`) passes the key-set + non-empty guards yet renders an
-    // un-interpolated `{price}` at runtime in that language. Guard the token sets.
     const tokens = (s: string): string =>
       [...s.matchAll(/\{(\w+)\}/g)]
         .map((m) => m[1])
@@ -76,8 +64,6 @@ describe("i18n dictionary parity (ru ⇄ en)", () => {
   });
 
   it("EN values differ from RU for at least the visibly-translated keys", () => {
-    // A migrated key like `settings.title` should NOT be left as the RU value
-    // in en.ts (the most common parity-passing-but-untranslated mistake).
     expect(en["settings.title"]).not.toBe(ru["settings.title"]);
     expect(en["common.back"]).not.toBe(ru["common.back"]);
   });

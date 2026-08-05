@@ -1,15 +1,3 @@
-/**
- * Natural comet/asteroid rework (2026-06-20) — Task 2.
- *
- * The flat `poly`-wedge comet tail is replaced by a soft PARTICLE dust tail.
- * Its motion is owned by the pure, PixiJS-free `CometDustTail` emitter so the
- * spawn/age/drift/prune/bound logic is unit-tested standalone (the renderer in
- * `AsteroidBelt` only mirrors each pool slot onto a PixiJS `Particle`).
- *
- * Verified here: motes spawn AT the head, drift ANTI-SUNWARD, fade + shrink over
- * their lifetime, are pruned (recycled) when spent, and the live count NEVER
- * exceeds the pool bound.
- */
 import { describe, it, expect } from "vitest";
 import {
   CometDustTail,
@@ -18,7 +6,6 @@ import {
   type DustMote,
 } from "@/presentation/flight/cometDustTail";
 
-/** Deterministic rng → no spread, mid-band lifetime/speed/size. */
 const half = (): number => 0.5;
 
 function mote(over: Partial<DustMote> = {}): DustMote {
@@ -43,7 +30,6 @@ describe("CometDustTail (pure dust-tail emitter)", () => {
     tail.update(50, 100, 200, 1, 0, true);
 
     expect(tail.count).toBeGreaterThan(0);
-    // A freshly-spawned mote sits exactly at the head (age 0, no drift yet).
     const fresh = tail.slots.find((m) => m.active && m.age === 0);
     expect(fresh).toBeDefined();
     expect(fresh!.x).toBe(100);
@@ -58,12 +44,10 @@ describe("CometDustTail (pure dust-tail emitter)", () => {
 
   it("drifts motes ANTI-SUNWARD over subsequent frames", () => {
     const tail = new CometDustTail(64, half);
-    // Anti-sunward unit vector = +x.
     tail.spawn(0, 0, 1, 0);
     const before = tail.slots.find((m) => m.active)!;
     expect(before.x).toBe(0);
 
-    // Advance without emitting so we observe the existing mote drift.
     tail.update(100, 0, 0, 1, 0, false);
     tail.update(100, 0, 0, 1, 0, false);
 
@@ -77,12 +61,10 @@ describe("CometDustTail (pure dust-tail emitter)", () => {
     const mid = mote({ age: 500, life: 1000 });
     const spent = mote({ age: 1000, life: 1000 });
 
-    // Alpha ramps 1 → 0.
     expect(moteAlpha(young)).toBeCloseTo(1, 6);
     expect(moteAlpha(mid)).toBeCloseTo(0.5, 6);
     expect(moteAlpha(spent)).toBeCloseTo(0, 6);
 
-    // Scale shrinks monotonically.
     expect(moteScale(young)).toBeGreaterThan(moteScale(mid));
     expect(moteScale(mid)).toBeGreaterThan(moteScale(spent));
   });
@@ -102,7 +84,6 @@ describe("CometDustTail (pure dust-tail emitter)", () => {
       tail.update(16, 0, 0, 1, 0, true);
       expect(tail.count).toBeLessThanOrEqual(8);
     }
-    // It does saturate the pool (emission outpaces expiry).
     expect(tail.count).toBe(8);
   });
 
@@ -131,8 +112,6 @@ describe("CometDustTail (pure dust-tail emitter)", () => {
     const m = tail.slots.find((s) => s.active)!;
     const { x, y, age } = m;
 
-    // A paused frame still calls update with dt = 0 while emitting — it must be
-    // a no-op: no new motes, no drift, no aging.
     tail.update(0, 50, 60, 1, 0, true);
 
     expect(tail.count).toBe(1); // no spawn
@@ -142,8 +121,6 @@ describe("CometDustTail (pure dust-tail emitter)", () => {
   });
 
   it("moteAlpha / moteScale guard a zero-life mote (no NaN)", () => {
-    // Recycled pool slots default to life 0; the helpers must return 0, not
-    // NaN (age/0), which would silently corrupt the tail render.
     const dead = mote({ life: 0, age: 0 });
     expect(moteAlpha(dead)).toBe(0);
     expect(moteScale(dead)).toBe(0);

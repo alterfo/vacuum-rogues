@@ -1,15 +1,3 @@
-/**
- * Task 8 (`docs/plans/20260626-playtest-bugs-pause-help-infocenter-i18n.md`):
- * the settings controls (speed / font / language / neural) moved off the
- * in-flight ⚙ HUD button onto the **main menu**. These exercise the real
- * `MainMenuScene` + the real shared `SettingsPanel` with mocked pixi.js + textures
- * (no WebGL/asset context), asserting:
- *   • the menu builds a localized «Настройки» button;
- *   • clicking it opens the shared `SettingsPanel`;
- *   • a control writes through `gameSettings` (speed → engine store, language →
- *     the i18n `localStorage` pref) so the choice persists into a run;
- *   • the panel closes on its own request.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -73,8 +61,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Textures are not available headless — return the "art not loaded" fallbacks so
-// the menu draws its disc/diamond placeholders and the nebula backdrop no-ops.
 vi.mock("@/presentation/textures", () => ({
   pickVariant: vi.fn().mockReturnValue(null),
   pickVariantKey: vi.fn().mockReturnValue(null),
@@ -131,7 +117,6 @@ function makeEngine(): GameEngine {
   } as unknown as GameEngine;
 }
 
-/** Invoke the pointerdown handler of the created Text button with the given label. */
 function clickTextButton(label: string): boolean {
   const inst = vi
     .mocked(Text)
@@ -189,8 +174,6 @@ describe("MainMenuScene settings (Task 8 — relocated from the in-flight HUD)",
       .settingsPanel!;
     panel.selectSpeed(2);
 
-    // setSpeed(target, 2) persists onto the engine's gameSpeedMultiplier, so the
-    // choice survives into flight (no live HUD/physics to update from the menu).
     expect(engine.gameSpeedMultiplier).toBe(2);
   });
 
@@ -201,13 +184,10 @@ describe("MainMenuScene settings (Task 8 — relocated from the in-flight HUD)",
 
     const panel = (scene as unknown as { settingsPanel: SettingsPanel | null })
       .settingsPanel;
-    // A font/language pick re-renders the menu and then closes the panel; capture
-    // the ref before that close fires.
     expect(panel).toBeInstanceOf(SettingsPanel);
     panel!.selectLanguage("en");
 
     expect(getLanguage()).toBe("en");
-    // restore default so later suites see RU
     setLanguage("ru");
   });
 
@@ -216,7 +196,6 @@ describe("MainMenuScene settings (Task 8 — relocated from the in-flight HUD)",
     scene.initialize({ gameEngine: makeEngine() });
     clickTextButton(t("menu.settings"));
 
-    // Clicking «Настройки» again toggles the panel shut.
     clickTextButton(t("menu.settings"));
 
     expect(
@@ -225,16 +204,6 @@ describe("MainMenuScene settings (Task 8 — relocated from the in-flight HUD)",
     ).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Playtest bug pass 2, Task 4: the accessibility controls (colourblind palette /
-// reduced-motion / key remap) now live in the general Settings overlay too — the
-// menu mounts an `AccessibilityPanel` beside the `SettingsPanel`. Before this,
-// the palette was only reachable from the in-flight ♿ button, so a player on the
-// menu could not set it: "the palette change does nothing". The palette persists
-// through the existing accessor and the faction hues render under it everywhere
-// `factionColor` is read (faction-select / flight).
-// ---------------------------------------------------------------------------
 
 describe("MainMenuScene accessibility in Settings (Task 4)", () => {
   beforeEach(() => {
@@ -273,7 +242,6 @@ describe("MainMenuScene accessibility in Settings (Task 4)", () => {
 
     expect(accPanel.currentPalette()).toBe("deuteranopia");
     expect(currentPaletteMode()).toBe("deuteranopia");
-    // The colour seam now renders under the new palette — the "palette applies" fix.
     expect(factionColor(Faction.SYNDICATE)).not.toBe(before);
   });
 
@@ -281,7 +249,6 @@ describe("MainMenuScene accessibility in Settings (Task 4)", () => {
     const scene = new MainMenuScene(makeMockRenderer());
     scene.initialize({ gameEngine: makeEngine() });
     clickTextButton(t("menu.settings"));
-    // Toggle shut.
     clickTextButton(t("menu.settings"));
 
     const s = scene as unknown as WithA11y;

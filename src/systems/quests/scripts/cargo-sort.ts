@@ -1,31 +1,9 @@
 import type { QuestScript } from "../QuestScript";
 
-// Дизайн: Диспетчер орбитального склада. 5 прибывающих транспортов (A-E),
-// 3 разгрузочных дока. Время разгрузки транспорта random(1,4) часов. Один
-// транспорт ломается (+2 часа, определяется random(0,4)). Распредели транспорты
-// по докам так, чтобы ни один док не превысил 8 ч (порог смены).
-// Победа: все 5 назначены и overtime (сверхурочные доки) == 0.
-//
-// Баланс: суммарная работа 10-20 ч против ёмкости 3×8=24 ч — узкий бюджет,
-// требующий продуманной раскладки: небрежная свалка бортов в один док теперь
-// реально проваливает смену (жадная эвристика "в самый пустой док" срывается на
-// части сидов), но у каждого сида есть выигрышная раскладка.
-//
-// Финал ветвится по качеству исхода, а не одним общим текстом:
-//   overtime == 0 → quest_success (запас) либо quest_success_tight (док впритык),
-//   overtime == 1 → quest_failure_overtime (один сорванный док, поправимо),
-//   overtime >= 2 → quest_failure_severe (обвал смены).
-//
-// Технически: QuestVM не поддерживает param += param, поэтому:
-// 1. Инит: init_breakdown → один из break_ship==N → time_N += 2 → dispatch_hub
-// 2. Назначение: select_X → assign_X_dockN → assign_to_dockN (роутинг через
-//    pending_time = time_X + 0, затем 6 autoExecute по pending_time) → check_progress
-// 3. Финал: check_dock1/2/3 → overload_dockN (overtime++) → final_verdict → margin_check
 export const cargoSortScript: QuestScript = {
   id: "cargo-sort",
   title: "Сортировка грузов",
   params: [
-    // Transport unload times: random(1,4); breakdown adds +2 in init_breakdown
     {
       id: "time_A",
       name: "Транспорт A (ч)",
@@ -66,7 +44,6 @@ export const cargoSortScript: QuestScript = {
       initial: "random",
       showInUI: true,
     },
-    // Which transport broke down (0=A, 1=B, 2=C, 3=D, 4=E) — applied in init_breakdown
     {
       id: "break_ship",
       name: "Поломка",
@@ -75,7 +52,6 @@ export const cargoSortScript: QuestScript = {
       initial: "random",
       showInUI: false,
     },
-    // Staging variable: holds time of current transport being assigned
     {
       id: "pending_time",
       name: "Ожидание",
@@ -84,7 +60,6 @@ export const cargoSortScript: QuestScript = {
       initial: 0,
       showInUI: false,
     },
-    // Dock loads (accumulated hours)
     {
       id: "dock1_load",
       name: "Док 1 (ч)",
@@ -109,7 +84,6 @@ export const cargoSortScript: QuestScript = {
       initial: 0,
       showInUI: true,
     },
-    // How many transports have been assigned so far
     {
       id: "assigned_count",
       name: "Назначено",
@@ -118,7 +92,6 @@ export const cargoSortScript: QuestScript = {
       initial: 0,
       showInUI: true,
     },
-    // Overloaded dock count (> 8h)
     {
       id: "overtime",
       name: "Перегрузы",
@@ -127,7 +100,6 @@ export const cargoSortScript: QuestScript = {
       initial: 0,
       showInUI: true,
     },
-    // Per-transport assignment flags
     {
       id: "assigned_A",
       name: "A назначен",
@@ -171,7 +143,6 @@ export const cargoSortScript: QuestScript = {
   ],
   startLocation: "init_breakdown",
   locations: [
-    // Step 1: Apply breakdown (+2h) to the affected transport
     {
       id: "init_breakdown",
       text: "Грузовой узел «Перекрёсток-9». Смена только началась — и уже гарь в воздухе. По селектору хрипит аварийная сводка: один из бортов заглох на подходе, стыковка встанет дольше на два часа. Диспетчерская вгрызается в данные...",
@@ -219,7 +190,6 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 2: Main dispatch hub — player selects unassigned transports
     {
       id: "dispatch_hub",
       text:
@@ -266,7 +236,6 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 3: Select dock for each transport
     {
       id: "select_A",
       text: "Борт A тянет на швартовку — {time_A} ч под краном. Куда его, пока клиент не поседел? Считай остаток до порога в 8 ч.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
@@ -478,7 +447,6 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 4: Routing — add pending_time to the chosen dock (autoExecute by value match)
     {
       id: "assign_to_dock1",
       text: "Захваты Дока 1 подхватывают борт, лебёдки визжат...",
@@ -642,7 +610,6 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 5: Route back to hub or forward to dock-overload checks
     {
       id: "check_progress",
       text: "Диспетчер сверяется с табло: кто ещё висит на орбите?",
@@ -665,7 +632,6 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 6: Check each dock for overload (> 8h)
     {
       id: "check_dock1",
       text: "Табло Дока 1 гаснет в расчётах: уложились в 8 или ушли в красное?",
@@ -769,10 +735,6 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 7: Final verdict — branch by outcome quality, not one shared line.
-    // overtime == 0 → margin check (comfortable vs razor-thin win)
-    // overtime == 1 → one dock over (salvageable)
-    // overtime >= 2 → shift collapse
     {
       id: "final_verdict",
       text: "Клаксоны смолкают. Диспетчер выдыхает и смотрит на сводку смены — доков в перегрузе: {overtime}",
@@ -803,8 +765,6 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Step 8: On a clean shift, was any dock at the very edge (== 8h)? If so it
-    // was a nail-biter, not a comfortable win — give it its own ending.
     {
       id: "margin_check1",
       text: "Сводка чистая — но диспетчер щурится на самый нагруженный док...",
@@ -869,7 +829,6 @@ export const cargoSortScript: QuestScript = {
       ],
     },
 
-    // Terminal locations — distinct text per outcome tier
     {
       id: "quest_success",
       text: "Ни одного перегруза, и ни один док даже не подошёл к порогу — раскладка выверена, запас держится. Бригадир одобрительно кивает: «Чисто сработано, диспетчер». Клиенты снимают трубки довольные.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 8ч)",

@@ -27,7 +27,6 @@ interface GovernmentContext {
   planet?: Planet;
 }
 
-// Reputation tier thresholds matching PlanetScene / Player logic
 export type RepTier = "hostile" | "neutral" | "ally";
 
 export function getRepTier(rep: number): RepTier {
@@ -69,7 +68,6 @@ export class GovernmentScene extends GameScene {
   private uiContainer: Container | null = null;
   private jobBoardPanel: JobBoardPanel | null = null;
   private toastTimers: ReturnType<typeof setTimeout>[] = [];
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
@@ -87,11 +85,6 @@ export class GovernmentScene extends GameScene {
     logger.info(`GovernmentScene: ${this.planet?.name ?? "unknown"}`);
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so it sits above the panel and survives the
-   * scene's UI rebuilds.
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -144,7 +137,6 @@ export class GovernmentScene extends GameScene {
 
     let y = h * 0.07;
 
-    // Heading: planet name
     const titleText = new Text({
       text: `Губернатор: ${this.planet?.name ?? "Неизвестно"}`,
       style: {
@@ -162,14 +154,12 @@ export class GovernmentScene extends GameScene {
     ui.addChild(titleText);
     y += 46;
 
-    // Separator
     const sep = new Graphics();
     sep.rect(w * 0.15, y, w * 0.7, 1);
     sep.fill({ color: factionColor, alpha: 0.4 });
     ui.addChild(sep);
     y += 12;
 
-    // Info block
     const infoLines: Array<{ label: string; value: string; color: number }> = [
       { label: "Фракция:", value: factionName, color: factionColor },
       { label: "Экономика:", value: economyLabel, color: 0x88ccff },
@@ -219,7 +209,6 @@ export class GovernmentScene extends GameScene {
 
     y += 16;
 
-    // Dialogue lines panel
     const lines = getDialogueLines(tier);
     const panelH = lines.length * 22 + 24;
     const panelBg = new Graphics();
@@ -257,27 +246,18 @@ export class GovernmentScene extends GameScene {
 
     y += panelH + 24;
 
-    // Governor's first-person quest offers (Task 7): the same quests the board
-    // lists, but framed as in-character dialogue with an inline accept button.
     y = this.addGovernorOffers(ui, w, y, factionColor);
 
-    // Job board button
     this.addButton(ui, "[ Доска заданий ]", w / 2, y, 0xffee66, () =>
       this.openJobBoard(),
     );
     y += 44;
 
-    // Back button
     this.addButton(ui, "[ Назад ]", w / 2, y, 0xb4b4b4, () => this.goBack());
 
     this.renderer.uiLayer.addChild(ui);
   }
 
-  /**
-   * Render up to 3 of the planet's available quests as first-person governor
-   * dialogue offers (Task 7), each with an inline "Взять" button. The full board
-   * remains reachable via the "Доска заданий" button below. Returns the next y.
-   */
   private addGovernorOffers(
     ui: Container,
     w: number,
@@ -322,7 +302,6 @@ export class GovernmentScene extends GameScene {
       offer.y = y;
       ui.addChild(offer);
 
-      // Inline accept button on the right of the offer line.
       this.addButton(ui, "[ Взять ]", w * 0.82, y + 8, 0x00ff88, () =>
         this.acceptJob(q),
       );
@@ -401,7 +380,6 @@ export class GovernmentScene extends GameScene {
     if (!this.gameEngine || !this.planet) return;
 
     if (q.template.type === QuestType.TEXT_ADVENTURE) {
-      // scriptId is stored in targetObjectId; fall back to template id for legacy entries
       const scriptId = q.template.targetObjectId ?? q.template.id;
       const accepted = this.gameEngine.acceptBoardQuest(q, this.planet.id);
       this.closeJobBoard();

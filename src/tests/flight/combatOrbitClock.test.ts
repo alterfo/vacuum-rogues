@@ -1,18 +1,3 @@
-/**
- * Unit — the pure combat orbital-day increment
- * (`src/presentation/flight/combatOrbitClock.ts`).
- *
- * Planet orbital position is a pure function of `SpaceFlightScene.currentDay`. During
- * a stationary real-time fight neither the move-distance nor the wait-turn source
- * advances it, so this helper supplies a combat-time increment so orbits keep moving.
- * The decision is pure — given `{inCombat, paused, dt, timeScale}` it returns the
- * fractional orbital-day to add this frame (at the shared `MS_PER_ORBITAL_DAY` rate) —
- * so it pins:
- *   • advances during the real-time portion of a fight (`inCombat && !paused`),
- *   • holds (returns 0) while the active pause is up,
- *   • holds (returns 0) when no fight is engaged (move/wait paths stay the only sources),
- *   • matches the wait-turn pace (clamps `dt` to one day, scales by `timeScale`).
- */
 import { describe, it, expect } from "vitest";
 import {
   combatOrbitalDayIncrement,

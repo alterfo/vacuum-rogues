@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Pure helpers that mirror the max-qty logic in TradeScene.render() and the
- * deal-highlight logic — tested here without PixiJS.
- */
 function calcMaxBuyQty(
   credits: number,
   buyPrice: number,
@@ -30,12 +26,10 @@ function isSellDeal(sellPrice: number, basePrice: number): boolean {
 
 describe("Trade Max button qty calculation", () => {
   it("buy max is limited by credits", () => {
-    // credits=500, buyPrice=100 → can afford 5; freeHold=20 → limited to 5
     expect(calcMaxBuyQty(500, 100, 20)).toBe(5);
   });
 
   it("buy max is limited by free hold", () => {
-    // credits=5000, buyPrice=10 → can afford 500; freeHold=3 → limited to 3
     expect(calcMaxBuyQty(5000, 10, 3)).toBe(3);
   });
 

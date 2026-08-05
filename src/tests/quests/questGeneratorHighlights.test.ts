@@ -20,8 +20,6 @@ function twoSystemGalaxy(): StarSystem[] {
   return [sys("A", "Альфа", ["B"]), sys("B", "Бета", ["A"])];
 }
 
-/** Like {@link sys}, but with real planet `.name`s (not just ids) — needed to
- * tell a resolved display name apart from the raw `<system>_p<n>` id. */
 function namedSys(
   id: string,
   name: string,
@@ -151,9 +149,6 @@ describe("GeneratedQuest highlights", () => {
     }
   });
 
-  // Find the first quest of a given type across many seeds. Returns undefined
-  // only if the generator never emits the type — which must FAIL the test rather
-  // than pass silently (the old `if (!x) return` versions were vacuous).
   function findQuestOfType(type: QuestType, prefix: string) {
     for (let s = 0; s < 40; s++) {
       const board = fullBoard(`${prefix}-${s}`);
@@ -190,10 +185,6 @@ describe("GeneratedQuest highlights", () => {
     expect(sysHighlight!.value).toBe("Бета");
   });
 
-  // Job-board bug: the 'Выдан'/'Планета' highlight chips showed the raw
-  // internal planet id (e.g. "A_p1") instead of the planet's display name —
-  // it read as an unresolved template placeholder in the UI. Every highlight
-  // must resolve to a real name when the owning system's planets carry one.
   it("no highlight value ever leaks a raw internal planet id (planet_<sys>_p<n>)", () => {
     for (let s = 0; s < 20; s++) {
       const board = namedFullBoard(`hl-no-leak-${s}`);

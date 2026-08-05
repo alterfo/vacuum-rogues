@@ -1,7 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 
-// PlanetScene + mountSceneHelp import pixi.js at module load; mock it so the pure
-// layout helpers can be imported without a real renderer.
 vi.mock("pixi.js", () => ({
   Container: vi.fn(),
   Graphics: vi.fn(),
@@ -20,7 +18,6 @@ interface Rect {
   h: number;
 }
 
-/** Standard axis-aligned bounding-box overlap test. */
 function rectsIntersect(a: Rect, b: Rect): boolean {
   return (
     a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
@@ -28,9 +25,6 @@ function rectsIntersect(a: Rect, b: Rect): boolean {
 }
 
 describe("planet-screen «?» help button vs credit-balance read-out layout", () => {
-  // The credit balance is a right-anchored top-right read-out: its right edge
-  // sits at the anchor x, growing left. Sweep a generous range of rendered text
-  // widths + font heights so the no-overlap guarantee holds for any credit value.
   const widths = [800, 1024, 1280, 1366, 1920];
   const textWidths = [40, 80, 120, 160, 200, 260];
   const fontHeights = [16, 18, 20, 24];

@@ -1,21 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A logistics-routing puzzle under a draining evacuation window. The
-// station "Терминус" is minutes from a reactor breach; a `time` budget bleeds
-// with every run and, at zero, the core lets go (a `critMin` redirect to
-// ending_collapse — the time-pressure spine). The player optimises the ORDER
-// and ROUTE of shuttle runs to maximise the `saved` headcount before lift-off.
-// Choice points:
-//   1. First dock — the med-ring (slow load, few, +rep), the hab-block (fast,
-//      many), or the corporate VIP dock (fastest, credits, reputation hit).
-//   2. Second run — grab more (costs time) vs bug out now.
-//   3. The route home — the fast debris shortcut (roll: clean or snagged) vs
-//      the slow clean vector.
-// Outcomes (by `saved` at lift-off):
-//   - ending_full_evac (≥20 lifted — everyone out, hero)               SUCCESS
-//   - ending_partial   (≥10 lifted — most out)                         SUCCESS
-//   - ending_few       (<10 lifted — a handful, bittersweet)           SUCCESS
-//   - ending_collapse  (window ran out, station breached)              FAILURE
 export const evacuationScript: QuestScript = {
   id: "evacuation",
   title: "Эвакуация станции «Терминус»",

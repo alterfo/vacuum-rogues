@@ -19,7 +19,6 @@ export class SeededRNG {
     return finalize();
   }
 
-  // Mulberry32 algorithm
   next(): number {
     let z = (this.state += 0x6d2b79f5);
     z = Math.imul(z ^ (z >>> 15), z | 1);

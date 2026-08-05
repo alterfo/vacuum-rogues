@@ -59,7 +59,6 @@ describe("pickNpcDestination", () => {
   });
 
   it("PIRATE falls back to lane_point when traders array is explicitly empty", () => {
-    // Distinct from the undefined-traders case — exercises the length > 0 branch.
     const dest = pickNpcDestination(NpcRole.PIRATE, "pirate_1", 0, {
       ...CTX,
       traders: [],

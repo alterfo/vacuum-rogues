@@ -2,19 +2,6 @@ import { describe, it, expect } from "vitest";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 import { forward, loadWeights, type MlpWeights } from "./mlp";
 
-/**
- * A hand-computed 2-layer reference net: input dim 2 → hidden 2 (ReLU) →
- * output 3 (linear). Used to pin {@link forward} numerically.
- *
- * Layer 1 (W1, b1) over input [1, 2]:
- *   pre[0] = 1·1 + 2·2 + 0.5 = 5.5
- *   pre[1] = -1·1 + 0.5·2 - 1 = -1
- *   ReLU   = [5.5, 0]
- * Layer 2 (W2, b2, linear) over [5.5, 0]:
- *   out[0] = 0.5·5.5 + 1·0 + 1   = 3.75
- *   out[1] = 2·5.5  + -1·0 - 2   = 9
- *   out[2] = 0·5.5  + 3·0 + 0.5  = 0.5
- */
 const REFERENCE: MlpWeights = {
   layers: [
     {
@@ -45,8 +32,6 @@ describe("mlp.forward", () => {
   });
 
   it("applies ReLU on hidden layers (negative pre-activations clamp to 0)", () => {
-    // Input [0, 0] ⇒ hidden pre = b1 = [0.5, -1] ⇒ ReLU = [0.5, 0].
-    // out[1] = 2·0.5 + -1·0 - 2 = -1 (linear output is NOT relu'd → stays negative).
     const out = forward(REFERENCE, [0, 0]);
     expect(out[0]).toBeCloseTo(0.5 * 0.5 + 1 * 0 + 1, 5); // 1.25
     expect(out[1]).toBeCloseTo(2 * 0.5 + -1 * 0 - 2, 5); // -1
@@ -82,7 +67,6 @@ describe("mlp.forward", () => {
   });
 });
 
-/** Build a dense layer of the given dims filled with a constant (test helper). */
 function constLayer(inDim: number, outDim: number, w: number, bias: number) {
   return {
     W: Array.from({ length: outDim }, () =>
@@ -106,7 +90,6 @@ describe("mlp.loadWeights", () => {
     const loaded = loadWeights(weights);
     const out = forward(loaded, new Array(12).fill(0.5));
     expect(out).toHaveLength(10);
-    // hidden[j] = ReLU(0.01·0.5·12) = 0.06; out = 0.01·0.06·32 + 0.1 = 0.1192
     expect(out[0]).toBeCloseTo(0.01 * (0.01 * 0.5 * 12) * 32 + 0.1, 5);
   });
 
@@ -137,7 +120,6 @@ describe("mlp.loadWeights", () => {
   });
 
   it("rejects layers whose dims do not chain", () => {
-    // layer 0 outputs 2, layer 1 expects 3 inputs — broken chain.
     const bad = {
       layers: [
         {

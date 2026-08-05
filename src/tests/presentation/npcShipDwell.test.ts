@@ -42,9 +42,6 @@ const BOUNDS: SystemBounds = {
   boundary: 800,
 };
 
-// ---------------------------------------------------------------------------
-// NpcShipSprite dwell timer
-// ---------------------------------------------------------------------------
 describe("NpcShipSprite dwell lifecycle", () => {
   it("isAnchored() reflects orbit-anchor state", () => {
     const sprite = new NpcShipSprite(makeNpc("npc_anchored"), 200, 0, BOUNDS);
@@ -71,11 +68,9 @@ describe("NpcShipSprite dwell lifecycle", () => {
 
     expect(sprite.isAnchored()).toBe(true);
 
-    // One ms before threshold: still anchored.
     sprite.update(sprite.dwellDurationMs - 1);
     expect(sprite.isAnchored()).toBe(true);
 
-    // Push over the threshold.
     sprite.update(2);
     expect(sprite.isAnchored()).toBe(false);
 
@@ -96,20 +91,12 @@ describe("NpcShipSprite dwell lifecycle", () => {
   });
 
   it("does NOT increment dwell while departing (orbit branch is skipped)", () => {
-    // Ship at (200, 0). Departure heads toward the boundary along +X.
-    // Update for the FULL dwell duration — the orbit branch is skipped while
-    // departing so dwell can never fire and the anchor stays set.
     const sprite = new NpcShipSprite(makeNpc("npc_depart"), 200, 0, BOUNDS);
     sprite.setAnchor(200, 0);
     sprite.beginDeparture();
 
-    // Use more than dwellDurationMs so we'd definitely fire dwell if the orbit
-    // branch ran — a previous version used 100 ms which was far too small to
-    // catch a buggy implementation.
     sprite.update(sprite.dwellDurationMs + 1);
 
-    // Dwell counter couldn't fire (orbit branch disabled while departing);
-    // anchor was set before departure and is still set.
     expect(sprite.isAnchored()).toBe(true);
 
     sprite.destroy();
@@ -118,17 +105,14 @@ describe("NpcShipSprite dwell lifecycle", () => {
   it("after dwell fires, the sprite moves toward the next target (not staying still)", () => {
     const sprite = new NpcShipSprite(makeNpc("npc_dwell_move"), 200, 0, BOUNDS);
     sprite.setAnchor(200, 0);
-    // Provider sends ship far away
     sprite.setTargetProvider(() => ({ x: -400, y: -400 }));
 
-    // Fire the dwell
     sprite.update(sprite.dwellDurationMs + 1);
     expect(sprite.isAnchored()).toBe(false);
 
     const x0 = sprite.x;
     const y0 = sprite.y;
 
-    // Another update: ship should move toward (-400, -400)
     sprite.update(200);
     const moved = Math.hypot(sprite.x - x0, sprite.y - y0);
     expect(moved).toBeGreaterThan(0);
@@ -137,9 +121,6 @@ describe("NpcShipSprite dwell lifecycle", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// NpcShipManager anchor-map cleanup after dwell
-// ---------------------------------------------------------------------------
 describe("NpcShipManager dwell-expiry cleanup", () => {
   function makeManagerWithPlanets(
     npcs: NpcShip[],
@@ -190,7 +171,6 @@ describe("NpcShipManager dwell-expiry cleanup", () => {
   }
 
   it("re-anchors a non-pirate sprite when it arrives at the next planet after dwell expiry", () => {
-    // Single planet so pickNpcDestination always returns that planet's position.
     const planet = { screenX: 300, screenY: 0, displayRadius: 50 };
     const { manager, isTurnRunning } = makeManagerWithPlanets(
       [makeNpc("trader_reanchor")],
@@ -209,17 +189,13 @@ describe("NpcShipManager dwell-expiry cleanup", () => {
       }
     ).npcSprites[0];
 
-    // Fire the dwell — sprite leaves orbit and heads for the planet.
     isTurnRunning.value = true;
     manager.update(sprite.dwellDurationMs + 1, 0);
     expect(sprite.isAnchored()).toBe(false);
 
-    // Teleport the sprite to the planet center (simulates the travel).
     sprite.x = planet.screenX;
     sprite.y = planet.screenY;
 
-    // One more update: the sprite arrives (dist < 6), arrivalCallback fires,
-    // and the manager re-anchors it to the planet.
     manager.update(16, 0);
     expect(sprite.isAnchored()).toBe(true);
 
@@ -234,9 +210,6 @@ describe("NpcShipManager dwell-expiry cleanup", () => {
   });
 
   it("re-anchors even when the planet has drifted more than 20px from the arrival point", () => {
-    // Planet starts at (300, 0), sprite is sent there, but by arrival the planet
-    // has drifted to (325, 0) — 25px away, beyond the old hard-coded 20px guard.
-    // The fix uses nearest.displayRadius (50px) so the re-anchor still fires.
     const planet = { screenX: 300, screenY: 0, displayRadius: 50 };
     const { manager, isTurnRunning } = makeManagerWithPlanets(
       [makeNpc("trader_drift")],
@@ -255,20 +228,15 @@ describe("NpcShipManager dwell-expiry cleanup", () => {
       }
     ).npcSprites[0];
 
-    // Fire the dwell so the sprite starts traveling.
     isTurnRunning.value = true;
     manager.update(sprite.dwellDurationMs + 1, 0);
     expect(sprite.isAnchored()).toBe(false);
 
-    // Teleport sprite to the OLD planet position (where target was set).
     sprite.x = 300;
     sprite.y = 0;
 
-    // Simulate the planet drifting 25px along X while the ship was in transit.
-    // 25 > 20 (old threshold) but < 50 (displayRadius) — this was the failing case.
     planet.screenX = 325;
 
-    // Arrival update: dist < 6, arrivalCallback fires.
     manager.update(16, 0);
     expect(sprite.isAnchored()).toBe(true);
 
@@ -285,7 +253,6 @@ describe("NpcShipManager dwell-expiry cleanup", () => {
     manager.initialize();
     expect(manager.npcCount).toBe(1);
 
-    // Read the sprite's dwell duration via private access.
     const sprite = (
       manager as unknown as {
         npcSprites: Array<{ dwellDurationMs: number; isAnchored(): boolean }>;
@@ -294,15 +261,11 @@ describe("NpcShipManager dwell-expiry cleanup", () => {
 
     const dwellMs = sprite.dwellDurationMs;
 
-    // Run the world for just over the dwell duration.
     isTurnRunning.value = true;
     manager.update(dwellMs + 1, 0);
 
-    // After dwell: the sprite is no longer anchored.
     expect(sprite.isAnchored()).toBe(false);
 
-    // The anchor-planet map must be cleaned up so the manager doesn't keep
-    // calling updateAnchorPosition on an unanchored ship.
     const anchorMap = (
       manager as unknown as { npcAnchorPlanet: Map<unknown, unknown> }
     ).npcAnchorPlanet;

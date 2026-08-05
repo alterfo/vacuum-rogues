@@ -1,15 +1,3 @@
-/**
- * Tests for the scenario goal-bias seam (Task 4).
- *
- * Two layers, mirroring the heuristic-policy tests:
- *  - the **pure** {@link GoalBiasedPolicy.decide} is unit-tested over synthetic
- *    observations — it must prefer the goal's action when legal, stay legal in
- *    every state, never throw, and defer verbatim to the base policy when the
- *    goal has no legal preference;
- *  - a short **real-engine** run shows the bias *measurably* steers the agent: a
- *    `free-explore`-biased run takes a different action sequence than the plain
- *    heuristic over the same fresh game.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { SceneType, FactionType, StationType } from "@/types";
 import { RealEngineHarness } from "../realEngineHarness";
@@ -33,7 +21,6 @@ vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
 const base = new HeuristicPolicy();
 
-/** A hostile NPC snapshot for synthetic observations. */
 function hostile(id = "raider-1", hullHP = 80): NpcSnapshot {
   return {
     id,
@@ -54,7 +41,6 @@ interface ObsOpts {
   landedQuests?: number | null;
 }
 
-/** Build a self-consistent observation whose legal set is the real one. */
 function makeObs(scene: SceneType, opts: ObsOpts = {}): Observation {
   const hasPlayer = opts.hasPlayer ?? true;
   const planets = opts.planets ?? [];
@@ -131,7 +117,6 @@ const station = (id: string) => ({
   type: StationType.REPAIR_DOCK,
 });
 
-/** Representative states the biased policy must stay legal across. */
 const SAMPLE_STATES: Observation[] = [
   makeObs(SceneType.MAIN_MENU, { hasPlayer: false }),
   makeObs(SceneType.SPACE_FLIGHT, {
@@ -187,9 +172,7 @@ describe("GoalBiasedPolicy.decide (pure)", () => {
 
   it("go-broke shops the market instead of banking the offered quest", () => {
     const obs = makeObs(SceneType.PLANET, { landedQuests: 3 });
-    // Baseline: the heuristic takes the paid work.
     expect(base.decide(obs).kind).toBe("take-quest");
-    // Biased: it spends at the market instead.
     expect(new GoalBiasedPolicy(base, "go-broke").decide(obs).kind).toBe(
       "trade",
     );
@@ -205,9 +188,7 @@ describe("GoalBiasedPolicy.decide (pure)", () => {
       hostiles: [hostile("raider-x")],
       hullFraction: 0.95,
     });
-    // Baseline: a healthy hull attacks.
     expect(base.decide(obs).kind).toBe("attack");
-    // Biased: it flees rather than tank reputation in combat.
     const action = new GoalBiasedPolicy(base, "max-rep").decide(obs);
     expect(action.kind).toBe("flee");
     expect(action.targetId).toBe("raider-x");
@@ -225,7 +206,6 @@ describe("GoalBiasedPolicy.decide (pure)", () => {
   });
 
   it("defers to the base policy when the goal has no legal preference", () => {
-    // hoard prefers only `trade`, which is illegal in flight → fall through.
     const obs = makeObs(SceneType.SPACE_FLIGHT, { connections: 3 });
     const baseAction = base.decide(obs);
     const biased = new GoalBiasedPolicy(base, "hoard").decide(obs);
@@ -257,7 +237,6 @@ describe("GoalBiasedPolicy steers the agent over a real short run", () => {
   });
 
   it("a free-explore bias produces a measurably different action sequence than free-play", async () => {
-    // Same fresh game, two brains — the only difference is the goal bias.
     await harness.newGame();
     const baseResult = await new PlayerAgent(harness, base).run(20);
 
@@ -271,12 +250,9 @@ describe("GoalBiasedPolicy steers the agent over a real short run", () => {
       new GoalBiasedPolicy(base, explore),
     ).run(20);
 
-    // Both ran cleanly.
     expect(baseResult.errors).toEqual([]);
     expect(biasedResult.errors).toEqual([]);
 
-    // Measurable steering: the biased agent did not play the identical sequence,
-    // and it reached for exploration (warp/move) at least as eagerly.
     const baseKinds = baseResult.steps.map((s) => s.action.kind);
     const biasedKinds = biasedResult.steps.map((s) => s.action.kind);
     expect(biasedKinds).not.toEqual(baseKinds);

@@ -17,22 +17,8 @@ export class Inventory {
   micromodules: MicroModule[] = [];
   resources: ResourceStack[] = [];
   cosmetics: CosmeticItem[] = [];
-  /**
-   * Canonical store of gear the player owns but has **not** installed (catalog
-   * gear ids). Replaces the ad-hoc "legacy bag" role: purchases/loot that aren't
-   * auto-installed land here; installing moves an id out (into the loadout) and
-   * unequipping moves it back. Read through `ownedUninstalledGear` (GearBridge),
-   * the single accessor both the hangar and equipment-shop ТРЮМ views consume.
-   */
   ownedGearIds: string[] = [];
 
-  /**
-   * Persisted inventory of combat consumables (tactical devices) the player carries between
-   * fights — catalog consumable ids (`combatConsumable.ts`'s `COMBAT_CONSUMABLES`). Loot/purchase
-   * lands here; activating one during a planning phase spends a copy. Additive-optional field
-   * (`ownedGearIds` precedent): absent old saves default to an empty inventory, so no migration /
-   * version bump is needed (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 9).
-   */
   ownedConsumableIds: string[] = [];
 
   addItem(item: ShipModule | CosmeticItem): void {
@@ -61,12 +47,10 @@ export class Inventory {
     );
   }
 
-  /** Record a gear id as owned-but-uninstalled (a purchase/loot with no free slot). */
   addOwnedGear(gearId: string): void {
     (this.ownedGearIds ??= []).push(gearId);
   }
 
-  /** Remove the first owned copy of a gear id. Returns true if one was removed. */
   removeOwnedGear(gearId: string): boolean {
     const list = (this.ownedGearIds ??= []);
     const i = list.indexOf(gearId);
@@ -75,17 +59,14 @@ export class Inventory {
     return true;
   }
 
-  /** Record a combat consumable (tactical device) id as owned (loot/purchase). */
   addConsumable(consumableId: string): void {
     (this.ownedConsumableIds ??= []).push(consumableId);
   }
 
-  /** True while the player still carries at least one copy of a consumable id. */
   hasConsumable(consumableId: string): boolean {
     return (this.ownedConsumableIds ??= []).includes(consumableId);
   }
 
-  /** Spend the first owned copy of a consumable id (on activation). Returns true if one was spent. */
   removeConsumable(consumableId: string): boolean {
     const list = (this.ownedConsumableIds ??= []);
     const i = list.indexOf(consumableId);
@@ -126,12 +107,6 @@ export class Inventory {
     }
   }
 
-  /**
-   * Jettison-to-space: remove `amount` of a held resource, no credit refund
-   * (selling is the separate paid path). Throws when the type isn't held or
-   * the requested amount exceeds the stack — same error code
-   * {@link consumeResources} uses for an insufficient stack.
-   */
   removeResource(type: ResourceType, amount: number): void {
     const stack = this.resources.find((r) => r.type === type);
     if (!stack || stack.amount < amount) {

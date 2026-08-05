@@ -1,17 +1,3 @@
-/**
- * New-game / faction-selection localization (Task 6 of
- * `docs/plans/20260626-playtest-bugs-pause-help-infocenter-i18n.md`).
- *
- * `RaceSelectionScene` was the explicitly user-reported still-Russian screen:
- * the «ВЫБЕРИТЕ ФРАКЦИЮ» heading, the difficulty titles «Бог/Средний/Сложный»
- * and their descriptions, plus the faction card titles/descriptions/bonuses and
- * the stat labels. They now resolve through `t(...)` / the pure `translate`
- * resolver against `race.*` keys. This guard pins:
- *   • parity — every `race.*` key exists in BOTH catalogs (the global parity
- *     test already enforces full-dict parity; this names the set explicitly),
- *   • RU-default + EN resolution, and
- *   • no Russian leak in the EN-resolved faction/difficulty strings.
- */
 import { describe, expect, it } from "vitest";
 import { translate } from "@/i18n/i18n";
 import { ru } from "@/i18n/ru";
@@ -21,7 +7,6 @@ import { FactionType } from "@/types";
 const FACTIONS = Object.values(FactionType);
 const MODES = ["GOD", "NORMAL", "HARD"] as const;
 
-/** Every race.* key the scene resolves at render. */
 function raceKeys(): string[] {
   const keys = [
     "race.title",
@@ -68,7 +53,6 @@ describe("faction-selection (RaceSelectionScene) localization", () => {
 
   it("resolves English when the language is English (no Russian leak)", () => {
     expect(translate("en", "race.title")).toBe("CHOOSE YOUR FACTION");
-    // Every EN faction/difficulty string is free of Cyrillic.
     const enStrings: string[] = [];
     for (const k of raceKeys()) enStrings.push(translate("en", k));
     const leaks = enStrings.filter((s) => RU_CYRILLIC.test(s));

@@ -11,12 +11,10 @@ import { GAME_BALANCE } from "@/config/balance";
 
 const BASE = GAME_BALANCE.combatFireIntervalMs; // 2500 ms per cooldown turn
 
-/** Catalog weapon by id, typed as a WeaponSpec (fixture lookup, not under test). */
 function weapon(id: string): WeaponSpec {
   return gearById(id) as WeaponSpec;
 }
 
-/** ShipPhysics stand-in carrying only the fields CombatModule reads. */
 function makePhysics(x = 0, y = 0): ShipPhysics {
   return {
     shipX: x,
@@ -27,7 +25,6 @@ function makePhysics(x = 0, y = 0): ShipPhysics {
   } as unknown as ShipPhysics;
 }
 
-/** NpcShipSprite stand-in with the position + npc fields CombatModule touches. */
 function makeSprite(
   id: string,
   x: number,
@@ -41,7 +38,6 @@ function makeSprite(
   } as unknown as NpcShipSprite;
 }
 
-/** A CombatModule fitted with a single catalog weapon, plus its scratch ship. */
 function moduleWith(weaponId: string): {
   module: CombatModule;
   ship: { hullHP: number; maxHull: number };
@@ -57,11 +53,6 @@ function moduleWith(weaponId: string): {
   return { module, ship };
 }
 
-/**
- * Drive `module` for `totalMs` in `step`-ms ticks against a tanky in-range target
- * and return how many shots the single fitted weapon landed (inferred from the
- * target's hull loss ÷ per-shot damage).
- */
 function countShots(weaponId: string, totalMs: number, step = 50): number {
   const { module } = moduleWith(weaponId);
   const dmg = weapon(weaponId).damage;
@@ -71,9 +62,6 @@ function countShots(weaponId: string, totalMs: number, step = 50): number {
   return Math.round((10_000_000 - target.npc.hullHP) / dmg);
 }
 
-// ---------------------------------------------------------------------------
-// weaponFireIntervalMs — pure cadence derivation
-// ---------------------------------------------------------------------------
 describe("weaponFireIntervalMs (per-weapon cadence)", () => {
   it("scales the base interval by cooldownTurns (cooldownTurns:1 keeps the old flat cadence)", () => {
     expect(weaponFireIntervalMs({ cooldownTurns: 1 })).toBe(BASE);
@@ -98,9 +86,6 @@ describe("weaponFireIntervalMs (per-weapon cadence)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// DPS ordering — cadence makes a high-damage weapon a real tradeoff
-// ---------------------------------------------------------------------------
 describe("cadence is a real tradeoff, not a free upgrade", () => {
   const dps = (id: string): number =>
     weapon(id).damage / weaponFireIntervalMs(weapon(id));
@@ -113,8 +98,6 @@ describe("cadence is a real tradeoff, not a free upgrade", () => {
   });
 
   it("sustained DPS follows damage ÷ cadence, not raw per-shot damage", () => {
-    // Railgun (26 dmg, cooldownTurns 1) out-DPSes the heavier-hitting beam
-    // (30 dmg, cooldownTurns 3): cadence, not raw damage, sets the ordering.
     expect(weapon("wpn_railgun").damage).toBeLessThan(
       weapon("wpn_beam").damage,
     );
@@ -122,18 +105,13 @@ describe("cadence is a real tradeoff, not a free upgrade", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Integration — the module fires each weapon on its own cadence
-// ---------------------------------------------------------------------------
 describe("CombatModule fires per-weapon cadence", () => {
   it("a cooldownTurns:3 weapon fires ~⅓ as often as a cooldownTurns:1 weapon over a fixed window", () => {
     const window = BASE * 12; // 12 quick intervals / 4 slow intervals
     const pulseShots = countShots("wpn_pulse", window); // cooldownTurns 1
     const beamShots = countShots("wpn_beam", window); // cooldownTurns 3
-    // The quick weapon should fire roughly 3× as often as the slow one.
     expect(pulseShots).toBeGreaterThan(beamShots * 2.5);
     expect(pulseShots).toBeLessThan(beamShots * 3.5);
-    // And both fire about as many times as their interval predicts.
     expect(pulseShots).toBeGreaterThanOrEqual(10); // ~12 expected
     expect(beamShots).toBeGreaterThanOrEqual(3); // ~4 expected
   });
@@ -160,9 +138,6 @@ describe("CombatModule fires per-weapon cadence", () => {
 
   it("a cooldownTurns:3 weapon's first shot after engaging lands well before the full cold-start interval (engage pre-charge)", () => {
     const beamInterval = weaponFireIntervalMs(weapon("wpn_beam")); // 7500 ms
-    // The timer is SEEDED with `interval × fraction` already elapsed, so the
-    // remaining wait before the first shot is `interval × (1 − fraction)` —
-    // and it must be materially shorter than the full cold start.
     const budget =
       beamInterval * (1 - GAME_BALANCE.combatEngagePrechargeFraction);
     expect(budget).toBeLessThan(beamInterval);
@@ -179,8 +154,6 @@ describe("CombatModule fires per-weapon cadence", () => {
 
   it("engage pre-charge does not change steady-state cadence — the second shot still waits the full interval", () => {
     const beamInterval = weaponFireIntervalMs(weapon("wpn_beam"));
-    // Remaining wait to the pre-charged first shot (the timer starts at
-    // `interval × fraction` elapsed).
     const budget =
       beamInterval * (1 - GAME_BALANCE.combatEngagePrechargeFraction);
     const { module } = moduleWith("wpn_beam");
@@ -198,12 +171,7 @@ describe("CombatModule fires per-weapon cadence", () => {
   });
 
   it("a second combatant joining the active fight does not re-prime in-flight weapon timers", () => {
-    // The garrison-aggro path calls addCombatant every frame per aggressor —
-    // a mid-fight join must leave a nearly-charged weapon's schedule intact
-    // (prime runs only behind the !isActive fresh-engagement guard).
     const beamInterval = weaponFireIntervalMs(weapon("wpn_beam"));
-    // Remaining wait to the pre-charged first shot (timer seeded to
-    // `interval × fraction` elapsed).
     const budget =
       beamInterval * (1 - GAME_BALANCE.combatEngagePrechargeFraction);
     const { module } = moduleWith("wpn_beam");
@@ -218,14 +186,6 @@ describe("CombatModule fires per-weapon cadence", () => {
   });
 
   it("the pre-charge seeds ELAPSED time (interval × fraction) — pinned with a non-symmetric fraction", () => {
-    // At the shipped fraction 0.5 the seed is symmetric: `interval × f` ===
-    // `interval × (1 − f)`, so no 0.5-based test can tell elapsed-seeding
-    // (correct) from remaining-seeding (the inverted bug). Stub 0.75 to pin
-    // the semantics: seeded elapsed = 75% of the interval ⇒ the first shot
-    // lands after the REMAINING 25% — a remaining-seed implementation would
-    // instead wait 75% and red both assertions below.
-    // GAME_BALANCE is typed readonly; the runtime object is mutable, so a
-    // narrow cast lets the test stub the fraction and restore it after.
     const balance = GAME_BALANCE as unknown as {
       combatEngagePrechargeFraction: number;
     };

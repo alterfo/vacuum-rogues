@@ -65,9 +65,6 @@ import type { EquipmentSystem } from "@/systems/EquipmentSystem";
 import type { ResourceType } from "@/types";
 import { logger } from "@/utils/logger";
 
-// ── Hangar (SR-canon categorized fitting) ────────────────────────────────────
-
-/** Display label for each fitting bank (canon §11.3). */
 export const CATEGORY_LABEL: Record<SlotCategory, string> = {
   weapon: "ОРУЖИЕ",
   engine: "ДВИГАТЕЛЬ",
@@ -75,25 +72,16 @@ export const CATEGORY_LABEL: Record<SlotCategory, string> = {
   equipment: "ОБОРУДОВАНИЕ",
 };
 
-/**
- * Re-exported for `HangarPanel.test.ts`'s pinned import — the implementation
- * lives in `./gearIcon.ts` (shared with `EquipmentShopScene`'s gear listing).
- */
 export { gearIconKey };
 
-/** Historical fitted-slot box height at the "M" font scale — the floor a
- * font-scale-driven height never shrinks below. */
 const FITTED_SLOT_MIN_H = 34;
 
-/** Fitted-slot box height: name row + micromodule row, each sized off the
- * current font scale so the two lines never overlap at "L" (Task 3). */
 function fittedSlotHeight(): number {
   const nameStep = lineStepFor(scaledFont(11));
   const mmStep = lineStepFor(scaledFont(10));
   return Math.max(FITTED_SLOT_MIN_H, 4 + nameStep + mmStep + 4);
 }
 
-/** Russian goods names for the cargo hold (ТРЮМ) read-out. */
 export const RESOURCE_LABEL: Record<string, string> = {
   FUEL: "Топливо",
   METALS: "Металлы",
@@ -107,7 +95,6 @@ export const RESOURCE_LABEL: Record<string, string> = {
   DATA_CORES: "Ядра данных",
 };
 
-/** Computed geometry shared across the hangar's column renderers. */
 interface HangarLayout {
   readonly leftX: number;
   readonly leftW: number;
@@ -117,29 +104,16 @@ interface HangarLayout {
   readonly contentBottom: number;
 }
 
-/** A resolved installed-slot entry: the slot data, its flat loadout index
- *  (needed so [снять]/micromodule target the exact clicked copy), and its
- *  resolved catalog item. */
 interface FittedEntry {
   readonly slot: { gearId: string; micromoduleId?: string; upgrades: number };
   readonly idx: number;
   readonly gear: Gear;
 }
 
-/**
- * Why an install is blocked, or null when it would succeed. Engine/radar are
- * single slots that *replace* the current fitting, so they only fail on mass;
- * the weapon/equipment banks also fail when full.
- *
- * Shared by the hangar warehouse install path and the station's per-listing
- * install-block toast, so the message can never drift from {@link gearFit}.
- */
 export function explainInstallBlock(
   loadout: ShipLoadout,
   gearId: string,
 ): string | null {
-  // One source of truth for the fit decision — gearFit (also used by the
-  // equipment-shop per-listing hint) — so the toast can never drift from it.
   const fit = gearFit(loadout, gearId);
   switch (fit.status) {
     case "fits":
@@ -153,20 +127,6 @@ export function explainInstallBlock(
   }
 }
 
-/**
- * The micromodule-slot control shown on a fitted item that has no micromodule
- * yet: its label and whether it is an actionable button. Three distinct states
- * so the label never misleads —
- *  - `mmCategory === null`: the gear structurally **cannot** take a micromodule
- *    (a future non-fittable `GearKind`; hulls never reach a fitted slot). The
- *    old code showed "[нет микромодулей]" here too, wrongly implying that owning
- *    a module would help — so this returns a dedicated "not applicable" label;
- *  - the gear can take one but the player owns no compatible module: the
- *    "нет микромодулей" hint (buy one at a Центр крафта);
- *  - a compatible module is on hand: the actionable "install" label.
- *
- * Pure (no PixiJS/Player) so it's unit-testable directly.
- */
 export function micromoduleSlotControl(
   mmCategory: ModuleCategory | null,
   hasMatchingMm: boolean,
@@ -177,58 +137,24 @@ export function micromoduleSlotControl(
   return { label: "[установить микромодуль]", actionable: true };
 }
 
-/**
- * The host scene context the hangar panel draws against. Player/loadout are the
- * canonical fitting model; the callbacks let the panel coordinate scene-owned
- * concerns (toast, navigation, re-render) without forking any logic.
- */
 export interface HangarPanelContext {
-  /** Container the panel draws into (the host scene's main container). */
   readonly container: Container;
   readonly player: Player;
   readonly loadout: ShipLoadout | null;
-  /** Bank seam for selling owned gear (gameEngine.bank). */
   readonly bank?: BankAccess | null;
   readonly equipment: EquipmentSystem;
-  /** Saved КОМПЛЕКТАЦИЯ gear-loadout presets (0–3). */
   readonly presets: readonly LoadoutPreset[];
-  /** Persist an updated preset list back to the host (GameEngine.playerLoadoutPresets). */
   mutatePresets(next: LoadoutPreset[]): void;
-  /** Flash a status message in the panel's toast slot. */
   showToast(msg: string, color: number): void;
-  /** Play a one-shot sound effect for a hangar action (repair/sell/install/
-   *  jettison/preset). Optional — omitted in headless tests + no-op host stubs. */
   playSfx?(key: SfxKey): void;
-  /** Mount the host scene's toast at the given panel geometry. */
   addToastSlot(px: number, py: number, pw: number, ph: number): void;
-  /** Re-render the host scene (refreshes the hangar in place). */
   rerender(): void;
-  /** Leave the hangar back to the host scene's previous view. */
   back(): void;
-  /** Open the micromodule-apply sub-panel for a fitted slot. */
   openMicromoduleApply(slotIndex: number, gearId: string): void;
-  /** Repair rate (cr/HP) for СЕРВИСНЫЙ ЦЕНТР, so a station's own discounted
-   *  rate (`REPAIR_DISCOUNT`) isn't undercut by the hangar tab's default —
-   *  omit to use the planet Верфь baseline (`repairCost`'s default, 2 cr/HP). */
   readonly repairRatePerHp?: number;
 }
 
-/**
- * The shared slot-fitting hangar: the four categorized fitting banks (weapons /
- * engine / radar / equipment), the hull micromodule bank, the СКЛАД warehouse +
- * ТРЮМ cargo strip, and the drag-drop micromodule tray. Both `StationScene` and
- * `EquipmentShopScene` mount it so fitting looks and behaves identically.
- *
- * All mutations route through the canonical `ShipLoadout` + the shared gear
- * helpers (`installOwnedGear`, `sellUninstalledGear`, the GearBridge drag-drop
- * seam) — the panel is pure presentation over that model.
- */
 export class HangarPanel {
-  /**
-   * Drop zones registered while the hangar renders (drag-drop fitting): each
-   * fitted gear slot and each hull micromodule slot, in screen coords. A dropped
-   * micromodule chip hit-tests against these to find its target.
-   */
   private dropZones: Array<{
     x: number;
     y: number;
@@ -236,18 +162,15 @@ export class HangarPanel {
     h: number;
     target: MicromoduleDropTarget;
   }> = [];
-  /** In-flight micromodule drag — the chip's module + the ghost following the pointer. */
   private dragMicromodule: {
     mm: MicroModule;
     ghost: Container;
-    /** Ghost border/fill, re-tinted to signal a valid (green) / invalid (red) hover. */
     bg: Graphics;
     w: number;
     h: number;
   } | null = null;
   private dragMoveHandler: ((e: FederatedPointerEvent) => void) | null = null;
   private dragEndHandler: ((e: FederatedPointerEvent) => void) | null = null;
-  /** Screen rects of the draggable tray chips (drag *source*), for E2E. */
   private chipRects: Array<{
     id: string;
     x: number;
@@ -255,46 +178,24 @@ export class HangarPanel {
     w: number;
     h: number;
   }> = [];
-  /** The host context from the most recent render — read by the drag handlers,
-   *  which outlive a single render. Refreshed on every render. */
   private ctx: HangarPanelContext | null = null;
 
-  /** Two-step ВЫБРОСИТЬ/ШЛЮЗ confirmation armed by a СКЛАД/ТРЮМ [Выброс]
-   *  click — no credit refund (selling is the separate paid path). Persists
-   *  across a `ctx.rerender()` on this same instance until confirmed or
-   *  cancelled, mirroring `InventoryScene`'s `pendingJettison`. */
   private pendingJettison: { kind: "gear" | "resource"; id: string } | null =
     null;
 
-  /**
-   * The two scrollable content columns for the current render (left: hull
-   * micromodule bank + the four fitting banks; right: СКЛАД warehouse + ТРЮМ
-   * cargo). Rebuilt fresh every render() — the host scenes fully tear down
-   * and rebuild on every mutation (`rerender()` → full scene render), so
-   * there is no incremental content to preserve across renders.
-   */
   private leftContent: Container | null = null;
   private rightContent: Container | null = null;
-  /** Current/max px scroll offset per column — mutated in place by wheel/drag
-   *  handlers so `dropZoneAt` and `getScrollInfo` always read the live value. */
   private leftScroll = { offset: 0, max: 0 };
   private rightScroll = { offset: 0, max: 0 };
-  /** Detach fns for the two columns' window-level wheel listeners. Re-armed at
-   *  the top of every render() — a host rerender() fully rebuilds the panel's
-   *  display objects without disposing the HangarPanel instance itself, so a
-   *  stale listener from the previous render would otherwise leak and
-   *  double-scroll. */
   private detachLeftWheel: (() => void) | null = null;
   private detachRightWheel: (() => void) | null = null;
 
   constructor(private readonly renderer: Renderer) {}
 
-  /** Play a one-shot SFX for a hangar action, if the host wired the seam. */
   private sfx(key: SfxKey): void {
     this.ctx?.playSfx?.(key);
   }
 
-  /** Current scroll offset/max per column (E2E + tests, read-only). */
   getScrollInfo(): {
     left: { offset: number; max: number };
     right: { offset: number; max: number };
@@ -302,7 +203,6 @@ export class HangarPanel {
     return { left: { ...this.leftScroll }, right: { ...this.rightScroll } };
   }
 
-  /** Screen-coord drop zones for the current hangar render (read-only, for E2E). */
   getDropZones(): ReadonlyArray<{
     x: number;
     y: number;
@@ -313,7 +213,6 @@ export class HangarPanel {
     return this.dropZones;
   }
 
-  /** Screen-coord drag-source chip rects for the current hangar render (E2E). */
   getChipRects(): ReadonlyArray<{
     id: string;
     x: number;
@@ -324,7 +223,6 @@ export class HangarPanel {
     return this.chipRects;
   }
 
-  /** Tear down any in-flight drag + clear registered zones (host scene destroy). */
   dispose(): void {
     this.cancelMicromoduleDrag();
     this.detachScrollListeners();
@@ -333,7 +231,6 @@ export class HangarPanel {
     this.ctx = null;
   }
 
-  /** Detach both columns' window-level wheel listeners, if attached. */
   private detachScrollListeners(): void {
     this.detachLeftWheel?.();
     this.detachLeftWheel = null;
@@ -341,13 +238,8 @@ export class HangarPanel {
     this.detachRightWheel = null;
   }
 
-  /** Draw the full hangar board into the host container at panel geometry. */
   render(ctx: HangarPanelContext): void {
     this.ctx = ctx;
-    // A host rerender() fully rebuilds the panel's display objects on this
-    // same HangarPanel instance (dispose() is only called on scene destroy),
-    // so any wheel listener armed by the previous render must be detached
-    // first — otherwise it leaks and the content scrolls twice.
     this.detachScrollListeners();
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
@@ -380,8 +272,6 @@ export class HangarPanel {
     title.eventMode = "none";
     ctx.container.addChild(title);
 
-    // Hull is the ship itself (canon §11.3), shown as a centred banner rather
-    // than occupying a slot.
     const hullBanner = scaledText(
       loadout ? `Корпус: ${loadout.hull.name}` : "Корпус: —",
       12,
@@ -397,17 +287,12 @@ export class HangarPanel {
     this.renderPresetTabs(loadout, player, ctx.presets, PX, PY);
     this.renderHangarStats(loadout, PX, PY, PW);
 
-    // The drag-drop fitting board re-registers its drop zones + chip source
-    // rects each render.
     this.dropZones = [];
     this.chipRects = [];
 
     const CW = PW - 36;
     const gap = 18;
     const leftW = Math.round((CW - gap) * 0.55);
-    // Reserve a strip along the bottom for the draggable micromodule tray, above
-    // the [Назад] button. The two columns scroll within `contentTop..contentBottom`
-    // instead of clipping — see `wireScrollRegion`.
     const trayH = 64;
     const trayY = PY + PH - 38 - trayH;
     const layout: HangarLayout = {
@@ -419,21 +304,11 @@ export class HangarPanel {
       contentBottom: trayY - 8,
     };
 
-    // Each column's content draws into its own masked, scrollable Container
-    // (added to `ctx.container` up front so children appended by the
-    // sub-renderers below are already in the scene graph) rather than
-    // `ctx.container` directly — content that overflows the visible band is
-    // reachable by wheel/drag instead of being silently clipped (the
-    // reported bug: an installed item could render below the fold with no
-    // way to reach it).
     this.leftContent = new Container();
     this.rightContent = new Container();
     ctx.container.addChild(this.leftContent);
     ctx.container.addChild(this.rightContent);
 
-    // Hull micromodule bank sits atop the left column; the fitting banks flow
-    // below the y it consumes. Both draw unclipped — `bottomY` is the actual
-    // bottom of the drawn content, used below to size the scroll range.
     const banksTop = this.renderHullMicromoduleBank(layout, loadout);
     const leftBottomY = this.renderFittingRing(
       { ...layout, contentTop: banksTop },
@@ -468,10 +343,8 @@ export class HangarPanel {
       rightBottomY - layout.contentTop,
     );
 
-    // Toast slot so drag-drop fit hints (and sell/unequip messages) show here.
     ctx.addToastSlot(PX, PY, PW, PH);
 
-    // Back button
     const backBtn = scaledText("[ ← Назад ]", 14, 0xb4c4d4, {
       rawColor: true,
       fontFamily: "monospace",
@@ -488,19 +361,6 @@ export class HangarPanel {
     ctx.container.addChild(backBtn);
   }
 
-  /**
-   * Mask + wheel/drag-scroll a content column that already drew all of its
-   * children unclipped. Mirrors `ScrollableList`'s proven mask pattern (mask
-   * as a sibling of `content`, `addChild()`'d to the shared parent BEFORE
-   * `content.mask = mask` — a mask ignored by PixiJS 8 unless it's in the
-   * scene graph), adapted for heterogeneous, non-uniform-row content instead
-   * of a fixed `itemHeight` list.
-   *
-   * Returns a detach function for the window-level wheel listener (only
-   * attached when the column actually overflows), or `null` when everything
-   * already fits — mirroring `ScrollableList`'s `enableWheel && maxScroll > 0`
-   * gate so a fitting column never needlessly intercepts page scroll.
-   */
   private wireScrollRegion(
     content: Container,
     state: { offset: number; max: number },
@@ -520,11 +380,6 @@ export class HangarPanel {
     this.ctx!.container.addChild(mask);
     content.mask = mask;
 
-    // A mask clips render only — without a tracking hitArea the scrolled-out
-    // rows stay clickable in their old on-screen spots (real interactive
-    // children still hit-test correctly through the container's own
-    // transform; this hitArea exists so empty background space inside the
-    // column also catches a drag-scroll gesture).
     const hitArea = new Rectangle(x, contentTop, w, viewportH);
     content.eventMode = "static";
     content.hitArea = hitArea;
@@ -565,17 +420,6 @@ export class HangarPanel {
     return attachWheelScroll((dir) => scrollBy(dir * WHEEL_STEP));
   }
 
-  /**
-   * КОМПЛЕКТАЦИЯ 1/2/3 preset tabs, top-right of the header (free real
-   * estate: the title sits left, the hull banner is centred). Each tab is
-   * three independent actions — [Сохр] snapshots the live fitting into that
-   * slot (`captureLoadoutPreset` + `upsertLoadoutPreset`), [Прим] re-fits it
-   * via `applyLoadoutPreset` (missing/sold gear is silently skipped by the
-   * engine's normal install rules; the toast reports how many), [X] clears
-   * the slot (`removeLoadoutPreset`). [Прим]/[X] are disabled (dim, inert)
-   * while that slot has no saved preset; every action is disabled with no
-   * loadout mounted.
-   */
   private renderPresetTabs(
     loadout: ShipLoadout | null,
     player: Player,
@@ -678,7 +522,6 @@ export class HangarPanel {
     }
   }
 
-  /** МАССА / СВОБОДНО / СКОРОСТЬ / ЗАЩИТА strip under the title. */
   private renderHangarStats(
     loadout: ShipLoadout | null,
     PX: number,
@@ -725,20 +568,6 @@ export class HangarPanel {
     });
   }
 
-  /**
-   * The SR2-style fitting ring: a central hull view flanked by four visually
-   * grouped zones — ВООРУЖЕНИЕ (top, weapon bank), СИСТЕМА ДВИЖЕНИЯ (left,
-   * engine bank + fuel-tank items), СИСТЕМА ОТСЛЕЖИВАНИЯ (right, radar bank +
-   * scanner items), ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ (bottom, the rest of the
-   * shared equipment bank). The domain model underneath is untouched — still
-   * the four `SlotCategory` banks (`weapon`/`engine`/`radar`/`equipment`);
-   * fuel/scanner items are equipment-bank members that this view simply
-   * *displays* alongside their related zone. Draws unclipped into the
-   * scrollable `leftContent` — `wireScrollRegion` (called by `render()` once
-   * the true bottom is known) makes any overflow reachable by scroll instead
-   * of silently dropping it below the fold. Returns the y just past the last
-   * thing drawn, for sizing the scroll range.
-   */
   private renderFittingRing(
     layout: HangarLayout,
     loadout: ShipLoadout | null,
@@ -772,7 +601,6 @@ export class HangarPanel {
     const zeroCount = { used: 0, total: 0 };
     let y = contentTop;
 
-    // ── ВООРУЖЕНИЕ (top, full width) ──
     const wc = stats?.categories.weapon ?? zeroCount;
     y = this.renderRingZone(
       "ВООРУЖЕНИЕ",
@@ -787,7 +615,6 @@ export class HangarPanel {
     );
     y += 6;
 
-    // ── central hull view flanked by movement (left) / tracking (right) ──
     const zoneW = Math.round(leftW * 0.3);
     const hullX = leftX + zoneW + 8;
     const hullW = leftW - zoneW * 2 - 16;
@@ -823,7 +650,6 @@ export class HangarPanel {
 
     y = Math.max(leftBottom, hullBottom, rightBottom) + 6;
 
-    // ── ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ (bottom, full width) ──
     const qc = stats?.categories.equipment ?? zeroCount;
     y = this.renderRingZone(
       "ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ",
@@ -840,15 +666,6 @@ export class HangarPanel {
     return y;
   }
 
-  /**
-   * One ring zone: a visual group title, a `${label} used/total` header, its
-   * filled slots, then its remaining empty-slot placeholders. `entries` may
-   * mix items from more than one `SlotCategory` (e.g. movement shows engine +
-   * fuel); the header's used/total is derived from what this zone actually
-   * draws (`entries.length` / `entries.length + emptyCount`), not the
-   * underlying bank's own count, so it never disagrees with the boxes shown
-   * below it.
-   */
   private renderRingZone(
     groupTitle: string,
     cat: SlotCategory,
@@ -911,13 +728,6 @@ export class HangarPanel {
     return y + 8;
   }
 
-  /**
-   * The central ship view: per-hull art (`player_ships/<hullClass>`, falling
-   * back to the generic `ships/ranger` art the flight scene uses) or a small
-   * accent-colored placeholder when no art is loaded, plus the hull name.
-   * Returns the y just past the box, for sizing the row it shares with the
-   * movement/tracking zones.
-   */
   private renderHullArtBox(
     loadout: ShipLoadout | null,
     x: number,
@@ -965,9 +775,6 @@ export class HangarPanel {
       sp.eventMode = "none";
       container.addChild(sp);
     } else {
-      // No hull art loaded yet — a small accent mark stands in for the ship
-      // silhouette (Graphics.poly() isn't available in every render context
-      // this panel is unit-tested under, so the placeholder stays rect-only).
       const s = Math.min(w, h) * 0.34;
       const mark = new Graphics();
       mark
@@ -990,7 +797,6 @@ export class HangarPanel {
     return y + h;
   }
 
-  /** One occupied fitting slot: icon, name, [снять], and micromodule control. */
   private renderFilledSlot(
     x: number,
     w: number,
@@ -1004,9 +810,6 @@ export class HangarPanel {
     const gear = entry.gear;
     const slot = entry.slot;
     const idx = entry.idx;
-    // Name sits above the micromodule row; both steps scale with the current
-    // font setting so the two lines never overlap at "L" (Task 3: they used to
-    // sit at fixed y+4/y+20 offsets sized for the "M" line height).
     const nameStep = lineStepFor(scaledFont(11));
     const mmStep = lineStepFor(scaledFont(10));
 
@@ -1016,9 +819,6 @@ export class HangarPanel {
     slotBg.eventMode = "none";
     container.addChild(slotBg);
 
-    // Drop target: a dragged micromodule released over this fitted item lands on
-    // its exact slot index. Only empty slots accept one (one per item); a
-    // filled-slot drop is rejected with a hint by applyMicromoduleDrop.
     this.dropZones.push({
       x,
       y,
@@ -1056,10 +856,6 @@ export class HangarPanel {
     unBtn.cursor = "pointer";
     unBtn.on("pointerdown", (e) => {
       e.stopPropagation();
-      // Remove the exact clicked slot by index (not first id-match) so the right
-      // copy is removed with two identical items fitted. slotToBagModule carries
-      // the applied micromodule AND artifact-upgrade count onto the bagged item
-      // so re-installing restores both.
       if (loadout.removeAt(idx)) {
         player.inventory.addItem(slotToBagModule(gear, slot));
       }
@@ -1067,7 +863,6 @@ export class HangarPanel {
     });
     container.addChild(unBtn);
 
-    // Micromodule control — one per item, never removed.
     const mmCategory = gearMicromoduleCategory(gear);
     const mmRowY = y + 4 + nameStep;
     if (slot.micromoduleId) {
@@ -1087,11 +882,6 @@ export class HangarPanel {
         player.inventory.micromodules.some(
           (mm) => mm.targetCategory === mmCategory,
         );
-      // Explicit label via the pure resolver: spell out the action when a
-      // compatible micromodule is on hand, distinguish "you own none" from
-      // "this gear can't take one at all", and *why* it's disabled otherwise —
-      // the old "[+ микромодуль]" never said it slots an upgrade chip, and
-      // "[нет микромодулей]" wrongly implied a non-fittable item just lacked one.
       const control = micromoduleSlotControl(mmCategory, hasMatchingMm);
       const mmBtn = scaledText(
         control.label,
@@ -1122,15 +912,6 @@ export class HangarPanel {
     }
   }
 
-  // ── micromodule drag-drop fitting ───────────────────────────────────────────
-
-  /**
-   * The hull's own micromodule bank, rendered atop the left column as the drop
-   * target for hull micromodules (defense/cargo/energy-redirect). Shows each of
-   * the hull's 1–4 slots — fitted module name or "— свободно —" — and registers
-   * the whole bank as a single `{kind:"hull"}` drop zone. Returns the y below it
-   * so the fitting banks flow underneath. A null loadout renders nothing.
-   */
   private renderHullMicromoduleBank(
     layout: HangarLayout,
     loadout: ShipLoadout | null,
@@ -1185,8 +966,6 @@ export class HangarPanel {
       container.addChild(label);
     }
 
-    // One drop zone spanning the bank: applyMicromoduleDrop routes a HULL module
-    // into the next free slot (or rejects with "hull-full" when all are taken).
     this.dropZones.push({
       x: leftX,
       y: rowY,
@@ -1198,11 +977,6 @@ export class HangarPanel {
     return rowY + chipH + 12;
   }
 
-  /**
-   * The draggable owned-micromodule tray along the bottom of the hangar. Each
-   * owned micromodule is a chip the player drags onto a fitted item or the hull
-   * bank. Empty → a hint to buy them at a Центр крафта.
-   */
   private renderMicromoduleTray(
     px: number,
     py: number,
@@ -1243,7 +1017,6 @@ export class HangarPanel {
       const text = `${mm.name}`;
       const w = Math.min(220, 14 + text.length * 6.2);
       if (x + w > px + pw - 8) {
-        // No more horizontal room — flag the overflow rather than clip silently.
         const more = scaledText(`…+${owned.length - i}`, 11, 0x8aa0b4, {
           rawColor: true,
           fontFamily: "monospace",
@@ -1259,7 +1032,6 @@ export class HangarPanel {
     }
   }
 
-  /** One draggable micromodule chip in the tray. */
   private renderMicromoduleChip(
     mm: MicroModule,
     x: number,
@@ -1287,7 +1059,6 @@ export class HangarPanel {
 
     chip.eventMode = "static";
     chip.cursor = "grab";
-    // hitArea so the all-`none` children don't prune the event boundary.
     chip.hitArea = new Rectangle(0, 0, w, h);
     chip.on("pointerdown", (e: FederatedPointerEvent) => {
       e.stopPropagation();
@@ -1297,7 +1068,6 @@ export class HangarPanel {
     this.chipRects.push({ id: mm.id, x, y, w, h });
   }
 
-  /** Begin dragging a micromodule chip: a ghost follows the pointer until release. */
   private beginMicromoduleDrag(
     mm: MicroModule,
     e: FederatedPointerEvent,
@@ -1322,8 +1092,6 @@ export class HangarPanel {
     ghost.eventMode = "none";
     ghost.x = e.global.x - gw / 2;
     ghost.y = e.global.y - gh / 2;
-    // The ghost lives on the uiLayer, above the host container, so it floats
-    // over the board while dragging.
     this.renderer.uiLayer.addChild(ghost);
 
     this.dragMicromodule = { mm, ghost, bg: gbg, w: gw, h: gh };
@@ -1339,7 +1107,6 @@ export class HangarPanel {
     stage.on("pointerupoutside", this.dragEndHandler);
   }
 
-  /** Move the drag ghost; tint it by whether the hovered zone would accept the drop. */
   private updateMicromoduleDrag(e: FederatedPointerEvent): void {
     const drag = this.dragMicromodule;
     if (!drag) return;
@@ -1358,7 +1125,6 @@ export class HangarPanel {
     drag.bg.tint = tint;
   }
 
-  /** Release the drag: apply onto the hovered zone (or no-op) and refresh. */
   private endMicromoduleDrag(e: FederatedPointerEvent): void {
     const drag = this.dragMicromodule;
     if (!drag) return;
@@ -1371,7 +1137,6 @@ export class HangarPanel {
     const loadout = ctx?.loadout ?? null;
     const zone = this.dropZoneAt(dropX, dropY);
     if (!ctx || !player || !loadout || !zone) {
-      // Released over empty space — silently cancelled.
       ctx?.rerender();
       return;
     }
@@ -1392,7 +1157,6 @@ export class HangarPanel {
     );
   }
 
-  /** Tear down an in-flight drag: remove the ghost and detach stage listeners. */
   private cancelMicromoduleDrag(): void {
     if (this.dragMicromodule) {
       this.renderer.uiLayer.removeChild(this.dragMicromodule.ghost);
@@ -1411,14 +1175,6 @@ export class HangarPanel {
     }
   }
 
-  /**
-   * The registered drop zone containing the screen point, if any. Every
-   * current drop zone (hull micromodule bank + fitted gear slots) is
-   * registered by the left column's renderers in that column's unscrolled
-   * layout coordinates — `leftContent` visually shifts them by `-leftScroll.
-   * offset`, so translate the pointer's global y back into that same
-   * content-local space before comparing.
-   */
   private dropZoneAt(
     gx: number,
     gy: number,
@@ -1432,16 +1188,6 @@ export class HangarPanel {
     return null;
   }
 
-  /**
-   * Right column: the СКЛАД warehouse (owned-but-uninstalled gear + the legacy
-   * bag, each installable into its matching category or sellable) above the ТРЮМ
-   * cargo hold (goods, read-only). Installing routes through the loadout's
-   * category+mass rules; a blocked install shows a toast explaining why. Draws
-   * unclipped into the scrollable `rightContent` — `wireScrollRegion` (called by
-   * `render()` once the true bottom is known) makes any overflow reachable by
-   * scroll instead of silently dropping it below the fold. Returns the y just
-   * past the last thing drawn, for sizing the scroll range.
-   */
   private renderWarehouseAndCargo(
     layout: HangarLayout,
     loadout: ShipLoadout | null,
@@ -1449,9 +1195,6 @@ export class HangarPanel {
   ): number {
     const container = this.rightContent!;
     const { rightX, rightW, contentTop, contentBottom } = layout;
-    // СКЛАД starts at the top of the column; ТРЮМ nominally starts 60 % down
-    // (unchanged look for the common case), but is pushed further down below
-    // when the warehouse itself grows past that split — never overlapping it.
     const nominalSplitY = Math.round(
       contentTop + (contentBottom - contentTop) * 0.6,
     );
@@ -1465,9 +1208,6 @@ export class HangarPanel {
     sklLabel.eventMode = "none";
     container.addChild(sklLabel);
 
-    // Warehouse rows: canonical owned-uninstalled gear first (sellable), then the
-    // legacy inventory bag (install-only until the bag is retired). Both install
-    // into the matching category bank.
     const ownedIds = ownedUninstalledGear(player, loadout);
     const legacy = player.inventory.modules;
     type Row =
@@ -1489,14 +1229,7 @@ export class HangarPanel {
       empty.eventMode = "none";
       container.addChild(empty);
     }
-    // Vertical gap between the two stacked «Установить»/«Продать» actions —
-    // sized for the "M" line height (20 px cleared the ~14 px text) but that
-    // margin shrinks to zero at "L"; grow it with the font scale so the two
-    // buttons never overlap (Task 3).
     const btnGap = Math.max(20, lineStepFor(scaledFont(11)) + 4);
-    // Owned rows stack up to three actions («Установить»/«Продать»/«Выброс»,
-    // or the «Отмена»/«Выбросить» confirm pair) at `btnGap` apart — size the
-    // row for the tallest case so it never shrinks when a jettison is armed.
     const warehouseRowH = 12 + btnGap * 2 + 8;
     for (const row of rows) {
       const gearId =
@@ -1507,9 +1240,6 @@ export class HangarPanel {
           ? (gear?.name ?? gearId)
           : (legacy[row.index]?.name ?? gearId);
 
-      // Taller row so the two stacked actions below get a clear vertical gap
-      // («Установить» and «Продать» were 13 px apart — within text height, so
-      // they overlapped and got mis-tapped; see Task 3).
       const rowBg = new Graphics();
       rowBg
         .rect(rightX, y, rightW, warehouseRowH)
@@ -1548,8 +1278,6 @@ export class HangarPanel {
         this.pendingJettison.id === ownedGearId;
 
       if (confirmingJettison && ownedGearId) {
-        // ВЫБРОСИТЬ/ШЛЮЗ two-step confirm — replaces the normal row actions
-        // while armed so a mis-tap can't jettison without a second click.
         const cancelBtn = scaledText("[Отмена]", 11, 0x99aabb, {
           rawColor: true,
           fontFamily: "monospace",
@@ -1580,7 +1308,6 @@ export class HangarPanel {
         });
         container.addChild(confirmBtn);
       } else {
-        // Sell — only the canonical owned store is sellable.
         if (row.kind === "owned" && gear) {
           const sellBtn = scaledText(
             `[Продать ${sellGearPrice(gear)}₡]`,
@@ -1590,9 +1317,6 @@ export class HangarPanel {
           );
           sellBtn.anchor.set(1, 0.5);
           sellBtn.x = btnRight;
-          // Middle action: a font-scale-derived centre gap from «Установить»
-          // (y + 12) clears the text height at every scale so the stacked
-          // actions never overlap.
           sellBtn.y = y + 12 + btnGap;
           sellBtn.eventMode = "static";
           sellBtn.cursor = "pointer";
@@ -1611,7 +1335,6 @@ export class HangarPanel {
           container.addChild(sellBtn);
         }
 
-        // Install into the matching category — catalog non-hull gear only.
         const installable = !!gear && gear.kind !== GearKind.HULL && !!loadout;
         if (installable && loadout) {
           const eqBtn = scaledText("[Установить]", 11, 0x44ddaa, {
@@ -1620,7 +1343,6 @@ export class HangarPanel {
           });
           eqBtn.anchor.set(1, 0.5);
           eqBtn.x = btnRight;
-          // Top action — paired with «Продать» at `btnGap` below.
           eqBtn.y = y + 12;
           eqBtn.eventMode = "static";
           eqBtn.cursor = "pointer";
@@ -1637,8 +1359,6 @@ export class HangarPanel {
           container.addChild(eqBtn);
         }
 
-        // Jettison-to-space (ВЫБРОСИТЬ/ШЛЮЗ) — owned store only, no refund;
-        // arms the two-step confirm above instead of discarding immediately.
         if (ownedGearId) {
           const jettisonBtn = scaledText("[Выброс]", 11, 0xff8844, {
             rawColor: true,
@@ -1646,7 +1366,6 @@ export class HangarPanel {
           });
           jettisonBtn.anchor.set(1, 0.5);
           jettisonBtn.x = btnRight;
-          // Bottom action — two `btnGap` steps below «Установить».
           jettisonBtn.y = y + 12 + btnGap * 2;
           jettisonBtn.eventMode = "static";
           jettisonBtn.cursor = "pointer";
@@ -1660,10 +1379,6 @@ export class HangarPanel {
       y += warehouseRowH + 8;
     }
 
-    // ── ТРЮМ — cargo hold (goods), separate read-only panel. Starts at the
-    // nominal 60 % split (unchanged look when the warehouse is short), but
-    // never overlaps a warehouse that grew past it — pushed down to clear the
-    // last drawn row plus a gap instead.
     const splitY = Math.max(nominalSplitY, y + 12);
     const stats = loadout?.derivedStats() ?? null;
     const resources = player.inventory.resources.filter((r) => r.amount > 0);
@@ -1696,9 +1411,6 @@ export class HangarPanel {
         const confirmingResource =
           this.pendingJettison?.kind === "resource" &&
           this.pendingJettison.id === r.type;
-        // Stacked confirm pair needs two `btnGap`-spaced lines below the
-        // label instead of the normal single-line row — mirrors the СКЛАД
-        // row's confirm layout so the two zones behave identically.
         const rowH = confirmingResource ? 8 + btnGap * 2 : 18;
 
         const label = RESOURCE_LABEL[r.type] ?? r.type;
@@ -1763,15 +1475,6 @@ export class HangarPanel {
     return cy;
   }
 
-  /**
-   * СЕРВИСНЫЙ ЦЕНТР — hull repair status + a single [Полный ремонт <cost>₡]
-   * action, drawn below the ТРЮМ cargo strip in the same scrollable right
-   * column. Prices off the shared `repairCost` seam (`hullStatus.ts`) so the
-   * bill can never drift from the hangar's own percent read-out; syncs the
-   * live ship to the canonical loadout max first (`applyLoadoutHullToShip`,
-   * same as the planet Верфь) so a stale `ship.maxHull` can't under/over-charge.
-   * Returns the y just past the block, for sizing the column's scroll range.
-   */
   private renderServiceCenter(
     layout: HangarLayout,
     loadout: ShipLoadout | null,
@@ -1847,8 +1550,6 @@ export class HangarPanel {
       );
       ship.repair();
       this.sfx("buy");
-      // Robot-assistant diagnostic voice (canon §11.4) instead of a bare
-      // mechanical confirmation.
       this.ctx!.showToast(diagnosticVoiceLine(cost), 0x44ff88);
       this.ctx!.rerender();
     });
@@ -1856,11 +1557,6 @@ export class HangarPanel {
     return y + 20;
   }
 
-  /**
-   * Install a warehouse row into the loadout, routing it to its category bank.
-   * Blocks with an explanatory toast when the category is full or the install
-   * would exceed the hull's mass budget (even with a free slot elsewhere).
-   */
   private installFromWarehouse(
     loadout: ShipLoadout,
     player: Player,
@@ -1877,13 +1573,8 @@ export class HangarPanel {
     if (row.kind === "owned") {
       installOwnedGear(player, loadout, gearId);
     } else if (mod) {
-      // An engine/radar install replaces the fitted single-slot part; capture it
-      // first so the displaced item is re-bagged, not destroyed (the owned/buy/
-      // loot paths all re-home it — this legacy path must too).
       const displaced = loadout.displacedBy(mod.id);
       if (this.ctx!.equipment.installGear(loadout, mod.id)) {
-        // Restore the micromodule + artifact-upgrade count carried on a
-        // previously-removed item onto the freshly-filled slot (install appends).
         const lastSlot = loadout.installedGearIds().length - 1;
         if (mod.micromoduleId) {
           loadout.applyMicromoduleAt(lastSlot, mod.micromoduleId);
@@ -1898,26 +1589,20 @@ export class HangarPanel {
         }
       }
     }
-    // Reached only on a non-blocked install (the block path returned above), so
-    // the fit succeeded — confirm it with the install click.
     this.sfx("ui_click");
     this.ctx!.rerender();
   }
 
-  /** Arm a two-step ВЫБРОСИТЬ/ШЛЮЗ confirmation for an owned gear id or a
-   *  held cargo resource type. */
   private requestJettisonConfirm(kind: "gear" | "resource", id: string): void {
     this.pendingJettison = { kind, id };
     this.ctx!.rerender();
   }
 
-  /** Disarm an armed jettison confirmation without discarding anything. */
   private cancelJettisonConfirm(): void {
     this.pendingJettison = null;
     this.ctx!.rerender();
   }
 
-  /** Carry out the armed jettison — no credit refund (selling is the paid path). */
   private confirmJettison(): void {
     const pending = this.pendingJettison;
     this.pendingJettison = null;

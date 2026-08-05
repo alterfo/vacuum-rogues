@@ -6,9 +6,6 @@ import type {
 import type { Quest } from "@/domain/Quest";
 import type { Player } from "@/domain/Player";
 
-/**
- * Mock implementation of IQuestService for testing.
- */
 export class MockQuestService implements IQuestService {
   public activeQuests: Quest[] = [];
   public completedQuestIds: string[] = [];

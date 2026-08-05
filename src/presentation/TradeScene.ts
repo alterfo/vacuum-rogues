@@ -18,34 +18,20 @@ interface TradeContext {
   planet?: Planet;
 }
 
-/**
- * Trade Scene - buy and sell resources at a planet's market.
- * Reached from PlanetScene via the "Маркет" button. Uses TradeSystem for
- * pricing and transaction logic; returns to the originating planet on close.
- */
 export class TradeScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
   private readonly tradeSystem = new TradeSystem();
   private mainContainer: Container | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
-  /** Per-resource quantity selector state (persists across refresh). */
   private readonly tradeQty = new Map<ResourceType, number>();
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  /** Localized display name for a market good (falls back to the raw id). */
   private resourceName(resource: ResourceType | string): string {
     return t(`resource.${resource}`);
   }
 
-  /**
-   * The faction controlling this planet's system — the real key into
-   * `player.reputation` for pricing (live report 2026-07-19: `TradeSystem`
-   * used to read `player.reputation[planet.id]`, a key that never matched any
-   * real faction id, silently zeroing the reputation-price effect).
-   */
   private planetFaction(): Faction | undefined {
     if (!this.gameEngine?.galaxy || !this.planet) return undefined;
     return this.gameEngine.galaxy.systems.find((s) =>
@@ -74,11 +60,6 @@ export class TradeScene extends GameScene {
     logger.info(`TradeScene initialized at ${this.planet?.name ?? "unknown"}`);
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so it sits above the panel and survives the
-   * scene's `refresh()` UI rebuilds (which only touch `uiLayer`).
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -157,7 +138,6 @@ export class TradeScene extends GameScene {
       true,
     );
 
-    // Column headers
     const top = panelY + 55;
     this.addText(t("trade.colResource"), panelX + 20, top, 12, 0xaaaaaa);
     this.addText(t("trade.colBuy"), panelX + 195, top, 12, 0xaaaaaa);
@@ -170,8 +150,6 @@ export class TradeScene extends GameScene {
       (sum, r) => sum + r.amount,
       0,
     );
-    // Authoritative hold size comes from the canonical loadout, not the legacy
-    // hull-class getter (which can drift when only one model is updated).
     const cargoCapacity = cargoCapacityOf(this.gameEngine.playerLoadout);
     const freeHold = Math.max(0, cargoCapacity - totalCargo);
 
@@ -194,7 +172,6 @@ export class TradeScene extends GameScene {
         player.inventory.resources.find((r) => r.type === resource)?.amount ??
         0;
 
-      // Qty caps
       const maxBuyQty = Math.max(
         0,
         Math.min(
@@ -223,17 +200,14 @@ export class TradeScene extends GameScene {
         owned > 0 ? 0x00ff88 : 0xaaaaaa,
       );
 
-      // Quantity selector: [-] qty [+] [Макс]
       const maxQty = Math.max(maxBuyQty, maxSellQty);
       this.addQtySelector(resource, qty, maxQty, panelX + 440, y - 2);
 
-      // Deal indicators: compare current price against base (galaxy average)
       const basePrice = this.tradeSystem.getBasePrice(resource);
       const threshold = GAME_BALANCE.tradeDealThreshold;
       const isBuyDeal = buyPrice < basePrice * (1 - threshold);
       const isSellDeal = sellPrice > basePrice * (1 + threshold);
 
-      // Buy button — disabled when cargo is full
       const canBuy = maxBuyQty > 0;
       const buyBtn = this.createButton(
         t("common.buy"),
@@ -258,7 +232,6 @@ export class TradeScene extends GameScene {
       }
       this.mainContainer!.addChild(buyBtn);
 
-      // Sell button — disabled when owned === 0
       const canSell = owned > 0;
       const sellBtn = this.createButton(
         t("common.sell"),
@@ -290,7 +263,6 @@ export class TradeScene extends GameScene {
       y += 44;
     }
 
-    // Close / leave button
     const closeBtn = this.createButton(
       t("trade.leave"),
       panelX + panelW - 200,
@@ -326,7 +298,6 @@ export class TradeScene extends GameScene {
     const btnW = 22;
     const btnH = 22;
 
-    // [-] button
     const minusBtn = new Container();
     minusBtn.x = x;
     minusBtn.y = y;
@@ -351,7 +322,6 @@ export class TradeScene extends GameScene {
     });
     this.mainContainer.addChild(minusBtn);
 
-    // qty label
     const qtyLbl = scaledText(String(qty), 13, 0xffffff, { rawColor: true });
     qtyLbl.anchor.set(0.5, 0);
     qtyLbl.x = x + btnW + 18;
@@ -359,7 +329,6 @@ export class TradeScene extends GameScene {
     qtyLbl.eventMode = "none";
     this.mainContainer.addChild(qtyLbl);
 
-    // [+] button
     const plusBtn = new Container();
     plusBtn.x = x + btnW + 36;
     plusBtn.y = y;
@@ -384,7 +353,6 @@ export class TradeScene extends GameScene {
     });
     this.mainContainer.addChild(plusBtn);
 
-    // [Макс] button — sets qty to maximum affordable/holdable amount
     const maxBtn = new Container();
     maxBtn.x = x + btnW + 36 + btnW + 4;
     maxBtn.y = y;
@@ -466,8 +434,6 @@ export class TradeScene extends GameScene {
       logger.error("Trade failed:", error);
       toast = { message: t("trade.failed"), color: 0xff5555 };
     }
-    // Rebuild the panel with updated prices/balances first, then show the
-    // feedback toast on top of the fresh container so it isn't wiped.
     this.refresh();
     this.showToast(toast.message, toast.color);
   }
@@ -620,7 +586,6 @@ export class TradeScene extends GameScene {
     return btn;
   }
 
-  /** E2E helper: buy qty units of resource; returns true if all purchases succeeded */
   e2eBuyItem(resource: ResourceType, qty: number): boolean {
     for (let i = 0; i < qty; i++) {
       this.trade(resource, true);
@@ -628,7 +593,6 @@ export class TradeScene extends GameScene {
     return (this.gameEngine?.player?.credits ?? 0) >= 0;
   }
 
-  /** E2E helper: sell qty units of resource; returns true if the market was driven */
   e2eSellItem(resource: ResourceType, qty: number): boolean {
     for (let i = 0; i < qty; i++) {
       this.trade(resource, false);

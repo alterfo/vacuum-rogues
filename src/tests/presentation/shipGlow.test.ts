@@ -1,19 +1,5 @@
-/**
- * Sprint 3 Task 5: add a ship outline + volumetric glow so the player ship has
- * 3D presence and stays visible against dark space.
- *
- * After initialize() the PlayerShipRenderer must own a `shipGlow` Graphics that
- * is blurred (one filter) and drawn behind the hull. drawShip() must re-stroke
- * the hull polygon so the silhouette has a crisp cyan rim. This guards against a
- * regression that drops the outline or the volumetric glow.
- *
- * Retargeted to PlayerShipRenderer after the SOLID refactor (Task 7) extracted
- * the ship rendering out of SpaceFlightScene.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock pixi.js so the renderer can be exercised in jsdom without a real GPU
-// context; the Graphics mock records circle/fill/stroke/poly calls for assertion.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -127,17 +113,14 @@ describe("shipGlow: outline + volumetric glow give the ship 3D presence", () => 
     const glow = s.shipGlow as GraphicsMock | null;
     expect(glow).not.toBeNull();
     expect(glow).toBeDefined();
-    // The glow is filled circles (the volumetric blob)...
     expect(glow!.circle).toHaveBeenCalled();
     expect(glow!.fill).toHaveBeenCalled();
-    // ...and carries NO blur filter (per-frame blurs removed for FPS).
     const filters = Array.isArray(glow!.filters) ? glow!.filters : [];
     expect(filters.length).toBe(0);
   });
 
   it("re-strokes the procedural hull for a crisp rim outline", () => {
     const g = s.shipGraphics as GraphicsMock;
-    // Procedural path (no ship texture in the mock): hull is filled AND stroked.
     expect(g.poly).toHaveBeenCalled();
     expect(g.fill).toHaveBeenCalled();
     expect(g.stroke).toHaveBeenCalled();
@@ -146,7 +129,6 @@ describe("shipGlow: outline + volumetric glow give the ship 3D presence", () => 
   it("draws an engine flame only while moving", () => {
     const g = s.shipGraphics as GraphicsMock;
     const polyAtRest = g.poly.mock.calls.length;
-    // While moving, drawShip adds the engine-glow polygon → more poly calls.
     physics.isMoving = true;
     (ship as unknown as { drawShip(): void }).drawShip();
     expect(g.poly.mock.calls.length).toBeGreaterThan(polyAtRest);

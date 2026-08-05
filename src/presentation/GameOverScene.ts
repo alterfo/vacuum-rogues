@@ -14,20 +14,6 @@ interface GameOverAction {
   readonly run: () => void;
 }
 
-/**
- * Terminal screen shown when the player ship is destroyed in flight combat
- * (plan 20260619-player-death-gameover-and-takeoff-autosave). Mirrors the
- * WinScene terminal-screen shape but offers two non-destructive recoveries:
- *
- *  - «Загрузить сохранение» rolls back to the last takeoff autosave (the
- *    `"auto"` slot — death never overwrites it, so this returns the player to
- *    their most recent takeoff).
- *  - «Начать заново» starts a fresh game via the existing race-selection path.
- *
- * The two actions are the single source of truth for both rendering and the
- * e2e/test seam ({@link e2eActions}), so a test can assert the labels without
- * pixel-clicking.
- */
 export class GameOverScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private container: Container | null = null;
@@ -63,12 +49,10 @@ export class GameOverScene extends GameScene {
     this.gameEngine = null;
   }
 
-  /** e2e/test seam: the recovery action labels in display order. */
   e2eActions(): string[] {
     return this.actions.map((a) => a.label);
   }
 
-  /** e2e/test seam: invoke an action by its label (bypasses pixel hit-testing). */
   e2eRunAction(label: string): void {
     this.actions.find((a) => a.label === label)?.run();
   }
@@ -107,7 +91,6 @@ export class GameOverScene extends GameScene {
     }
   }
 
-  /** «Загрузить сохранение» → restore the last takeoff autosave (`"auto"`). */
   private loadAutosave(): void {
     const engine = this.gameEngine;
     if (!engine) {
@@ -122,7 +105,6 @@ export class GameOverScene extends GameScene {
           engine.hideLoadingOverlay();
           logger.warn("GameOverScene: no takeoff autosave to load");
         }
-        // On success loadGame transitions away → this scene is destroyed.
       })
       .catch((err) => {
         engine.hideLoadingOverlay();
@@ -130,12 +112,6 @@ export class GameOverScene extends GameScene {
       });
   }
 
-  /**
-   * «Начать заново» → the existing new-game path. Routes through
-   * {@link GameEngine.restartNewGame} so game state is reset (player nulled,
-   * galaxy regenerated, guards cleared) BEFORE race selection — otherwise the
-   * dead player carries over and the "fresh" game reuses the destroyed ship.
-   */
   private startOver(): void {
     const engine = this.gameEngine;
     if (!engine) {

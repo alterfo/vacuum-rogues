@@ -9,25 +9,11 @@ interface WarpArrivalEffect {
   duration: number;
 }
 
-/**
- * Warp-exit flourish (US-043): a bright flash, expanding shock rings and a
- * lingering glow at the point where the ship drops out of hyperspace. Extracted
- * from SpaceFlightScene as a self-contained visual decoration — the scene just
- * calls {@link play} on arrival and {@link update} each frame. Owns its single
- * transient effect container on the game layer (Information Expert / SRP).
- */
 export class WarpEffectRenderer {
   private warpEffect: WarpArrivalEffect | null = null;
 
   constructor(private readonly gameLayer: Container) {}
 
-  /**
-   * A BlurFilter with generous padding. PixiJS renders a filter into a texture
-   * sized to the object's bounds + padding; if the padding is too small the
-   * blur is clipped at the texture edge and shows as a hard rectangular band —
-   * especially once the gameLayer is scaled by the camera zoom. Padding ~2×
-   * the blur strength keeps the falloff inside the texture so no edge appears.
-   */
   private paddedBlur(strength: number): BlurFilter {
     const f = new BlurFilter({ strength });
     f.padding = Math.ceil(strength * 3 + 24);
@@ -35,7 +21,6 @@ export class WarpEffectRenderer {
     return f;
   }
 
-  /** Spawn the warp-exit flourish at a world point. Replaces any active effect. */
   play(x: number, y: number): void {
     const container = new Container();
     container.x = x;
@@ -72,14 +57,6 @@ export class WarpEffectRenderer {
     };
   }
 
-  /**
-   * Dispose the effect's flash/glow BlurFilters. `Container.destroy({children})`
-   * removes the display objects but does NOT release filter GPU textures, so the
-   * BlurFilters must be disposed explicitly or they leak — once per warp arrival
-   * (the {@link update} completion path) and on scene teardown ({@link destroy},
-   * which removes the container before the scene's layer-wide filter sweep can
-   * reach it).
-   */
   private disposeEffectFilters(fx: WarpArrivalEffect): void {
     for (const node of [fx.flash, fx.glow]) {
       const fs = node.filters;
@@ -88,7 +65,6 @@ export class WarpEffectRenderer {
     }
   }
 
-  /** Animate the warp-exit flash + expanding rings, then clean up. */
   update(deltaTime: number): void {
     const fx = this.warpEffect;
     if (!fx) return;
@@ -96,15 +72,12 @@ export class WarpEffectRenderer {
     fx.elapsed += deltaTime;
     const t = Math.min(1, fx.elapsed / fx.duration);
 
-    // Flash: bright then fades fast.
     fx.flash.alpha = Math.max(0, 1 - t * 2.2);
     fx.flash.scale.set(1 + t * 0.6);
 
-    // Glow: swells in, fades out over the full duration.
     fx.glow.alpha = Math.sin(t * Math.PI) * 0.6;
     fx.glow.scale.set(0.6 + t * 1.4);
 
-    // Rings: staggered expansion outward, thinning as they grow.
     fx.rings.forEach((ring, i) => {
       const rt = Math.max(0, Math.min(1, t * 1.3 - i * 0.18));
       ring.scale.set(0.2 + rt * 8);
@@ -119,12 +92,10 @@ export class WarpEffectRenderer {
     }
   }
 
-  /** True while an effect is mid-animation (for tests / state checks). */
   get isActive(): boolean {
     return this.warpEffect !== null;
   }
 
-  /** Tear down any in-flight effect (called from the scene's destroy()). */
   destroy(): void {
     const fx = this.warpEffect;
     if (fx) {

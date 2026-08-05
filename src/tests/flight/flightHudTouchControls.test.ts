@@ -1,16 +1,3 @@
-/**
- * Mobile adaptation Task 3 — the HUD's touch-only «✕» cancel button (the
- * on-screen twin of the Esc key). On a coarse-pointer touch layout the HUD grows
- * a ✕ button left of «ХОД» that fans out via {@link FlightHud.onCancel}; on a
- * fine-pointer desktop it is **never built** (the desktop HUD is unchanged). The
- * scene wires onCancel to the exact action Escape runs (asserted by the
- * flightKeyHandler suite / scene wiring) — here we prove the HUD side: the button
- * appears only on touch and dispatches onCancel via the real pointer path.
- *
- * Built against a REAL PixiJS scene graph in jsdom (mirrors inFlightMenu.test.ts);
- * the touch *device* is faked by stubbing the window pointer/size globals that
- * `isTouchLayoutActive` reads.
- */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { Container, Text } from "pixi.js";
 
@@ -24,7 +11,6 @@ afterEach(() => {
   vi.unstubAllGlobals(); // never leak the faked touch env into other tests
 });
 
-/** Fake a coarse-pointer phone so `isTouchLayoutActive()` reads true. */
 function stubTouchEnv(): void {
   vi.stubGlobal("matchMedia", (q: string) => ({
     matches: q.includes("coarse"),
@@ -85,7 +71,6 @@ describe("FlightHud — touch ✕ cancel button", () => {
   });
 
   it("is NOT built on a fine-pointer desktop (HUD unchanged)", () => {
-    // No stub → default jsdom env has no coarse pointer → gate is off.
     const { hud, uiLayer } = build();
     hud.initialize();
     expect(allTexts(uiLayer).some((t) => t.text === "✕")).toBe(false);
@@ -104,11 +89,6 @@ describe("FlightHud — touch ✕ cancel button", () => {
   });
 
   it("on a narrow phone the ✕/ХОД pair shifts right of the bottom-left [МЕНЮ] lane instead of overlapping it", () => {
-    // Regression: with [МЕНЮ] at its bottom-left corner anchor (x=20, y=h-40)
-    // the centred ✕ (x = w/2 - 134, same bottom band) lands on top of the
-    // [МЕНЮ] text under ~430px width and steals its taps. The cluster must
-    // clamp right of the [МЕНЮ]/♿ lane (BOTTOM_LEFT_LANE_W = 104 in
-    // FlightHud.ts — [МЕНЮ]'s x=20 + ~65px bold text at the largest scale).
     stubTouchEnv();
     const { hud, uiLayer } = build(390, 844);
     hud.initialize();
@@ -120,21 +100,16 @@ describe("FlightHud — touch ✕ cancel button", () => {
       if (!node) throw new Error(`No clickable ancestor for "${label}"`);
       return node.x;
     };
-    // Creation path: the ✕ clears the lane, ХОД keeps its 64px offset from it.
     expect(buttonX("✕")).toBeGreaterThanOrEqual(104);
     expect(buttonX("▶ ХОД")).toBe(buttonX("✕") + 64);
-    // Resize path (reposition) holds the same clamp.
     hud.reposition(390, 844);
     expect(buttonX("✕")).toBeGreaterThanOrEqual(104);
-    // A wide touch screen keeps the exact centred position (no clamp).
     hud.reposition(800, 600);
     expect(buttonX("✕")).toBe(800 / 2 - 134);
     hud.destroy();
   });
 
   it("survives a font-scale restyle exactly once (no duplicate leak)", () => {
-    // refreshFontScale tears the HUD down and rebuilds it in place; the ✕ must
-    // come back exactly once (teardownUI nulls it, createUI re-gates it).
     stubTouchEnv();
     const { hud, uiLayer } = build();
     hud.initialize();

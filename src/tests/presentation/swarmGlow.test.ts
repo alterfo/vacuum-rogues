@@ -1,14 +1,5 @@
-/**
- * Sprint 3 Task 7: replace flat/rectangular swarm particles with glowing cosmic
- * swarms. Each swarm's mote Graphics gets a subtle per-Graphics BlurFilter (so
- * the tiny circles read as soft light orbs, not hard dots), and every swarm
- * layer carries a small `rotSpeed` so the whole cluster slowly turns and feels
- * alive. This guards against a regression that drops the glow or the spin.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mirror the pixi.js + presentation mocks from shipGlow.test.ts so the
-// SpaceFlightScene can be constructed in jsdom without a real renderer.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -169,7 +160,6 @@ describe("swarmGlow: glowing, slowly-spinning cosmic swarms", () => {
     const renderer = makeMockRenderer();
     background = new SpaceBackgroundLayer(
       renderer,
-      // skyContainer mock — createSwarms only touches nebulaeContainer below.
       {
         addChild: vi.fn(),
         children: [],
@@ -179,8 +169,6 @@ describe("swarmGlow: glowing, slowly-spinning cosmic swarms", () => {
       () => null,
     );
     s = background as unknown as Record<string, unknown>;
-    // createSwarms early-returns without a nebulae container; supply a mock that
-    // records the swarm containers added to it.
     s.nebulaeContainer = {
       addChild: vi.fn(),
       children: [] as unknown[],
@@ -202,8 +190,6 @@ describe("swarmGlow: glowing, slowly-spinning cosmic swarms", () => {
   it("keeps swarm motes blur-free (per-frame blurs removed for FPS)", () => {
     const layers = s.swarmLayers as SwarmLayer[];
     for (const layer of layers) {
-      // Neither the container nor the mote Graphics carries a BlurFilter now —
-      // each mote is a bright core + faint halo circle that reads as a light orb.
       expect(layer.container.filters.length).toBe(0);
       const moteGraphics = layer.container.addChild.mock.calls[0][0] as {
         filters: unknown[];

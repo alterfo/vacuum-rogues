@@ -62,10 +62,8 @@ describe("CombatAI — state machine", () => {
     const ai = new CombatAI();
     const action = ai.decide(enemy, encounter, grid);
 
-    // Enemy at q=7,r=4 and player at q=1,r=4 — enemy should move toward player
     expect(action.type).toBe("MOVE");
     if (action.type === "MOVE" && action.target) {
-      // The move should bring enemy closer to player (smaller q)
       expect(action.target.q).toBeLessThan(7);
     }
   });
@@ -73,7 +71,6 @@ describe("CombatAI — state machine", () => {
   it("attacks when adjacent to player", () => {
     const player = makePlayer();
     const enemy = makeEnemy(100);
-    // Place enemy 1 hex from player
     const { encounter, grid } = makeEncounterWithGrid(
       player,
       enemy,
@@ -91,15 +88,12 @@ describe("CombatAI — state machine", () => {
   it("retreats when HP is below 30%", () => {
     const player = makePlayer();
     const enemy = makeEnemy(100);
-    // Damage enemy to below 30% HP (maxHull = 100, so < 30)
     enemy.hullHP = 25;
     const { encounter, grid } = makeEncounterWithGrid(player, enemy);
 
     const ai = new CombatAI();
     const action = ai.decide(enemy, encounter, grid);
 
-    // Enemy at q=7 and player at q=1 — retreating means moving to higher q (away)
-    // or waiting if edge-blocked
     expect(action.type === "MOVE" || action.type === "WAIT").toBe(true);
     if (action.type === "MOVE" && action.target) {
       const distBefore = hexDistance({ q: 7, r: 4 }, { q: 1, r: 4 });
@@ -111,7 +105,6 @@ describe("CombatAI — state machine", () => {
   it("returns WAIT when entities not found on grid", () => {
     const player = makePlayer();
     const enemy = makeEnemy(100);
-    // Don't place them on any tile
     const grid = new HexGrid(9, 9);
     const encounter = new TacticalEncounter("enc", grid, player, [enemy]);
 
@@ -133,7 +126,6 @@ describe("CombatSystem — victory rewards (Task 9)", () => {
 
     const rewards = system.resolveVictory(enemies);
 
-    // techLevel 3 → 150 credits, techLevel 5 → 250 credits = 400 total
     expect(rewards.creditsGained).toBe(400);
   });
 
@@ -145,7 +137,6 @@ describe("CombatSystem — victory rewards (Task 9)", () => {
 
   it("loot array exists (may be empty due to RNG)", () => {
     const system = makeSystem();
-    // Mock Math.random to guarantee a drop
     vi.spyOn(Math, "random").mockReturnValue(0.1); // < 0.3 → drop
     const rewards = system.resolveVictory([makeEnemy(60, 4)]);
     expect(Array.isArray(rewards.loot)).toBe(true);
@@ -177,7 +168,6 @@ describe("CombatSystem — defeat condition (Task 9)", () => {
       nebulae: [],
     });
 
-    // Set player HP to 0 to trigger defeat
     player.hullHP = 0;
 
     const result = system.checkEndConditions();

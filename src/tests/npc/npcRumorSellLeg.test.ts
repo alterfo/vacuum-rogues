@@ -22,10 +22,6 @@ import { Faction } from "@/types/faction";
 const RESOURCE = ResourceType.METALS;
 const FROM = "sys_from";
 const TO = "sys_to";
-// The rumor's dear destination is the SECOND planet of the TO system — i.e. NOT
-// the first market planet `simulateTraderTrade` would otherwise default to. This
-// is the production-realistic case (every planet carries a full market), and the
-// case the buggy first-planet sell-leg silently mishandled.
 const TARGET_PLANET = "planet_to_b";
 
 function neutralMarket(): Market {
@@ -53,8 +49,6 @@ function makePlanet(id: string): Planet {
   );
 }
 
-/** Source: one market planet. Destination: TWO market planets; the rumor targets
- *  the second one. */
 function makeRouteGalaxy(): Galaxy {
   const from = new StarSystem(
     FROM,
@@ -136,15 +130,11 @@ describe("NPC rumor sell-leg targets the rumor's destination planet", () => {
 
     const sim = new NpcSimulator();
     const rng = new SeededRNG("sell_leg");
-    // Enough ticks for traders to divert at the source, travel, and arrive.
     for (let day = 0; day < 8; day++) {
       sim.tick(galaxy, rng);
     }
 
     const target = planetMarket(galaxy, TO, TARGET_PLANET);
-    // The diverted traders sold their METALS at the rumor's target planet, so its
-    // persistent multiplier fell below neutral. Under the old first-planet sell
-    // logic this planet was never sold to and would have stayed at 1.0.
     expect(target.multiplierFor(RESOURCE)).toBeLessThan(1.0);
   });
 });

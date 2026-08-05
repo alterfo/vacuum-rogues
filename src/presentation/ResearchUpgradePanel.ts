@@ -9,23 +9,11 @@ import { ResourceType } from "@/types";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
 
-/**
- * Panel rendered inside StationScene when the player visits a RESEARCH_LAB
- * and chooses the "Исследования" service.
- *
- * Lists all slotted gear from the canonical loadout, showing current upgrade
- * tier and artifact cost for the next upgrade.  Upgrades are capped at +2
- * per item; artifact cost is 2 for the first upgrade and 3 for the second
- * (5 total).
- */
 export class ResearchUpgradePanel {
   constructor(
     private readonly engine: GameEngine,
     private readonly onBack: () => void,
     private readonly showToast: (msg: string, color: number) => void,
-    // The scene owns the toast node; the panel re-mounts it at the end of every
-    // self-render (same contract HangarPanel uses) so a post-upgrade toast fired
-    // AFTER the re-render lands on a live slot instead of the wiped one.
     private readonly addToastSlot: (
       px: number,
       py: number,
@@ -34,7 +22,6 @@ export class ResearchUpgradePanel {
     ) => void,
   ) {}
 
-  /** Render the panel into `parent`; clears existing children first. */
   render(parent: Container, sw: number, sh: number): void {
     parent.removeChildren().forEach((c) => c.destroy({ children: true }));
     this.buildPanel(parent, sw, sh);
@@ -66,7 +53,6 @@ export class ResearchUpgradePanel {
     titleText.eventMode = "none";
     parent.addChild(titleText);
 
-    // Artifact count display
     const loadout = this.engine.playerLoadout;
     const player = this.engine.player;
     const artifactStack = player?.inventory.resources.find(
@@ -128,7 +114,6 @@ export class ResearchUpgradePanel {
             .fill({ color: 0x0a1810, alpha: 1 });
           parent.addChild(rowBg);
 
-          // Gear name + tech level
           const nameText = new Text({
             text: item.gear.name,
             style: { fontSize: 13, fill: 0xddeeff, fontFamily: "monospace" },
@@ -138,7 +123,6 @@ export class ResearchUpgradePanel {
           nameText.eventMode = "none";
           parent.addChild(nameText);
 
-          // Tech level and upgrade tier
           const techColor =
             currentUpgrades === 2
               ? 0xcc88ff
@@ -155,7 +139,6 @@ export class ResearchUpgradePanel {
           techText.eventMode = "none";
           parent.addChild(techText);
 
-          // Cost or max label
           const costLabel = maxed ? "Максимум" : `Улучшить: ${cost} арт.`;
           const costColor = maxed ? 0x445566 : canAfford ? 0xcc88ff : 0x664433;
           const costText = new Text({
@@ -168,7 +151,6 @@ export class ResearchUpgradePanel {
           costText.eventMode = "none";
           parent.addChild(costText);
 
-          // Upgrade button
           if (!maxed) {
             const btnLabel = canAfford ? "[Улучшить]" : "Мало арт.";
             const btnColor = canAfford ? 0xaa66ff : 0x443355;
@@ -212,7 +194,6 @@ export class ResearchUpgradePanel {
       }
     }
 
-    // Back button
     const back = new Text({
       text: "[ ← Назад ]",
       style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
@@ -234,8 +215,6 @@ export class ResearchUpgradePanel {
     });
     parent.addChild(back);
 
-    // Toast slot last so an upgrade-confirmation message renders on top and
-    // survives this panel's own re-render on the next upgrade.
     this.addToastSlot(PX, PY, PW, PH);
   }
 
@@ -274,8 +253,6 @@ export class ResearchUpgradePanel {
       logger.info(
         `ResearchUpgradePanel: upgraded ${gearId} to T${upgradedGear.techLevel} (+${upgradedGear.upgrades})`,
       );
-      // Re-render first so the toast slot is freshly mounted, THEN show the
-      // message — otherwise the re-render wipes the toast before it can paint.
       this.render(parent, sw, sh);
       this.showToast(
         `${baseGear.name} улучшен до T${upgradedGear.techLevel}!`,

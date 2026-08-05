@@ -1,15 +1,5 @@
-/**
- * Sprint 3 Task 9: undocking from a station / re-entering SPACE_FLIGHT must
- * spawn the ship NEXT TO the body it left (station, else last-landed planet),
- * not fling it to the distant system edge.
- *
- * These exercise the spawn-resolution helpers directly (running the full
- * `initialize()` in jsdom isn't practical — PlanetSprite is mocked there), with
- * a real ShipPhysics so the actual world coordinates are asserted.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Minimal pixi.js stub so SpaceFlightScene can be imported & constructed.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -145,7 +135,6 @@ function makeMockRenderer(): Renderer {
   } as unknown as Renderer;
 }
 
-/** Star is at screen centre (400, 300); ship "spawns" far away at the edge. */
 const STAR = { x: 400, y: 300 };
 const EDGE = { x: 400, y: 3000 };
 
@@ -160,14 +149,9 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
   beforeEach(() => {
     scene = new SpaceFlightScene(makeMockRenderer());
     s = scene as unknown as Record<string, unknown>;
-    // Star geometry now lives on the StarRenderer module; the spawn helpers read
-    // its centre. Stub it directly since these tests bypass initialize().
     s.starRenderer = { centerX: STAR.x, centerY: STAR.y };
     s.shipPhysics = new ShipPhysics(EDGE.x, EDGE.y, 0.1);
     s.shipContainer = { x: 0, y: 0 };
-    // Planet sprites + station markers now live on the PlanetManager module; the
-    // spawn helpers read them through it. Stub it directly (these tests bypass
-    // initialize(), so the real manager is never constructed).
     s.planetManager = {
       planetSprites: [
         {
@@ -188,7 +172,6 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
       }
     ).spawnShipBeside(700, 300, 80);
     const phys = s.shipPhysics as ShipPhysics;
-    // Body is due-east of the star → ship parks further east at radius+margin.
     expect(phys.shipX).toBeCloseTo(700 + 80 + 40, 5);
     expect(phys.shipY).toBeCloseTo(300, 5);
   });
@@ -210,7 +193,6 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
     ).applyReentrySpawn(undefined);
     const phys = s.shipPhysics as ShipPhysics;
     expect(dist(phys.shipX, phys.shipY, 700, 300)).toBeLessThanOrEqual(200);
-    // The landing site is consumed so later free-flight entries don't snap back.
     expect(player.landedPlanetId).toBeNull();
   });
 
@@ -225,14 +207,6 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// preserveShipPos entry-spawn precedence: a re-entry into SPACE_FLIGHT carrying a
-// preserveShipPos context must teleport the ship there, never edge-spawn it via
-// applyReentrySpawn (no marker). The font-scale restyle plan (Task 1) removed the
-// font-change re-init, but preserveShipPos still guards the other re-entry paths
-// (docking/landing/star-map round-trip), so this contract stays; a second test
-// pins that a font change now restyles in place instead of re-initialising.
-// ---------------------------------------------------------------------------
 describe("preserveShipPos entry spawn + font-scale restyle-in-place", () => {
   let scene: SpaceFlightScene;
   let s: Record<string, unknown>;
@@ -241,7 +215,6 @@ describe("preserveShipPos entry spawn + font-scale restyle-in-place", () => {
     scene = new SpaceFlightScene(makeMockRenderer());
     s = scene as unknown as Record<string, unknown>;
     s.starRenderer = { centerX: STAR.x, centerY: STAR.y };
-    // Park the ship in the middle of the system, far from the edge.
     s.shipPhysics = new ShipPhysics(900, 410, 0.1);
     s.planetManager = { planetSprites: [], stationMarkers: [] };
   });
@@ -268,7 +241,6 @@ describe("preserveShipPos entry spawn + font-scale restyle-in-place", () => {
 
     (scene as unknown as { onFontScaleChanged(): void }).onFontScaleChanged();
 
-    // The world is restyled in place, not rebuilt: no scene transition fires.
     expect(transitionTo).not.toHaveBeenCalled();
     expect(hud.refreshFontScale).toHaveBeenCalledTimes(1);
     expect(npcManager.refreshFontScale).toHaveBeenCalledTimes(1);

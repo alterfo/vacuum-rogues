@@ -11,14 +11,6 @@ import {
 } from "@/systems/equipment/GearBridge";
 import { InventorySchema } from "@/validation/schemas";
 
-/**
- * Task 3: the canonical owned-but-uninstalled-gear store. Purchases/loot that
- * aren't auto-installed land in `inventory.ownedGearIds`; installing moves an id
- * into the loadout; unequipping moves it back. `ownedUninstalledGear` is the
- * single accessor (owned − installed) both the hangar and shop ТРЮМ views read.
- */
-
-/** Minimal Player stand-in — the GearBridge helpers only touch `.inventory`. */
 function playerWith(inventory: Inventory): Player {
   return { inventory } as unknown as Player;
 }
@@ -61,10 +53,6 @@ describe("ownedUninstalledGear — owned minus installed", () => {
   });
 
   it("keeps an owned spare visible even when a duplicate is fitted", () => {
-    // Reproduces buying a second copy of already-installed gear with the slots
-    // full: the spare lands in `ownedGearIds` while a duplicate stays fitted. The
-    // spare is a distinct, paid-for item — it must remain visible and sellable,
-    // never cancelled out against the installed copy.
     const inv = new Inventory();
     inv.addOwnedGear("wpn_pulse");
     const loadout = new ShipLoadout("hull_corvette");
@@ -102,9 +90,6 @@ describe("acquire / install / uninstall transitions", () => {
   });
 
   it("installOwnedGear returns the displaced engine to the store (swap, no loss)", () => {
-    // An engine install replaces the single engine slot. The swapped-out engine
-    // must land back in the owned store, not be destroyed — otherwise the player
-    // loses a paid-for part every time they upgrade an engine from the hangar.
     const inv = new Inventory();
     inv.addOwnedGear("eq_engine_iii");
     const loadout = new ShipLoadout("hull_corvette");
@@ -114,7 +99,6 @@ describe("acquire / install / uninstall transitions", () => {
     expect(installOwnedGear(player, loadout, "eq_engine_iii")).toBe(true);
     expect(loadout.installedGearIds()).toContain("eq_engine_iii");
     expect(loadout.installedGearIds()).not.toContain("eq_engine_i");
-    // The old engine is recoverable in the store, not gone.
     expect(inv.ownedGearIds).toEqual(["eq_engine_i"]);
   });
 
@@ -134,8 +118,6 @@ describe("acquire / install / uninstall transitions", () => {
     const inv = new Inventory();
     inv.addOwnedGear("wpn_railgun");
     const loadout = new ShipLoadout("hull_corvette");
-    // Fill every bank in a valid SR-canon mix: 2 weapons + engine + radar +
-    // 3 additional equipment leaves no free weapon slot for the owned railgun.
     loadout.install("wpn_pulse");
     loadout.install("wpn_pulse");
     loadout.install("eq_engine_i");
@@ -238,7 +220,6 @@ describe("jettisonOwnedGear — drop an owned item with no refund (Bug 2)", () =
 
     expect(jettisonOwnedGear(player, "wpn_pulse")).toBe(true);
     expect(inv.ownedGearIds).toEqual([]);
-    // The fitted copy is untouched — jettison only ever drops the spare.
     expect(loadout.installedGearIds()).toContain("wpn_pulse");
   });
 });

@@ -1,16 +1,5 @@
-/**
- * Sprint 3 Task 4: replace solar corona + bezier prominences with a quality
- * 3-layer radial glow halo.
- *
- * After star setup the scene must own a halo container and must NOT carry any
- * animated-prominence state (the old `starProminenceData` field and the
- * triangular spikes / corona rings it drove are gone). This guards against a
- * regression that re-introduces the cheap-looking corona.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mirror the pixi.js + presentation mocks from hudCursors.test.ts so the
-// SpaceFlightScene can be constructed in jsdom without a real renderer.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -159,9 +148,6 @@ describe("starHalo: quality glow replaces corona + prominences", () => {
   beforeEach(() => {
     const renderer = makeMockRenderer();
     const gameEngine: GameEngine | null = null;
-    // Star rendering now lives in the StarRenderer FlightModule (extracted from
-    // SpaceFlightScene). Run the star setup (procedural path: no gameEngine /
-    // star texture).
     star = new StarRenderer(renderer, gameEngine, renderer.gameLayer);
     s = star as unknown as Record<string, unknown>;
     star.initialize();
@@ -173,7 +159,6 @@ describe("starHalo: quality glow replaces corona + prominences", () => {
   });
 
   it("carries no animated-prominence state (corona/spikes removed)", () => {
-    // The old field is gone entirely — it must not be re-introduced.
     expect(s.starProminenceData).toBeUndefined();
   });
 
@@ -183,8 +168,6 @@ describe("starHalo: quality glow replaces corona + prominences", () => {
       filters: unknown[];
     };
     expect(halo.blendMode).toBe("screen");
-    // The glow is now a baked gradient sprite (or a stacked-fill Graphics in the
-    // no-canvas fallback) — never a per-frame BlurFilter.
     const filters = Array.isArray(halo.filters) ? halo.filters : [];
     expect(filters.length).toBe(0);
   });

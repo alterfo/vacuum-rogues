@@ -33,10 +33,6 @@ function makeNpc(id: string, role: NpcRole = NpcRole.PIRATE): NpcShip {
   });
 }
 
-/**
- * Build a flight harness wired to count endTurn() invocations, with a real
- * ShipPhysics + a live player ship so updateCombat reaches its decision switch.
- */
 function makeHarness(npcs: NpcShip[]): {
   manager: NpcShipManager;
   endTurnCalls: () => number;
@@ -92,25 +88,19 @@ function makeHarness(npcs: NpcShip[]): {
 
 describe("Цель потеряна ends the running turn (regression)", () => {
   it("a lost chase target ends the turn exactly once and clears the follow id", () => {
-    // Chase a target id that is NOT present among the spawned sprites → the
-    // resolver returns "lost". Losing the target must stop the running turn so
-    // the calendar doesn't keep advancing on a chase with nothing to pursue.
     const { manager, endTurnCalls, messages } = makeHarness([
       makeNpc("present_npc"),
     ]);
     manager.initialize();
 
-    // Follow a ship that doesn't exist in the system → "lost" branch.
     manager.followNpcId = "ghost_npc";
 
     manager.updateCombat(1 / 60);
 
     expect(messages()).toContain("Цель потеряна");
     expect(manager.followNpcId).toBeNull();
-    // The turn was ended (mirrors the shakedown-hail freeze).
     expect(endTurnCalls()).toBe(1);
 
-    // A second tick with the cleared follow id is "idle" → no further endTurn.
     manager.updateCombat(1 / 60);
     expect(endTurnCalls()).toBe(1);
 
@@ -118,9 +108,6 @@ describe("Цель потеряна ends the running turn (regression)", () => {
   });
 
   it("a live chase target does NOT end the turn (only a lost one does)", () => {
-    // Sanity guard: a normal chase path must not fire endTurn — only the "lost"
-    // branch does. The followed NPC IS present (placed beyond weapon range so the
-    // resolver returns "chase", not "launch"), so the turn keeps running.
     const present = makeNpc("present_npc");
     const { manager, endTurnCalls } = makeHarness([present]);
     manager.initialize();
@@ -134,7 +121,6 @@ describe("Цель потеряна ends the running turn (regression)", () => {
     manager.followNpcId = "present_npc";
     manager.updateCombat(1 / 60);
 
-    // Still chasing the live target; the turn was not ended.
     expect(manager.followNpcId).toBe("present_npc");
     expect(endTurnCalls()).toBe(0);
 

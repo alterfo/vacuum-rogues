@@ -66,8 +66,6 @@ interface TwinkleStar {
 
 interface StarLayer {
   container: Container;
-  // Parallax depth: on-screen pan shift = cameraPan * depth (smaller = farther
-  // and slower). zoomDepth: how much the layer scales with camera zoom.
   depth: number;
   zoomDepth: number;
 }
@@ -80,38 +78,20 @@ interface SwarmLayer {
   pulseAmp: number;
   phase: number;
   baseAlpha: number;
-  // Slow organic spin (rad/frame) applied to the whole cluster so the swarm
-  // feels alive rather than a static dot field. Tiny (±0.0002) → barely
-  // perceptible per frame, like the existing per-frame drift.
   rotSpeed: number;
 }
 
-/** Camera state the parallax systems read each frame. */
 export interface BackgroundCamera {
   panX: number;
   panY: number;
   zoom: number;
 }
 
-/** Ship velocity (heading + speed) the foreground dust streaks read. */
 export interface BackgroundShipVelocity {
   angle: number;
   speed: number;
 }
 
-/**
- * Owns the entire flight background: the screen-fixed deep-space backdrop
- * (nebula clouds, star fields, glowing swarms, twinkle hero stars), the
- * mid-ground parallax layer (slow-drifting asteroids, comet streaks, silhouette
- * ships, parallax dust motes), the foreground speed-streak dust, and the edge
- * vignette.
- *
- * Sky elements live inside the injected `skyContainer` (a screen-space layer the
- * scene owns and tears down); the mid-ground sits just above it; dust + vignette
- * go on the renderer's UI layer. The layer never receives a camera transform —
- * its elements are individually parallaxed each frame from the injected camera
- * state, so panning/zooming never exposes a hard background edge.
- */
 export class SpaceBackgroundLayer implements FlightModule {
   private readonly renderer: Renderer;
   private readonly skyContainer: Container;
@@ -119,7 +99,6 @@ export class SpaceBackgroundLayer implements FlightModule {
   private readonly getCamera: () => BackgroundCamera;
   private destroyed = false;
 
-  // Mid-ground parallax container (sits above the sky, below the game world).
   private readonly midground = new Container();
 
   private readonly driftAsteroids: DriftAsteroid[] = [];
@@ -129,7 +108,6 @@ export class SpaceBackgroundLayer implements FlightModule {
   private readonly bgShips: BgShip[] = [];
   private readonly dustParticles: DustParticle[] = [];
 
-  // "Toward camera" asteroid: periodically scales 0.3→1.5 and fades out
   private camAstG: Graphics | null = null;
   private camAstX = 0;
   private camAstY = 0;
@@ -138,7 +116,6 @@ export class SpaceBackgroundLayer implements FlightModule {
   private camAstElapsed = 0;
   private camAstDuration = 5000;
 
-  // Screen-fixed deep-space backdrop systems (children of skyContainer).
   private nebulaBackdropSprite: Sprite | null = null;
   private readonly starLayers: StarLayer[] = [];
   private nebulaeContainer: Container | null = null;
@@ -147,10 +124,8 @@ export class SpaceBackgroundLayer implements FlightModule {
   private twinkleContainer: Container | null = null; // parallaxed with the near layer
   private readonly swarmLayers: SwarmLayer[] = []; // Glowing swarms in the nebula
 
-  // Edge vignette (on the UI layer).
   private vignette: Graphics | null = null;
 
-  // Readability dimmer: full-screen black overlay above all sky content (F2).
   private dimmer: Graphics | null = null;
 
   constructor(
@@ -158,10 +133,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     skyContainer: Container,
     systemId: string,
     getCamera: () => BackgroundCamera,
-    // Retained for the constructor contract (the scene + module-contract tests
-    // pass a velocity provider). Its only consumer — the foreground speed-streak
-    // dust — was removed: those 190 per-frame Graphics redraws hurt FPS and read
-    // as "stretching stars".
     _getShipVelocity: () => BackgroundShipVelocity | null,
   ) {
     this.renderer = renderer;
@@ -178,71 +149,44 @@ export class SpaceBackgroundLayer implements FlightModule {
     return this.renderer.app.screen.height;
   }
 
-  // ---------------------------------------------------------------------------
-  // FlightModule lifecycle
-  // ---------------------------------------------------------------------------
-
   initialize(): void {
-    // Sky systems first (children of skyContainer): backdrop → nebulae → stars.
     this.createNebulae(); // Screen-space nebula clouds (skyContainer) + swarms
     this.createStarField(); // Crisp far stars (screen-fixed)
     this.createTwinkleStars(); // Bright pulsing hero stars (screen-fixed)
     this.createDimmer(); // Readability dimmer above the whole sky (F2)
-    // Edge vignette (UI layer).
     this.createVignette();
-    // Mid-ground parallax layer (between the sky and the game world).
     this.initMidground();
   }
 
   update(_dt: number, bgElapsed: number): void {
-    // Accessibility: when reduced motion is active (player setting OR the OS-level
-    // `prefers-reduced-motion`), suppress every *idle/autonomous* animation —
-    // drifting asteroids/ships/dust, comets, the camera asteroid, and the nebula/
-    // swarm/twinkle "breathing" pulses — but keep the *camera-driven* parallax
-    // positioning so panning still reads coherently (it only moves when the player
-    // moves the view, which is not the decorative motion the preference targets).
     if (reducedMotion()) {
       this.updateStarField(); // camera-pan parallax of star layers (no idle motion)
       this.positionNebulae(); // keep nebula clouds centred + parallaxed, but frozen
       return;
     }
 
-    // Mid-ground parallax.
     this.updateDriftAsteroids(_dt);
     this.updateBgShips(_dt);
     this.updateDustParticles(_dt);
     this.updateComets(_dt);
     this.updateCamAsteroid(_dt);
-    // Screen-fixed sky parallax + animation.
     this.updateStarField();
     this.updateNebulae(bgElapsed);
     this.updateSwarms(bgElapsed);
     this.updateTwinkleStars(bgElapsed);
   }
 
-  /**
-   * Toggle every background sub-layer this module owns (mid-ground parallax,
-   * edge vignette). The screen-fixed sky lives in the
-   * scene-owned `skyContainer`, so the scene hides that separately — see
-   * SpaceFlightScene.e2eSetBackgroundVisible. Used by E2E tests to get a clean
-   * black background for lightweight, diff-friendly screenshots.
-   */
   setVisible(visible: boolean): void {
     this.midground.visible = visible;
     if (this.vignette) this.vignette.visible = visible;
-    // The readability dimmer is NOT toggled here: it is a child of
-    // skyContainer, which the scene hides alongside this call, taking the
-    // dimmer with it (no double-dark in E2E screenshots).
   }
 
   destroy(): void {
     this.destroyed = true;
 
-    // Destroy any live comet graphics not yet removed.
     for (const c of this.activeComets) {
       c.g.destroy();
     }
-    // Mid-ground container lives on renderer.stage — remove and destroy it.
     if (this.midground.parent) {
       this.midground.parent.removeChild(this.midground);
     }
@@ -250,17 +194,10 @@ export class SpaceBackgroundLayer implements FlightModule {
       this.midground.destroy({ children: true });
     }
 
-    // The vignette lives on the UI layer, which the host scene tears down via
-    // renderer.clearUILayer() (it removes AND destroys every UI-layer child).
-    // Just detach it here so the module is also safe standalone; never destroy
-    // it directly (clearUILayer owns that, and avoids a double-free).
     if (this.vignette?.parent) {
       this.vignette.parent.removeChild(this.vignette);
     }
 
-    // The nebula/star/twinkle display objects live inside skyContainer, which the
-    // scene owns and destroys (after disposing their BlurFilters) — just drop our
-    // references here.
     this.nebulaBackdropSprite = null;
     this.nebulaeContainer = null;
     this.twinkleContainer = null;
@@ -277,7 +214,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.dustParticles.length = 0;
   }
 
-  /** Blend a hex colour toward white by `amount` [0..1]. */
   private lightenColor(color: number, amount: number): number {
     const r = (color >> 16) & 0xff;
     const g = (color >> 8) & 0xff;
@@ -288,33 +224,13 @@ export class SpaceBackgroundLayer implements FlightModule {
     return (lr << 16) | (lg << 8) | lb;
   }
 
-  // ---------------------------------------------------------------------------
-  // Screen-fixed star field
-  // ---------------------------------------------------------------------------
-
   private createStarField(): void {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Depth layers, deepest → nearest. `depth` = on-screen pan parallax rate
-    // (far moves least → reads as distant); `zoomDepth` = how much it scales with
-    // zoom. Stars are laid out in a large field CENTRED on the origin and the
-    // whole layer is translated by cameraPan*depth — no per-pan reshuffling/
-    // wrapping, so stars don't pop/change as you pan (US-070 parallax fix).
     const cx = width / 2;
     const cy = height / 2;
-    // Depth hierarchy (pan parallax rate × cameraPan = on-screen shift per px).
-    // Far layer barely moves (deep-background cue); near layer clearly trails
-    // behind as you pan (close-foreground cue). The 5.5× ratio between layers
-    // makes the depth effect read clearly without stars "flying" off screen.
-    // zoomDepth: subtle size change on zoom-in/out — near-layer stars feel
-    // like local dust/debris; far-layer stars are unaffected by zoom (infinity).
-    // spread: field half-extent in screen-widths/heights; near layer uses more
-    // so its larger pan shifts never expose an edge.
     const layerConfigs = [
-      // Deepest layer: ultra-dense carpet of faint micro-stars (the "infinity" cue).
-      // Very low alpha individually — they stack into a dense milky band rather than
-      // isolated dots. No zoom-depth: they sit at infinite distance.
       {
         count: 3400,
         depth: 0.02,
@@ -323,7 +239,6 @@ export class SpaceBackgroundLayer implements FlightModule {
         alpha: [0.1, 0.42],
         spread: 1.0,
       },
-      // Mid layer: slightly larger, begin to show color, visible individually.
       {
         count: 1200,
         depth: 0.08,
@@ -332,13 +247,8 @@ export class SpaceBackgroundLayer implements FlightModule {
         alpha: [0.28, 0.72],
         spread: 1.3,
       },
-      // No near/foreground star layer — foreground is dust streaks only (per art direction).
     ];
 
-    // Weighted color pool: 60% blue-white (hot stellar cores), 15% pure white,
-    // 8% cool blue, 8% warm yellow-white, 5% nebula-lit pink, 4% warm orange.
-    // This matches photographic star fields where cool/hot stars dominate and
-    // a few warm/pink ones signal nebula illumination.
     const starColorPool: number[] = [];
     const pushColors = (c: number, w: number) => {
       for (let i = 0; i < w; i++) starColorPool.push(c);
@@ -385,21 +295,10 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
   }
 
-  /**
-   * A handful of bright "hero" stars with a soft photographic glint that
-   * gently pulse (twinkle). Only these few are animated per-frame, so it
-   * stays cheap. Rendered as a tinted `Sprite` of the baked
-   * `starPointTexture()` (a tight core + anti-aliased glints for hero stars)
-   * — NOT a runtime `Graphics.stroke()` cross, which reads as a flat vector
-   * plus-sign rather than a point of light. Falls back to a plain `Graphics`
-   * dot (no stroke spike) only when no 2D canvas context is available
-   * (jsdom / unit tests).
-   */
   private createTwinkleStars(): void {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
     const container = new Container();
-    // Mix of colors: most blue-white (hot giants), some warm, some pink (nebula-lit).
     const twinkleColors = [
       { c: 0xffffff, w: 8 }, // pure white
       { c: 0xe0eeff, w: 12 }, // blue-white (most common)
@@ -422,7 +321,6 @@ export class SpaceBackgroundLayer implements FlightModule {
       const y = Math.random() * height * 2.2 - height * 0.6;
       const color = twinklePool[Math.floor(Math.random() * twinklePool.length)];
       const isHero = Math.random() < 0.15;
-      // vary size: most small, a few large "hero" stars
       const r = isHero
         ? 2.2 + Math.random() * 1.4 // bright hero star
         : 1.1 + Math.random() * 1.4; // normal bright star
@@ -461,18 +359,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.twinkleContainer = container;
   }
 
-  // ---------------------------------------------------------------------------
-  // Nebulae, swarms, dust-lane pillars
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Big, organic, multi-tone nebula clouds spread across the whole system.
-   * Each cloud is built from many overlapping soft blobs baked into a single
-   * blurred Graphics (drawn once), then only its transform/alpha is animated —
-   * slow drift + gentle "breathing" pulse — so it's cheap but feels alive.
-   * The palette and layout are seeded from the system id, so every system has a
-   * distinct but stable look.
-   */
   private createNebulae(): void {
     this.nebulaeContainer = new Container();
     this.nebulaeContainer.eventMode = "none";
@@ -483,12 +369,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
 
-    // Photorealistic nebula palettes — [dark-outer, mid-body, inner-hot,
-    // core-bright, accent]. One palette per available backdrop-art FAMILY so the
-    // procedural clouds tint to match the nebula sprite behind them. The index
-    // aligns 1:1 with `families` below. Previously only red/blue art was ever
-    // selected (green + teal tiles shipped but unused), so most systems showed
-    // the same backdrop — every family is now in rotation.
     const palettes = [
       [0x6e0a00, 0xcc2000, 0xff4400, 0xff8800, 0xffbb22], // red — warm red-orange
       [0x05082a, 0x0d1a88, 0x2244cc, 0x4466ff, 0x88aaff], // blue — deep blue-violet
@@ -500,17 +380,12 @@ export class SpaceBackgroundLayer implements FlightModule {
     const palette = palettes[palIdx];
     const palName = families[palIdx];
 
-    // Backdrop art sprite — lazily loaded so large nebula PNGs don't block boot.
-    // Vary the parallax DEPTH layer too (each family ships far/mid/near), giving
-    // 4 families × 3 depths = 12 distinct backdrops instead of 2.
     const depths = ["mid", "near", "far"];
     const depth = depths[rng.nextInt(0, depths.length - 1)];
     const backdropKey =
       pickVariantKey("nebula", `${palName}_${depth}`, systemId) ??
       pickVariantKey("nebula", `${palName}_mid`, systemId);
     if (backdropKey) {
-      // Show immediately from cache if already loaded (e.g. revisiting system),
-      // otherwise load async and splice into skyContainer once ready.
       const mountBackdrop = (tex: Texture): void => {
         if (this.destroyed) return;
         const bg = new Sprite(tex);
@@ -537,34 +412,19 @@ export class SpaceBackgroundLayer implements FlightModule {
       }
     }
 
-    // Clouds are in screen-space (skyContainer), centred on (0,0) relative to
-    // nebulaeContainer. nebulaeContainer is placed at screen-centre and translated
-    // by cameraPan × NEBULA_DEPTH for gentle parallax — same model as star layers.
-    // Each cloud is many overlapping low-alpha circles under screen blend (no
-    // BlurFilter — per-frame blurs removed for FPS) reading as a soft gradient.
     const cloudCount = rng.nextInt(4, 6);
 
     for (let c = 0; c < cloudCount; c++) {
       const cloud = new Container();
-      // Symmetric spread so clouds fill and slightly overflow the viewport.
       cloud.x = rng.nextFloat(-sw * 0.7, sw * 0.7);
       cloud.y = rng.nextFloat(-sh * 0.7, sh * 0.7);
 
       const bodyColor = palette[rng.nextInt(1, 2)];
 
-      // cloudR in screen pixels (was world-px, caused scaling artifacts on zoom).
       const cloudR = rng.nextFloat(200, 450);
       const squash = rng.nextFloat(0.45, 0.92);
       const rot = rng.next() * Math.PI;
 
-      // One wispy, internally-structured cloud sprite (space-visual-cleanup,
-      // 2026-07-08) — replaces the previous 4 perfectly concentric
-      // `softGlowTexture` rings (haze/body/inner/core), which under screen
-      // blend read as a single smooth, undifferentiated blob rather than a
-      // nebula. `nebulaCloudTexture` bakes its own internal density variation
-      // (offset blobs + a denser core + speckle) so ONE tinted, squashed,
-      // rotated sprite already reads as structured. Falls back to the
-      // previous stacked-Graphics rings in jsdom (no canvas).
       const nebulaTex = nebulaCloudTexture(rng.nextInt(0, 999));
       if (nebulaTex) {
         const s = new Sprite(nebulaTex);
@@ -577,7 +437,6 @@ export class SpaceBackgroundLayer implements FlightModule {
         s.alpha = 0.55;
         cloud.addChild(s);
       } else {
-        // Fallback (no canvas): stacked translucent circles per layer.
         const outerColor = palette[0];
         const innerColor = palette[3];
         const coreColor = palette[4];
@@ -648,10 +507,6 @@ export class SpaceBackgroundLayer implements FlightModule {
         cloud.addChild(coreG);
       }
 
-      // Screen blend so the many overlapping translucent fills accumulate into a
-      // soft volumetric glow. No BlurFilter — a per-frame GPU blur on every cloud
-      // was the FPS killer; the cloud is built from many low-alpha circles that
-      // already read as a gradient under screen blend.
       cloud.blendMode = "screen";
       cloud.eventMode = "none";
 
@@ -670,16 +525,9 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.createSwarms(rng, palette);
     this.createNebulaPillars(rng, sw, sh);
 
-    // Add behind star layers: backdrop(0) → nebulae(1) → stars(2+).
     this.skyContainer.addChild(this.nebulaeContainer);
   }
 
-  /**
-   * A few drifting swarms of tiny glowing motes — the luminous "fireflies" that
-   * cluster inside the nebula in the reference shot. Each swarm is a baked
-   * Graphics of soft dots (cheap), animated only by a slow drift + breathing
-   * pulse on its container.
-   */
   private createSwarms(rng: SeededRNG, palette: number[]): void {
     if (!this.nebulaeContainer) return;
 
@@ -689,18 +537,13 @@ export class SpaceBackgroundLayer implements FlightModule {
 
     for (let s = 0; s < swarmCount; s++) {
       const container = new Container();
-      // Screen-space positions relative to nebulaeContainer origin (screen centre).
       container.x = rng.nextFloat(-sw * 0.55, sw * 0.55);
       container.y = rng.nextFloat(-sh * 0.55, sh * 0.55);
 
-      // Brighten a palette colour toward white for a "glowing" mote.
       const tint = this.lightenColor(
         palette[rng.nextInt(0, palette.length - 1)],
         0.6,
       );
-      // Small, tight cluster of luminous motes — like the reference's green
-      // "fireflies". Key: small spread + low baseAlpha so they don't coalesce
-      // into the cartoon glowing balls that plagued the old version.
       const spread = rng.nextFloat(50, 110);
       const motes = rng.nextInt(22, 44);
 
@@ -711,13 +554,9 @@ export class SpaceBackgroundLayer implements FlightModule {
         const mx = Math.cos(ang) * dist;
         const my = Math.sin(ang) * dist;
         const r = rng.nextFloat(0.6, 1.8);
-        // minimal halo (r×1.6), bright-but-small core
         g.circle(mx, my, r * 1.6).fill({ color: tint, alpha: 0.08 });
         g.circle(mx, my, r).fill({ color: tint, alpha: 0.7 });
       }
-      // Each mote is a bright core + a faint r×1.6 halo circle — that two-ring
-      // fill reads as a small light orb without any BlurFilter (per-frame blurs
-      // removed for FPS). Motes are tiny, so hard edges are imperceptible.
       container.addChild(g);
       this.nebulaeContainer.addChild(container);
 
@@ -734,27 +573,17 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
   }
 
-  /**
-   * Dark dust-lane pillars composited over the nebula clouds with multiply blend.
-   * The reference (SR2) shows dark gas columns visible against the lit nebula —
-   * elongated, slightly rotated, softly blurred so they read as absorption zones
-   * rather than painted stripes.
-   */
   private createNebulaPillars(rng: SeededRNG, sw: number, sh: number): void {
     if (!this.nebulaeContainer) return;
 
     const pillarCount = rng.nextInt(3, 5);
     const glowTex = softGlowTexture();
     for (let p = 0; p < pillarCount; p++) {
-      // Position near the core of the nebula, offset slightly.
       const cx = rng.nextFloat(-sw * 0.35, sw * 0.35);
       const cy = rng.nextFloat(-sh * 0.35, sh * 0.35);
       const tilt = rng.nextFloat(-Math.PI * 0.45, Math.PI * 0.45);
 
       if (glowTex) {
-        // One soft, elongated dark gradient ellipse — tinted black under multiply
-        // blend it darkens like an absorption lane, fading smoothly at the edges
-        // (no per-frame BlurFilter).
         const pillar = new Sprite(glowTex);
         pillar.anchor.set(0.5);
         pillar.eventMode = "none";
@@ -770,7 +599,6 @@ export class SpaceBackgroundLayer implements FlightModule {
         continue;
       }
 
-      // Fallback (no canvas): a column of 3–5 overlapping dark ellipses.
       const g = new Graphics();
       const segments = rng.nextInt(3, 5);
       for (let s = 0; s < segments; s++) {
@@ -792,13 +620,10 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
   }
 
-  /** Slow drift + spin + breathing pulse so the glowing swarms shimmer. */
   private updateSwarms(bgElapsed: number): void {
     for (const s of this.swarmLayers) {
       s.container.x += s.driftX;
       s.container.y += s.driftY;
-      // Per-frame spin (same convention as driftX/driftY above — applied once
-      // per frame, not scaled by dt) so the cluster slowly turns and feels alive.
       s.container.rotation += s.rotSpeed;
       const pulse =
         1 + Math.sin(bgElapsed * s.pulseSpeed + s.phase) * s.pulseAmp;
@@ -806,14 +631,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
   }
 
-  /**
-   * Camera-driven parallax positioning of the whole nebula container (no idle
-   * motion). Nebulae live in skyContainer (screen-space) — they don't scale with
-   * gameLayer zoom, so depth remains consistent at any zoom level. Gentle parallax
-   * (NEBULA_DEPTH ≈ 0.04) is midway between far stars (0.02) and mid stars (0.08).
-   * Extracted so reduced-motion can keep the clouds centred + parallaxed while
-   * freezing the drift/breathing animation (see `update`).
-   */
   private positionNebulae(): void {
     const NEBULA_DEPTH = 0.04;
     if (this.nebulaeContainer) {
@@ -825,7 +642,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
   }
 
-  /** Slow drift + gentle "breathing" pulse so the nebulae feel alive. */
   private updateNebulae(bgElapsed: number): void {
     this.positionNebulae();
 
@@ -842,7 +658,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
   }
 
-  /** Twinkle the few bright hero stars by oscillating their alpha. */
   private updateTwinkleStars(bgElapsed: number): void {
     for (const s of this.twinkleStars) {
       const t = 0.55 + 0.45 * Math.sin(bgElapsed * s.speed + s.phase);
@@ -855,17 +670,11 @@ export class SpaceBackgroundLayer implements FlightModule {
     const cx = this.renderer.app.screen.width / 2;
     const cy = this.renderer.app.screen.height / 2;
 
-    // Nebula art backdrop drifts almost imperceptibly (0.01) — it reads as an
-    // infinite-distance cosmic cloud that barely reacts to local camera motion.
     if (this.nebulaBackdropSprite) {
       this.nebulaBackdropSprite.x = cx + cam.panX * 0.01;
       this.nebulaBackdropSprite.y = cy + cam.panY * 0.01;
     }
 
-    // Each depth layer is a centred field translated by cameraPan*depth. Stars
-    // also scale slightly with zoom (except the deepest layer — it's at infinity
-    // and never scales). No Math.max clamp: stars can shrink at zoom-out, giving
-    // the correct depth cue that distant stars look smaller when you step back.
     for (const layer of this.starLayers) {
       const s = Math.max(0.4, 1 + (cam.zoom - 1) * layer.zoomDepth);
       layer.container.scale.set(s);
@@ -873,30 +682,15 @@ export class SpaceBackgroundLayer implements FlightModule {
       layer.container.y = cy + cam.panY * layer.depth;
     }
 
-    // Twinkle stars ride with the mid layer — bright distant stars, not foreground.
     if (this.twinkleContainer) {
       this.twinkleContainer.x = cx + cam.panX * 0.08;
       this.twinkleContainer.y = cy + cam.panY * 0.08;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Readability dimmer (F2 — nebula drowns the game layer)
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Full-screen black overlay added as the LAST child of skyContainer so it
-   * uniformly darkens every sky element beneath it (nebula art backdrop,
-   * procedural clouds, star fields, twinkle stars) while the game world — drawn
-   * above the sky — keeps full contrast. Strength comes from BACKGROUND_DIM in
-   * `src/config/balance.ts`. The nebula backdrop sprite is async-mounted at
-   * index 0, so it always lands below this overlay regardless of load order.
-   */
   private createDimmer(): void {
     if (this.dimmer) return; // initialize() must not stack a second overlay
     const d = new Graphics();
-    // Sized once at initialize (the layer has no resize handler); the 1.5×
-    // overdraw absorbs moderate window growth, like the other sky layers.
     d.rect(
       -this.width * 0.25,
       -this.height * 0.25,
@@ -910,15 +704,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.skyContainer.addChild(d);
   }
 
-  // ---------------------------------------------------------------------------
-  // Edge vignette (UI layer)
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Screen-fixed vignette that darkens the edges so the action reads in the
-   * centre. Built as stacked edge strokes fading inward (no BlurFilter — a
-   * blurred full-screen rect showed up as bands across the whole canvas).
-   */
   private createVignette(): void {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
@@ -932,21 +717,12 @@ export class SpaceBackgroundLayer implements FlightModule {
       v.stroke({ width: 32, color: 0x000000, alpha });
     }
     v.eventMode = "none"; // never intercept clicks
-    // Added before the HUD so it sits underneath it (above the world). Torn
-    // down by clearUILayer on the next scene init.
     this.vignette = v;
     this.renderer.uiLayer.addChild(v);
   }
 
-  // ---------------------------------------------------------------------------
-  // Mid-ground parallax (drift asteroids, comets, silhouette ships, dust motes)
-  // ---------------------------------------------------------------------------
-
   private initMidground(): void {
     this.midground.eventMode = "none";
-    // Sit just above the screen-fixed sky but below the game world. The scene
-    // inserts skyContainer at stage index 0 immediately before building this
-    // module, so index 1 places the mid-ground between the sky and gameLayer.
     this.renderer.stage.addChildAt(this.midground, 1);
 
     const rng = new SeededRNG(`bgLayer_${this.systemId}`);
@@ -955,7 +731,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.createBgShips(rng);
     this.createDustParticles(rng);
 
-    // Camera asteroid placeholder — positioned and activated on first trigger.
     this.camAstG = this.buildCamAsteroid();
     this.camAstG.alpha = 0;
     this.midground.addChild(this.camAstG);
@@ -1028,7 +803,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     const hw = 3;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    // Elongated hull
     g.poly([
       cos * len - sin * hw,
       sin * len + cos * hw,
@@ -1039,7 +813,6 @@ export class SpaceBackgroundLayer implements FlightModule {
       -cos * len - sin * hw,
       -sin * len + cos * hw,
     ]).fill({ color: 0x8899aa, alpha: 0.3 });
-    // Engine glow at the tail
     g.circle(-cos * (len - 1), -sin * (len - 1), 2).fill({
       color: 0x66aaff,
       alpha: 0.4,
@@ -1141,7 +914,6 @@ export class SpaceBackgroundLayer implements FlightModule {
       c.y += c.vy * dt;
       c.life -= dt;
       const t = 1 - c.life / c.maxLife;
-      // Fade in quickly, hold, then fade out near the end
       let alpha: number;
       if (t < 0.08) alpha = t / 0.08;
       else if (t > 0.88) alpha = (1 - t) / 0.12;
@@ -1166,7 +938,6 @@ export class SpaceBackgroundLayer implements FlightModule {
 
   private spawnComet(): void {
     const { width: w, height: h } = this;
-    // Pick a random entry edge and aim toward the opposite half of the screen
     const side = Math.floor(Math.random() * 4);
     let sx: number, sy: number, angle: number;
     switch (side) {
@@ -1190,7 +961,6 @@ export class SpaceBackgroundLayer implements FlightModule {
         sy = Math.random() * h;
         angle = -Math.PI * 0.2 + Math.random() * Math.PI * 0.4;
     }
-    // Slow, graceful drift (was 0.28-0.46 — read as a fast streak, not a comet).
     const speed = 0.09 + Math.random() * 0.06;
     const vx = Math.cos(angle) * speed;
     const vy = Math.sin(angle) * speed;
@@ -1198,11 +968,8 @@ export class SpaceBackgroundLayer implements FlightModule {
 
     const g = new Graphics();
     g.eventMode = "none";
-    // Tail points opposite to the direction of travel
     const tailAngle = Math.atan2(-vy, -vx);
     const tailLen = 55 + Math.random() * 55;
-    // Soft dust tail: neutral sunlit white (not icy blue), 3 layered wedges
-    // instead of 6 so the overlap doesn't stack into a hazy/glowing smear.
     for (let i = 0; i < 3; i++) {
       const spread = (i / 2 - 0.5) * 0.22;
       const ta = tailAngle + spread;
@@ -1214,7 +981,6 @@ export class SpaceBackgroundLayer implements FlightModule {
         alpha: 0.05,
       });
     }
-    // Bright spine
     g.poly([
       Math.cos(tailAngle) * tailLen,
       Math.sin(tailAngle) * tailLen,
@@ -1223,7 +989,6 @@ export class SpaceBackgroundLayer implements FlightModule {
       0,
       1.2,
     ]).fill({ color: 0xfffdf5, alpha: 0.3 });
-    // Nucleus — sunlit white, not a saturated glow
     g.circle(0, 0, 3).fill({ color: 0xfffdf5, alpha: 0.7 });
     g.circle(0, 0, 1.3).fill({ color: 0xffffff, alpha: 1 });
 
@@ -1254,7 +1019,6 @@ export class SpaceBackgroundLayer implements FlightModule {
       const t = Math.min(this.camAstElapsed / this.camAstDuration, 1);
       const scale = 0.3 + t * 1.2;
       this.camAstG.scale.set(scale);
-      // Fade in first half, fade out second half
       this.camAstG.alpha = t < 0.5 ? (t / 0.5) * 0.55 : ((1 - t) / 0.5) * 0.55;
       if (t >= 1) {
         this.camAstG.alpha = 0;

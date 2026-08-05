@@ -11,7 +11,6 @@ import { GAME_BALANCE } from "@/config/balance";
 
 const FIRE = GAME_BALANCE.combatFireIntervalMs; // 2500 ms
 
-/** ShipPhysics stand-in carrying the fields CombatModule reads. */
 function makePhysics(
   x = 0,
   y = 0,
@@ -25,7 +24,6 @@ function makePhysics(
   } as unknown as ShipPhysics & { isMoving: boolean; currentSpeed: number };
 }
 
-/** NpcShipSprite stand-in with just the position + npc fields CombatModule touches. */
 function makeSprite(
   id: string,
   x: number,
@@ -75,9 +73,6 @@ function makeModule(
   return { module: new CombatModule(deps), ship, destroyed, messages, physics };
 }
 
-// ---------------------------------------------------------------------------
-// CombatModule — engagement lifecycle
-// ---------------------------------------------------------------------------
 describe("CombatModule engagement (Task 1)", () => {
   it("addCombatant activates, joins the set and auto-selects the first target", () => {
     const { module } = makeModule();
@@ -166,9 +161,6 @@ describe("CombatModule engagement (Task 1)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — simultaneous-engagement cap (win-rate-100pct plan, Task 6)
-// ---------------------------------------------------------------------------
 describe("CombatModule simultaneous-combatant cap (win-rate-100pct plan, Task 6 escalation)", () => {
   it("refuses a new joiner once the cap is reached, keeping the fight at exactly the cap", () => {
     const { module } = makeModule();
@@ -210,9 +202,6 @@ describe("CombatModule simultaneous-combatant cap (win-rate-100pct plan, Task 6 
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — timer-driven firing
-// ---------------------------------------------------------------------------
 describe("CombatModule fire timers (Task 1)", () => {
   it("the player does not fire before the interval elapses", () => {
     const { module } = makeModule();
@@ -235,10 +224,6 @@ describe("CombatModule fire timers (Task 1)", () => {
     const { module, ship } = makeModule();
     module.addCombatant(makeSprite("a", 40, 0, { damage: 20 }));
     module.addCombatant(makeSprite("b", 60, 0, { damage: 15 }));
-    // "b" joined second, so it carries a `combatJoinFireStaggerMs` fire-timer
-    // stagger (win-rate-100pct plan, combat-mechanics escalation — prevents a
-    // batch of simultaneously-joining hostiles from firing in lock-step); the
-    // tick here is widened by that stagger so both still land within it.
     module.update(FIRE + GAME_BALANCE.combatJoinFireStaggerMs);
     expect(ship.hullHP).toBe(65); // 100 - (20 + 15)
   });
@@ -254,9 +239,6 @@ describe("CombatModule fire timers (Task 1)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — death + removal
-// ---------------------------------------------------------------------------
 describe("CombatModule death & removal (Task 1)", () => {
   it("a killed NPC is removed, fires onNpcDestroyed once and ends combat when last", () => {
     const { module, destroyed, messages } = makeModule();
@@ -295,8 +277,6 @@ describe("CombatModule death & removal (Task 1)", () => {
     const { module, ship, destroyed } = makeModule();
     const a = makeSprite("a", 50, 0, { hullHP: 100, damage: 20 });
     module.addCombatant(a);
-    // The NpcShipManager destroyed the sprite (e.g. it hyperjumped out) without
-    // notifying the combat module — its container is now destroyed.
     (a as unknown as { container: { destroyed: boolean } }).container = {
       destroyed: true,
     };
@@ -321,16 +301,12 @@ describe("CombatModule death & removal (Task 1)", () => {
 
   it("floors the player hull at 0 through the live NPC-fire path (no negative hull)", () => {
     const { module, ship } = makeModule({ ship: { hullHP: 15, maxHull: 100 } });
-    // Tanky NPC survives the player's return fire so it keeps shooting.
     module.addCombatant(makeSprite("a", 50, 0, { hullHP: 1000, damage: 20 }));
     module.update(FIRE); // 15 - 20 would be -5, must clamp to 0
     expect(ship.hullHP).toBe(0);
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — turn gating (combat pauses with the world)
-// ---------------------------------------------------------------------------
 describe("CombatModule turn gating", () => {
   it("does not fire while the turn is paused, then resumes once it runs", () => {
     let running = false;
@@ -338,13 +314,11 @@ describe("CombatModule turn gating", () => {
     const a = makeSprite("a", 50, 0, { hullHP: 100, damage: 20 });
     module.addCombatant(a);
 
-    // Paused: timers must not advance, so no shots land even past the interval.
     module.update(FIRE * 2);
     expect(ship.hullHP).toBe(100);
     expect(a.npc.hullHP).toBe(100);
     expect(module.isActive).toBe(true); // the fight is still engaged, just frozen
 
-    // Resume the turn — the next elapsed interval fires on both sides.
     running = true;
     module.update(FIRE);
     expect(ship.hullHP).toBe(80); // 100 - 20 npc damage
@@ -352,9 +326,6 @@ describe("CombatModule turn gating", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — lifecycle robustness with a render context
-// ---------------------------------------------------------------------------
 describe("CombatModule lifecycle (Task 1)", () => {
   it("runs initialize → engage → update → destroy with render layers without throwing", () => {
     const uiLayer = new Container();
@@ -384,11 +355,6 @@ describe("CombatModule lifecycle (Task 1)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — auto-mode visual feedback wiring (Task 4)
-// The HUD owns the engaged-enemy reticles + per-turn fire flashes; this asserts
-// the module actually drives them onto the shared game layer during a fight.
-// ---------------------------------------------------------------------------
 describe("CombatModule auto-mode feedback (Task 4)", () => {
   function countGraphics(node: Container): number {
     let n = 0;
@@ -419,10 +385,8 @@ describe("CombatModule auto-mode feedback (Task 4)", () => {
   it("a fire round draws an engaged reticle + fire-flash beams on the game layer", () => {
     const { module, gameLayer } = moduleWithLayers();
     module.addCombatant(makeSprite("a", 50, 0, { hullHP: 100, damage: 20 }));
-    // Before any round: only the dashed range circle is on the layer.
     expect(countGraphics(gameLayer)).toBe(1);
     module.update(FIRE); // both sides fire once → marker + two flash beams appear
-    // Range circle (1) + engaged reticle (1) + player/enemy flash beams (2).
     expect(countGraphics(gameLayer)).toBeGreaterThanOrEqual(3);
   });
 
@@ -432,47 +396,27 @@ describe("CombatModule auto-mode feedback (Task 4)", () => {
     module.update(FIRE);
     expect(countGraphics(gameLayer)).toBeGreaterThan(0);
     module.endCombat();
-    // Every combat Graphics (range ring, reticles, flash beams) is gone. Floating
-    // damage-number Text persists by design until destroy(), so assert on the
-    // Graphics overlays rather than the raw child count.
     expect(countGraphics(gameLayer)).toBe(0);
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — multi-NPC integration (Task 5)
-// End-to-end exercises of the real-time engagement across update() rounds,
-// asserting the four behaviours the integration pass guards.
-// ---------------------------------------------------------------------------
 describe("CombatModule multi-NPC integration (Task 5)", () => {
   it("two engaged NPCs advance their OWN timers and fire in staggered turn, not lock-step", () => {
-    // "b" joined second, so it carries a `combatJoinFireStaggerMs` fire-timer
-    // stagger (win-rate-100pct plan, combat-mechanics escalation): several
-    // hostiles joining in the same beat no longer fire in perfect lock-step —
-    // each NPC's OWN interval still governs its own cadence, just offset by
-    // join order. This regression demonstrates the stagger directly (was:
-    // "both fire together when the interval elapses" — the exact lock-step
-    // this escalation fixes).
     const { module, ship } = makeModule();
     const a = makeSprite("a", 40, 0, { hullHP: 100, damage: 20 });
     const b = makeSprite("b", 60, 0, { hullHP: 100, damage: 15 });
     module.addCombatant(a);
     module.addCombatant(b);
 
-    // Timers advance but stay short of "a"'s interval: no one has fired yet.
     module.update(FIRE - 1);
     expect(ship.hullHP).toBe(100);
     expect(a.npc.hullHP).toBe(100);
 
-    // One more ms crosses "a"'s interval — "a" alone fires; "b" is still
-    // `combatJoinFireStaggerMs` short of its own (staggered) threshold.
     module.update(1);
     expect(ship.hullHP).toBe(80); // 100 - 20 ("a" only)
     expect(a.npc.hullHP).toBe(86); // selected target, 100 - 14 pulse
     expect(b.npc.hullHP).toBe(100);
 
-    // Crossing "b"'s staggered interval: "b" now fires too, summing onto the
-    // player's hull; the player's auto-fire still targets "a" only.
     module.update(GAME_BALANCE.combatJoinFireStaggerMs);
     expect(ship.hullHP).toBe(65); // 80 - 15 ("b" joins in)
     expect(b.npc.hullHP).toBe(100); // not the selected target — untouched by player fire
@@ -492,7 +436,6 @@ describe("CombatModule multi-NPC integration (Task 5)", () => {
     expect(module.selectedTarget).toBe(b); // re-picked from survivors
     expect(module.isActive).toBe(true); // fight continues against b
 
-    // A second round must not re-report the already-dead NPC.
     module.update(FIRE);
     expect(destroyed.filter((s) => s === a)).toHaveLength(1);
   });
@@ -521,7 +464,6 @@ describe("CombatModule multi-NPC integration (Task 5)", () => {
     const { module, messages, physics } = makeModule({
       ship: { hullHP: 45, maxHull: 100 },
     });
-    // NPC tanky enough to survive the player's return fire so the fight persists.
     module.addCombatant(makeSprite("a", 50, 0, { hullHP: 1000, damage: 20 }));
 
     module.update(FIRE); // 45 - 20 = 25, below 30% of 100 → retreat warning

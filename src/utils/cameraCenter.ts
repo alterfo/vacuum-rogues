@@ -1,4 +1,3 @@
-/** Compute the cameraPan values that centre the ship on screen. */
 export function computeCenterOnPlayerPan(
   shipX: number,
   shipY: number,
@@ -12,11 +11,6 @@ export function computeCenterOnPlayerPan(
   };
 }
 
-/**
- * Returns true when the current camera pan already centres the ship within
- * `threshold` pixels (screen space).  Used to decide whether the ⊙ button
- * should be visible.
- */
 export function isCameraOnPlayer(
   cameraPanX: number,
   cameraPanY: number,

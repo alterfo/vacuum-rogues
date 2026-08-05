@@ -1,13 +1,3 @@
-/**
- * Task 7 (gear icon art category): the ГАЛАКТИЧЕСКАЯ shop's ТОВАРЫ gear
- * listing (`EquipmentShopScene.renderRows`) mounts each row's icon through
- * the SAME shared `gearIcon.ts` helper `HangarPanel` uses — never a forked
- * copy (root CLAUDE.md "one shared component" rule). This pins the wiring:
- * one `mountGearIcon` call per listed gear row, with that row's own `gear`
- * and its name-line position, and that the name text is offset by whatever
- * width the icon reports consuming (0 in every unit-test environment, since
- * no art is preloaded — mirrors `HangarPanel`'s existing icon-offset tests).
- */
 import { describe, it, expect, vi } from "vitest";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { gearById } from "@/systems/equipment/GearCatalog";
@@ -103,7 +93,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mocks so the scene sees the fakes.
 import { EquipmentShopScene } from "@/presentation/EquipmentShopScene";
 
 const renderer = {
@@ -183,7 +172,6 @@ describe("EquipmentShopScene gear listing — shared icon wiring (Task 7)", () =
     const gearName = gearById("wpn_pulse")!.name;
     const nameText = created.find((n) => n.text.includes(gearName));
     expect(nameText).toBeTruthy();
-    // No icon width consumed (mock returns 0) -> name sits at the un-offset column.
     const [, , iconX] = mountGearIconMock.mock.calls[0];
     expect(nameText!.x).toBe(iconX);
   });

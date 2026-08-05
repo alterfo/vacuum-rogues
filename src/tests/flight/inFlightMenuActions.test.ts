@@ -1,14 +1,3 @@
-/**
- * Task 2 (in-flight system menu actions): the scene wires the HUD menu's two
- * escape actions to the engine via {@link wireFlightSystemMenu} (the single
- * source of truth the scene calls in initialize()). This proves the action side:
- * «Загрузить сохранение» raises a confirm — current progress is discarded — and
- * only on «Да» calls `loadGame("auto")` exactly once (never on «Отмена»);
- * «В главное меню» transitions to MAIN_MENU exactly once.
- *
- * Built against a REAL PixiJS scene graph (mirrors inFlightMenu.test.ts) so the
- * confirm flow is driven through real pointer clicks, not by poking internals.
- */
 import { describe, it, expect, afterEach, vi, type Mock } from "vitest";
 import { Container, Text } from "pixi.js";
 
@@ -59,12 +48,10 @@ function build(opts: { loadResolves?: boolean } = {}): {
   } as unknown as GameEngine;
   const hud = new FlightHud(renderer, gameEngine, uiLayer);
   hud.initialize();
-  // Wire exactly as SpaceFlightScene.initialize() does — same code path.
   wireFlightSystemMenu(hud, gameEngine);
   return { hud, uiLayer, engine: { loadGame, transitionTo }, gameEngine };
 }
 
-/** Recursively collect every PixiJS Text node under a display object. */
 function allTexts(node: Container): Text[] {
   const out: Text[] = [];
   if (node instanceof Text) out.push(node);
@@ -78,7 +65,6 @@ function hasLabel(uiLayer: Container, label: string): boolean {
   return allTexts(uiLayer).some((t) => t.text === label);
 }
 
-/** Find the UiButton container whose label matches and emit a real pointerdown. */
 function clickLabel(uiLayer: Container, label: string): void {
   const labelNode = allTexts(uiLayer).find((t) => t.text === label);
   if (!labelNode) throw new Error(`No button labelled "${label}"`);
@@ -95,7 +81,6 @@ describe("FlightHud — in-flight system menu actions", () => {
     hud.toggleSystemMenu();
     clickLabel(uiLayer, "Загрузить сохранение");
 
-    // The load is gated behind a confirm — nothing loaded yet.
     expect(hud.isSystemMenuConfirmOpen()).toBe(true);
     expect(engine.loadGame).not.toHaveBeenCalled();
     expect(hasLabel(uiLayer, "Да")).toBe(true);
@@ -133,8 +118,6 @@ describe("FlightHud — in-flight system menu actions", () => {
     clickLabel(uiLayer, "В главное меню");
 
     expect(engine.transitionTo).toHaveBeenCalledTimes(1);
-    // MAIN_MENU is not auto-injected with gameEngine by transitionTo, so the
-    // context MUST be passed explicitly — else the main menu boots dead.
     expect(engine.transitionTo).toHaveBeenCalledWith(SceneType.MAIN_MENU, {
       gameEngine,
     });
@@ -151,8 +134,6 @@ describe("FlightHud — in-flight system menu actions", () => {
     clickLabel(uiLayer, "Да");
 
     expect(engine.loadGame).toHaveBeenCalledTimes(1);
-    // Flush the loadGame promise + its .then so the false-resolution toast lands
-    // (a macrotask drains all pending microtasks).
     await new Promise((r) => setTimeout(r, 0));
     expect(hasLabel(uiLayer, "Не удалось загрузить сохранение")).toBe(true);
 
@@ -166,8 +147,6 @@ describe("FlightHud — in-flight system menu actions", () => {
     clickLabel(uiLayer, "Загрузить сохранение");
     expect(hud.isSystemMenuConfirmOpen()).toBe(true);
 
-    // The [МЕНЮ] toggle must tear the whole modal down, not raise a second menu
-    // panel layered over the open confirm.
     hud.toggleSystemMenu();
     expect(hud.isSystemMenuConfirmOpen()).toBe(false);
     expect(hud.isSystemMenuOpen()).toBe(false);

@@ -1,22 +1,6 @@
-/**
- * Task 1 (font-scale restyle in place): a font-size change must restyle the
- * text-bearing flight modules WITHOUT a scene re-init. The guarantee under test
- * is "the world is left untouched": planet/asteroid/ship sprites (which live on
- * the game layer) keep their exact instances across `refreshFontScale()`, while
- * the modules' text labels pick up the new `scaledFont` size.
- *
- * Built against a REAL PixiJS scene graph (Container / Graphics / Text construct
- * in jsdom without WebGL). PlanetSprite / PlanetInfoPanel need WebGL textures in
- * real play, so they are stubbed with lightweight stand-ins (mirroring
- * moduleContracts.test.ts) — the assertions are about object identity + font
- * size, which the stubs preserve.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import { Container, Text } from "pixi.js";
 
-// Lightweight PlanetSprite/PlanetInfoPanel stand-ins (real WebGL textures aren't
-// available in jsdom). Their `container` is a real PixiJS Container so the
-// manager's mount/teardown flows through the real scene graph.
 import { vi } from "vitest";
 vi.mock("@/presentation/PlanetSprite", async () => {
   const { Container: PixiContainer, Graphics } = await import("pixi.js");
@@ -118,7 +102,6 @@ function makeNpc(id: string): NpcShip {
   });
 }
 
-/** Recursively collect every PixiJS Text node under a display object. */
 function allTexts(node: Container): Text[] {
   const out: Text[] = [];
   if (node instanceof Text) out.push(node);
@@ -176,7 +159,6 @@ describe("PlanetManager.refreshFontScale", () => {
     const { manager, gameLayer } = build();
     manager.initialize();
 
-    // Capture the world before the font change.
     const planetsRef = manager.planetSprites;
     const planet0 = manager.planetSprites[0];
     const station0 = manager.stationMarkers[0];
@@ -189,15 +171,12 @@ describe("PlanetManager.refreshFontScale", () => {
     setFontScale("L");
     manager.refreshFontScale();
 
-    // The expensive sprites are the SAME instances (no rebuild).
     expect(manager.planetSprites).toBe(planetsRef);
     expect(manager.planetSprites[0]).toBe(planet0);
     expect(manager.stationMarkers[0]).toBe(station0);
     expect(station0.label).toBe(label0);
-    // The game layer (planets + station containers) is byte-for-byte the same set.
     expect([...gameLayer.children]).toEqual(worldBefore);
 
-    // …but the label font size tracked the new scale.
     expect(label0.style.fontSize).toBe(scaledFont(10)); // L now
     expect(scaledFont(10)).toBe(13); // sanity: L = round(10 × 1.25)
   });
@@ -273,7 +252,6 @@ describe("FlightHud.refreshFontScale", () => {
     return { hud, uiLayer };
   }
 
-  /** The day counter is the canonical scaled HUD label (scaledFont(14)). */
   function dayCounterFontSize(uiLayer: Container): number | undefined {
     const target = formatGameDate(0);
     return allTexts(uiLayer).find((t) => t.text === target)?.style.fontSize;
@@ -290,13 +268,11 @@ describe("FlightHud.refreshFontScale", () => {
     setFontScale("L");
     expect(() => hud.refreshFontScale()).not.toThrow();
 
-    // Day counter rescaled; the old one was torn down (no duplicate left behind).
     expect(dayCounterFontSize(uiLayer)).toBe(scaledFont(14)); // L = 18
     expect(scaledFont(14)).toBe(18);
     expect(
       allTexts(uiLayer).filter((t) => t.text === formatGameDate(0)).length,
     ).toBe(1);
-    // Teardown + rebuild is balanced: the UI layer doesn't accumulate objects.
     expect(uiLayer.children.length).toBe(childCountBefore);
 
     hud.destroy();

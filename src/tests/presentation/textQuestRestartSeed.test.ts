@@ -1,17 +1,7 @@
-/**
- * Task 1 — TextQuestScene restart seed-reuse exploit fix.
- *
- * A failed VM quest must NOT be replayable with foreknowledge of every random
- * roll: the «Начать заново» restart path derives a fresh seed by mixing in an
- * attempt counter (`deriveRestartSeed`) instead of reusing `vmSeed` verbatim.
- * Determinism from a given (base seed, attempt) is preserved so a specific
- * failing run stays reproducible from logs.
- */
 import { describe, it, expect, vi } from "vitest";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 import { QuestVM } from "@/systems/quests/QuestVM";
 
-// Keep the quest illustration path inert (no art on disk in tests).
 vi.mock("@/presentation/textures", () => ({
   pickVariantKey: vi.fn().mockReturnValue(undefined),
   tex: vi.fn(),
@@ -84,9 +74,6 @@ import {
   deriveRestartSeed,
 } from "@/presentation/TextQuestScene";
 
-// A quest whose only param is a wide-range random roll captured at start, so
-// two different seeds are effectively certain to produce different values and
-// the "no replay foreknowledge" property is observable via getParam.
 const script: QuestScript = {
   id: "restart_probe",
   title: "Проверка перезапуска",
@@ -147,10 +134,8 @@ describe("QuestVM rolls under restart seeds", () => {
     const rollFor = (attempt: number) =>
       new QuestVM(script, deriveRestartSeed(1234, attempt)).getParam("roll");
 
-    // Same (seed, attempt) → identical roll (reproducible from logs).
     expect(rollFor(1)).toBe(rollFor(1));
 
-    // Consecutive restart attempts → the roll changes (no foreknowledge).
     const rolls = [1, 2, 3, 4, 5].map(rollFor);
     expect(new Set(rolls).size).toBeGreaterThan(1);
   });
@@ -171,9 +156,7 @@ describe("TextQuestScene restart path", () => {
       rolls.push(((scene as any).vm as QuestVM).getParam("roll"));
     }
 
-    // Restart advances the attempt counter each time...
     expect((scene as any).restartAttempt).toBe(5);
-    // ...and the fresh seeds produce more than one distinct outcome.
     expect(new Set(rolls).size).toBeGreaterThan(1);
 
     scene.destroy();

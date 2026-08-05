@@ -66,7 +66,6 @@ describe("Market dynamics — player trade impact (anti-arbitrage)", () => {
 
   it("repeated round-trip arbitrage profit shrinks each trip (self-correcting)", () => {
     const trade = new TradeSystem();
-    // Two distinct planets so prices differ → an arbitrage spread exists.
     const cheap = makePlanet("cheap_src", EconomyType.AGRICULTURAL);
     const dear = makePlanet("dear_dst", EconomyType.INDUSTRIAL);
     const player = makePlayer(FactionType.BASTIONS);
@@ -76,7 +75,6 @@ describe("Market dynamics — player trade impact (anti-arbitrage)", () => {
 
     const profitOfTrip = (): number => {
       const spend = trade.getBuyPrice(cheap, good, player) * qty;
-      // Simulate a round trip: buy at cheap, carry, sell at dear.
       const buyAt = cheap;
       const sellAt = dear;
       const creditsBefore = player.credits;
@@ -93,16 +91,10 @@ describe("Market dynamics — player trade impact (anti-arbitrage)", () => {
       lastProfit = profitOfTrip();
     }
 
-    // The market must move against the player: a later trip is worth strictly
-    // less than the very first one. (Old code: trips were flat or widening.)
     expect(lastProfit).toBeLessThan(firstProfit);
   });
 
   it("same-planet buy→sell of a modest lot still loses credits even at the best sell faction", () => {
-    // Guards the SELL_SPREAD no-money-printing invariant against the new trade
-    // impact: a modest round trip on one planet must not profit, even for
-    // SYNDICATE (the best 1.15 sell multiplier). 10 units keeps the nudge below
-    // its cap, matching the regime the spread is designed to protect.
     const trade = new TradeSystem();
     const planet = makePlanet("invariant", EconomyType.MIXED);
     const player = makePlayer(FactionType.SYNDICATE);
@@ -117,9 +109,6 @@ describe("Market dynamics — player trade impact (anti-arbitrage)", () => {
 
 describe("Trade impact is resilient to method-less (deserialized) markets", () => {
   it("selling succeeds and applies impact even when the market has no prototype methods", () => {
-    // Reproduces the 'Сделка не удалась хотя удалась' bug: SaveManager rehydrates
-    // markets as PLAIN data objects (no class methods). The trade impact must not
-    // depend on a Market method, or selling throws AFTER mutating credits/cargo.
     const trade = new TradeSystem();
     const plainMarket = {
       availableResources: RESOURCES,
@@ -128,7 +117,6 @@ describe("Trade impact is resilient to method-less (deserialized) markets", () =
       priceMultipliers: RESOURCES.map(() => 1),
       economyType: "MIXED",
     };
-    // Sanity: this stand-in really lacks the method, like a loaded save.
     expect(
       (plainMarket as unknown as { applyTradeImpact?: unknown })
         .applyTradeImpact,
@@ -157,7 +145,6 @@ describe("Trade impact is resilient to method-less (deserialized) markets", () =
 
     expect(result.success).toBe(true);
     expect(player.credits).toBeGreaterThan(before);
-    // Impact still landed on the plain data field (selling lowers the multiplier).
     const idx = RESOURCES.indexOf(ResourceType.METALS);
     expect(plainMarket.priceMultipliers[idx]).toBeLessThan(1);
   });
@@ -165,10 +152,6 @@ describe("Trade impact is resilient to method-less (deserialized) markets", () =
 
 describe("Market daily drift mean-reverts toward neutral (1.0), not the econ baseline", () => {
   it("an elevated multiplier on a CHEAP good drifts down toward ~1.0", () => {
-    // AGRICULTURAL ORGANICS baseline is 0.7. Start the dynamic multiplier ABOVE
-    // 1.0 — it must relax back toward 1.0 (the neutral value), NOT all the way
-    // down to the 0.7 economy baseline (which getMarketPrice already applies
-    // separately as econMult — double-applying it is the bug being fixed).
     const market = new Market([ResourceType.ORGANICS], [1], [1]);
     market.economyType = EconomyType.AGRICULTURAL;
     market.priceMultipliers = [0.5]; // start below neutral
@@ -177,7 +160,6 @@ describe("Market daily drift mean-reverts toward neutral (1.0), not the econ bas
     const rng = () => (i++ * 0.381) % 1.0;
     for (let day = 0; day < 100; day++) market.advanceMarketDay(rng);
 
-    // Old behaviour would converge toward 0.7; new behaviour toward ~1.0.
     expect(market.priceMultipliers[0]).toBeGreaterThan(0.85);
   });
 });

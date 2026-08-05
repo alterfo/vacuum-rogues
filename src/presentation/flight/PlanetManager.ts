@@ -28,52 +28,22 @@ import { tex } from "../textures";
 import { stationSpriteKey } from "./stationArt";
 import type { FlightModule } from "./FlightModule";
 
-/** Station marker sprite footprint (square, anchor 0.5 ⇒ spans ±half from centre). */
 export const STATION_SPRITE_SIZE = 80;
-/**
- * Vertical offset of the name label below the marker centre. The label is
- * top-anchored (anchor 0.5,0), so its top edge must clear the sprite's bottom
- * edge (half the sprite size) plus a small gap — otherwise the name draws *over*
- * the station. Scales with {@link STATION_SPRITE_SIZE} so a resize keeps it clear.
- */
 export const STATION_LABEL_Y = STATION_SPRITE_SIZE / 2 + 4;
 
-/** A space-station marker: its domain record, display container and world position. */
 export interface StationMarker {
   station: Station;
   container: Container;
   x: number;
   y: number;
-  /** The marker's name label — kept so a font-scale change can restyle it in
-   *  place (no marker rebuild). See {@link PlanetManager.refreshFontScale}. */
   label: Text;
 }
 
-/**
- * Live state the manager reads from the host scene without depending on the
- * concrete {@link SpaceFlightScene}. Route planning, the turn loop, the HUD
- * (tooltip) and the authoritative ship/star geometry all stay in the scene; the
- * manager reads them through these accessors (Low Coupling / DIP — it depends on
- * abstractions, not the scene class).
- */
 export interface PlanetManagerDeps {
-  /** Authoritative ship physics (null before the ship spawns). */
   getShipPhysics(): ShipPhysics | null;
-  /** System centre (the star's centre) for orbital layout. */
   getStarCenter(): { x: number; y: number };
-  /** True while the turn is running (planets spin, clicks are disabled). */
   isTurnRunning(): boolean;
-  /**
-   * Cumulative game-day value used to position planets on their orbits
-   * (whole days + in-flight fraction + waited sub-day). Owned by the scene's
-   * route/turn bookkeeping.
-   */
   getOrbitalDay(): number;
-  /**
-   * Rich planet hover tooltip (delegated to the scene's HUD). `landingDenial`
-   * is the live land-access verdict (Overmind / pirate-rep) so the tooltip can
-   * surface an un-landable planet on hover — `null` when landing is allowed.
-   */
   showPlanetTooltip(
     planet: Planet,
     faction: Faction,
@@ -82,28 +52,9 @@ export interface PlanetManagerDeps {
     landingDenial: LandingDenialReason | null,
   ): void;
   hideTooltip(): void;
-  /** Cancel any NPC auto-follow target — picking a body cancels a chase. */
   clearFollow(): void;
 }
 
-/**
- * Owns all planet and space-station visual state in the player's current system:
- * the planet sprite + quest-marker lifecycle, station markers, the planet info
- * panel, and per-frame orbital motion. Extracted from {@link SpaceFlightScene} as
- * a {@link FlightModule}.
- *
- * Click handling sets the manager-owned route targets and delegates the actual
- * route planning / landing / docking back to the scene through the public
- * callbacks ({@link onPlanetRouteRequested}, {@link onPlanetLanding},
- * {@link onStationDock}) — the scene is the Information Expert for route data, so
- * it keeps that logic while the manager owns the bodies (High Cohesion).
- *
- * The {@link FlightModule} `update(dt, bgElapsed)` signature can't carry the
- * orbital-day/turn state the motion needs, so those are injected via
- * {@link PlanetManagerDeps} accessors — matching the {@link NpcShipManager}
- * precedent (the plan's "PanZoomController reference" was unnecessary here: no
- * method touches the camera).
- */
 export class PlanetManager implements FlightModule {
   private readonly renderer: Renderer;
   private readonly gameEngine: GameEngine | null;
@@ -111,24 +62,15 @@ export class PlanetManager implements FlightModule {
   private readonly uiLayer: Container;
   private readonly deps: PlanetManagerDeps;
 
-  // Planet sprites for the current system (public — the scene's route/landing/
-  // spawn/mini-map code reads them in many places).
   planetSprites: PlanetSprite[] = [];
-  // Station markers (US-066). Public for the scene's docking + re-entry spawn.
   stationMarkers: StationMarker[] = [];
   private planetInfoPanel: PlanetInfoPanel | null = null;
 
-  // Active route targets (public mutable — the scene's two-step route planner and
-  // updateShip arrival logic read and clear these).
   routeTargetPlanetId: string | null = null;
   routeTargetStationId: string | null = null;
 
-  // px past a planet's surface at which landing is allowed (planets render large,
-  // so the ship lands at the disc edge, not the centre).
   private readonly LANDING_RANGE = 60;
 
-  // Route planning, landing and docking stay in the scene (Information Expert).
-  // The manager fans these out when a body is clicked / the land button is hit.
   onPlanetRouteRequested:
     | ((planetId: string, x: number, y: number) => void)
     | null = null;
@@ -149,30 +91,11 @@ export class PlanetManager implements FlightModule {
     this.deps = deps;
   }
 
-  // ---------------------------------------------------------------------------
-  // FlightModule lifecycle
-  // ---------------------------------------------------------------------------
-
-  /** Build planet sprites and station markers for the current system. */
   initialize(): void {
     this.createPlanets();
     this.createStations();
   }
 
-  /**
-   * Advance planet orbital positions (a pure function of elapsed game days) and
-   * their cosmetic axial spin / moons. The mini-map refresh stays in the scene
-   * (it reads route + camera state).
-   *
-   * Pause applies **only to ships** (and combat): the ambient solar system stays
-   * alive, so axial spin + moons advance on real elapsed time even while paused —
-   * matching the sun ({@link StarRenderer}) and comets ({@link AsteroidBelt}),
-   * which are driven by `deltaTime` unconditionally. Fast-forward (`timeScale`)
-   * scales the spin only while the turn is actually running; when paused the
-   * planet keeps spinning at the base 1× rate. The orbital position, by contrast,
-   * stays a deterministic function of game-days (frozen when paused, by design —
-   * chase/intercept lead + route targeting rely on `position = f(gameDays)`).
-   */
   update(deltaTime: number, _bgElapsed: number): void {
     const currentDays = this.deps.getOrbitalDay();
     const timeScale = this.deps.isTurnRunning()
@@ -205,39 +128,16 @@ export class PlanetManager implements FlightModule {
     }
   }
 
-  /**
-   * Restyle the manager's text labels at the current font scale WITHOUT a scene
-   * re-init (Task 1): the only persistent text the manager owns is the station
-   * marker name labels, so just re-apply {@link scaledFont} to each in place. The
-   * planet sprites, station diamonds, hit-areas and orbits are left untouched —
-   * a font change no longer rebuilds the world.
-   */
   refreshFontScale(): void {
     for (const m of this.stationMarkers) {
       m.label.style.fontSize = scaledFont(10);
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Queries the scene reads from
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Distance (px) from the ship to a planet's centre at which landing is allowed:
-   * the surface radius plus a fixed approach margin (planets render large, so the
-   * ship would otherwise have to fly to the disc's centre before it could land).
-   */
   landingThreshold(sprite: PlanetSprite): number {
     return sprite.displayRadius + this.LANDING_RANGE;
   }
 
-  /**
-   * True once the ship has reached `planet`'s landing margin — the sprite-find +
-   * distance + {@link landingThreshold} check the scene's land guard used to
-   * inline. A planet with no live sprite counts as reached (the scene then
-   * defers to its own logic). Information Expert: the manager owns the planet
-   * sprites and the threshold geometry.
-   */
   shipReachedPlanet(planet: Planet, physics: ShipPhysics): boolean {
     const sprite = this.planetSprites.find((s) => s.planet.id === planet.id);
     if (!sprite) return true;
@@ -248,31 +148,13 @@ export class PlanetManager implements FlightModule {
     return d <= this.landingThreshold(sprite);
   }
 
-  /**
-   * Captured-system landing gate: the denial reason when the current player may
-   * not land on `planet` (Overmind-held → always; pirate-held → without good
-   * pirate rep), else null. The manager owns the planet bodies, so the access
-   * rule lives here (delegating to the pure {@link canLandOnPlanet}); the scene
-   * shows the message + clears the route.
-   */
   landingDenial(planet: Planet): LandingDenialReason | null {
     const player = this.gameEngine?.player;
     if (!player) return null;
-    // Effective controller: Overmind / pirate capture is tracked per-*system* on
-    // the galaxy (`overmindSystems` / `pirateSystems`, mutated by GameEngine's
-    // ownership tick) — **never** on `planet.capturedBy` (typed FactionType, which
-    // has no Overmind/Pirate member and is never written in production). Every
-    // flight-scene planet belongs to the current system, so the system the player
-    // is in decides who holds it; fall back to the planet's own `capturedBy` only
-    // when galaxy / system context is unavailable (e.g. a unit harness).
     const galaxy = this.gameEngine?.galaxy;
     const systemId = player.currentSystemId;
     let captor: string | null =
       (planet.capturedBy as unknown as string | null) ?? null;
-    // The per-system capture lookups are guarded by method presence: a partial
-    // galaxy (a unit harness with no capture-tracking API) counts as "context
-    // unavailable" and falls through to the planet's own `capturedBy`, per the
-    // note above — never a hard crash on the missing method.
     if (
       galaxy &&
       systemId &&
@@ -289,7 +171,6 @@ export class PlanetManager implements FlightModule {
     return access.allowed ? null : (access.reason ?? null);
   }
 
-  /** First planet whose disc the world point (x,y) falls within (or null). */
   getPlanetAt(x: number, y: number): PlanetSprite | null {
     return (
       this.planetSprites.find((s) => {
@@ -300,15 +181,6 @@ export class PlanetManager implements FlightModule {
     );
   }
 
-  /**
-   * Lead point for pursuing an orbiting planet: solve the intercept against the
-   * planet's orbital-tangent velocity so a chase aims where the planet WILL be,
-   * not where it is now (playtest4 C). The planet's velocity is geometry the
-   * sprite owns (px/game-day); we convert it to px/ms to match the ship's cruise
-   * speed — 1 game-day of cruise covers `pixelsPerDay` px at `getMaxSpeed()`
-   * px/ms, so px/ms = (px/day) · maxSpeed / pixelsPerDay. Falls back to the
-   * planet's current centre when no intercept solves (handled by the solver).
-   */
   planetLeadPoint(sprite: PlanetSprite): { x: number; y: number } {
     const physics = this.deps.getShipPhysics();
     if (!physics) return { x: sprite.screenX, y: sprite.screenY };
@@ -326,15 +198,6 @@ export class PlanetManager implements FlightModule {
     );
   }
 
-  /**
-   * Decide what an in-flight ship aimed at the current planet target should do
-   * this frame: `land` once it touches the planet's surface margin (planets
-   * render large, US-070 #3), or `reaim` at the planet's fresh lead point once
-   * the orbiting planet has drifted past the threshold from the route
-   * `endpoint` — so the ship corrects course mid-flight instead of trailing it.
-   * `null` = keep flying the current route. Keeps the landing/lead/threshold
-   * math in the module that owns the planet sprites; the scene just acts on it.
-   */
   updateRouteToTarget(
     shipX: number,
     shipY: number,
@@ -362,7 +225,6 @@ export class PlanetManager implements FlightModule {
     return null;
   }
 
-  /** First station marker the world point (x,y) falls within (or null). */
   getStationAt(x: number, y: number): StationMarker | null {
     return (
       this.stationMarkers.find((m) => {
@@ -373,25 +235,16 @@ export class PlanetManager implements FlightModule {
     );
   }
 
-  /** True while the planet info panel is open (for the Escape close-chain). */
   get hasInfoPanel(): boolean {
     return this.planetInfoPanel !== null;
   }
 
-  /** Close the planet info panel (deferred so it never tears down mid-dispatch). */
   closeInfoPanel(): void {
     const info = this.planetInfoPanel;
     this.planetInfoPanel = null;
     if (info) queueMicrotask(() => info.destroy());
   }
 
-  /**
-   * Set the planet hover cursors: "pointer" when idle (a click plots a course),
-   * "default" while a turn is running (clicks are disabled). The manager owns the
-   * planet sprites, so it owns their cursor too — mirrors
-   * {@link NpcShipManager.setCursors} so the scene's Controller never reaches into
-   * a sprite's Graphics directly.
-   */
   setCursors(turnRunning: boolean): void {
     const cursor = turnRunning ? "default" : "pointer";
     for (const sprite of this.planetSprites) {
@@ -399,19 +252,11 @@ export class PlanetManager implements FlightModule {
     }
   }
 
-  /** E2E: true once at least one planet renders via the GLSL rotation filter. */
   e2eHasFilterPlanet(): boolean {
     if (!__DEBUG__) return false;
     return this.planetSprites.some((s) => s.e2eHasRotationFilter());
   }
 
-  /**
-   * E2E (F1 pixel assertion): isolate the first GLSL-filtered planet — hide
-   * every other planet sprite this manager owns and strip the target down to
-   * its filtered body (delegated to the sprite, which owns its children) —
-   * and return its on-screen geometry. The manager owns the planet sprites,
-   * so the test seam lives here, not in the spec (Information Expert).
-   */
   e2eIsolateFilterPlanet(): {
     screenX: number;
     screenY: number;
@@ -425,10 +270,6 @@ export class PlanetManager implements FlightModule {
     }
     return target.e2eIsolateFilterBody();
   }
-
-  // ---------------------------------------------------------------------------
-  // Planet sprites
-  // ---------------------------------------------------------------------------
 
   private createPlanets(): void {
     if (!this.gameEngine?.player) return;
@@ -451,10 +292,6 @@ export class PlanetManager implements FlightModule {
       this.gameEngine.questManager.getActiveQuestLocations();
 
     const center = this.deps.getStarCenter();
-    // Orbital position is a deterministic function of the (persisted) game-day
-    // count, so planets sit where they should every time the scene loads. The
-    // base angle is derived from the planet id so each planet starts at a stable,
-    // distinct point on its orbit.
     const gameDays = this.gameEngine.galaxy?.gameDays ?? 0;
     for (const planet of currentSystem.planets) {
       const baseAngle = hashToAngle(planet.id);
@@ -485,8 +322,6 @@ export class PlanetManager implements FlightModule {
         this.addQuestMarker(sprite);
       }
 
-      // zIndex 50 so ships behind the disc (zIndex 40) are occluded and ships in
-      // front (zIndex 100) render on top — see NpcShipManager.updateNpcDepth().
       sprite.container.zIndex = 50;
       this.gameLayer.addChild(sprite.container);
       this.planetSprites.push(sprite);
@@ -495,27 +330,18 @@ export class PlanetManager implements FlightModule {
     logger.info(`Created ${this.planetSprites.length} planet sprites`);
   }
 
-  /** Add a quest marker (ring halo) to a planet sprite. */
   private addQuestMarker(sprite: PlanetSprite): void {
     const marker = new Graphics();
 
-    // Halo just OUTSIDE the disc: planets render large (US-070 #3), so a fixed
-    // small ring used to sit inside the planet and read as a stray circle.
     const radius = questMarkerRadius(sprite.displayRadius);
     marker.circle(0, 0, radius);
     marker.stroke({ width: 3, color: 0xffff00, alpha: 0.8 });
 
-    // Add to planet container so it rotates with the planet.
     sprite.container.addChild(marker);
 
     logger.debug(`Added quest marker to planet ${sprite.planet.name}`);
   }
 
-  /**
-   * Handle a planet click: cancel any chase, preview/commit a route to the disc
-   * edge (delegated to the scene), and show the planet info panel. The land
-   * button is only offered once the ship has actually reached the planet.
-   */
   handlePlanetClick(planet: Planet): void {
     if (this.deps.isTurnRunning()) return;
 
@@ -527,8 +353,6 @@ export class PlanetManager implements FlightModule {
 
     this.deps.clearFollow(); // picking a planet cancels auto-follow
 
-    // Approach point at the planet edge (ship-facing side) so the route preview
-    // stops at the disc surface rather than cutting through to the centre.
     const approachPt = planetApproachPoint(
       physics.shipX,
       physics.shipY,
@@ -538,12 +362,8 @@ export class PlanetManager implements FlightModule {
       GAME_BALANCE.landingApproachOffset,
     );
 
-    // Route planning (plan vs execute + landing curve) stays in the scene.
     this.onPlanetRouteRequested?.(planet.id, approachPt.x, approachPt.y);
 
-    // Show planet info panel. Landing is only offered once the ship has actually
-    // flown to the planet; otherwise a single click would teleport the player
-    // there (game-days only accrue while the ship is in motion).
     if (this.planetInfoPanel) {
       this.planetInfoPanel.destroy();
       this.planetInfoPanel = null;
@@ -571,9 +391,6 @@ export class PlanetManager implements FlightModule {
       ownerFaction != null && typeof player?.getReputation === "function"
         ? player.getReputation(ownerFaction)
         : undefined;
-    // Same landing gate the tooltip/land-attempt use — resolved here so a denied
-    // planet's «Приземлиться» button renders inert (and explains why) instead of
-    // firing a doomed land attempt that would burn a game day.
     const denial = this.landingDenial(planet);
     const landingDenialText = denial ? landingDenialMessage(denial) : undefined;
     this.planetInfoPanel = new PlanetInfoPanel(
@@ -590,10 +407,6 @@ export class PlanetManager implements FlightModule {
     );
     this.uiLayer.addChild(this.planetInfoPanel.container);
   }
-
-  // ---------------------------------------------------------------------------
-  // Station markers (US-066)
-  // ---------------------------------------------------------------------------
 
   private createStations(): void {
     const currentSystemId = this.gameEngine?.player?.currentSystemId;
@@ -617,9 +430,6 @@ export class PlanetManager implements FlightModule {
         station.type as import("@/types").StationType,
       );
 
-      // Prefer a per-type station sprite; fall back to the colour-coded diamond
-      // when no `station/` art is committed/cached yet (graceful, eager — no
-      // async/lazy loading; station art is non-lazy like `ships`/`planets`).
       const spriteKey = stationSpriteKey(
         station.type as import("@/types").StationType,
         station.id,
@@ -631,14 +441,10 @@ export class PlanetManager implements FlightModule {
         sprite.width = STATION_SPRITE_SIZE;
         sprite.height = STATION_SPRITE_SIZE;
         sprite.eventMode = "none";
-        // Sprites are baked lit from their top edge; rotate so the lit side faces
-        // the star, making each station's shading consistent with the sun's
-        // direction (the far side falls into shadow) instead of a fixed angle.
         sprite.rotation =
           Math.atan2(center.y - wy, center.x - wx) + Math.PI / 2;
         ctn.addChild(sprite);
       } else {
-        // Diamond shape coloured by station type.
         const g = new Graphics();
         g.poly([0, -14, 10, 0, 0, 14, -10, 0]);
         g.fill({ color: stationColor, alpha: 0.85 });
@@ -660,7 +466,6 @@ export class PlanetManager implements FlightModule {
       label.eventMode = "none";
       ctn.addChild(label);
 
-      // Hit area for clicking (matches the sprite footprint, scales with it).
       const hit = new Graphics();
       hit.circle(0, 0, STATION_SPRITE_SIZE / 2);
       hit.fill({ color: 0xffffff, alpha: 0.001 });
@@ -700,10 +505,6 @@ export class PlanetManager implements FlightModule {
     }
   }
 
-  /**
-   * Handle a station click: set this station as the route target, cancel any
-   * chase, and delegate the route planning / docking approach to the scene.
-   */
   private onStationClick(station: Station): void {
     logger.debug(`Station clicked: ${station.name}`);
     if (!this.deps.getShipPhysics()) return;

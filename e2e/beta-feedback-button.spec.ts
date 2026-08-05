@@ -2,14 +2,6 @@ import { test, expect } from '@playwright/test';
 import { applyMockHeavySystems, waitForEngine, waitForScene } from './fixtures/mockHeavySystems';
 import { ErrorCollector } from './helpers/errorCollector';
 
-/**
- * Task 4 (beta-tester feedback collection): the «Сообщить отзыв» button must be
- * present and visible in BOTH homes — the Main Menu and the in-flight system
- * menu — so a tester can file a structured GitHub Issue from either surface.
- *
- * Visual placement is screenshot-verified (CLAUDE.md presentation rule). This is
- * a NEW spec (existing menu specs are left untouched per the standing rule).
- */
 
 type EngineHandle = {
   currentScene: {
@@ -32,8 +24,6 @@ test.describe('Beta-feedback «Сообщить отзыв» button', () => {
     await waitForEngine(page);
     await waitForScene(page, 'MainMenuScene');
 
-    // Collect labels mounted under the renderer's UI layer (the menu buttons live
-    // in buttonsContainer on uiLayer).
     const labels = await page.evaluate(() => {
       const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
         renderer: { uiLayer: unknown };

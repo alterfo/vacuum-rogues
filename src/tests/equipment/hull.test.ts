@@ -60,10 +60,6 @@ describe("HullClass specs — slot counts", () => {
   });
 });
 
-// ⚠️ dual-hull Task 5: the legacy "PlayerShip derived getters" describe (which
-// asserted ship.weaponSlots/equipmentSlots/cargoCapacity off HULL_CLASS_SPECS)
-// was retired with those getters. Derived hull stats are now read from the
-// canonical ShipLoadout — these are its loadout-based replacements.
 describe("ShipLoadout — derived hull stats (replaces PlayerShip getters)", () => {
   const HULL_IDS = GEAR_CATALOG.filter(
     (g): g is HullSpec => g.kind === GearKind.HULL,
@@ -88,17 +84,10 @@ describe("ShipLoadout — derived hull stats (replaces PlayerShip getters)", () 
   });
 });
 
-// ⚠️ dual-hull Task 5: the legacy "Hull buying — modules move to inventory"
-// describe (ship.modules[] mutation) was retired with the modules array. The
-// canonical hull swap is ShipLoadout.setHull, which drops gear that no longer
-// fits — this is its loadout-based replacement.
 describe("ShipLoadout.setHull — hull swap (replaces legacy module shuffle)", () => {
   it("swaps the hull and drops slotted gear that no longer fits", () => {
     const loadout = new ShipLoadout("hull_bastion"); // most slots
     const slots = loadout.hull.slots;
-    // Fill every bank in a valid SR-canon mix totalling the hull's 9 slots:
-    // 4 weapons + engine + radar + 3 additional-equipment items. (A single
-    // category can no longer flat-fill — engine/radar are dedicated 1-slots.)
     for (let i = 0; i < 4; i++) loadout.install("wpn_pulse");
     loadout.install("eq_engine_i");
     loadout.install("eq_radar");
@@ -109,10 +98,6 @@ describe("ShipLoadout.setHull — hull swap (replaces legacy module shuffle)", (
 
     loadout.setHull("hull_scout"); // fewest slots
     expect(loadout.hull.hullClass).toBe(HullClass.LIGHT_FIGHTER);
-    // The surviving fitting must respect every per-category cap (the real
-    // capacity model) and stay within the new hull's mass budget — not merely
-    // the flat `hull.slots` total, which omits the dedicated engine/radar slots
-    // and let a flat pop keep over-cap weapons while dropping the engine.
     const stats = loadout.derivedStats();
     for (const c of Object.values(stats.categories)) {
       expect(c.used).toBeLessThanOrEqual(c.total);

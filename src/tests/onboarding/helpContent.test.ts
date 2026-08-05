@@ -5,7 +5,6 @@ import {
   type HelpKey,
 } from "@/systems/onboarding/helpContent";
 
-/** Every reachable gameplay screen + the intro/hints must have content. */
 const ALL_KEYS: HelpKey[] = [
   "RACE_SELECTION",
   "SPACE_FLIGHT",
@@ -30,7 +29,6 @@ describe("helpContent registry", () => {
     for (const key of ALL_KEYS) {
       expect(HELP_CONTENT[key], `missing entry for ${key}`).toBeDefined();
     }
-    // No extra/unexpected keys either — the record matches the key list exactly.
     expect(Object.keys(HELP_CONTENT).sort()).toEqual([...ALL_KEYS].sort());
   });
 
@@ -74,7 +72,6 @@ describe("helpContent registry", () => {
   it("the welcome entry states the game's goal", () => {
     const welcome = helpFor("welcome");
     const text = welcome.body.join(" ").toLowerCase();
-    // Goal: get rich and stop the Overmind threat.
     expect(text).toContain("цель");
     expect(text).toContain("овермайнд");
   });

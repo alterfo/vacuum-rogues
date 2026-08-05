@@ -10,17 +10,6 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Task 3 — the active-pause overlay's "confirm" path on the combat module.
- *
- * The overlay itself is PixiJS (covered by the regression spec + screenshot);
- * here we prove the pure module seam it routes through: {@link CombatModule.fittedWeapons}
- * lists the selectable weapons, and {@link CombatModule.confirmAttack} fires
- * exactly one shot with the player-chosen weapon, keeps that target selected,
- * and resets the auto-fire cadence — wired to a real {@link CombatPauseController}
- * the same way `SpaceFlightScene` does. No render context.
- */
-
 const FIRE = GAME_BALANCE.combatFireIntervalMs;
 const PULSE = gearById("wpn_pulse") as WeaponSpec; // dmg 14, range 240
 const BEAM = gearById("wpn_beam") as WeaponSpec; // dmg 30, range 300
@@ -102,9 +91,6 @@ describe("CombatModule.confirmAttack (Task 3)", () => {
   });
 
   it("lands a deliberate shot on an engaged target beyond weapon range (unlike auto-fire)", () => {
-    // The headline rule of confirmAttack: a hand-picked shot is NOT range-gated,
-    // while the real-time auto-fire is. Park an engaged enemy beyond pulse range
-    // (240) but inside combatEscapeRange (1200) so it stays a combatant.
     const controller = new CombatPauseController<NpcShipSprite, WeaponSpec>({
       onConfirm: (a) => module.confirmAttack(a.target, a.weapon),
     });
@@ -121,11 +107,9 @@ describe("CombatModule.confirmAttack (Task 3)", () => {
     const farEnemy = makeSprite("far", 500, 0); // > PULSE.range, < combatEscapeRange
     module.addCombatant(farEnemy);
 
-    // Auto-fire is range-gated: a full interval lands nothing on the far enemy.
     module.update(FIRE);
     expect(farEnemy.npc.hullHP).toBe(100);
 
-    // A deliberate confirmed shot lands anyway.
     module.confirmAttack(farEnemy, PULSE);
     expect(farEnemy.npc.hullHP).toBe(100 - PULSE.damage);
   });
@@ -134,33 +118,21 @@ describe("CombatModule.confirmAttack (Task 3)", () => {
     const { module, enemy } = makeFight();
     module.confirmAttack(enemy, PULSE); // one manual shot
     const afterConfirm = enemy.npc.hullHP;
-    // A short tick (less than a full interval) must NOT fire again.
     module.update(FIRE - 1);
     expect(enemy.npc.hullHP).toBe(afterConfirm);
-    // A full interval elapses → the auto-fire lands its next shot.
     module.update(1);
     expect(enemy.npc.hullHP).toBeLessThan(afterConfirm);
   });
 
   it("resumed real-time auto-fire fires ALL fitted weapons (Task 1 multi-weapon)", () => {
     const { module, enemy } = makeFight();
-    // The confirmed shot is a single deliberate weapon (the beam). The *resumed*
-    // real-time loop is the multi-weapon path: it fires every fitted weapon at an
-    // in-range target — both the pulse (dmg 14) and the beam (dmg 30) here — not a
-    // single persisted "active" weapon.
     module.confirmAttack(enemy, BEAM); // one deliberate beam shot
     const afterConfirm = enemy.npc.hullHP; // 100 - 30
-    // A resumed interval long enough for the slowest fitted weapon (the beam,
-    // cooldownTurns 3) — every fitted weapon then fires once (each fires at most
-    // once per update() call, so the per-shot damage is unchanged by the cadence).
     module.update(3 * FIRE);
     expect(enemy.npc.hullHP).toBe(afterConfirm - PULSE.damage - BEAM.damage);
   });
 
   it("resumed auto-fire fires only the still-fitted weapons after one is unequipped mid-fight", () => {
-    // A weapon unequipped mid-fight leaves the resumed real-time loop — never
-    // firing a weapon the loadout no longer carries. With the beam removed only
-    // the pulse remains fitted, so only the pulse lands.
     const { module, enemy, loadout } = makeFight();
     module.confirmAttack(enemy, BEAM); // one deliberate beam shot
     const afterConfirm = enemy.npc.hullHP; // 100 - 30
@@ -174,12 +146,10 @@ describe("active-pause confirm wiring (Task 3)", () => {
   it("an attack pauses; confirming the controller fires one shot and resumes", () => {
     const { module, controller, enemy } = makeFight();
 
-    // First interval: both sides fire and the incoming shot pauses the fight.
     module.update(FIRE);
     expect(controller.paused).toBe(true);
     const enemyHullAfterPause = enemy.npc.hullHP;
 
-    // Player picks the beam and confirms — fires exactly one beam shot + resumes.
     controller.selectTarget(enemy);
     controller.selectWeapon(BEAM);
     const action = controller.confirm();

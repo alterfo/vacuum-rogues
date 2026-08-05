@@ -19,15 +19,6 @@ import {
   MILITARY_SPEND_TRADE_RESERVE,
 } from "../playtest/letsplay/MemoryHeuristicPolicy";
 
-// ---------------------------------------------------------------------------
-// Task 4 — oddity sweep: remove gear-curve dominance inversions and tame the
-// money-printers. Assert the *relationships* (no strictly-dominated pricier
-// item, the cheapest hull is no longer the most cost-efficient, the courier is
-// no longer cheaper-and-roomier than the corvette, delivery profit is tight
-// against the worst-case market buy, combat reward is bounded) rather than exact
-// magnitudes, so later tuning doesn't churn these tests.
-// ---------------------------------------------------------------------------
-
 const HULLS = GEAR_CATALOG.filter(
   (g): g is HullSpec => g.kind === GearKind.HULL,
 );
@@ -35,12 +26,6 @@ const WEAPONS = GEAR_CATALOG.filter(
   (g): g is WeaponSpec => g.kind === GearKind.WEAPON,
 );
 
-/**
- * A hull `b` is *strictly dominated* by a cheaper-or-equal hull `a` when `a`
- * costs no more **and** is at least as good on every capacity stat **and**
- * strictly better on at least one — i.e. you would never rationally buy `b`.
- * A genuine role trade-off (more cargo for less HP) is NOT domination.
- */
 function hullDominates(a: HullSpec, b: HullSpec): boolean {
   if (a.id === b.id) return false;
   if (a.basePrice > b.basePrice) return false;
@@ -61,13 +46,6 @@ function hullDominates(a: HullSpec, b: HullSpec): boolean {
   return strictlyBetterSomewhere;
 }
 
-/**
- * A weapon `b` is dominated by a cheaper-or-equal weapon `a` of the **same
- * operating profile** (same ability) when `a` is at least as good on damage and
- * range and fires at least as fast (≤ cooldown), strictly better somewhere. A
- * unique special ability (EMP, homing, burst) makes a weapon non-dominated even
- * if a cheaper plain weapon out-damages it.
- */
 function weaponDominates(a: WeaponSpec, b: WeaponSpec): boolean {
   if (a.id === b.id) return false;
   if (a.basePrice > b.basePrice) return false;
@@ -103,8 +81,6 @@ describe("gear curve — no dominance inversions (Task 4)", () => {
       h.hp / h.basePrice > best.hp / best.basePrice ? h : best,
     );
     expect(bestEfficiency.id).not.toBe(cheapest.id);
-    // The cheapest hull's HP/cr is strictly worse than the best, so spending up
-    // (scout → corvette) is a genuine value upgrade, not a downgrade.
     expect(cheapest.hp / cheapest.basePrice).toBeLessThan(
       bestEfficiency.hp / bestEfficiency.basePrice,
     );
@@ -116,8 +92,6 @@ describe("gear curve — no dominance inversions (Task 4)", () => {
     const cheaperAndRoomier =
       courier.basePrice < corvette.basePrice && courier.cargo > corvette.cargo;
     expect(cheaperAndRoomier).toBe(false);
-    // It stays a real hauler (more cargo than the combat corvette) — the fix is
-    // the price, not gutting its role.
     expect(courier.cargo).toBeGreaterThan(corvette.cargo);
   });
 
@@ -152,22 +126,15 @@ describe("gear curve — no dominance inversions (Task 4)", () => {
 });
 
 describe("second-hull-tier affordability wall (2026-07-25 Task 2b)", () => {
-  // The freighter is the campaign agent's designated battle-ready hull
-  // (`BATTLE_READY_MAX_HULL = 180`). Task 2b trimmed its price 4500→3900 to lower
-  // the "second-hull-tier affordability wall" while preserving every gear-curve
-  // invariant. Pin the new value and the relationships that make the cut safe.
   const freighter = gearById("hull_freighter") as HullSpec;
   const corvette = gearById("hull_corvette") as HullSpec;
 
   it("freighter is priced at the tuned 3900cr", () => {
     expect(freighter.basePrice).toBe(3900);
-    // 180 hp — still the battle-ready hull the campaign agent aims for.
     expect(freighter.hp).toBe(BATTLE_READY_MAX_HULL);
   });
 
   it("stays strictly above the corvette so it never dominates it", () => {
-    // hullDominates would flag the freighter (≥ corvette on every capacity stat)
-    // the instant it is priced at-or-below the corvette — keep the gap.
     expect(freighter.basePrice).toBeGreaterThan(corvette.basePrice);
   });
 
@@ -179,40 +146,28 @@ describe("second-hull-tier affordability wall (2026-07-25 Task 2b)", () => {
   });
 
   it("lowers the net upgrade wall from the corvette to 3700cr", () => {
-    // Net upgrade cost = price − corvette trade-in (0.4×3000=1200); the agent's
-    // affordability gate adds MILITARY_SPEND_TRADE_RESERVE on top.
     const tradeIn = Math.floor(corvette.basePrice * HULL_TRADE_IN_RATE);
     const wall = freighter.basePrice - tradeIn + MILITARY_SPEND_TRADE_RESERVE;
     expect(wall).toBe(3700);
-    // …a real reduction from the old 4500-price wall of 4300cr.
     expect(wall).toBeLessThan(4300);
   });
 });
 
 describe("money-printers tamed (Task 4)", () => {
   it("local-delivery margin is tight against the worst-case market buy", () => {
-    // A "Местный подряд" makes the player BUY the cargo first; the worst-case
-    // purchase cost is base × 3.0 (market ceiling × best faction multiplier 1.0).
-    // The reward must stay above that — a contract should never be a hidden loss
-    // (locked by localDeliveryProfit.test.ts) — but no longer carry a fat
-    // structural surplus, so delivery stops being a printer.
     const WORST_CASE_BUY_MARKUP = 3.0;
     expect(LOCAL_DELIVERY_REWARD_MARGIN).toBeGreaterThan(WORST_CASE_BUY_MARKUP);
-    // ≤ 10% headroom over the worst case: just-profitable, not a windfall.
     expect(LOCAL_DELIVERY_REWARD_MARGIN).toBeLessThanOrEqual(
       WORST_CASE_BUY_MARKUP * 1.1,
     );
   });
 
   it("expected artifact payout per Overmind kill is bounded", () => {
-    // Artifacts double as a sellable good; the expected credit value of a kill's
-    // artifact drop must stay modest so combat is not a money-printer.
     const avgCount = (ARTIFACT_DROP_COUNT_MIN + ARTIFACT_DROP_COUNT_MAX) / 2;
     const expectedValue =
       ARTIFACT_DROP_CHANCE * avgCount * RESOURCE_BASE_PRICES.ARTIFACTS;
     expect(ARTIFACT_DROP_CHANCE).toBeLessThanOrEqual(0.3);
     expect(expectedValue).toBeLessThanOrEqual(600);
-    // …but still a real reward (not zeroed out).
     expect(expectedValue).toBeGreaterThan(0);
   });
 });

@@ -1,22 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A vault heist on the Hyperion corporate station, with a betrayal branch.
-// Two+ meaningful choice points:
-//   1. How to get in — bribe your inside contact Векслер (costs cr, gains a
-//      partner), hack the security grid (roll: clean or loud — each with its own
-//      narrated beat), or force the airlock (loud).
-//   2. What to grab — the full haul (more loot, but louder/slower) vs the data
-//      core only (lighter, quieter).
-//   3. The exit — meet Векслер to split the loot (he may BETRAY you on a roll),
-//      double-cross him (keep everything, lose reputation), or slip out. Slipping
-//      out WITH a partner is not free: he keeps the cases he was carrying, so you
-//      lose part of the haul (bringing a partner genuinely changes this exit).
-//      A high alarm level gets you caught regardless.
-// Outcomes:
-//   - ending_clean         (escaped with the loot)                       SUCCESS
-//   - ending_double_cross  (ditched the partner: more loot, −rep)        SUCCESS
-//   - ending_betrayed      (partner took the loot and ran)               FAILURE
-//   - ending_caught        (alarm too high, security caught you)         FAILURE
 export const sabotageHeistScript: QuestScript = {
   id: "sabotage-heist",
   title: "Налёт на хранилище",

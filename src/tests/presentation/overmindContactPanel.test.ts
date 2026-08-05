@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 
-// PixiJS is mocked with lightweight class stubs so the panel constructs headless
-// in jsdom (no canvas text measurement). Real classes (not vi.fn factories) keep
-// `instanceof Text` working, and addChild tracks children so the rendered button
-// labels can be inspected. Event handlers are stored so a button's pointerdown
-// can be replayed to assert its wired callback fires.
 vi.mock("pixi.js", () => {
   class Container {
     children: unknown[] = [];
@@ -96,7 +91,6 @@ function makeNpc(id: string, opts: NpcOpts = {}): NpcShip {
   return npc;
 }
 
-/** Visible text labels rendered in the panel (stat readouts + button captions). */
 function panelLabels(panel: NpcContactPanel): string[] {
   return (panel.container.children as unknown[])
     .filter((c): c is Text => c instanceof Text)
@@ -122,7 +116,6 @@ describe("NpcContactPanel always offers Атаковать to a hostile/Overmind
 
     const labels = panelLabels(panel);
     expect(labels).toContain("Атаковать");
-    // The Overmind drops the standing hail/scan affordances (gibberish context).
     expect(labels).not.toContain("Связаться");
     expect(labels).not.toContain("Сканировать");
     panel.destroy();
@@ -149,7 +142,6 @@ describe("NpcContactPanel always offers Атаковать to a hostile/Overmind
       (c) => c instanceof Text && c.text === "Атаковать",
     );
     expect(label).toBeTruthy();
-    // The clickable button Graphics sits immediately before its caption Text.
     const btn = children[children.indexOf(label!) - 1] as {
       emit: (ev: string, ...a: unknown[]) => void;
     };

@@ -11,7 +11,6 @@ import {
   type WeaponVfxSpec,
 } from "@/presentation/flight/combatWeaponVfxOverlay";
 
-// Minimal fake Graphics recorder — the seam only touches these methods.
 function fakeGraphics() {
   return {
     clear: vi.fn(),
@@ -47,7 +46,6 @@ describe("drawWeaponVfx — weapon-type visual dispatch (Task 13)", () => {
     expect(g.lineTo).toHaveBeenCalledWith(100, 0);
     expect(g.stroke).toHaveBeenCalledTimes(1);
     expect(g.stroke.mock.calls[0][0].color).toBe(WEAPON_VFX_COLOR);
-    // A beam is a pure stroke — no spark fill.
     expect(g.fill).not.toHaveBeenCalled();
   });
 
@@ -71,7 +69,6 @@ describe("drawWeaponVfx — weapon-type visual dispatch (Task 13)", () => {
     drawWeaponVfx(g as never, [
       shot({ variant: variant({ kind: WeaponVfxKind.MISSILE_TRAIL }), trail }),
     ]);
-    // One moveTo to the first trail point, then a lineTo per remaining point.
     expect(g.moveTo).toHaveBeenCalledWith(0, 0);
     expect(g.lineTo).toHaveBeenCalledTimes(2);
     expect(g.lineTo).toHaveBeenCalledWith(20, 6);
@@ -95,7 +92,6 @@ describe("drawWeaponVfx — weapon-type visual dispatch (Task 13)", () => {
         variant: variant({ kind: WeaponVfxKind.BEAM, distortion: true }),
       }),
     ]);
-    // Base beam stroke + the distortion ripple stroke.
     expect(g.stroke).toHaveBeenCalledTimes(2);
     const distortionCall = g.stroke.mock.calls.find(
       (c) => c[0].color === DISTORTION_COLOR,

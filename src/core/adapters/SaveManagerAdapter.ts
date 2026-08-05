@@ -3,10 +3,6 @@ import type { SaveState } from "@/domain/SaveState";
 import type { SaveSlotInfo } from "@/types";
 import { SaveManager } from "@/data/SaveManager";
 
-/**
- * Adapter: makes SaveManager compatible with ISaveService port.
- * Follows Adapter pattern + DIP.
- */
 export class SaveManagerAdapter implements ISaveService {
   private readonly delegate = new SaveManager();
 

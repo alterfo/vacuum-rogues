@@ -70,13 +70,6 @@ vi.mock("pixi.js", () => ({
   BlurFilter: vi.fn().mockImplementation(() => ({})),
 }));
 
-/**
- * Regression: SaveManager persists plain JSON, so a loaded galaxy's markets are
- * data-only (no prototype methods). rehydrateLoadedState must restore the
- * Market/Planet/StarSystem prototypes — otherwise daily market drift is silently
- * skipped on loaded saves (the `typeof advanceMarketDay === "function"` guard
- * fails) and any Market method call throws ("Сделка не удалась").
- */
 describe("GameEngine — market rehydration on load", () => {
   let diDeps: GameEngineDIDependencies;
   let engine: GameEngine;
@@ -105,14 +98,9 @@ describe("GameEngine — market rehydration on load", () => {
       factionType: FactionType.OUTLANDERS,
     });
 
-    // Faithfully reproduce a real load: JSON round-trip strips all prototypes,
-    // exactly like SaveManager's JSON.parse.
     const plainGalaxy = JSON.parse(JSON.stringify(galaxy));
     const plainPlayer = JSON.parse(JSON.stringify(player));
 
-    // Markets are currently empty stubs (EPIC-001), so match any planet market
-    // rather than requiring populated availableResources — the rehydration
-    // contract is about restoring the prototype, not the contents.
     const findMarket = (g: typeof plainGalaxy) => {
       for (const sys of g.systems) {
         for (const planet of sys.planets) {
@@ -122,7 +110,6 @@ describe("GameEngine — market rehydration on load", () => {
       return null;
     };
 
-    // Sanity: before load, the round-tripped market is method-less.
     expect(typeof findMarket(plainGalaxy)?.advanceMarketDay).not.toBe(
       "function",
     );
@@ -143,7 +130,6 @@ describe("GameEngine — market rehydration on load", () => {
 
     const market = findMarket(engine.galaxy as unknown as typeof plainGalaxy);
     expect(market).not.toBeNull();
-    // After rehydration the market behaves like a real Market again.
     expect(typeof market.advanceMarketDay).toBe("function");
     expect(typeof market.getPrice).toBe("function");
     expect(typeof market.applyTradeImpact).toBe("function");

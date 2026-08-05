@@ -12,12 +12,6 @@ import {
 } from "@/domain/banking/Ledger";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 
-/**
- * Task 1 — the pure double-entry ledger. These tests pin the two invariants the
- * whole АБС prototype rests on: every entry is balanced (Σ amount == 0) and an
- * account's balance is exactly the sum of its postings (value-dated when asked).
- */
-
 const PLAYER = "cur:player";
 
 function openPlayer(ledger: Ledger): void {
@@ -242,7 +236,6 @@ describe("Ledger — posting & balances", () => {
       }),
     );
 
-    // booked, but not yet valued
     expect(ledger.balanceOf(PLAYER)).toBe(200); // no asOf → full balance
     expect(ledger.balanceOf(PLAYER, 4)).toBe(0); // value date not reached
     expect(ledger.balanceOf(PLAYER, 5)).toBe(200); // value date reached

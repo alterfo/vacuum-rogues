@@ -4,12 +4,6 @@ import { gearById, type HullSpec } from "@/systems/equipment/GearCatalog";
 import { MigrationPipeline } from "@/data/MigrationPipeline";
 import type { SaveState } from "@/domain/SaveState";
 
-/**
- * Task 3 (install/micromodule overhaul): hulls expose 1–4 micromodule slots and
- * the loadout holds an array of hull micromodules bounded by that count, replacing
- * the former single `hullMicromoduleId`. Pure loadout/data behaviour only — hull
- * micromodule *effects* (defense/cargo/energy-redirect) land in Task 4.
- */
 describe("ShipLoadout — multi-slot hull micromodules", () => {
   it("exposes the hull's micromodule-slot count", () => {
     expect(new ShipLoadout("hull_scout").hullMicromoduleSlots()).toBe(1);
@@ -37,13 +31,11 @@ describe("ShipLoadout — multi-slot hull micromodules", () => {
   });
 
   it("accepts up to micromoduleSlots hull micromodules and rejects beyond", () => {
-    // hull_scout has a single hull micromodule slot.
     const scout = new ShipLoadout("hull_scout");
     expect(scout.applyMicromodule("hull_scout", "mm_amplifier_1")).toBe(true);
     expect(scout.applyMicromodule("hull_scout", "mm_amplifier_2")).toBe(false);
     expect(scout.hullMicromodules()).toEqual(["mm_amplifier_1"]);
 
-    // hull_bastion has four — accept exactly four, then refuse the fifth.
     const bastion = new ShipLoadout("hull_bastion");
     expect(bastion.applyMicromodule("hull_bastion", "mm_amplifier_1")).toBe(
       true,
@@ -74,7 +66,6 @@ describe("ShipLoadout — multi-slot hull micromodules", () => {
       false,
     );
     expect(warden.hullMicromodules()).toEqual([]);
-    // A real one still fits afterwards.
     expect(warden.applyMicromodule("hull_warden", "mm_amplifier_1")).toBe(true);
   });
 
@@ -101,8 +92,6 @@ describe("ShipLoadout — multi-slot hull micromodules", () => {
   });
 
   it("reads a legacy single hullMicromoduleId snapshot into the array", () => {
-    // A pre-v26 snapshot (legacy single id) must still restore — the save-layer
-    // migration converts it, but fromJSON also reads it defensively.
     const restored = ShipLoadout.fromJSON({
       hullId: "hull_warden",
       hullMicromoduleId: "mm_amplifier_1",
@@ -152,7 +141,6 @@ describe("MigrationPipeline v25→26 — hull micromodule array", () => {
     expect(migrated.loadout.hullMicromoduleIds).toEqual(["mm_amplifier_1"]);
     expect(migrated.loadout.hullMicromoduleId).toBeUndefined();
 
-    // The migrated snapshot restores into a loadout carrying the hull micromodule.
     const restored = ShipLoadout.fromJSON(
       migrated.loadout as Parameters<typeof ShipLoadout.fromJSON>[0],
     );

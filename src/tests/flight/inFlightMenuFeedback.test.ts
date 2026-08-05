@@ -1,12 +1,3 @@
-/**
- * Task 4 (beta-feedback): the in-flight system menu's «Сообщить отзыв» entry
- * captures LIVE context (current scene, in-game day, galaxy seed) and opens the
- * prefilled GitHub Issue Form. {@link wireFlightSystemMenu} accepts an injectable
- * opener so we assert the exact URL handed to it — without a real `window`.
- *
- * Built against a REAL PixiJS scene graph (mirrors inFlightMenuActions.test.ts)
- * so the button is driven through a real pointerdown, not by poking internals.
- */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { Container, Text } from "pixi.js";
 
@@ -30,7 +21,6 @@ function makeRenderer(uiLayer: Container): Renderer {
   } as unknown as Renderer;
 }
 
-/** Recursively collect every PixiJS Text node under a display object. */
 function allTexts(node: Container): Text[] {
   const out: Text[] = [];
   if (node instanceof Text) out.push(node);
@@ -44,7 +34,6 @@ function hasLabel(uiLayer: Container, label: string): boolean {
   return allTexts(uiLayer).some((t) => t.text === label);
 }
 
-/** Find the UiButton container whose label matches and emit a real pointerdown. */
 function clickLabel(uiLayer: Container, label: string): void {
   const labelNode = allTexts(uiLayer).find((t) => t.text === label);
   if (!labelNode) throw new Error(`No button labelled "${label}"`);
@@ -98,7 +87,6 @@ describe("FlightHud — in-flight «Сообщить отзыв»", () => {
     });
     expect(open).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledWith(expectedUrl, "_blank", "noopener");
-    // The seed and day are the *live* values, not placeholders.
     const [url] = open.mock.calls[0] as [string];
     const diag = new URL(url).searchParams.get("diagnostics") ?? "";
     expect(diag).toContain("day: 7");

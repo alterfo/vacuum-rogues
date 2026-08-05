@@ -1,25 +1,5 @@
-/**
- * Regression: the customs ("Таможня") text quest restarts after a win, can't be
- * exited, and «Сдаться» does nothing.
- *
- * Root cause (all three symptoms, one root): the quest is launched with
- * `returnScene = PLANET`; surrender / Esc / exit and the post-win return all
- * route through `TextQuestScene.doReturn()`, which transitions back to PLANET.
- * `PlanetScene.initialize()` then calls `checkAndResumeTextQuest()`, which
- * auto-relaunches any still-active TEXT_ADVENTURE quest on that planet — so the
- * immediate return bounces the player straight back into the same quest. An
- * inescapable loop that reads as "restart / can't exit / surrender does nothing".
- *
- * Fix contract (Task 2): `doReturn()` tags the return context with
- * `resumeTextQuest: false`; `PlanetScene` honours it and skips the auto-resume
- * on that one immediate return. A genuine fresh landing (no flag) still resumes.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SceneType, QuestType } from "@/types";
-
-// ── PixiJS mock (must come before imports that load pixi.js) ─────────────────
-// Rich Container/Graphics/Text for the TextQuestScene VM layout; bare Rectangle/
-// Sprite so PlanetScene can be imported (we only ever Object.create it).
 
 vi.mock("pixi.js", () => ({
   Container: vi.fn().mockImplementation(() => ({
@@ -76,8 +56,6 @@ import { PlanetScene } from "@/presentation/PlanetScene";
 import { customsScript } from "@/systems/quests/scripts/customs";
 import type { QuestVM } from "@/systems/quests/QuestVM";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function makeRenderer() {
   return {
     app: { screen: { width: 800, height: 600 } },
@@ -99,18 +77,14 @@ function makeEngine() {
   return { engine, forceCompleteQuest, transitionTo };
 }
 
-/** Position the scene's live VM at `check_final` with a winning credit balance,
- *  exactly as the script reaches it after 20 inspected ships. */
 function driveToWinTerminal(scene: TextQuestScene): void {
   const vm = (scene as any).vm as QuestVM;
   vm.setParam("money", 6000);
   vm.setParam("shipNum", 20);
-  // jump to the end-of-shift auto-check (the script gets here via critMax on shipNum)
   (vm as any).currentLocationId = "check_final";
   (scene as any).renderVmLocation();
 }
 
-/** An active, in-progress customs TEXT_ADVENTURE quest issued on `planetId`. */
 function activeCustomsQuest(planetId: string) {
   return {
     id: "q_customs",
@@ -122,7 +96,6 @@ function activeCustomsQuest(planetId: string) {
   };
 }
 
-/** A PlanetScene with only the fields `checkAndResumeTextQuest` reads. */
 function makePlanetScene(opts: {
   planetId: string;
   activeQuests: unknown[];
@@ -136,12 +109,9 @@ function makePlanetScene(opts: {
     startTextQuest,
   };
   fields.planet = { id: opts.planetId };
-  // The Task-2 fix stores this from the init context (resumeTextQuest === false).
   fields.suppressTextQuestResume = opts.suppressResume ?? false;
   return { scene, startTextQuest };
 }
-
-// ── Win path: terminal finishes once, completes, returns (no re-launch) ────────
 
 describe("Customs quest — win exits once and does not restart", () => {
   beforeEach(() => {
@@ -186,10 +156,6 @@ describe("Customs quest — win exits once and does not restart", () => {
   });
 });
 
-// ── doReturn must tell the destination NOT to auto-resume the quest ────────────
-// Task 2 fix: `doReturn()` tags the return context with `resumeTextQuest: false`,
-// so returning to PLANET does not re-launch the still-active quest.
-
 describe("Customs quest — surrender / exit / Esc return without re-launching", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -214,7 +180,6 @@ describe("Customs quest — surrender / exit / Esc return without re-launching",
     return { scene, transitionTo };
   }
 
-  // Post-fix contract: `doReturn()` returns to PLANET with `resumeTextQuest:false`.
   it("«Сдаться» returns to the prior scene and flags no auto-resume", () => {
     const { scene, transitionTo } = initScene();
     (scene as any).doReturn();
@@ -236,9 +201,6 @@ describe("Customs quest — surrender / exit / Esc return without re-launching",
   });
 });
 
-// ── Adjacent case: a failure terminal does not auto-return, but the player can
-//    still exit it cleanly (no-resume) — the failed quest must not relaunch. ────
-
 describe("Customs quest — failure terminal exits without re-launching", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -248,7 +210,6 @@ describe("Customs quest — failure terminal exits without re-launching", () => 
     vi.useRealTimers();
   });
 
-  /** Position the live VM on the `quest_failure_credits` terminal. */
   function driveToFailureTerminal(scene: TextQuestScene): void {
     const vm = (scene as any).vm as QuestVM;
     (vm as any).currentLocationId = "quest_failure_credits";
@@ -272,12 +233,9 @@ describe("Customs quest — failure terminal exits without re-launching", () => 
     const vm = (scene as any).vm as QuestVM;
     expect(vm.isFinished()).toBe(true);
     expect(vm.isSuccess()).toBe(false);
-    // Failure does not auto-return — the player chooses «Начать заново» or exits.
     vi.advanceTimersByTime(3000);
     expect(transitionTo).not.toHaveBeenCalled();
 
-    // Exiting a failed shift returns to PLANET with the no-resume flag set, so
-    // the still-active quest is not relaunched on the return.
     (scene as any).doReturn();
     expect(transitionTo).toHaveBeenCalledTimes(1);
     const [sceneArg, ctx] = transitionTo.mock.calls[0];
@@ -286,8 +244,6 @@ describe("Customs quest — failure terminal exits without re-launching", () => 
     scene.destroy(); // release the global keydown listener (no cross-test leak)
   });
 });
-
-// ── The loop itself: the immediate return must NOT auto-relaunch the quest ─────
 
 describe("PlanetScene.checkAndResumeTextQuest — no relaunch loop", () => {
   beforeEach(() => {
@@ -298,7 +254,6 @@ describe("PlanetScene.checkAndResumeTextQuest — no relaunch loop", () => {
     vi.useRealTimers();
   });
 
-  // Task 2 honours the suppression flag: the immediate return does not relaunch.
   it("does NOT auto-relaunch when entered as the return from an exited quest", () => {
     const { scene, startTextQuest } = makePlanetScene({
       planetId: "planet_x",

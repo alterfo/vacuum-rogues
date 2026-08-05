@@ -12,15 +12,11 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 
-// Opaque handles — the controller never inspects them beyond identity.
 type Target = { id: string };
 type Weapon = { id: string };
 
 const FIRE = GAME_BALANCE.combatFireIntervalMs; // 2500 ms
 
-// ---------------------------------------------------------------------------
-// CombatPauseController — pure state machine (Task 1)
-// ---------------------------------------------------------------------------
 describe("CombatPauseController auto-pause + confirm (Task 1)", () => {
   it("an incoming attack pauses; selecting target+weapon then confirm fires once and resumes", () => {
     const onConfirm = vi.fn();
@@ -126,7 +122,6 @@ describe("CombatPauseController incoming-attack debounce (Task 1)", () => {
 
     expect(c.requestPause("incoming-attack")).toBe(true);
     c.resume();
-    // Same engagement, more incoming fire: must not re-pause.
     expect(c.requestPause("incoming-attack")).toBe(false);
     expect(c.requestPause("incoming-attack")).toBe(false);
     expect(c.paused).toBe(false);
@@ -198,7 +193,6 @@ describe("CombatPauseController target-lost re-pause (Task 1)", () => {
     c.selectTarget(a);
     c.selectWeapon({ id: "pulse" });
     c.confirm();
-    // Even though incoming-attack is consumed, a lost target still re-pauses.
     expect(c.notifyTargetLost(a)).toBe(true);
     expect(c.paused).toBe(true);
   });
@@ -215,9 +209,6 @@ describe("CombatPauseController target-lost re-pause (Task 1)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — raises the active-pause trigger on incoming fire (Task 1)
-// ---------------------------------------------------------------------------
 function makePhysics(x = 0, y = 0): ShipPhysics {
   return {
     shipX: x,

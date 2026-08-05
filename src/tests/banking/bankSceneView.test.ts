@@ -42,8 +42,6 @@ describe("formatCredits", () => {
 
 describe("wholeCreditsToCurrent", () => {
   it("floors a fractional balance to whole credits", () => {
-    // EOD interest leaves savings/loan balances fractional; only whole credits
-    // may land on a current account (player.credits is int() in the save schema).
     expect(wholeCreditsToCurrent(1000, 502.001)).toBe(502);
     expect(wholeCreditsToCurrent(3015.7)).toBe(3015);
   });
@@ -87,7 +85,6 @@ describe("playerAccountRows", () => {
       type: AccountType.SAVINGS,
       label: "Сберегательный вклад",
     });
-    // Seed: cash → current 1000, then current → savings 300.
     ledger.post(
       journalEntry({
         id: "e1",
@@ -151,7 +148,6 @@ describe("statementRows", () => {
         { accountId: "gl:services", amount: 200 },
       ],
     }),
-    // An entry that does not touch the current account — must be skipped.
     journalEntry({
       id: "e4",
       date: 3,
@@ -186,12 +182,7 @@ describe("statementRows", () => {
   });
 });
 
-// UX review finding #2: raw English enum tokens (a `ResourceType` or an
-// encounter `kind`) once leaked verbatim into player-visible ledger reasons.
-// A row rendered from a reason built by the localized producers must carry no
-// such token.
 describe("statementRows — localized reasons carry no raw enum token", () => {
-  /** Matches an all-caps ASCII enum token or a lowercase encounter kind. */
   const RAW_ENUM =
     /\b([A-Z][A-Z_]{2,}|salvage|trap|bonus|hazard|rescue|ambush|ignored)\b/;
 
@@ -260,8 +251,6 @@ describe("describeCommand / describePosting", () => {
       }),
     ).toBe("Выдача кредита 5 000 ₡");
     expect(describeCommand({ kind: "RunEndOfDay" })).toBe("Конец дня (EOD)");
-    // PostTransaction now flows through the live panel in production (loan-residual
-    // write-off), and AccrueInterest is the EOD interest leg — both must render.
     expect(
       describeCommand({
         kind: "PostTransaction",
@@ -303,11 +292,7 @@ describe("BANK_TOAST semantic colours", () => {
   });
 
   it("keeps the two must-differ pairs apart", () => {
-    // A denied loan (warn) must never read like a granted one (success)…
     expect(BANK_TOAST.warn).not.toBe(BANK_TOAST.success);
-    // …and a neutral "nothing to repay" (info) must never read like a
-    // completed withdrawal (success). These are the two contradictions the
-    // Task 5 colour fix targets.
     expect(BANK_TOAST.info).not.toBe(BANK_TOAST.success);
   });
 });
@@ -332,14 +317,11 @@ describe("loanPanelLines", () => {
   it("shows the offer (term, rate, payment, total) when there is no debt", () => {
     const lines = loanPanelLines(summary, 0);
     const byLabel = Object.fromEntries(lines.map((l) => [l.label, l.value]));
-    // The principal disbursed and the per-day interest rate are surfaced.
     expect(byLabel["Сумма кредита"]).toBe(formatCredits(5000));
     expect(byLabel["Ставка"]).toBe("0,2 %/день");
     expect(byLabel["Срок"]).toBe("10 дн.");
-    // Total repayable always exceeds the principal (interest is charged).
     expect(byLabel["К возврату"]).toBe(formatCredits(summary.totalRepayable));
     expect(summary.totalRepayable).toBeGreaterThan(5000);
-    // No outstanding-debt line in the offer view.
     expect(byLabel["Текущий долг"]).toBeUndefined();
   });
 
@@ -348,7 +330,6 @@ describe("loanPanelLines", () => {
     const debt = lines.find((l) => l.label === "Текущий долг");
     expect(debt?.value).toBe(formatCredits(3200));
     expect(debt?.tone).toBe("debt");
-    // The active view drops the up-front "Сумма кредита"/"К возврату" offer rows.
     expect(lines.some((l) => l.label === "Сумма кредита")).toBe(false);
     expect(lines.some((l) => l.label === "Платёж/день")).toBe(true);
   });

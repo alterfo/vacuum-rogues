@@ -1,36 +1,19 @@
-/**
- * find-symbol — hybrid grep + ast-grep symbol extractor.
- *
- * Strategy: grep locates candidate files (fast), ast-grep parses each one and
- * returns the full declaration body (not just the declaration line).
- * Supports TypeScript, JavaScript, Python, and Go out of the box.
- */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse, Lang } from "@ast-grep/napi";
 
-/** Valid identifier: letters, digits, underscores — never shell-unsafe. */
 export const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-/** Source paths accepted by findTestsFor. */
 export const SAFE_PATH = /^[A-Za-z0-9_./-]+$/;
 
-// ---------------------------------------------------------------------------
-// Language configuration
-// ---------------------------------------------------------------------------
 
 export type SupportedLang = "ts" | "tsx" | "js" | "jsx";
 
 interface LangConfig {
-  /** @ast-grep/napi Lang enum value */
   lang: Lang;
-  /** AST node kinds that represent a complete declaration body */
   declarationKinds: string[];
-  /** File extensions handled by this config */
   extensions: string[];
-  /** grep --include flags (one per extension — brace expansion is shell-only) */
   grepIncludes: string[];
-  /** Grep pattern for declarations (function, class, etc.) */
   grepPattern: (name: string) => string;
 }
 
@@ -69,9 +52,6 @@ const LANG_CONFIGS: LangConfig[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Core: grep-based file discovery
-// ---------------------------------------------------------------------------
 
 function grepLines(args: string[], cwd: string): string[] {
   try {
@@ -87,9 +67,6 @@ function grepLines(args: string[], cwd: string): string[] {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Core: ast-grep body extraction
-// ---------------------------------------------------------------------------
 
 interface SymbolBody {
   text: string;
@@ -113,7 +90,6 @@ function extractBodyFromFile(
   for (const kind of config.declarationKinds) {
     const nodes = root.findAll({ rule: { kind } });
     for (const node of nodes) {
-      // Identifier sits at child(0) or child(1) depending on modifiers
       for (let i = 0; i < Math.min(4, node.children().length); i++) {
         const child = node.child(i);
         if (child && child.text() === name) {
@@ -130,14 +106,9 @@ function extractBodyFromFile(
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 export interface FindSymbolOptions {
-  /** Directories to search (relative to root). Defaults to ["."] */
   searchDirs?: string[];
-  /** Languages to search. Defaults to all supported languages. */
   langs?: SupportedLang[];
 }
 
@@ -148,12 +119,6 @@ export interface SymbolMatch {
   text: string;
 }
 
-/**
- * Find all declarations of `name` in `root` and return their full bodies.
- *
- * Returns an array of matches (usually one; multiple when the same name appears
- * in several files — e.g. overloads or same-named exports in different modules).
- */
 export function findSymbol(
   name: string,
   root: string,
@@ -190,9 +155,6 @@ export function findSymbol(
   return results;
 }
 
-/**
- * Formatted string output of findSymbol results — suitable for MCP text responses.
- */
 export function findSymbolText(
   name: string,
   root: string,
@@ -210,15 +172,10 @@ export function findSymbolText(
     .join("\n\n");
 }
 
-/**
- * List test files that import the given source file by basename.
- */
-/** File base name: letters, digits, underscores, hyphens, dots. */
 const SAFE_BASENAME = /^[A-Za-z0-9_.-]+$/;
 
 export function findTestsFor(srcPath: string, root: string): string[] {
   if (!SAFE_PATH.test(srcPath)) return [];
-  // Reject path traversal attempts
   if (srcPath.includes("..")) return [];
   const base = srcPath.replace(/\.[^.]+$/, "").replace(/.*\//, "");
   if (!SAFE_BASENAME.test(base)) return [];

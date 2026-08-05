@@ -12,16 +12,6 @@ export interface GenerationProgress {
   status: string;
 }
 
-/**
- * Frost-line orbital zones: the set of planet types allowed at each orbit
- * index (0 = innermost/hottest, 4 = outermost/coldest). Hot rocky worlds hug
- * the star; gas giants and ice worlds sit in the cold outer reaches. There is
- * no dedicated "barren" enum member, so INDUSTRIAL (mining/factory worlds)
- * stands in for the harsh rocky bodies of the inner system.
- *
- * Index this with the planet's orbit index; unit tests assert every generated
- * planet's type falls within its zone.
- */
 export const ORBIT_ZONES: readonly PlanetType[][] = [
   [PlanetType.VOLCANIC, PlanetType.INDUSTRIAL],
   [PlanetType.VOLCANIC, PlanetType.INDUSTRIAL, PlanetType.TERRESTRIAL],
@@ -30,7 +20,6 @@ export const ORBIT_ZONES: readonly PlanetType[][] = [
   [PlanetType.GAS_GIANT, PlanetType.ICE],
 ];
 
-/** Relative selection weights per planet type (within a zone's allowed set). */
 const TYPE_WEIGHTS: Record<PlanetType, number> = {
   [PlanetType.VOLCANIC]: 20,
   [PlanetType.INDUSTRIAL]: 15,
@@ -40,7 +29,6 @@ const TYPE_WEIGHTS: Record<PlanetType, number> = {
   [PlanetType.ICE]: 20,
 };
 
-/** Planet types that carry population and can be landed on / traded with. */
 const HABITABLE_TYPES: readonly PlanetType[] = [
   PlanetType.TERRESTRIAL,
   PlanetType.INDUSTRIAL,
@@ -63,8 +51,6 @@ export class PlanetGenerator {
     const names = PlanetNameGenerator.generate(this.rng, count);
     const planets: Planet[] = [];
 
-    // Guarantee at least one habitable planet, placed at the goldilocks orbit
-    // (index 2) when the system is large enough, else the outermost orbit.
     const habitableOrbit = Math.min(count - 1, 2);
 
     for (let i = 0; i < count; i++) {
@@ -108,11 +94,6 @@ export class PlanetGenerator {
     return planets;
   }
 
-  /**
-   * Pick a planet type for the given orbit index, constrained to that orbit's
-   * frost-line zone. When `habitableOnly` is set, the choice is further limited
-   * to habitable types within the zone (the system's guaranteed landing spot).
-   */
   private selectForZone(
     orbitIndex: number,
     habitableOnly: boolean,

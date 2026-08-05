@@ -27,14 +27,6 @@ export enum FactionType {
   PROGRESSORS = "PROGRESSORS",
 }
 
-/**
- * Per-run difficulty mode, chosen on the new-game screen and persisted on the
- * save (not the global PlayerSettings — it is per playthrough).
- * - GOD: the ship is never destroyed — a lethal hit floors its hull above 0 and
- *   leaves it "downed" (can't fire/hyperjump until repaired above the floor).
- * - NORMAL: baseline behaviour.
- * - HARD: modestly more hostile systems + larger garrisons.
- */
 export type GameMode = "GOD" | "NORMAL" | "HARD";
 
 export enum EnemyType {
@@ -50,14 +42,6 @@ export enum ModuleCategory {
   SHIELD = "SHIELD",
   ENGINE = "ENGINE",
   EQUIPMENT = "EQUIPMENT",
-  /**
-   * Hull micromodules (install/micromodule overhaul Task 4): fitted into a hull's
-   * own micromodule slots, not onto a piece of gear. Their {@link MicroModule.bonusType}
-   * selects the effect — boost defense/cargo, or redirect energy to weapons/engine —
-   * applied as a global multiplier in {@link ShipLoadout.derivedStats}. Never stored
-   * on a {@link ShipModule} (the legacy bag), so the `ShipModuleSchema.category`
-   * enum deliberately omits it.
-   */
   HULL = "HULL",
 }
 
@@ -82,10 +66,7 @@ export enum QuestType {
   ESCORT = "ESCORT",
   DIPLOMACY = "DIPLOMACY",
   EXPLORATION = "EXPLORATION",
-  // Branching text-adventure novella (EPIC-005), issued ~1 in 5 by the quest
-  // generator (EPIC-008) as the special "cherry on top".
   TEXT_ADVENTURE = "TEXT_ADVENTURE",
-  // Anti-OVERMIND defense mission: fly to the target system to push OVERMIND back.
   DEFENSE = "DEFENSE",
 }
 
@@ -170,23 +151,14 @@ export enum ProfileLevel {
   LOW = "LOW",
 }
 
-// --- Living Galaxy: autonomous NPC ships (Feature 8) ---
-
 export enum NpcRole {
   RANGER = "RANGER",
   TRADER = "TRADER",
   PIRATE = "PIRATE",
   PATROL = "PATROL",
-  /** Overmind hive craft — hostile-faction ships with their own stats/art. */
   OVERMIND = "OVERMIND",
 }
 
-/**
- * Overmind hull size tier — scales spawn stats off `ROLE_STATS[NpcRole.OVERMIND]`
- * (small/medium/large; boss uses fixed stats) and selects per-tier ship art
- * (`ships/overmind_<tier>`). Optional/additive: absent on non-Overmind ships
- * and on old saves (both read as the medium base tier where it matters).
- */
 export type NpcSizeTier = "small" | "medium" | "large" | "boss";
 
 export enum NpcState {
@@ -213,7 +185,6 @@ export interface NpcGoal {
   readonly questId?: string;
 }
 
-/** Plain initialization data for an NpcShip (also its serialized shape). */
 export interface NpcShipInit {
   id: string;
   name: string;
@@ -232,26 +203,17 @@ export interface NpcShipInit {
   daysToArrival: number;
   credits: number;
   reputation: number;
-  /** Shield tech level — compared against player scanPower for scan check. */
   shieldPower?: number;
-  /** Names of equipment items visible when scanned (3 items at NPC tech level). */
   loadoutSummary?: string[];
-  /** Goods a trader NPC is currently carrying between systems. */
   cargo?: { goodId: string; qty: number }[];
-  /** System ID this ranger NPC is currently traveling toward to complete a quest. */
   activeQuestTarget?: string | null;
-  /** Shared ID grouping ships travelling together as a military convoy. */
   convoyId?: string;
-  /** Persisted world position offset from the system star centre (null until placed). */
   worldX?: number | null;
   worldY?: number | null;
-  /** True when openly hostile to the player (garrison/pirate spawns, or attacked). */
   hostile?: boolean;
-  /** Overmind hull size tier (stat scaling + per-tier art). Unset for other factions. */
   sizeTier?: NpcSizeTier;
 }
 
-/** A simulation event emitted by the living-galaxy and collected in newsFeed. */
 export interface NewsEvent {
   type:
     | "NPC_QUEST_COMPLETE"
@@ -267,38 +229,19 @@ export interface NewsEvent {
     | "LIBERATION_CAMPAIGN"
     | "TRADE_OPPORTUNITY"
     | "CAMPAIGN_ESCALATION";
-  /** Ranger NPC that completed a quest (NPC_QUEST_COMPLETE only). */
   npcId?: string;
-  /** System where the event occurred. */
   systemId: string;
-  /** Galaxy day the event was emitted. */
   day: number;
-  /** Human-readable description shown in the news feed. */
   description: string;
-  /** Hostile system a liberation campaign targets (LIBERATION_CAMPAIGN only). */
   targetSystemId?: string;
-  /** Friendly system rangers rally at before the assault (LIBERATION_CAMPAIGN only). */
   stagingSystemId?: string;
-  /** Absolute galaxy day the rally departs / assault begins (LIBERATION_CAMPAIGN only). */
   liberationDate?: number;
-  /** Traded good of a route opportunity (TRADE_OPPORTUNITY only). */
   resource?: ResourceType;
-  /** Buy-low source system of a route opportunity (TRADE_OPPORTUNITY only). */
   fromSystemId?: string;
-  /** Sell-high destination system of a route opportunity (TRADE_OPPORTUNITY only). */
   toSystemId?: string;
-  /** Headline margin percentage of a route opportunity (TRADE_OPPORTUNITY only). */
   marginPct?: number;
 }
 
-/**
- * A floating loot item dropped by a destroyed NPC ship in the player's flight
- * scene (Feature: space loot drops). Transient/presentation-only — lives in the
- * NpcShipManager's in-memory `spaceLoot` array, never persisted in SaveState.
- * Carries either a `moduleId` (salvaged equipment) or an `artifactId` (Overmind
- * artifact); `x`/`y` are world-space and `spawnedAt` is the manager's elapsed-ms
- * clock at spawn (used to despawn the item after its lifetime).
- */
 export interface SpaceLootItem {
   id: string;
   moduleId?: string;
@@ -335,13 +278,6 @@ export enum HullClass {
   DESTROYER = "DESTROYER",
   TRANSPORT = "TRANSPORT",
   HEAVY_FREIGHTER = "HEAVY_FREIGHTER",
-  // Gear-catalog & garrison-power-ceiling plan (2026-07-19): a genuinely new
-  // archetype (`hull_cruiser`), not another DESTROYER — `hullIdForHullClass`
-  // (`MigrationPipeline.ts`) resolves a legacy save's hullClass string to ONE
-  // specific catalog hull id, an assumption that breaks the moment two hulls
-  // share a class (a real regression caught by `hullUnificationMigration.test.ts`
-  // while adding this hull — reusing DESTROYER silently redirected legacy
-  // DESTROYER saves onto the new hull instead of «Бастион»).
   CRUISER = "CRUISER",
 }
 
@@ -540,9 +476,7 @@ export interface ReputationMap {
 export interface QuestLog {
   readonly activeQuests: Quest[];
   readonly completedQuests: string[];
-  // chainId → completed part indices (0/1/2); persisted for cross-session chains.
   readonly completedChainParts?: Record<string, number[]>;
-  // Quests whose objectives are done but reward is unclaimed (return-to-issuer).
   readonly pendingReturnQuests?: Quest[];
 }
 
@@ -574,11 +508,6 @@ export interface OvermindAction {
   readonly targetSystemId: string;
 }
 
-/**
- * Overmind endgame-arc status (the spread machine's small state machine;
- * `src/systems/overmind/overmindSpread.ts`). dormant → advancing ⇄ contained →
- * won|lost. Persisted on `Galaxy.overmindArc`.
- */
 export type OvermindStatus =
   | "dormant"
   | "advancing"
@@ -586,31 +515,12 @@ export type OvermindStatus =
   | "won"
   | "lost";
 
-/**
- * Persisted Overmind endgame-arc state — the spread machine's clock + threat
- * snapshot. Lives on `Galaxy.overmindArc`; the captured *set* is the separate,
- * already-persisted `galaxy.overmindSystems`. Defined in the Types layer so the
- * domain (`Galaxy`) and validation (`schemas.ts`) can reference it without an
- * upward import from `systems/`.
- */
 export interface OvermindSpreadState {
-  /** Business day the arc clock started (the Overmind's "day zero"). -1 until first advance. */
   dayZero: number;
-  /** Last business day a spread tick actually advanced the front. -1 until first spread. */
   lastSpreadDay: number;
-  /** Current arc status (derived each tick; persisted for the UI + end-conditions). */
   status: OvermindStatus;
-  /** Snapshot Overmind share 0..1 after this tick (drives the threat indicator). */
   threat: number;
-  /** High-water mark of the Overmind share — lets us detect "pushed back" → contained. */
   peakThreat: number;
-  /**
-   * Count of Overmind systems the PLAYER personally liberated (via
-   * `Galaxy.tryLiberate(id, "player")` — `liberateCurrentSystem()` or a DEFENSE
-   * quest completion). Optional additive (absent on old saves ⇒ 0 — no
-   * migration). Gates the arc's `won` derivation: an NPC-only equilibrium
-   * clearing the front must never fire a spurious, unearned victory (F10).
-   */
   playerLiberations?: number;
 }
 
@@ -631,10 +541,6 @@ export interface SaveSlotInfo {
   readonly timestamp: number;
   readonly playerLevel: number;
   readonly location: string;
-  /**
-   * Scene the save was taken in — listing metadata only (NOT part of the
-   * serialized save schema). Lets the Continue resolver skip terminal scenes.
-   */
   readonly currentSceneType?: SceneType;
 }
 
@@ -657,25 +563,9 @@ export interface SerializedSave {
   readonly payload: string;
 }
 
-/**
- * Serialized snapshot of the canonical GearCatalog loadout (hull + slotted
- * gear + micromodules). Produced by ShipLoadout.toJSON(), restored by
- * ShipLoadout.fromJSON() on load — without it, gear bought in the equipment
- * shop silently vanished on "Continue" (letsplay F6 follow-up).
- */
 export interface ShipLoadoutSnapshot {
   readonly hullId: string;
-  /**
-   * Micromodules fitted in the hull's slots (multi-slot per the install/
-   * micromodule overhaul). The save-layer migration (v25→26) converts the legacy
-   * single `hullMicromoduleId` into this array; absent ⇒ no hull micromodules.
-   */
   readonly hullMicromoduleIds?: string[];
-  /**
-   * @deprecated Legacy single hull micromodule (pre-v26). Kept so old snapshots
-   * still type-check and {@link ShipLoadout.fromJSON} can read them; migration
-   * folds it into `hullMicromoduleIds`. Never written by `toJSON` anymore.
-   */
   readonly hullMicromoduleId?: string;
   readonly slotted: {
     readonly gearId: string;
@@ -684,24 +574,13 @@ export interface ShipLoadoutSnapshot {
   }[];
 }
 
-/** Slot name a КОМПЛЕКТАЦИЯ preset occupies — the hangar shows exactly 3 tabs. */
 export type LoadoutPresetName = "1" | "2" | "3";
 
-/**
- * Saved КОМПЛЕКТАЦИЯ (gear-loadout preset) — gear ids only, not copies.
- * `GearBridge.applyLoadoutPreset` re-installs each slot from whatever the
- * player currently owns via the normal install path; a sold/missing item is
- * skipped rather than force-fitted. Optional additive save field
- * (`SaveState.loadoutPresets`): absent on saves made before this existed.
- */
 export interface LoadoutPreset {
   readonly name: LoadoutPresetName;
   readonly slots: ReadonlyArray<{
     readonly gearId: string;
     readonly micromoduleId?: string;
-    /** Artifact-upgrade count captured with the slot, so re-applying the
-     *  preset later restores the same effective tech level instead of
-     *  silently resetting a spent artifact-upgrade investment to 0. */
     readonly upgrades?: number;
   }>;
   readonly hullMicromoduleIds?: readonly string[];
@@ -725,29 +604,20 @@ export interface AIProfile {
   readonly targetPriority: string[];
 }
 
-// --- Text Quest Graph (EPIC-005) ---
-
 export interface QuestCondition {
   readonly type: "credits" | "reputation" | "item";
-  /** The comparison operator applied to player's value vs. this value. */
   readonly comparison: ">=" | "<=" | "==" | ">";
   readonly value: number;
-  /** For reputation checks: which faction id to look up. */
   readonly factionId?: string;
-  /** For item checks: which resource type (ResourceType string) must be in inventory. */
   readonly itemId?: string;
 }
 
 export interface QuestOutcome {
   readonly creditsDelta: number;
   readonly reputationDelta: number;
-  /** Faction that receives the reputation delta (required when reputationDelta ≠ 0). */
   readonly factionId?: string;
-  /** ResourceType string added to player inventory (quantity = 1). */
   readonly itemGained?: string;
-  /** ResourceType string removed from player inventory (quantity = 1). */
   readonly itemLost?: string;
-  /** Short text appended to the player journal when this outcome fires. */
   readonly journalEntry: string;
 }
 
@@ -760,7 +630,6 @@ export interface QuestChoice {
 
 export interface QuestNode {
   readonly id: string;
-  /** Lookup key for narration text (used by QuestNarrator / TemplateQuestNarrator). */
   readonly textKey: string;
   readonly choices: QuestChoice[];
 }
@@ -772,10 +641,8 @@ export interface TextQuest {
   readonly startNodeId: string;
 }
 
-/** Saved runtime state of an in-progress text quest. */
 export interface TextQuestState {
   readonly questId: string;
   readonly currentNodeId: string;
-  /** Outcomes accumulated so far (applied only on quest completion). */
   readonly pendingOutcomes: QuestOutcome[];
 }

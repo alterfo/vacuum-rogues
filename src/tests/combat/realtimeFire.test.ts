@@ -8,23 +8,6 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Task 2 — real-time fire decoupled from the route-turn (NPCs shoot back).
- *
- * Before the fix the module gated fire on `isTurnRunning?.() === false`, and the
- * scene folded the route-"Ход" into that signal
- * (`isTurnRunning: () => this.isTurnRunning && !paused`). So an engaged fight
- * only ticked while a route-turn was executing — in practice NPCs never shot
- * back and the player couldn't auto-fire outside a turn. The fix gives the
- * module an explicit {@link CombatModuleDeps.isPaused} dep so combat is gated on
- * the active-pause **only** — it ticks in real time whether or not a turn runs.
- *
- * These tests wire the deps the production way (an `isPaused` signal) AND assert
- * that fire advances even with `isTurnRunning` reporting **false** (no route-turn
- * running) — which would have frozen the old turn-gated module. Pure — no PixiJS
- * render context.
- */
-
 const FIRE = GAME_BALANCE.combatFireIntervalMs;
 const PULSE_DMG = 14; // wpn_pulse damage (range 240) — see combatModule.test.ts
 const NPC_DMG = 20;
@@ -62,8 +45,6 @@ describe("real-time fire decoupled from the route-turn (Task 2)", () => {
       getShipPhysics: () => makePhysics(),
       getPlayerLoadout: () => loadout,
       getPlayerShip: () => ship,
-      // Production-style: combat is frozen ONLY by the active-pause. The route
-      // turn is explicitly NOT running — the old turn-gated module froze here.
       isPaused: () => paused,
       isTurnRunning: () => false,
       onPlayerUnderAttack: () => {
@@ -90,8 +71,6 @@ describe("real-time fire decoupled from the route-turn (Task 2)", () => {
       getShipPhysics: () => makePhysics(),
       getPlayerLoadout: () => loadout,
       getPlayerShip: () => ship,
-      // isPaused is the sole freeze signal — a "running" turn must NOT thaw a
-      // frozen (paused) fight.
       isPaused: () => paused,
       isTurnRunning: () => true,
       onPlayerUnderAttack: () => {
@@ -107,7 +86,6 @@ describe("real-time fire decoupled from the route-turn (Task 2)", () => {
     const enemyHullAfterPause = enemy.npc.hullHP;
     expect(paused).toBe(true);
 
-    // Several full fire intervals pass while the overlay is open — nothing fires.
     module.update(FIRE);
     module.update(FIRE * 3);
 

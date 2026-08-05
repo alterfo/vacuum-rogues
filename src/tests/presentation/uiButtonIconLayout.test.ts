@@ -2,12 +2,6 @@ import { describe, it, expect } from "vitest";
 import { UiButton } from "@/presentation/ui/UiButton";
 import type { Text } from "pixi.js";
 
-/**
- * Locks in UiButton's existing icon-only / label-only / icon+label layout
- * modes (Track 2 icon-button redesign, `_layout()`'s three branches) before
- * any redesign work builds on top of them — see
- * `docs/plans/20260711-parallel-workstream-boundaries.md` Task 2.
- */
 describe("UiButton icon/label layout modes", () => {
   function childText(btn: UiButton, index: 2 | 3): Text {
     return btn.container.children[index] as Text;

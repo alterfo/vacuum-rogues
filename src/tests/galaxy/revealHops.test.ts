@@ -1,19 +1,9 @@
-/**
- * Galaxy.revealSystemsWithinHops() — star-map purchase reveal (Task 3).
- *
- * Buying an N-hop star map on a habitable planet marks every system within N
- * warp jumps as explored (fogOfWar = false) and returns the count of *newly*
- * revealed systems. The BFS runs over the undirected warp graph — a warp link
- * is traversable in either direction — and stops once the hop budget is spent,
- * so systems beyond N hops stay hidden.
- */
 import { describe, it, expect } from "vitest";
 import { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
 import type { Overmind } from "@/domain/Overmind";
 import type { GalacticEvent } from "@/domain/GalacticEvent";
 
-/** Build a star system with bidirectional warp connections to `neighbours`. */
 function makeSystem(id: string, neighbours: string[]): StarSystem {
   return {
     id,
@@ -42,7 +32,6 @@ function makeGalaxy(systems: StarSystem[]): Galaxy {
   );
 }
 
-/** A → B → C → D → E chain (bidirectional links). */
 function makeChain(): Galaxy {
   return makeGalaxy([
     makeSystem("sys_a", ["sys_b"]),
@@ -62,18 +51,15 @@ describe("Galaxy.revealSystemsWithinHops", () => {
 
     const revealed = g.revealSystemsWithinHops("sys_a", 2);
 
-    // sys_b (1 hop) and sys_c (2 hops) become explored.
     expect(byId(g, "sys_b").explored).toBe(true);
     expect(byId(g, "sys_b").fogOfWar).toBe(false);
     expect(byId(g, "sys_c").explored).toBe(true);
     expect(byId(g, "sys_c").fogOfWar).toBe(false);
 
-    // sys_d (3 hops) and sys_e (4 hops) stay hidden.
     expect(byId(g, "sys_d").explored).toBe(false);
     expect(byId(g, "sys_d").fogOfWar).toBe(true);
     expect(byId(g, "sys_e").explored).toBe(false);
 
-    // Origin is marked explored; only the two newcomers are counted.
     expect(byId(g, "sys_a").explored).toBe(true);
     expect(revealed).toBe(2);
   });
@@ -85,7 +71,6 @@ describe("Galaxy.revealSystemsWithinHops", () => {
 
     const revealed = g.revealSystemsWithinHops("sys_a", 2);
 
-    // sys_b was already explored → only sys_c is new.
     expect(revealed).toBe(1);
     expect(byId(g, "sys_c").explored).toBe(true);
   });
@@ -105,7 +90,6 @@ describe("Galaxy.revealSystemsWithinHops", () => {
 
     const revealed = g.revealSystemsWithinHops("sys_a", 10);
 
-    // All four non-origin systems revealed; never more than the galaxy holds.
     expect(revealed).toBe(4);
     for (const id of ["sys_b", "sys_c", "sys_d", "sys_e"]) {
       expect(byId(g, id).explored).toBe(true);

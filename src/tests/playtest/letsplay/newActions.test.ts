@@ -1,14 +1,3 @@
-/**
- * Task 3 regression: real-engine executors for the 6 new letsplay actions
- * (buy-gear, upgrade-hull, buy-module, take-loan, repay-loan, sell-cargo).
- *
- * Mirrors `trade.test.ts`'s approach: call each `equipmentQueries`/`bankingQueries`/
- * `engineQueries` executor directly against a real `GameEngine`, asserting the
- * genuine domain effect (credits/gear/loan state change) with zero harness
- * errors — no mocked seam. `PlayerAgent.apply`'s new switch cases are thin
- * wrappers over these same executors (see `PlayerAgent.ts`), so exercising the
- * executors directly covers the behaviour the applier drives.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
 import { StationType } from "@/types";
@@ -44,10 +33,6 @@ describe("letsplay new-action executors (Task 3)", () => {
     harness = await RealEngineHarness.boot({ seed: "NEWACTIONS-TEST" });
     await harness.newGame();
 
-    // Guarantee a shoppable system: a CRAFT_CENTER station, plus a tech level
-    // high enough to unlock hull listings (the cheapest hull is techLevel 2;
-    // a fresh system defaults to techLevel 1, which `generateShop` would filter
-    // out entirely).
     const sys = currentSystem(harness.engine)!;
     sys.techLevel = 5;
     sys.stations.push(
@@ -60,7 +45,6 @@ describe("letsplay new-action executors (Task 3)", () => {
         0,
       ),
     );
-    // Deep pockets so affordability never gates the assertions below.
     adjustPlayerCredits(
       harness.engine.bank,
       harness.engine.player!,

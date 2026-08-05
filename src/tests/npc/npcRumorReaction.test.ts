@@ -55,7 +55,6 @@ function makeSystemWithMarket(id: string): StarSystem {
   );
 }
 
-/** Two connected market systems; rumors run FROM → TO. */
 function makeRouteGalaxy(): Galaxy {
   const from = makeSystemWithMarket(FROM);
   const to = makeSystemWithMarket(TO);
@@ -101,7 +100,6 @@ function makeShip(id: string, role: NpcRole): NpcShip {
   });
 }
 
-/** True when this NPC diverted onto the rumor route (carrying its resource). */
 function reactedToRumor(npc: NpcShip): boolean {
   return (
     npc.destinationSystemId === TO &&
@@ -109,7 +107,6 @@ function reactedToRumor(npc: NpcShip): boolean {
   );
 }
 
-/** Fraction of `count` IDLE NPCs (one tick) that divert onto the rumor route. */
 function reactionFraction(
   marginPct: number,
   role: NpcRole,
@@ -159,7 +156,6 @@ describe("rumorReactionChance curve", () => {
 describe("NPC trader rumor reaction", () => {
   it("a fat-margin rumor pulls a measurable fraction of traders", () => {
     const frac = reactionFraction(50, NpcRole.TRADER, "fat_margin");
-    // p ≈ rumorNpcMaxChance (0.6); assert a sizeable, measurable fraction.
     expect(frac).toBeGreaterThan(0.4);
   });
 
@@ -183,10 +179,6 @@ describe("NPC trader rumor reaction", () => {
   });
 
   it("a diverting trader raises the rumor's SOURCE price (buy-side impact, Task 6)", () => {
-    // A fat-margin rumor FROM→TO; the source market starts neutral (mult 1.0).
-    // Idle traders at the source divert through pickTraderGoal, abstractly buying
-    // the rumor resource there — which must lift the cheap source's persistent
-    // multiplier (the buy leg that converges the route alongside the sell leg).
     const galaxy = makeRouteGalaxy();
     galaxy.activeRumors.push(makeRumor(80));
     for (let i = 0; i < 200; i++) {
@@ -198,17 +190,12 @@ describe("NPC trader rumor reaction", () => {
 
     new NpcSimulator().tick(galaxy, new SeededRNG("source_buy"));
 
-    // At least one trader diverted (sanity) and the source price rose above
-    // neutral from the cumulative buy impact.
     const diverted = galaxy.npcShips.filter(reactedToRumor).length;
     expect(diverted).toBeGreaterThan(0);
     expect(sourceMarket.multiplierFor(RESOURCE)).toBeGreaterThan(1.0);
   });
 
   it("never moves the source price when there are no rumors", () => {
-    // No rumor → no trader can divert → the source market stays exactly neutral
-    // regardless of how the random goal draws resolve (the rng-only-when-rumors
-    // invariant, asserted on the persistent multiplier rather than NPC state).
     const galaxy = makeRouteGalaxy();
     for (let i = 0; i < 50; i++) {
       galaxy.npcShips.push(makeShip(`trader_${i}`, NpcRole.TRADER));
@@ -235,9 +222,6 @@ describe("NPC trader rumor reaction", () => {
   });
 
   it("does not perturb the simulation when no rumors are active", () => {
-    // With an empty rumor store, traders must behave exactly as before: a galaxy
-    // with no rumors produces an identical NPC snapshot across two runs and
-    // never sets the rumor-route cargo marker.
     const run = (): string => {
       const galaxy = makeRouteGalaxy();
       for (let i = 0; i < 20; i++) {

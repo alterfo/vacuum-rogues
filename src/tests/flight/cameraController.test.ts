@@ -1,16 +1,3 @@
-/**
- * CameraController test suite — general behaviour (extracted from
- * SpaceFlightScene in the SOLID refactor) plus the F3 pan-clamp regression
- * (letsplay 2026-06-10): the player ship spawns at the system boundary
- * (SYSTEM_GEOMETRY.boundaryRadius from the star), and the camera pan-clamp
- * must allow centring that spawn point at ANY zoom level and screen size —
- * otherwise the player cannot find their own ship. The old clamp bound the
- * viewport *edges* to ±boundaryRadius·1.25 around the star, which silently
- * forbade centring edge spawns at default zoom on full-HD screens and at low
- * zooms on 720p. The sky backdrop is screen-fixed (skyContainer, not the
- * panned gameLayer), so panning can never reveal a backdrop edge — the clamp
- * only needs to keep the focus point inside the ship-reachable area.
- */
 import { describe, it, expect, vi } from "vitest";
 import { Container } from "pixi.js";
 import {
@@ -22,8 +9,6 @@ import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { SYSTEM_GEOMETRY } from "@/config/balance";
 
 const BOUNDARY = SYSTEM_GEOMETRY.boundaryRadius;
-
-// ── F3 clamp harness (star at screen centre, real system boundary) ──────────
 
 function makeCamera(
   screenW: number,
@@ -44,7 +29,6 @@ function makeCamera(
   return { cam: new CameraController(renderer, deps), centerX, centerY };
 }
 
-/** Pan that puts world point (wx, wy) at screen centre for the camera's zoom. */
 function centringPan(
   cam: CameraController,
   screenW: number,
@@ -75,9 +59,6 @@ function expectCentrable(
 
 describe("CameraController pan clamp (F3 — ship spawn must be focusable)", () => {
   it("centres the edge spawn (y ≈ 3100+) at MAX_ZOOM on 720p", () => {
-    // Default entry vector {x:0, y:1} → spawn at (cx, cy + BOUNDARY) = (640, 3160).
-    // setZoom clamps the requested zoom to MAX_ZOOM (2.0) — assert that
-    // explicitly so the clamping is visible, not hidden in the helper.
     const { cam } = makeCamera(1280, 720);
     cam.setZoom(3.5);
     expect(cam.zoom).toBe(cam.MAX_ZOOM);
@@ -88,7 +69,6 @@ describe("CameraController pan clamp (F3 — ship spawn must be focusable)", () 
   });
 
   it("centres the edge spawn at default zoom 1.0 on a full-HD screen (x-axis)", () => {
-    // entryVector {x:1, y:0} → spawn at (960 + 2800, 540) on 1920×1080.
     expectCentrable(1920, 1080, 1.0, 960 + BOUNDARY, 540);
   });
 
@@ -116,8 +96,6 @@ describe("CameraController pan clamp (F3 — ship spawn must be focusable)", () 
     const sh = 720;
     const { cam, centerX, centerY } = makeCamera(sw, sh);
     cam.setZoom(1.0);
-    // Ask to centre a point 2× past the boundary — must be pulled back so the
-    // focus point sits within [center ± boundaryRadius].
     cam.focusOnWorld(centerX, centerY + BOUNDARY * 2);
     const focusY = (sh / 2 - cam.panY) / cam.zoom;
     expect(focusY).toBeLessThanOrEqual(centerY + BOUNDARY + 1e-6);
@@ -125,9 +103,6 @@ describe("CameraController pan clamp (F3 — ship spawn must be focusable)", () 
   });
 });
 
-// ── General behaviour harness (movable ship, generous boundary) ─────────────
-
-/** Minimal ship-physics stand-in exposing only what the camera reads. */
 function makeShip(over: Partial<ShipPhysics> = {}): ShipPhysics {
   return {
     shipX: 0,
@@ -158,9 +133,6 @@ function makeHarness(
   } as unknown as Renderer;
 
   const shipRef = { current: ship };
-  // Star at screen centre; default to a generous boundary so the pan-clamp does
-  // not interfere with the small pans most tests apply. Pass a small boundary to
-  // exercise clampPan itself.
   const camera = new CameraController(renderer, {
     getShipPhysics: () => shipRef.current,
     getStarCenter: () => ({ x: 400, y: 300 }),
@@ -238,7 +210,6 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
       }),
     );
     const idlePan = camera.panX;
-    // A stopped, lead-free camera does nothing; a moving ship pulls the pan.
     camera.update(16.67);
     expect(camera.panX).not.toBe(idlePan);
   });
@@ -250,10 +221,6 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
   });
 
   it("clampPan keeps the focus point inside [star ± boundaryRadius]", () => {
-    // F3 semantics: the world point at screen centre is clamped to the
-    // ship-reachable square. boundaryRadius 400, star (400,300), screen
-    // 800×600, zoom 1: focus x ∈ [0, 800] → panX = sw/2 - focusX·z ∈ [-400, 400];
-    // focus y ∈ [-100, 700] → panY = sh/2 - focusY·z ∈ [-400, 400].
     const { camera } = makeHarness(makeShip(), 400);
     camera.setPan(9999, -9999);
     expect(camera.panX).toBe(400);
@@ -261,8 +228,6 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
   });
 
   it("clampPan still bounds the focus point when zoomed out", () => {
-    // Same focus bounds at zoom 0.25: focus x ∈ [0, 800] → panX ∈ [200, 400];
-    // focus y ∈ [-100, 700] → panY ∈ [125, 325].
     const { camera } = makeHarness(makeShip(), 400);
     camera.setZoom(0.25);
     camera.setPan(9999, -9999);
@@ -272,7 +237,6 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
 });
 
 describe("CameraController frame-rate independence (jitter fix)", () => {
-  /** Run `update(dt)` repeatedly until `totalMs` real time has elapsed. */
   function runFor(
     camera: CameraController,
     stepMs: number,
@@ -286,12 +250,6 @@ describe("CameraController frame-rate independence (jitter fix)", () => {
   }
 
   it("updateReturn() converges to the same pan regardless of frame-step size", () => {
-    // A pure single-target glide (ship stationary) — mathematically an exact
-    // exponential decay, so two different frame-step subdivisions of the same
-    // elapsed real time must land on (near enough) the same pan, not a
-    // frame-count-dependent one. Start 1000px off-target so neither run's
-    // final distance ever crosses updateReturn()'s 1px snap-to-target branch
-    // (which would otherwise make the two runs incomparable).
     const start = () => {
       const { camera } = makeHarness(makeShip({ shipX: 0, shipY: 0 }));
       camera.setPan(1000, 0);
@@ -309,14 +267,6 @@ describe("CameraController frame-rate independence (jitter fix)", () => {
   });
 
   it("motion-follow (focusWithLead) lands close together at realistic frame rates (60fps vs 30fps)", () => {
-    // A moving ship's camLead itself glides toward a moving target, so this
-    // path isn't a pure single-variable exponential like updateReturn() —
-    // a small step-size-dependent residual from the two coupled smoothers is
-    // expected even after the fix — but at the frame-rate variance a real
-    // session actually sees (60fps vs a 30fps hitch, not an extreme
-    // synthetic ratio), it must be a handful of px, nowhere near the
-    // ~300+ px divergence the un-normalized frame-COUNT lerp produced
-    // between 4ms and 40ms steps pre-fix.
     const start = () => {
       const { camera } = makeHarness(
         makeShip({

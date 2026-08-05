@@ -1,11 +1,3 @@
-/**
- * isSystemKnown(player, galaxy, systemId) — partial-observability predicate.
- *
- * A system is "known" when it has been revealed on the star-map
- * (StarSystem.explored) OR physically visited (Player.hasVisited). Used to gate
- * InfoCenter trade margins so the player can't read the profit of a route into a
- * system they've never discovered.
- */
 import { describe, it, expect } from "vitest";
 import { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
@@ -38,7 +30,6 @@ function makeGalaxy(systems: StarSystem[]): Galaxy {
   );
 }
 
-/** Minimal Player stub — isSystemKnown only consults hasVisited. */
 function makePlayer(visited: string[]): Player {
   const visitedSystems = [...visited];
   return {

@@ -2,15 +2,6 @@ import { describe, it, expect } from "vitest";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 
-/**
- * Dual-hull unification: stat reads resolve from the canonical {@link ShipLoadout},
- * the single source of truth. Task 1 introduced `cargoCapacityOf`; Task 5 removed
- * the legacy `PlayerShip.cargoCapacity` getter (and its fallback), so these now
- * read the loadout exclusively.
- *
- * ⚠️ Task 5: the prior assertions on the removed `ship.cargoCapacity` getter and
- * the legacy no-loadout fallback were retired here (they exercised deleted code).
- */
 describe("cargoCapacityOf — loadout is the single source of truth", () => {
   it("reads the loadout hull's cargo", () => {
     const loadout = new ShipLoadout("hull_freighter");

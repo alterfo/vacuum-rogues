@@ -1,25 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: First contact with an unknown alien vessel. Diplomacy with clear
-// peace vs hostility outcomes, driven by an alien-`trust` meter.
-// Choice points:
-//   1. The opening — broadcast a peace greeting (safe +trust), run an active scan
-//      (a gamble: on a curious roll it yields sellable xeno-intel (+credits) but
-//      no diplomatic edge; on an alarmed roll it drops you into a standoff), or
-//      raise shields (−trust, leads to a standoff). Broadcast buys the better
-//      diplomatic ceiling; scan trades that ceiling for material intel at real risk.
-//   2. The follow-up — reciprocate a gift (+trust), accept warily (small +trust),
-//      or make demands (−trust); from a standoff: stand down (+trust), hold aim
-//      or fire a warning shot (−trust, risks war). The exchange scene branches per
-//      how you got there: generous reciprocation, one-sided taking, extortion under
-//      posturing, or a tense de-escalation from aimed guns — each its own beat, all
-//      funnelling into the same trust-keyed resolution_gate.
-// Peaceful endings are SUCCESS, hostile endings are FAILURE.
-//   - ending_alliance      (high trust → alliance, big reward)           SUCCESS
-//   - ending_trade_pact    (mid trust → trade pact)                      SUCCESS
-//   - ending_wary_peace    (low trust → uneasy peace)                    SUCCESS
-//   - ending_cold_standoff (they leave wary, no relations)               FAILURE
-//   - ending_war           (provoked them into hostilities)              FAILURE
 export const firstContactScript: QuestScript = {
   id: "first-contact",
   title: "Первый контакт",

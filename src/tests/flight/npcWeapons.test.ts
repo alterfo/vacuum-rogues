@@ -16,7 +16,6 @@ import { NpcRole } from "@/types";
 const FIRE = GAME_BALANCE.combatFireIntervalMs;
 const NPC_DMG = 20;
 
-/** Player ship parked at the origin; combat measures distance from here. */
 function makePhysics(x = 0, y = 0): ShipPhysics {
   return {
     shipX: x,
@@ -27,7 +26,6 @@ function makePhysics(x = 0, y = 0): ShipPhysics {
   } as unknown as ShipPhysics;
 }
 
-/** NpcShipSprite stand-in carrying the role the weapon range derives from. */
 function makeSprite(
   id: string,
   x: number,
@@ -48,12 +46,6 @@ function makeSprite(
   } as unknown as NpcShipSprite;
 }
 
-/**
- * A CombatModule whose player ship is parked at the origin with a short-range
- * starter weapon (pulse, 240) so the player can't out-shoot a long-range NPC
- * placed past 240 — isolating the NPC's own firing range. Returns the live ship
- * so a test can read incoming hull loss.
- */
 function arena(): {
   module: CombatModule;
   ship: { hullHP: number; maxHull: number };
@@ -69,9 +61,6 @@ function arena(): {
   return { module, ship };
 }
 
-// ---------------------------------------------------------------------------
-// npcWeaponRange — per-role variety, no flat 240
-// ---------------------------------------------------------------------------
 describe("npcWeaponRange (per-role NPC weapon reach)", () => {
   it("differs across roles — enemies are not all the same flat range", () => {
     const ranges = [
@@ -80,17 +69,13 @@ describe("npcWeaponRange (per-role NPC weapon reach)", () => {
       npcWeaponRange({ role: NpcRole.RANGER }),
       npcWeaponRange({ role: NpcRole.PATROL }),
     ];
-    // Four distinct values — no two roles share a reach.
     expect(new Set(ranges).size).toBe(4);
-    // …and they are role-ordered: a trader's popgun < the law's long reach.
     expect(npcWeaponRange({ role: NpcRole.TRADER })).toBeLessThan(
       npcWeaponRange({ role: NpcRole.PATROL }),
     );
   });
 
   it("falls back to the legacy flat weaponRange for an absent/unknown role", () => {
-    // A lightweight stand-in (no role) keeps the old behaviour so existing
-    // combat tests stay green.
     expect(npcWeaponRange({})).toBe(GAME_BALANCE.weaponRange);
     expect(npcWeaponRange({ role: undefined })).toBe(GAME_BALANCE.weaponRange);
   });
@@ -101,9 +86,6 @@ describe("npcWeaponRange (per-role NPC weapon reach)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The player's range edge is bounded, not infinite
-// ---------------------------------------------------------------------------
 describe("player range edge is bounded, not infinite", () => {
   const commonPlayerRanges = GEAR_CATALOG.filter(
     (g): g is WeaponSpec => g.kind === GearKind.WEAPON && !isRareGear(g),
@@ -112,25 +94,17 @@ describe("player range edge is bounded, not infinite", () => {
   const maxNpcRange = Math.max(...Object.values(NPC_WEAPON_RANGE));
 
   it("the best common player weapon still out-ranges every enemy — but only just", () => {
-    // The player keeps an edge (spending up on a long-range weapon matters)…
     expect(bestCommonPlayerRange).toBeGreaterThan(maxNpcRange);
-    // …but the edge is bounded: the toughest enemy can return fire from nearly
-    // the player's best reach, so one long weapon no longer trivialises combat.
     expect(bestCommonPlayerRange - maxNpcRange).toBeLessThanOrEqual(40);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Integration — an NPC fires at ITS OWN range, not a flat 240
-// ---------------------------------------------------------------------------
 describe("CombatModule: an NPC engages at its own weapon range", () => {
   it("a long-range PATROL (340) returns fire from 300 — where the old flat 240 could not", () => {
     const { module, ship } = arena();
     const patrol = makeSprite("p", 300, NpcRole.PATROL); // 240 < 300 < 340
     module.addCombatant(patrol);
     module.update(FIRE);
-    // It fired: the player took exactly one NPC shot. Under the old flat-240 gate
-    // a foe at 300 was silently out-ranged and could not return fire.
     expect(ship.hullHP).toBe(100_000 - NPC_DMG);
   });
 

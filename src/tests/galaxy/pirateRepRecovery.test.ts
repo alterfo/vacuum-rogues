@@ -11,14 +11,6 @@ import {
 } from "@/config/balance";
 import { shakedownTribute } from "@/systems/npc/NpcBrain";
 
-/**
- * Task 3 — pirate-rep recovery. Today only *decreases* (or no upward path) exist
- * for pirate reputation, so a player whose pirate standing fell to −50 is locked
- * out of every pirate-captured system forever. Buying off a shakedown
- * («Откупиться») is the repeatable, credit-costed way back up.
- */
-
-/** Minimal mutable player rep stub keyed by faction id, clamped [-100,100]. */
 function makePlayer(initialPirateRep = 0) {
   const rep: Record<string, number> = { [PIRATE_FACTION_ID]: initialPirateRep };
   return {
@@ -29,7 +21,6 @@ function makePlayer(initialPirateRep = 0) {
   };
 }
 
-/** A pirate-captured planet (the only kind gated by pirate reputation). */
 const piratePlanet = { capturedBy: PIRATE_FACTION_ID } as unknown as Parameters<
   typeof canLandOnPlanet
 >[0];
@@ -64,7 +55,6 @@ describe("pirate-rep recovery (Task 3)", () => {
       payoffs++;
     }
     expect(canLandOnPlanet(piratePlanet, player).allowed).toBe(true);
-    // A genuine grind (several costly payoffs), not a free one-shot.
     expect(payoffs).toBeGreaterThan(1);
   });
 
@@ -82,7 +72,6 @@ describe("pirate-rep recovery (Task 3)", () => {
     const msg = landingDenialMessage("pirate-rep");
     expect(msg.length).toBeGreaterThan(0);
     expect(msg).not.toBe(landingDenialMessage("overmind"));
-    // Mentions the buy-off path so a blocked player learns how to climb back.
     expect(msg).toContain("Откуп");
   });
 });

@@ -5,12 +5,6 @@ import {
 } from "@/presentation/flight/flightTurnEnd";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 
-/**
- * Reload-resume capture (playtest 2026-06-22 #1): free flight has no autosave
- * trigger of its own, so the scene calls endFlightTurn on each turn-end to settle
- * the ship AND persist where it stopped. This locks both halves + the null-engine
- * (bare-scene) path so the ship still stops even without an engine to save into.
- */
 describe("endFlightTurn", () => {
   function makePhysics(x: number, y: number) {
     return {
@@ -61,13 +55,6 @@ import {
   type PlayPauseHost,
 } from "@/presentation/flight/flightTurnEnd";
 
-/**
- * Review 2026-07-15: the HUD «Ход»/«Пауза» button pressed DURING a confirmed
- * execute window used to hit the combat-abort branch → `endTurn()`, freezing
- * `CombatModule` (its `isPaused` includes `!isTurnRunning`) while the round
- * clock kept cycling — a permanent zero-fire planning loop. Task 1b: the round
- * timer is the single terminator, so mid-window the button is a no-op.
- */
 describe("handleFlightPlayPause — pause-and-plan loop guards", () => {
   function makeHost(overrides: Partial<PlayPauseHost> = {}) {
     const host = {

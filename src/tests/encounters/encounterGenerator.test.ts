@@ -11,7 +11,6 @@ import {
 const safe: EncounterSystemView = { id: "sys-safe", danger: 0 };
 const hostile: EncounterSystemView = { id: "sys-hostile", danger: 1 };
 
-/** Sweep a range of seeds and return only the non-null encounters. */
 function sweep(
   system: EncounterSystemView,
   count: number,
@@ -52,7 +51,6 @@ describe("rollEncounter — determinism", () => {
   it("different systems with the same seed can diverge (id is system-keyed)", () => {
     const a = rollEncounter(hostile, "x", {}, FLOOD);
     const b = rollEncounter(safe, "x", {}, FLOOD);
-    // ids are always distinct because they embed the system id
     expect(a?.id).not.toEqual(b?.id);
     expect(a?.id).toBe("enc:sys-hostile:x");
     expect(b?.id).toBe("enc:sys-safe:x");
@@ -65,7 +63,6 @@ describe("rollEncounter — determinism", () => {
   });
 });
 
-/** A config that always fires (rate-limit + occurrence cleared) for type sweeps. */
 const FLOOD: EncounterConfig = {
   ...DEFAULT_ENCOUNTER_CONFIG,
   baseChance: 1,
@@ -113,7 +110,6 @@ describe("rollEncounter — chance scaling by danger", () => {
   });
 
   it("clamps the per-roll chance at maxChance", () => {
-    // boost would push chance to 2.0; ceiling should cap density well below 100%.
     const cfg: EncounterConfig = {
       ...DEFAULT_ENCOUNTER_CONFIG,
       baseChance: 0.5,

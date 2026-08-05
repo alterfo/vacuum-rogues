@@ -1,9 +1,3 @@
-/**
- * Task 10 (SOLID refactor): FlightHud owns the in-flight HUD (turn/speed/settings
- * buttons, day counter, mini-map, mini-log, toasts and tooltips) extracted from
- * SpaceFlightScene. These exercise the module directly with mocked pixi.js +
- * UiButton/SystemMiniMap/QuestJournalUI so no WebGL/texture context is needed.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -48,8 +42,6 @@ vi.mock("pixi.js", () => {
       fill: vi.fn().mockReturnThis(),
       stroke: vi.fn().mockReturnThis(),
     })),
-    // Text approximates Courier New metrics (advance ≈ 0.6 em, line ≈ 1.2 em)
-    // so layout tests can reason about real bounding boxes.
     Text: vi
       .fn()
       .mockImplementation(
@@ -100,9 +92,6 @@ vi.mock("@/presentation/ui/UiButton", () => ({
     ),
 }));
 
-// SystemMiniMap is deliberately NOT mocked: the Bug 3 HUD-cleanup regression
-// below must measure the radar's REAL position and size.
-
 vi.mock("@/presentation/QuestJournalUI", () => ({
   QuestJournalUI: vi.fn().mockImplementation((_qm, _w, _h, _onClose) => ({
     container: { visible: true, addChild: vi.fn() },
@@ -150,12 +139,10 @@ function makeGameEngine(): GameEngine {
     },
     galaxy: { gameDays: 0 },
     questManager: {},
-    // Durable game-speed store (playtest3 F3) — mutable so persistence is real.
     gameSpeedMultiplier: 1,
   } as unknown as GameEngine;
 }
 
-/** Find a created UiButton mock instance by its constructor label. */
 function findButton(label: string): { onClick: (e: unknown) => void } {
   const mock = vi.mocked(UiButton);
   const hit = mock.mock.results.find(
@@ -181,17 +168,13 @@ describe("FlightHud", () => {
     expect(hud.miniMap).toBeNull();
     hud.initialize();
 
-    // The UI container is the first thing mounted on the UI layer, and it holds
-    // the instruction text, date, quest/back buttons and the Play button.
     expect(uiLayer.addChild).toHaveBeenCalled();
     const uiContainer = uiLayer.addChild.mock.calls[0][0] as {
       children: unknown[];
     };
     expect(uiContainer.children.length).toBeGreaterThan(0);
 
-    // The Play/Pause button was created.
     expect(findButton("▶ ХОД")).toBeDefined();
-    // The radar object now exists and is exposed for the scene's refresh.
     expect(hud.miniMap).not.toBeNull();
   });
 
@@ -240,13 +223,6 @@ describe("FlightHud", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Playtest3 F3: the in-flight game-speed (1×/2×/4×) reset to 1× on every
-// SPACE_FLIGHT re-init because each rebuild made a fresh FlightHud (speedIndex=0)
-// + ShipPhysics (timeScale=1). The HUD now persists the choice on the
-// (scene-surviving) GameEngine and restores it whenever it is (re)built.
-// ---------------------------------------------------------------------------
-
 describe("FlightHud game-speed persistence (playtest3 F3)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -260,7 +236,6 @@ describe("FlightHud game-speed persistence (playtest3 F3)", () => {
     hud.onSpeedCycle = onSpeedCycle;
     hud.initialize();
 
-    // First cycle advances 1× → 2×.
     findButton("1×").onClick({ stopPropagation: vi.fn() });
     expect(engine.gameSpeedMultiplier).toBe(2);
     expect(onSpeedCycle).toHaveBeenLastCalledWith(2);
@@ -278,8 +253,6 @@ describe("FlightHud game-speed persistence (playtest3 F3)", () => {
     const speed = findButton("1×") as unknown as {
       setLabel: ReturnType<typeof vi.fn>;
     };
-    // The fresh HUD adopts 4× rather than resetting to 1×, and re-applies it to
-    // physics through the scene callback.
     expect(speed.setLabel).toHaveBeenCalledWith("4×");
     expect(onSpeedCycle).toHaveBeenCalledWith(4);
   });
@@ -287,7 +260,6 @@ describe("FlightHud game-speed persistence (playtest3 F3)", () => {
   it("survives a full HUD rebuild round-trip (x4 chosen, kept after re-init)", () => {
     const engine = makeGameEngine();
 
-    // Day-1 HUD: player cycles 1× → 2× → 4×.
     const m1 = makeMockRenderer();
     const hud1 = new FlightHud(m1.renderer, engine, m1.renderer.uiLayer);
     hud1.onSpeedCycle = vi.fn();
@@ -296,14 +268,12 @@ describe("FlightHud game-speed persistence (playtest3 F3)", () => {
     findButton("1×").onClick({ stopPropagation: vi.fn() }); // → 4×
     expect(engine.gameSpeedMultiplier).toBe(4);
 
-    // Re-entry rebuilds the HUD from scratch (fresh speedIndex=0).
     const m2 = makeMockRenderer();
     const hud2 = new FlightHud(m2.renderer, engine, m2.renderer.uiLayer);
     const onSpeedCycle2 = vi.fn();
     hud2.onSpeedCycle = onSpeedCycle2;
     hud2.initialize();
 
-    // The choice is restored, not reset to 1×.
     expect(onSpeedCycle2).toHaveBeenCalledWith(4);
     expect(engine.gameSpeedMultiplier).toBe(4);
   });
@@ -322,16 +292,6 @@ describe("FlightHud game-speed persistence (playtest3 F3)", () => {
     expect(engine.gameSpeedMultiplier).toBe(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Task 8 (20260626 playtest pass): the in-flight ⚙ settings panel (speed / font
-// / language / neural) was removed from the HUD and relocated to the main menu
-// (`MainMenuScene`). The old playtest4-A "font-scale button doesn't re-init the
-// scene" contract moved with it — the HUD no longer mounts a ⚙ gear button or a
-// `toggleSettingsPanel`. The scene's own in-place restyle path (refreshFontScale
-// / onFontScaleChanged) is unchanged and still covered by fontScaleRestyle.test.ts
-// + spaceFlightSpawn.test.ts. The ♿ accessibility quick-toggle stays in flight.
-// ---------------------------------------------------------------------------
 
 describe("FlightHud settings panel relocated to the main menu (Task 8)", () => {
   beforeEach(() => {
@@ -362,11 +322,6 @@ describe("FlightHud settings panel relocated to the main menu (Task 8)", () => {
     ).toBeUndefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Task 6: HUD instruction text replaced with a toggleable [?] help overlay.
-// A persistent [I] inventory button is added to the top-left cluster.
-// ---------------------------------------------------------------------------
 
 describe("FlightHud help overlay and inventory button (Task 6)", () => {
   beforeEach(() => {
@@ -459,14 +414,6 @@ describe("FlightHud help overlay and inventory button (Task 6)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Task 10 (UX review): the icon-only top-left cluster buttons [I]/[?] now carry
-// a hover tooltip (mirroring the star-map button's starMapTooltip) so the glyph
-// isn't a mystery on first sight — a short Russian label appears on pointerover
-// and hides on pointerout, and the label node itself never intercepts pointer
-// events (eventMode="none").
-// ---------------------------------------------------------------------------
-
 describe("FlightHud icon-button tooltips (Task 10)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -488,7 +435,6 @@ describe("FlightHud icon-button tooltips (Task 10)", () => {
     return hit!;
   }
 
-  /** Fire every handler registered for `event` on a button node. */
   function fireAll(btn: TipNode, event: string): void {
     for (const call of btn.on.mock.calls) {
       if (call[0] === event) (call[1] as () => void)();
@@ -528,13 +474,6 @@ describe("FlightHud icon-button tooltips (Task 10)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Bug 3 (HUD clutter, 2026-07-06/07 playtest): the camera zoom/pan debug
-// read-out near the minimap is gone entirely, and the [МЕНЮ] button now lives
-// in the bottom-left corner (stacked above ♿) instead of the top-left stack —
-// clear of the bottom-right radar at every viewport.
-// ---------------------------------------------------------------------------
-
 type Box = { left: number; top: number; right: number; bottom: number };
 
 function intersects(a: Box, b: Box): boolean {
@@ -552,12 +491,10 @@ type MockText = {
   anchor: { x: number; y: number };
 };
 
-/** Bounding box of a mocked Text (anchor is always (0,0) for HUD labels here). */
 function textBox(t: MockText): Box {
   return { left: t.x, top: t.y, right: t.x + t.width, bottom: t.y + t.height };
 }
 
-/** The [МЕНЮ] button label the HUD created. */
 function findMenuButtonText(): MockText {
   const hit = vi
     .mocked(Text)
@@ -567,7 +504,6 @@ function findMenuButtonText(): MockText {
   return hit!;
 }
 
-/** The REAL SystemMiniMap's 180×180 plate box at its current position. */
 function miniMapBox(h: FlightHud): Box {
   const mini = h.miniMap!;
   const geom = mini as unknown as { mapWidth: number; mapHeight: number };
@@ -648,7 +584,6 @@ describe("FlightHud HUD cleanup (Bug 3)", () => {
       .mock.results.map((r) => r.value as { icon: string; y: number })
       .find((b) => b.icon === "♿");
     expect(accBtn, "♿ accessibility button must exist").toBeDefined();
-    // Larger y = lower on screen = closer to the actual corner.
     expect(menuY).toBeGreaterThan(accBtn!.y);
   });
 });

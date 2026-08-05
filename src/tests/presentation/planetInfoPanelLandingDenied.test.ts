@@ -1,14 +1,3 @@
-/**
- * Task 11 (quest-and-hub polish pass): the `PlanetInfoPanel` «Приземлиться»
- * button must re-check the landing gate at click time. When landing is denied
- * (Overmind / pirate-rep), clicking the button must NO-OP — it must not invoke
- * the `onLand` callback (which downstream shows a denial message and ends the
- * turn, wasting a game day). When landing is allowed the click still lands.
- *
- * A lightweight `pixi.js` mock records every node's text plus its registered
- * event handlers, so the land button's `pointerdown` can be fired directly
- * without a canvas or pointer device.
- */
 import { describe, it, expect, vi } from "vitest";
 
 interface FakeNode {
@@ -67,7 +56,6 @@ vi.mock("pixi.js", () => {
   return { Container, Graphics, Text };
 });
 
-// Imported AFTER the mock so the panel sees the fake pixi.
 import { PlanetInfoPanel } from "@/presentation/PlanetInfoPanel";
 
 function habitablePlanet() {
@@ -121,7 +109,6 @@ describe("PlanetInfoPanel landing-denied button", () => {
     const { onLand, landButton } = buildPanel("Овермайнд удерживает систему");
     expect(landButton).toBeDefined();
     click(landButton);
-    // No land attempt — so no downstream message + turn-end (wasted game day).
     expect(onLand).not.toHaveBeenCalled();
   });
 

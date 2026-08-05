@@ -1,5 +1,5 @@
-import type { AxialCoord } from '@/types';
-import { HexTile } from './HexTile';
+import type { AxialCoord } from "@/types";
+import { HexTile } from "./HexTile";
 
 interface PathNode {
   coord: AxialCoord;
@@ -26,7 +26,12 @@ export class HexGrid {
   }
 
   getTile(coord: AxialCoord): HexTile | undefined {
-    if (coord.q < 0 || coord.q >= this.width || coord.r < 0 || coord.r >= this.height) {
+    if (
+      coord.q < 0 ||
+      coord.q >= this.width ||
+      coord.r < 0 ||
+      coord.r >= this.height
+    ) {
       return undefined;
     }
     return this.tiles[coord.r][coord.q];
@@ -47,19 +52,16 @@ export class HexGrid {
   }
 
   findPath(from: AxialCoord, to: AxialCoord): AxialCoord[] | null {
-    // If start equals destination
     if (from.q === to.q && from.r === to.r) {
       return [from];
     }
 
-    // Validate bounds
     const fromTile = this.getTile(from);
     const toTile = this.getTile(to);
     if (!fromTile || !toTile) {
       return null;
     }
 
-    // A* pathfinding
     const openSet: PathNode[] = [];
     const closedSet = new Set<string>();
     const cameFrom = new Map<string, string>();
@@ -75,13 +77,11 @@ export class HexGrid {
     });
 
     while (openSet.length > 0) {
-      // Get node with lowest f score
       openSet.sort((a, b) => a.f - b.f);
       const current = openSet.shift()!;
       const currentKey = `${current.coord.q},${current.coord.r}`;
 
       if (currentKey === goalKey) {
-        // Reconstruct path
         return this.reconstructPath(cameFrom, startKey, goalKey);
       }
 
@@ -90,14 +90,15 @@ export class HexGrid {
       for (const neighborTile of this.getNeighbors(current.coord)) {
         const neighborKey = `${neighborTile.coord.q},${neighborTile.coord.r}`;
 
-        // Skip if in closed set or impassable
         if (closedSet.has(neighborKey)) continue;
-        if (neighborTile.occupant !== null || neighborTile.type === 'ASTEROID') continue;
+        if (neighborTile.occupant !== null || neighborTile.type === "ASTEROID")
+          continue;
 
         const tentativeG = current.g + 1;
 
-        // Check if this path is better
-        const existingNode = openSet.find((n) => `${n.coord.q},${n.coord.r}` === neighborKey);
+        const existingNode = openSet.find(
+          (n) => `${n.coord.q},${n.coord.r}` === neighborKey,
+        );
         if (!existingNode || tentativeG < existingNode.g) {
           const gScore = tentativeG;
           const fScore = gScore + this.heuristic(neighborTile.coord, to);
@@ -110,7 +111,9 @@ export class HexGrid {
           };
 
           if (existingNode) {
-            const idx = openSet.findIndex((n) => `${n.coord.q},${n.coord.r}` === neighborKey);
+            const idx = openSet.findIndex(
+              (n) => `${n.coord.q},${n.coord.r}` === neighborKey,
+            );
             if (idx !== -1) openSet[idx] = newNode;
           } else {
             openSet.push(newNode);
@@ -121,28 +124,35 @@ export class HexGrid {
       }
     }
 
-    // No path found
     return null;
   }
 
   private heuristic(a: AxialCoord, b: AxialCoord): number {
-    // Axial distance for hex grids
-    return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
+    return (
+      (Math.abs(a.q - b.q) +
+        Math.abs(a.q + a.r - b.q - b.r) +
+        Math.abs(a.r - b.r)) /
+      2
+    );
   }
 
-  private reconstructPath(cameFrom: Map<string, string>, startKey: string, goalKey: string): AxialCoord[] {
+  private reconstructPath(
+    cameFrom: Map<string, string>,
+    startKey: string,
+    goalKey: string,
+  ): AxialCoord[] {
     const path: AxialCoord[] = [];
     let currentKey = goalKey;
 
     while (currentKey !== startKey) {
-      const [q, r] = currentKey.split(',').map(Number);
+      const [q, r] = currentKey.split(",").map(Number);
       path.push({ q, r });
       const parentKey = cameFrom.get(currentKey);
       if (!parentKey) return []; // Should not happen, return empty path
       currentKey = parentKey;
     }
 
-    const [startQ, startR] = startKey.split(',').map(Number);
+    const [startQ, startR] = startKey.split(",").map(Number);
     path.push({ q: startQ, r: startR });
     path.reverse();
 

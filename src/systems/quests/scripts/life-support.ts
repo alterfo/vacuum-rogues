@@ -1,32 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A resource-optimisation puzzle with a hard, non-renewable budget.
-// A crippled liner is venting atmosphere; the scrubbers are dead and there are
-// only {oxygen} units of reserve air left. Repressurising each sealed section
-// costs oxygen and saves the people trapped inside — the player must ALLOCATE a
-// fixed budget to save the most (`saved`). If the reserve hits zero mid-op the
-// remaining sections decompress explosively (a `critMin` redirect to
-// ending_suffocate — the budget floor). Distinct from plague-crisis (that is a
-// TIME budget); here the scarce resource is air itself.
-// Choice points:
-//   1. First section to repressurise — the bridge (cheap, 2 people), the packed
-//      cargo hold (expensive, 6), engineering (cheap, 2, the repair console), OR
-//      the cracked-bulkhead medbay: a genuine EARLY gamble — a good roll saves
-//      four on the machines for almost no air, a bad one blows the patch and
-//      wastes reserve on a single soul. Risk is no longer concentrated on one
-//      late coin-flip: the run is a bet from the first move.
-//   2. Restart the scrubber (roll: +5 air on success, −2 on failure) vs conserve.
-//      The restart result now gets its OWN beat (scrubber_restored / dead) so the
-//      roll isn't silent, and its label discloses the failure penalty, not just
-//      the −1 purge cost and +5 upside.
-//   3. The last section — spend the remaining air to save them (+6) vs seal it
-//      off and guarantee the survivors you already have.
-// Outcomes (by `saved`):
-//   - ending_all_survive (>=10 — everyone breathes)                     SUCCESS
-//   - ending_most        (>=6 — most saved)                             SUCCESS
-//   - ending_few_more    (4-5 — a fair number, not most)                SUCCESS
-//   - ending_few         (<4 — a handful, hard choices)                 SUCCESS
-//   - ending_suffocate   (reserve blew mid-op, mass decompression)      FAILURE
 export const lifeSupportScript: QuestScript = {
   id: "life-support",
   title: "Кислородный расчёт",

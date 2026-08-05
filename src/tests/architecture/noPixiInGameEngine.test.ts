@@ -1,25 +1,9 @@
-/**
- * Layer guard for the `IOverlayPresenter` extraction (plan 20260701, Phase 2
- * Task 8). `GameEngine.ts` used to import `pixi.js` directly to build modal/
- * loading/outcome overlays with `Graphics`/`Text`. That UI now lives behind
- * `IOverlayPresenter` (`core/ports/`), implemented by
- * `presentation/OverlayPresenter.ts`. This guard keeps the `pixi.js` import
- * gone, mirroring `noOnnxRuntime.test.ts`'s pattern for the ONNX removal:
- * it recursively scans all of `src/systems/**`, so newly added files are
- * covered automatically without a manual allowlist edit.
- *
- * Note: this only scans for `pixi.js`/`@pixi/*` specifiers — it does not
- * enforce the broader `systems/` must-not-import-`presentation/` layer rule
- * (GameEngine.ts still imports `Renderer`/`GameScene`/`preloadTextures` from
- * `@/presentation/`, a pre-existing dependency predating this extraction).
- */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const SYSTEMS_ROOT = resolve(__dirname, "..", "..", "systems");
 
-/** Recursively collect every `.ts` file under `dir`, skipping `.d.ts`. */
 function collectTsFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -33,7 +17,6 @@ function collectTsFiles(dir: string): string[] {
   return out;
 }
 
-/** Extract every module specifier from a real import/export/require statement. */
 function importSpecifiers(source: string): string[] {
   const specs: string[] = [];
   const patterns = [

@@ -1,15 +1,3 @@
-/**
- * Photoreal WebP key-parity (Task 2).
- *
- * Task 2 converts the photoreal categories (nebula, panoramas, planets, …) from
- * PNG/JPG to lossy WebP and deletes the originals. Because `manifest.ts` keys by
- * path WITHOUT the extension, that swap must leave the EXACT same key set. This
- * test asserts, for the converted categories only, that (a) every key the
- * pre-conversion snapshot captured still resolves in the live manifest, and
- * (b) no PNG/JPG files remain on disk — every source is now `.webp`.
- *
- * UI + icons are converted separately (Task 3) and are NOT asserted here.
- */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,7 +11,6 @@ const snapshot: string[] = JSON.parse(
   readFileSync(join(here, "manifestKeys.snapshot.json"), "utf8"),
 ) as string[];
 
-/** Categories converted to lossy WebP in Task 2 (surfaces is empty on disk). */
 const PHOTOREAL_CATEGORIES = [
   "nebula",
   "panoramas",
@@ -36,7 +23,6 @@ const PHOTOREAL_CATEGORIES = [
   "player_ships",
 ] as const;
 
-/** Recursively collect lowercase file extensions under `dir`. */
 function listExtensions(dir: string): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];

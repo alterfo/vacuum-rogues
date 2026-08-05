@@ -7,20 +7,6 @@ import type { GearListing } from "@/systems/info/GalacticRegistry";
 import type { Renderer } from "@/presentation/Renderer";
 import { PlanetType, StationType } from "@/types";
 
-/**
- * Task 4 (screen consistency) — gear-buy parity guard (➕A).
- *
- * The same «buy this gear» action must land in the SAME place regardless of
- * entry point. SR-canon: the shop is a warehouse counter — a purchase drops into
- * the owned-uninstalled store (ТРЮМ) and fitting is a separate hangar action; the
- * shop NEVER auto-installs. The planet Верфь gear tab already did this; the
- * in-space station shop used to auto-install into a free slot (and offered a
- * forked gear trade-in modal the planet lacks). These tests boot both real scenes
- * and call their private `buyItem(listing)` with the SAME listing + a free slot,
- * asserting both warehouse the purchase identically (no auto-install) and that the
- * forked station trade-in path is gone.
- */
-
 interface FakeNode {
   text: string;
   handlers: Record<string, (e: unknown) => void>;
@@ -104,7 +90,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so every scene sees the fake pixi.
 import { EquipmentShopScene } from "@/presentation/EquipmentShopScene";
 import { StationScene } from "@/presentation/StationScene";
 
@@ -182,7 +167,6 @@ const tradeStation = {
   faction: "INDEPENDENT",
 } as unknown as import("@/domain/Station").Station;
 
-/** A weapon listing — a fresh SCOUT hull has a free weapon slot. */
 function weaponListing(price = 200): GearListing {
   return {
     systemId: "sys1",
@@ -224,8 +208,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
       weaponListing(),
     );
 
-    // The previous behaviour auto-installed into the free slot; canon is the
-    // warehouse path the planet uses.
     expect(ownedUninstalledGear(engine.player!, loadout)).toEqual([
       "wpn_pulse",
     ]);
@@ -255,7 +237,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
       weaponListing(price),
     );
 
-    // Same place (warehouse), same loadout (untouched), same credit deduction.
     expect(ownedUninstalledGear(stationEngine.player!, stationLoadout)).toEqual(
       ownedUninstalledGear(planetEngine.player!, planetLoadout),
     );
@@ -302,7 +283,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
     const scene = new StationScene(renderer);
     scene.initialize({ gameEngine: engine, station: tradeStation });
 
-    // Pin a single-row deterministic shop so the assertion targets that row.
     (scene as unknown as { shopListings: GearListing[] }).shopListings = [
       weaponListing(),
     ];
@@ -310,9 +290,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
       weaponListing(),
     );
 
-    // Re-render the shop view and inspect the row's buy label: the just-bought
-    // item must read "Есть" (owned), never "[Купить]" — otherwise the station
-    // would let the player re-buy a duplicate the planet already blocks.
     (scene as unknown as { view: string }).view = "shop";
     created.length = 0;
     (scene as unknown as { render: () => void }).render();
@@ -324,8 +301,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
 
   it("the in-space station shop never lists hulls (hull sales are planet-only)", () => {
     const engine = makeEngine(new ShipLoadout("hull_scout"));
-    // Place the station in a high-tech system so the shop reaches hull tech and
-    // the hull filter is actually exercised (at tech 1 no hull stocks anyway).
     (
       engine as unknown as {
         galaxy: {
@@ -346,10 +321,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
     const scene = new StationScene(renderer);
     scene.initialize({ gameEngine: engine, station: tradeStation });
 
-    // The unfiltered catalog at the same seed/day/planet/tech-cap the scene uses
-    // (TRADE_POST ⇒ maxTechLevel = systemTechLevel = 8) stocks at least one hull;
-    // the scene's shop must equal that set with every hull stripped — so a
-    // buyItem (which only warehouses) can never strand an un-fittable hull.
     const raw = generateShop({
       systemId: tradeStation.id,
       planetId: tradeStation.id,
@@ -372,10 +343,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
     const scene = new EquipmentShopScene(renderer);
     scene.initialize({ gameEngine: engine, planet });
 
-    // Seed the planet listings with a hull alongside gear. The gear-tab rows must
-    // hide the hull — buying it there would warehouse an un-fittable hull (the
-    // hangar has no hull bank), the same credit-loss trap the station filters out.
-    // The full `this.listings` (with the hull) still feeds the КОРПУС hull tab.
     const hullListing: GearListing = {
       systemId: "sys1",
       planetId: "p1",
@@ -392,7 +359,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
     const gearRows = inner.gearListings();
     expect(gearRows.every((l) => l.gear.kind !== GearKind.HULL)).toBe(true);
     expect(gearRows).toEqual([weaponListing()]);
-    // The hull survives in the full list so the КОРПУС tab can still sell it.
     expect(inner.listings.some((l) => l.gear.kind === GearKind.HULL)).toBe(
       true,
     );
@@ -400,9 +366,6 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
   });
 
   it("the forked station gear trade-in path is gone (no scene-local swap surface)", () => {
-    // The auto-install + gear trade-in modal was the divergence; aligning to the
-    // canonical warehouse buy removes both. No `buyItemWithTradeIn` /
-    // `showTradeInModal` should remain on the station scene.
     const proto = StationScene.prototype as unknown as Record<string, unknown>;
     expect(proto.buyItemWithTradeIn).toBeUndefined();
     expect(proto.showTradeInModal).toBeUndefined();

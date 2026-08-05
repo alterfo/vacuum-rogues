@@ -107,12 +107,10 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
         ],
         markObjectivesDone: markDone,
       },
-      // npc-bound is NOT present — it was killed off-screen by another NPC.
       galaxy: { npcShips: [{ id: "npc-other" }] },
       questPendingReturnCallback: undefined,
     } as unknown as GameEngine;
 
-    // Player kills a different pirate in the target system.
     new QuestCompletion(engine).bountyByNpcKill("npc-other");
     expect(markDone).toHaveBeenCalledTimes(1);
     expect(markDone).toHaveBeenCalledWith("b-gone");
@@ -139,7 +137,6 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
       questPendingReturnCallback: undefined,
     } as unknown as GameEngine;
 
-    // Killing a different pirate must NOT satisfy a bounty bound to a live target.
     new QuestCompletion(engine).bountyByNpcKill("npc-other");
     expect(markDone).not.toHaveBeenCalled();
   });
@@ -157,9 +154,6 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
     ]);
     new QuestCompletion(engine).defenseBySystemEntry();
     expect(markDone).toHaveBeenCalledTimes(1);
-    // "player" source (F10, three-year-campaign Task 16b): a completed DEFENSE
-    // quest is genuine player participation, tracked toward the arc's `won`
-    // gate — meaning preserved (the stored hostile system is still liberated).
     expect(tryLiberate).toHaveBeenCalledWith("overmind-2", "player");
   });
 
@@ -193,10 +187,6 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
   });
 
   it("routes an already-completed ESCORT quest to pending-return (VISIT_SYSTEM pre-completion must not strand it)", () => {
-    // The hyperjump fires a VISIT_SYSTEM quest-progress event that completes
-    // the escort objective and sets isCompleted=true BEFORE the next flight
-    // scene's escortBySystemEntry() runs. The handler must still route it
-    // through the return gate instead of skipping it as "already done".
     const { engine, markDone } = makeEngine([
       {
         ...base,

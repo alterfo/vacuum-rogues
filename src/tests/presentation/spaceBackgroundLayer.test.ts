@@ -8,10 +8,6 @@ import {
 import type { Renderer } from "@/presentation/Renderer";
 import { BACKGROUND_DIM } from "@/config/balance";
 
-// Make the lazy nebula backdrop resolve synchronously from the "cache", so the
-// real mount path (`skyContainer.addChildAt(bg, 0)`) runs during initialize()
-// and its ordering relative to the F2 dimmer can be asserted (in production
-// the texture loads async; jsdom would otherwise never mount it).
 vi.mock("@/presentation/textures", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/presentation/textures")>();
@@ -23,12 +19,6 @@ vi.mock("@/presentation/textures", async (importOriginal) => {
   };
 });
 
-/**
- * Build a minimal Renderer stand-in backed by real PixiJS Containers. The
- * background layer only reads `app.screen` dimensions and adds display objects
- * to `stage`/`uiLayer`, so real Containers exercise the actual scene-graph
- * wiring without a WebGL context.
- */
 function makeHarness(): {
   layer: SpaceBackgroundLayer;
   stage: Container;
@@ -40,8 +30,6 @@ function makeHarness(): {
   const uiLayer = new Container();
   const gameLayer = new Container();
   const skyContainer = new Container();
-  // SpaceBackgroundLayer inserts the mid-ground container just above the sky, so
-  // the sky must already live in the stage for getChildIndex() to resolve.
   stage.addChild(skyContainer);
 
   const renderer = {
@@ -80,7 +68,6 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     const { layer } = makeHarness();
     const internal = layer as unknown as BackgroundInternals;
 
-    // Nothing built until initialize() runs.
     expect(internal.twinkleStars.length).toBe(0);
     expect(internal.swarmLayers.length).toBe(0);
 
@@ -98,11 +85,8 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
 
     layer.initialize();
 
-    // Sky systems are children of the injected skyContainer (nebulae + stars).
     expect(skyContainer.children.length).toBeGreaterThan(0);
-    // The mid-ground parallax container sits just above the sky on the stage.
     expect(stage.children.length).toBeGreaterThan(1);
-    // Dust streaks + vignette live on the UI layer.
     expect(uiLayer.children.length).toBeGreaterThan(0);
 
     layer.destroy();
@@ -115,15 +99,12 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     const internal = layer as unknown as BackgroundInternals;
     const dimmer = internal.dimmer;
     expect(dimmer).not.toBeNull();
-    // The dimmer must sit ON TOP of every sky element (nebula backdrop, clouds,
-    // star fields, twinkle stars) so it dims the whole backdrop uniformly.
     expect(dimmer!.parent).toBe(skyContainer);
     expect(skyContainer.getChildIndex(dimmer!)).toBe(
       skyContainer.children.length - 1,
     );
     expect(dimmer!.alpha).toBeCloseTo(BACKGROUND_DIM);
 
-    // The module never touches the game world; destroy() must keep that true.
     layer.destroy();
     expect(gameLayer.children.length).toBe(0);
     expect(internal.dimmer).toBeNull();
@@ -136,13 +117,8 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     const internal = layer as unknown as BackgroundInternals;
     const backdrop = internal.nebulaBackdropSprite;
     const dimmer = internal.dimmer;
-    // The mocked texture cache makes the backdrop mount during initialize().
     expect(backdrop).not.toBeNull();
     expect(dimmer).not.toBeNull();
-    // The backdrop is the brightest sky element and mounts AFTER the dimmer in
-    // real load order — `addChildAt(bg, 0)` must splice it underneath. A
-    // regression to plain addChild() would render it above the dimmer and
-    // bring back the unreadable game layer (F2).
     expect(skyContainer.getChildIndex(backdrop!)).toBe(0);
     expect(skyContainer.getChildIndex(backdrop!)).toBeLessThan(
       skyContainer.getChildIndex(dimmer!),
@@ -155,7 +131,6 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
   });
 
   it("honours reduced motion: idle parallax/particles freeze, camera parallax still positions", () => {
-    // Default (no reduced-motion preference): idle drift advances each tick.
     localStorage.clear();
     const moving = makeHarness();
     moving.layer.initialize();
@@ -173,7 +148,6 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     expect(movedDelta).toBeGreaterThan(0);
     moving.layer.destroy();
 
-    // Reduced motion ON (player setting): the same idle drift is frozen.
     localStorage.setItem("reducedMotion", "true");
     const calm = makeHarness();
     calm.layer.initialize();
@@ -187,8 +161,6 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
       expect(a.x).toBe(frozenBefore[i].x);
       expect(a.y).toBe(frozenBefore[i].y);
     });
-    // Camera-driven parallax positioning still runs: the nebula container is
-    // centred (screen 800×600 → centre 400,300) rather than left at the origin.
     expect(calmInternal.nebulaeContainer).not.toBeNull();
     expect(calmInternal.nebulaeContainer!.x).toBeCloseTo(400);
     expect(calmInternal.nebulaeContainer!.y).toBeCloseTo(300);
@@ -204,16 +176,12 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     expect(() => layer.update(1 / 60, 100)).not.toThrow();
     expect(() => layer.destroy()).not.toThrow();
 
-    // After destroy the tracked arrays are emptied.
     const internal = layer as unknown as BackgroundInternals;
     expect(internal.twinkleStars.length).toBe(0);
     expect(internal.swarmLayers.length).toBe(0);
   });
 
   it("builds nebula clouds via the Graphics fallback when no 2D canvas context is available", () => {
-    // jsdom has no canvas 2D context, so nebulaCloudTexture() returns null and
-    // createNebulae() must fall back to its stacked-Graphics cloud rendering
-    // instead of throwing or silently building zero clouds.
     const { layer } = makeHarness();
     layer.initialize();
     const internal = layer as unknown as BackgroundInternals;

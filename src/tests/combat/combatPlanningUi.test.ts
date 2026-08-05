@@ -1,15 +1,3 @@
-/**
- * Planning-phase live UI (Task 14.5b of
- * `docs/plans/20260713-tactical-pause-combat-rework.md`): the weapon bar +
- * range rings mount on PLANNING and tear down on confirm/fight-end, the
- * two-step click-a-weapon-then-click-a-target interaction writes into the
- * planned-turn draft (out-of-range flagged, not rejected — Task 5's recorded
- * decision), a non-combatant click falls through, and the controller factory
- * wires the UI + toast + confirmed-movement side effects.
- *
- * Built against a REAL PixiJS scene graph in jsdom (mirrors
- * `flightHudCornerLayout.test.ts`); no text measurement is read.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import { Container, type Graphics } from "pixi.js";
 import {
@@ -24,12 +12,10 @@ import { setFontScale } from "@/utils/fontScale";
 
 afterEach(() => setFontScale("M")); // never leak a scale into other tests
 
-/** Minimal catalog-shaped weapon (only the surfaces the UI reads). */
 function weapon(id: string, name: string, range: number): WeaponSpec {
   return { id, name, range } as WeaponSpec;
 }
 
-/** Minimal enemy sprite (position + npc identity). */
 function enemy(id: string, x: number, y: number): NpcShipSprite {
   return { x, y, npc: { id, name: id } } as unknown as NpcShipSprite;
 }
@@ -93,7 +79,6 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
       (barL.children[1] as Container).x - (barL.children[0] as Container).x;
 
     expect(spacingL).toBeGreaterThan(spacingM); // button box widened, not just the label text
-    // Only the button width scales (168 → 210 at 1.25×); the inter-button gap (8px) doesn't.
     expect(spacingL - spacingM).toBeCloseTo(42, 0);
   });
 
@@ -106,13 +91,10 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
     ) as Container;
     expect(row).not.toBeNull();
 
-    // "Форсаж" is short enough to fit the uniformly-scaled base box.
     const afterburner = row.getChildByLabel("cpa-afterburner") as Container;
     const bribe = row.getChildByLabel("cpa-bribe") as Container;
     const shortLabelSpacing = bribe.x - afterburner.x;
 
-    // "Требовать сдаться" is far longer — its box must grow past that base
-    // width to avoid rendering under its neighbour (real-play report).
     const demand = row.getChildByLabel("cpa-demand-surrender") as Container;
     const callHelp = row.getChildByLabel("cpa-call-for-help") as Container;
     const longLabelSpacing = callHelp.x - demand.x;
@@ -121,13 +103,6 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
   });
 
   it("reposition() re-anchors the bar + action row to a new screen size (window resize mid-PLANNING, live bug report 2026-07-24: «Ход» silently stopped responding)", () => {
-    // FlightHud's «Ход» button re-anchors on every window resize
-    // (SpaceFlightScene.handleResize → hud.reposition), but the planning bar
-    // was computed once at enterPlanning() and never touched again. A window
-    // shrink mid-fight left the stale, taller-positioned bar sitting where
-    // «Ход» has since moved to, silently swallowing the click (PixiJS gives
-    // the later-mounted bar the top z-order) with no message/sound — exactly
-    // as if the button just stopped responding.
     const guns = [weapon("wpn_a", "Пульсар", 240)];
     const h = makeHarness(guns, true);
     h.ui.enterPlanning();
@@ -149,10 +124,6 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
   });
 
   it("reposition() re-centres the bar horizontally on a genuine width change (not just the vertical anchor)", () => {
-    // The 800→300 shrink above keeps width==mount width, so the x re-centre
-    // (Math.max(0, (width - total) / 2)) is a no-op there. A real width change
-    // with ≥2 weapons must move the first button's x AND keep the buttons in
-    // order — the "bar overlaps «Ход»" failure mode is an off-centre bar.
     const guns = [weapon("wpn_a", "Пульсар", 240), weapon("wpn_b", "Луч", 360)];
     const h = makeHarness(guns);
     h.ui.enterPlanning();
@@ -299,8 +270,6 @@ describe("CombatPlanningUi — planning-phase weapon bar + range rings (14.5b)",
     const h = makeHarness(guns);
     h.ui.enterPlanning();
     const rings = h.gameLayer.children[0] as Graphics;
-    // A dashed 240px ring around (100,100) must extend to x≈340 — assert via
-    // the Graphics bounds rather than re-testing the (unit-tested) draw seam.
     const bounds = rings.getLocalBounds();
     expect(bounds.maxX).toBeGreaterThan(330);
     expect(bounds.minX).toBeLessThan(-130);

@@ -10,10 +10,8 @@ test.describe('Game Launch', () => {
   });
 
   test('should display main menu screen', async ({ page }) => {
-    // Wait for game to initialize
     await page.waitForSelector('canvas', { timeout: 10000 });
     
-    // Check for main menu title
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });
@@ -27,7 +25,6 @@ test.describe('Game Launch', () => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
     
-    // Check console for worker errors
     const errors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
@@ -35,10 +32,8 @@ test.describe('Game Launch', () => {
       }
     });
     
-    // Wait for game initialization
     await page.waitForTimeout(3000);
     
-    // Should not have worker MIME type errors
     const workerErrors = errors.filter(e => 
       e.includes('MIME type') || 
       e.includes('inference.worker') ||
@@ -56,7 +51,6 @@ test.describe('Game Launch', () => {
     const box = await canvas.boundingBox();
     
     if (box) {
-      // Click "Новая игра"
       await canvas.click({
         position: {
           x: box.width / 2 - 50,
@@ -65,11 +59,8 @@ test.describe('Game Launch', () => {
       });
     }
     
-    // Wait for transition
     await page.waitForTimeout(2000);
     
-    // Should be on star map now (SECTOR MAP title visible)
-    // Canvas should still be visible
     await expect(canvas).toBeVisible();
     
     const newBox = await canvas.boundingBox();

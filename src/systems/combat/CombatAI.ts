@@ -9,11 +9,9 @@ export enum AIState {
   RETREAT = "RETREAT",
 }
 
-/** Rule-based AI for a single enemy ship in tactical combat. */
 export class CombatAI {
   private states = new Map<string, AIState>();
 
-  /** Decide the next action for an enemy. Returns MOVE, ATTACK, or WAIT. */
   decide(
     enemy: EnemyShip,
     encounter: TacticalEncounter,
@@ -49,7 +47,6 @@ export class CombatAI {
       return { type: "ATTACK", target: playerCoord };
     }
 
-    // Path toward an adjacent free tile next to the player (player's tile itself is occupied)
     let path: AxialCoord[] | null = null;
     for (const tile of grid.getNeighbors(playerCoord)) {
       if (!tile.occupant) {
@@ -66,7 +63,6 @@ export class CombatAI {
       }
     }
 
-    // Can't pathfind — attack from current position
     return { type: "ATTACK", target: playerCoord };
   }
 

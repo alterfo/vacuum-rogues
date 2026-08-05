@@ -10,9 +10,7 @@ import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
 import { GOOD_PIRATE_REP_THRESHOLD } from "@/config/balance";
 
-/** Hostile-rep player (pirates treat as prey) unless a case overrides pirateRep. */
 const HOSTILE_REP: HostilityContext = { pirateRep: 0 };
-/** Good-rep player (at the threshold — exempt). */
 const GOOD_REP: HostilityContext = { pirateRep: GOOD_PIRATE_REP_THRESHOLD };
 
 const ALL_KINDS: FactionKind[] = [
@@ -89,7 +87,6 @@ describe("factionHostility.isHostile", () => {
       ).toBe(false);
     });
     it("the exemption does not extend to the Overmind", () => {
-      // A good-rep-with-pirates player is still attacked by the Overmind.
       expect(isHostile("overmind", "player", GOOD_REP)).toBe(true);
     });
   });

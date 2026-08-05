@@ -1,8 +1,6 @@
 import type { SeededRNG } from "./seededRNG";
 
-// Russian sci-fi planet names - expanded list
 const NAMES = [
-  // Greek letters
   "Альфа",
   "Бета",
   "Гамма",
@@ -28,7 +26,6 @@ const NAMES = [
   "Пси",
   "Омега",
 
-  // Mythological names
   "Аврора",
   "Атлас",
   "Прометей",
@@ -69,7 +66,6 @@ const NAMES = [
   "Нот",
   "Тритон",
 
-  // Star names
   "Эридан",
   "Сириус",
   "Вега",
@@ -108,7 +104,6 @@ const NAMES = [
   "Шеат",
   "Маркаб",
 
-  // Sci-fi themed
   "Нексус",
   "Прайм",
   "Терра",
@@ -144,7 +139,6 @@ const NAMES = [
   "Горизонт",
   "Кардинал",
 
-  // Russian space program inspired
   "Восток",
   "Союз",
   "Салют",
@@ -161,7 +155,6 @@ const NAMES = [
   "Пирс",
   "Поиск",
 
-  // Elements and minerals (sci-fi style)
   "Платина",
   "Титаний",
   "Иридий",
@@ -177,7 +170,6 @@ const NAMES = [
   "Ксенон",
   "Цезий",
 
-  // Descriptive sci-fi
   "Рассвет",
   "Закат",
   "Полночь",
@@ -199,7 +191,6 @@ const NAMES = [
   "Редут",
   "Анклав",
 
-  // Abstract concepts
   "Резонанс",
   "Гармония",
   "Симфония",

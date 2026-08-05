@@ -40,10 +40,8 @@ export interface CombatRewardResult {
 export class CombatSystem {
   public encounter: TacticalEncounter | null = null;
   public grid: HexGrid;
-  /** Set to true when combat takes place in an Overmind-controlled system. */
   public isOvermindSystem: boolean = false;
   private combatAI: CombatAI;
-  /** Weapon cooldown tracking: weaponGearId → turns remaining. */
   private playerWeaponCooldowns = new Map<string, number>();
 
   constructor(_qualityProfile: AdaptiveQualityProfile) {
@@ -51,24 +49,20 @@ export class CombatSystem {
     this.combatAI = new CombatAI();
   }
 
-  /** Returns remaining cooldown turns for the given weapon gear id. */
   getWeaponCooldown(weaponId: string): number {
     return this.playerWeaponCooldowns.get(weaponId) ?? 0;
   }
 
-  /** Returns true when the weapon is on cooldown and cannot fire. */
   isWeaponOnCooldown(weaponId: string): boolean {
     return (this.playerWeaponCooldowns.get(weaponId) ?? 0) > 0;
   }
 
-  /** Decrement all player weapon cooldowns by 1. Call once per player turn start. */
   decrementPlayerCooldowns(): void {
     for (const [id, turns] of this.playerWeaponCooldowns) {
       if (turns > 0) this.playerWeaponCooldowns.set(id, turns - 1);
     }
   }
 
-  /** Also decrement EMP disabled-turn counters on all enemies. */
   private tickEnemyStatusEffects(): void {
     if (!this.encounter) return;
     for (const enemy of this.encounter.enemies) {
@@ -76,10 +70,6 @@ export class CombatSystem {
     }
   }
 
-  /**
-   * Resolve a player attack with optional weapon selection and ability effects.
-   * Returns damage dealt and any status message.
-   */
   resolvePlayerAttack(weaponId?: string): { damage: number; message: string } {
     if (!this.encounter) return { damage: 0, message: "" };
 
@@ -112,13 +102,11 @@ export class CombatSystem {
       }
       extraMsg = ` (Шквал: ${targets.length} целей)`;
     } else if (ability === WeaponAbility.EMP) {
-      // EMP pulses bypass shields and hit the hull directly, then disable the shield.
       const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage, true);
       totalDamage = dmg;
       primaryTarget.shieldDisabledTurns = 2;
       extraMsg = " (ЭМИ: щит отключён на 2 хода)";
     } else if (ability === WeaponAbility.HOMING) {
-      // Homing bypasses adjacency requirement — always hits
       const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage);
       totalDamage = dmg;
       extraMsg = " (Самонаведение)";
@@ -137,10 +125,6 @@ export class CombatSystem {
     return { damage: totalDamage, message: extraMsg };
   }
 
-  /**
-   * Apply damage to an enemy, respecting shield absorption and EMP state.
-   * Pass bypassShields=true for EMP hits that penetrate to the hull directly.
-   */
   applyDamageToEnemy(
     enemy: import("@/domain/EnemyShip").EnemyShip,
     rawDamage: number,
@@ -159,9 +143,6 @@ export class CombatSystem {
     }
   }
 
-  /**
-   * Get all enemies in 1-hex radius of the primary target (including the target itself).
-   */
   private getBurstTargets(
     primaryTarget: import("@/domain/EnemyShip").EnemyShip,
   ): import("@/domain/EnemyShip").EnemyShip[] {
@@ -206,7 +187,6 @@ export class CombatSystem {
 
     this.grid = new HexGrid(9, 9);
 
-    // Apply terrain
     for (const coord of terrain.obstacles) {
       const tile = this.grid.getTile(coord);
       if (tile) tile.type = "ASTEROID" as import("@/types").TileType;
@@ -226,7 +206,6 @@ export class CombatSystem {
       }
     }
 
-    // Place player and enemies on opposite edges
     const playerTile = this.grid.getTile({ q: 1, r: 4 });
     if (playerTile) playerTile.occupant = playerShip;
 
@@ -268,7 +247,6 @@ export class CombatSystem {
       );
     }
 
-    // Validate move action
     if (action.type === "MOVE" && action.target) {
       const tile = this.grid.getTile(action.target);
       if (!tile || tile.occupant) {
@@ -311,10 +289,6 @@ export class CombatSystem {
     };
   }
 
-  /**
-   * Execute all enemy turns until it's the player's turn again (or combat ends).
-   * Returns the accumulated damage dealt to the player.
-   */
   async executeEnemyTurns(): Promise<{
     damageTaken: number;
     result: EncounterResult | null;
@@ -328,11 +302,9 @@ export class CombatSystem {
 
     let damageTaken = 0;
 
-    // Decrement cooldowns and EMP timers at start of enemy phase
     this.decrementPlayerCooldowns();
     this.tickEnemyStatusEffects();
 
-    // Process all enemy turns until it's the player's turn again
     while (
       this.encounter.state === EncounterState.IN_PROGRESS &&
       this.encounter.turnOrder[this.encounter.currentEntityIndex]?.id !==
@@ -346,14 +318,12 @@ export class CombatSystem {
         (e) => e.id === currentEntity.id,
       );
       if (!enemy || enemy.hullHP <= 0) {
-        // Skip dead enemies
         this.encounter.processTurn(currentEntity, { type: "WAIT" });
         continue;
       }
 
       const action = this.combatAI.decide(enemy, this.encounter, this.grid);
 
-      // Apply Possessed special abilities
       if (enemy instanceof Possessed) {
         if (enemy.neuroShock.currentCooldown <= 0) {
           (enemy.neuroShock as { currentCooldown: number }).currentCooldown =
@@ -361,7 +331,6 @@ export class CombatSystem {
         }
       }
 
-      // Apply attack damage to player
       if (action.type === "ATTACK") {
         const rawDamage =
           Math.floor(Math.random() * enemy.damage * 0.5) +
@@ -377,7 +346,6 @@ export class CombatSystem {
           damageTaken += rawDamage;
         }
       } else if (action.type === "MOVE" && action.target) {
-        // Apply grid movement
         this.applyGridMove(enemy, action.target);
       }
 
@@ -392,7 +360,6 @@ export class CombatSystem {
     return { damageTaken, result: null };
   }
 
-  /** @deprecated Use executeEnemyTurns() instead. Kept for backward compatibility. */
   async processEnemyTurn(): Promise<CombatAction> {
     if (
       !this.encounter ||
@@ -450,7 +417,6 @@ export class CombatSystem {
       );
     }
 
-    // Player loss: HP drops to 0 → set to 1 (retreat, ship damaged)
     if (this.encounter.playerShip.hullHP <= 0) {
       this.encounter.playerShip.hullHP = 1;
       this.encounter.state = EncounterState.PLAYER_LOST;
@@ -463,7 +429,6 @@ export class CombatSystem {
       };
     }
 
-    // Player victory: all enemies destroyed
     if (this.encounter.enemies.every((e) => e.hullHP <= 0)) {
       this.encounter.state = EncounterState.PLAYER_WON;
       const rewards = this.resolveVictory(this.encounter.enemies);
@@ -486,21 +451,12 @@ export class CombatSystem {
     };
   }
 
-  /**
-   * Returns true when the player ship HP has dropped to ≤ 30% of max hull.
-   * The CombatScene checks this each round and emits 'combat-retreat' when true.
-   */
   isAutoRetreatTriggered(): boolean {
     if (!this.encounter) return false;
     const { hullHP, maxHull } = this.encounter.playerShip;
     return hullHP > 0 && hullHP <= maxHull * 0.3;
   }
 
-  /**
-   * Calculate victory rewards: credits and kill points based on enemy tech
-   * levels, plus a 30% equipment drop chance per enemy. If combat took place
-   * in an Overmind system, also rolls for artifact drops.
-   */
   resolveVictory(enemies: EnemyShip[]): CombatRewardResult {
     let creditsGained = 0;
     let killPointsGained = 0;
@@ -553,7 +509,6 @@ export class CombatSystem {
     const targetTile = this.grid.getTile(target);
     if (!targetTile || targetTile.occupant) return;
 
-    // Clear the enemy from its current tile
     outer: for (let r = 0; r < this.grid.height; r++) {
       for (let q = 0; q < this.grid.width; q++) {
         if (this.grid.tiles[r][q].occupant === enemy) {

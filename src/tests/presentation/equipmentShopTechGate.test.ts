@@ -4,15 +4,6 @@ import type { Renderer } from "@/presentation/Renderer";
 import { PlanetType } from "@/types";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 
-/**
- * Task 1 (gear-variety-and-hangar plan): `StationScene.buildShopInventory`
- * threads the owning system's `techLevel` into `generateShop` as
- * `maxTechLevel` so an in-space shop can't stock gear above the local
- * system's tech; `EquipmentShopScene.buildShopInventory` (planet shops) never
- * did this, so a low-tech planet could stock any tech-level item. Mirrors
- * `shopGenerator.test.ts`'s gating assertions through the scene path.
- */
-
 vi.mock("pixi.js", () => {
   class FakeBase {
     handlers: Record<string, (e: unknown) => void> = {};
@@ -85,7 +76,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scene + scaledText see the fake pixi.
 import { EquipmentShopScene } from "@/presentation/EquipmentShopScene";
 
 const renderer = {

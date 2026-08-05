@@ -1,8 +1,3 @@
-/**
- * Task 4: minRank check in JobBoardPanel.
- * Verifies that quests with a minimum rank requirement disable the "Принять"
- * button for players who don't meet the threshold, and enable it for those who do.
- */
 import { describe, it, expect, vi } from "vitest";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { QuestTemplate } from "@/systems/QuestManager";
@@ -115,7 +110,6 @@ describe("JobBoardPanel minRank gating", () => {
     );
 
     const texts = collectTexts(panel.container as unknown as MockNode);
-    // Button should show rank requirement, not "Принять"
     expect(texts).toContain("Ранг 3+");
     expect(texts).not.toContain("Принять");
   });

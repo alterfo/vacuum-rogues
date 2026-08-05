@@ -1,35 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: An orbital-mechanics burn-scheduling puzzle. Your ship is caught in
-// the decaying orbit of a gas giant; every maneuver bleeds `altitude`, and at
-// zero you graze the cloud-tops and burn up (a `critMin` redirect to
-// ending_burnup — the decay-pressure spine). You must raise the orbit above the
-// escape line before that happens, spending a finite `fuel` budget. The puzzle
-// is the Oberth effect: a hard burn timed at the low point of the orbit
-// (periapsis) buys far more altitude per unit of fuel than a panicked
-// full-throttle now — and stopping to think costs precious altitude to decay.
-// Choice points:
-//   1. First burn — wait for periapsis (efficient, keeps a fuel reserve),
-//      full-throttle now (wasteful — spends the reserve), or scan first and
-//      lose altitude to decay while you compute.
-//   2. Coast — the precise trim burn is NOT a free universal button: it needs a
-//      conserved fuel reserve (fuel >= 5), so only the disciplined first burn
-//      keeps it on the table. The wasteful full-throttle line burns past the
-//      reserve and locks the trim out, forcing the messy fuel-free endgame:
-//      dump cargo ballast (roll: a clean jettison or a jammed hatch, costs
-//      credits) or vent reactor plasma (a fuel-free gamble: a big shove, or a
-//      shorted coil that knocks you back down) or ride it out (more decay).
-//   3. Escape gate — an auto check on `altitude` decides the outcome.
-// The Oberth reward is thus gated behind fuel discipline rather than handed out
-// free: trim is the payoff for burning efficiently, not a risk-free default, and
-// the fuel-starved player faces a genuine dump-vs-vent-vs-hold dilemma instead.
-// Orbital control (the dispatcher heard at ending_escaped) is now on comms
-// through the coast, so the desperate stretch isn't run in silence.
-// Outcomes (by `altitude` at the escape gate, unless it decayed to burn-up):
-//   - ending_escaped  (altitude >= 10 — clean break, stable trajectory)  SUCCESS
-//   - ending_grazing  (altitude >= 7  — you scrape free, hull scorched)   SUCCESS
-//   - ending_stranded (altitude < 7   — trapped in a low orbit, hauled in) FAILURE
-//   - ending_burnup   (altitude ran out — atmospheric entry)              FAILURE
 export const orbitalEscapeScript: QuestScript = {
   id: "orbital-escape",
   title: "Срыв с орбиты",

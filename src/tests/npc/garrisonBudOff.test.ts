@@ -8,7 +8,6 @@ import { SeededRNG } from "@/utils/seededRNG";
 import { StarType, NpcState } from "@/types";
 import { Faction } from "@/types/faction";
 
-/** Private NpcSimulator state driven directly, mirroring garrisonGrowth.test.ts. */
 interface SimInternals {
   growGarrisons(g: Galaxy, r: SeededRNG): void;
   garrisonBaseline: Map<string, number>;
@@ -32,7 +31,6 @@ function makeSystem(id: string, name: string, q: number): StarSystem {
   );
 }
 
-/** sys_a (will be Overmind) ←→ sys_b (neutral), warp cost 3. */
 function makeGalaxy(): Galaxy {
   const sysA = makeSystem("sys_a", "Alpha", 0);
   const sysB = makeSystem("sys_b", "Beta", 10);
@@ -41,18 +39,12 @@ function makeGalaxy(): Galaxy {
   return new Galaxy("galaxy_bud_off", [sysA, sysB], new Overmind(), [], []);
 }
 
-/** Live standing-garrison ships (garrison_ prefixed) present in a system. */
 function garrisonShips(galaxy: Galaxy, systemId: string) {
   return npcsPresentInSystem(galaxy, systemId).filter((n) =>
     n.id.startsWith("garrison_"),
   );
 }
 
-/**
- * Establish sys_a's garrison and drive growth passes until it sits exactly at
- * the bud-off cap round(baseline × 1.5). gameDays is bumped per pass so each
- * growth ship gets a unique id. Returns the recorded baseline and the cap.
- */
 function growToCap(
   sim: NpcSimulator,
   galaxy: Galaxy,
@@ -71,11 +63,6 @@ function growToCap(
   return { baseline, cap };
 }
 
-/**
- * Hand-build a garrison of `present` ships with a recorded `baseline` in
- * `systemId` — lets a test pin exact bud-off arithmetic without the random
- * [GARRISON_MIN, GARRISON_MAX] establishment draw.
- */
 function seedGarrison(
   sim: NpcSimulator,
   galaxy: Galaxy,
@@ -104,7 +91,6 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     const { baseline, cap } = growToCap(sim, galaxy, "bud_basic");
     expect(internals(sim).captureFleetIds.size).toBe(0);
 
-    // Crossing the threshold: the next growth pass buds off instead of growing.
     galaxy.gameDays = cap - baseline + 1;
     internals(sim).growGarrisons(galaxy, new SeededRNG("bud_basic_fire"));
 
@@ -117,15 +103,12 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     );
     expect(fleet).toHaveLength(expected);
     for (const ship of fleet) {
-      // capture_ prefix keeps reconcileTransientState's save/load rebuild correct.
       expect(ship.id.startsWith("capture_")).toBe(true);
       expect(ship.state).toBe(NpcState.TRAVELING);
       expect(ship.destinationSystemId).toBe("sys_b");
       expect(ship.daysToArrival).toBeGreaterThanOrEqual(1);
     }
-    // A journey, not an instant flip: the target is still neutral right now.
     expect(galaxy.isHostileSystem("sys_b")).toBe(false);
-    // Baseline resets to the post-bud-off size so the grow→bud cycle repeats.
     expect(internals(sim).garrisonBaseline.get("sys_a")).toBe(cap - expected);
   });
 
@@ -140,8 +123,6 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
       Math.max(1, Math.round(baseline * 0.5)),
     );
 
-    // No new resolution logic: normal ticks travel the fleet to sys_b and the
-    // existing capture-fleet siege loop seizes it (same as captureEvent.test.ts).
     galaxy.gameDays = 1; // off every periodic trigger's interval
     for (let i = 0; i < 20 && !galaxy.isHostileSystem("sys_b"); i++) {
       sim.tick(galaxy, new SeededRNG(`bud_siege_tick_${i}`));
@@ -160,8 +141,6 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     const expected = Math.max(1, Math.round(baseline * 0.5));
     expect(internals(sim).captureFleetIds.size).toBe(expected);
 
-    // The very next pass must NOT launch a second fleet — the reset baseline
-    // puts the shrunken garrison back under its (new) cap, so it grows again.
     galaxy.gameDays = cap - baseline + 2;
     internals(sim).growGarrisons(galaxy, new SeededRNG("bud_once_after"));
     expect(internals(sim).captureFleetIds.size).toBe(expected);
@@ -172,7 +151,6 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_a");
     const sim = new NpcSimulator();
-    // baseline 1 → cap round(1.5) = 2; excess round(0.5) floors to 1 ship.
     seedGarrison(sim, galaxy, "sys_a", 1, 2);
 
     galaxy.gameDays = 1;
@@ -186,19 +164,10 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_a");
     const sim = new NpcSimulator();
-    // A weaker-era garrison: baseline 5 was recorded before the campaign
-    // ratchet lifted the replenishment floor to 7 (power bonus 2). Its bud cap
-    // round(5 × 1.5) = 8 sits inside the refill band [7, 12], so without
-    // re-anchoring every growth tick would bud off a 3-ship fleet whose cost
-    // the next day's free top-up refunds — a perpetual subsidized fleet
-    // factory that never grows organically.
     seedGarrison(sim, galaxy, "sys_a", 5, 8);
     sim.ensureGarrison(galaxy, new SeededRNG("stale_anchor_est"));
     expect(internals(sim).garrisonBaseline.get("sys_a")).toBe(7);
 
-    // With the repaired baseline the growth pass grows organically
-    // (8 < cap round(7 × 1.5) = 11) instead of stripping defenders into a
-    // subsidized capture fleet.
     galaxy.gameDays = 1;
     internals(sim).growGarrisons(galaxy, new SeededRNG("stale_anchor_grow"));
     expect(internals(sim).captureFleetIds.size).toBe(0);
@@ -217,7 +186,6 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
       internals(sim).growGarrisons(galaxy, new SeededRNG("bud_surrounded_f")),
     ).not.toThrow();
 
-    // Nothing launched, garrison intact, baseline untouched (retry next interval).
     expect(internals(sim).captureFleetIds.size).toBe(0);
     expect(garrisonShips(galaxy, "sys_a")).toHaveLength(cap);
     expect(internals(sim).garrisonBaseline.get("sys_a")).toBe(baseline);
@@ -225,11 +193,9 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
 
   it("prefers a neutral neighbour over a distant unconnected neutral", () => {
     const galaxy = makeGalaxy();
-    // sys_c: neutral, far away, no warp connection to sys_a.
     galaxy.systems.push(makeSystem("sys_c", "Gamma", 50));
     galaxy.addOvermindSystem("sys_a");
     const sim = new NpcSimulator();
-    // baseline 4 → cap 6; seed straight at the cap so one pass buds 2 ships.
     seedGarrison(sim, galaxy, "sys_a", 4, 6);
 
     galaxy.gameDays = 1;
@@ -253,8 +219,6 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     internals(sim).growGarrisons(galaxy, new SeededRNG("bud_dwell_fire"));
     expect(internals(sim).captureFleetIds.size).toBeGreaterThan(0);
 
-    // Despawned donors must not leak dwell-countdown entries: every key in the
-    // map corresponds to a ship that still exists.
     const dwell = (
       sim as unknown as {
         placement: { arrivalDwellCountdown: Map<string, number> };
@@ -267,8 +231,6 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
   });
 
   it("classifies a neutral neighbour behind a one-way incoming edge as adjacent", () => {
-    // ~25% of warp links are one-way (ensureConnectivity bridges): sys_b links
-    // to sys_a but not vice versa. The undirected scan must still see sys_b.
     const sysA = makeSystem("sys_a", "Alpha", 0);
     const sysB = makeSystem("sys_b", "Beta", 10);
     sysB.connections.push(new WarpPath("sys_b", "sys_a", 3)); // one-way b → a
@@ -303,7 +265,6 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     expect(fleet).toHaveLength(2);
     for (const ship of fleet) {
       expect(ship.destinationSystemId).toBe("sys_c");
-      // Unconnected hop travels by coordinate distance (30 / 10 = 3 days).
       expect(ship.daysToArrival).toBe(3);
     }
   });

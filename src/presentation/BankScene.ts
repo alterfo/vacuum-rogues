@@ -49,52 +49,30 @@ import {
 
 interface BankContext {
   gameEngine?: BankSceneHost;
-  /** Where the player came from — Bank returns here on "Назад". */
   planet?: Planet;
   station?: Station;
 }
 
-/** Demo-thin operation sizes (the products themselves are generic; see products.ts). */
 const DEPOSIT_STEP = 1000;
 const WITHDRAW_STEP = 1000;
 const REPAY_STEP = 1000;
 const LOAN_PRINCIPAL = 5000;
 const LOAN_PERIODS = 10;
 
-/** How many recent rows the statement and the live bus log show. */
 const STATEMENT_ROWS = 10;
 const BUS_LOG_ROWS = 12;
 
 const ACCENT = 0xffd24a;
 const HEADER = 0x88ccff;
 
-/**
- * Галактический Банк — the player-facing payoff for the in-game АБС (Task 7).
- * It is purely a *consumer* of the bus + a reader of the ledger: it never pokes
- * the ledger directly. Three panels make the core-banking architecture visible:
- *
- *  - **Счета** — the player's customer accounts (current / savings / loan) with
- *    their live GL balances, plus thin deposit / withdraw / loan / repay actions
- *    (each a balanced command on the bus via the products facade).
- *  - **Выписка** — a statement of the current account built straight from the
- *    journal: every entry that touched it, with its net effect and a running
- *    balance (so a recent trade/reward shows up as a posting).
- *  - **Шина** — a live "команды → проводки" log: every command observed on the
- *    bus and the journal entry it produced, the teaching artifact for the demo.
- *
- * Balances/statement come from {@link bankSceneView} (pure, unit-tested); the
- * scene just maps those rows to `Text`/`Graphics`.
- */
 export class BankScene extends GameScene {
   private gameEngine: BankSceneHost | null = null;
   private planet: Planet | null = null;
   private station: Station | null = null;
   private uiContainer: Container | null = null;
   private toastTimers: ReturnType<typeof setTimeout>[] = [];
-  /** Rolling live log of bus traffic since the screen opened (newest last). */
   private busLog: string[] = [];
   private busUnsub: Unsubscribe | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
@@ -113,11 +91,6 @@ export class BankScene extends GameScene {
     logger.info("BankScene: open");
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so it sits above the panel and survives the
-   * scene's `render()` UI rebuilds.
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -143,12 +116,6 @@ export class BankScene extends GameScene {
     this.station = null;
   }
 
-  /**
-   * Watch the bus so the Шина panel reflects live traffic: every command the
-   * scene's own actions dispatch is logged as `→ command`, and the journal entry
-   * it commits is logged as `✓ posting`. Only mutates {@link busLog}; the action
-   * handlers re-render after dispatching, so the new lines appear immediately.
-   */
   private subscribeBus(): void {
     this.busUnsub?.();
     const bus = this.gameEngine?.bankBus;
@@ -174,8 +141,6 @@ export class BankScene extends GameScene {
     }
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
   private render(): void {
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -191,7 +156,6 @@ export class BankScene extends GameScene {
     const ui = new Container();
     this.uiContainer = ui;
 
-    // Title + business-date / credits strip.
     const title = scaledText("⛁ ГАЛАКТИЧЕСКИЙ БАНК", 24, ACCENT, {
       fontWeight: "bold",
       align: "center",
@@ -225,7 +189,6 @@ export class BankScene extends GameScene {
     this.renderAccountsAndActions(ui, leftX, colTop, leftW);
     this.renderStatementAndBus(ui, rightX, colTop, rightW, h);
 
-    // Back button.
     this.makeButton(
       ui,
       "[ Назад ]",
@@ -240,7 +203,6 @@ export class BankScene extends GameScene {
     this.renderer.uiLayer.addChild(ui);
   }
 
-  /** Left column: accounts list + the four product actions. */
   private renderAccountsAndActions(
     ui: Container,
     x: number,
@@ -290,13 +252,6 @@ export class BankScene extends GameScene {
     this.renderLoanTerms(ui, x, y, width);
   }
 
-  /**
-   * Loan panel: the terms a loan is offered on (rate, term, per-day payment,
-   * total repayable) when the player has no debt, or the live position
-   * (outstanding + per-day payment) when a loan is active. All values come from
-   * the pure {@link loanPanelLines} / {@link loanTermsSummary}; the scene only
-   * lays the label/value rows out.
-   */
   private renderLoanTerms(
     ui: Container,
     x: number,
@@ -408,7 +363,6 @@ export class BankScene extends GameScene {
     ui.addChild(bal);
   }
 
-  /** Right column: current-account statement (top) + the live bus log (bottom). */
   private renderStatementAndBus(
     ui: Container,
     x: number,
@@ -434,11 +388,6 @@ export class BankScene extends GameScene {
       y += statementRowStep;
     }
 
-    // The "ШИНА" live command→posting log is a teaching/debug artifact (see the
-    // class comment): it takes up the bottom half of the column and means
-    // nothing to a real player. Gate it on `__DEBUG__` so dev/e2e keep it but
-    // production ships without it. Pure `showBankBusPanel` keeps both branches
-    // unit-testable.
     if (!showBankBusPanel(__DEBUG__)) return;
 
     y += 16;
@@ -465,9 +414,6 @@ export class BankScene extends GameScene {
       t.y = y;
       t.eventMode = "none";
       ui.addChild(t);
-      // Row step tracks the line's actual wrapped-line count at the current
-      // font scale — a fixed 18 px step assumed one line, so a long bus
-      // message that wraps at "L" scale used to bleed into the next row.
       const lines = estimateWrappedLines(line, width, scaledFont(11));
       y += lines * lineStepFor(scaledFont(11));
       if (y > h - 80) break;
@@ -481,10 +427,6 @@ export class BankScene extends GameScene {
     y: number,
     width: number,
   ): void {
-    // Max reason length in chars, sized from the *pixel* width available before
-    // the right-aligned delta text — not a fixed char count, which used to
-    // render wider at "L" scale (same glyph count, bigger glyphs) and bleed
-    // into the delta column.
     const datePrefixLen = `Д${row.date}  `.length;
     const deltaClearance = 90;
     const charPx = Math.max(1, scaledFont(12) * MONO_CHAR_WIDTH_RATIO);
@@ -550,8 +492,6 @@ export class BankScene extends GameScene {
     btn.y = y;
     btn.eventMode = "static";
     btn.cursor = "pointer";
-    // Children are all eventMode='none', so the container needs an explicit
-    // hitArea or the event boundary prunes it (pixi-rules.md).
     btn.hitArea = new Rectangle(0, 0, w, h);
 
     const bg = new Graphics();
@@ -583,8 +523,6 @@ export class BankScene extends GameScene {
     parent.addChild(btn);
   }
 
-  // ── Data (via the pure view-model) ───────────────────────────────────────────
-
   private accountRows(): AccountRow[] {
     const engine = this.gameEngine;
     const player = engine?.player;
@@ -608,8 +546,6 @@ export class BankScene extends GameScene {
       STATEMENT_ROWS,
     );
   }
-
-  // ── Actions (each a balanced command on the bus) ─────────────────────────────
 
   private doDeposit(): void {
     const engine = this.gameEngine;
@@ -689,20 +625,14 @@ export class BankScene extends GameScene {
       this.showToast("Нет действующего кредита", BANK_TOAST.info);
       return;
     }
-    // Whole credits we can move off the integer-only current account this press.
     const amount = wholeCreditsToCurrent(REPAY_STEP, owed, player.credits);
     if (amount <= 0 && owed >= 1) {
-      // A whole credit of debt remains but the player has no funds to pay it.
       this.showToast("Недостаточно средств для погашения", BANK_TOAST.error);
       return;
     }
     if (amount > 0) {
       repayLoan(engine.bankBus, player.currentAccountId, loanId, amount);
     }
-    // Whatever sub-credit residual remains (EOD interest leaves the loan balance
-    // fractional, and a Transfer can only move whole credits onto the current
-    // account) is written off so the loan closes at exactly 0 — otherwise it
-    // would stay permanently negative and block every future loan.
     const residual = -engine.bankingService.balanceOf(loanId);
     if (residual > 0 && residual < 1) {
       forgiveLoanResidual(
@@ -741,9 +671,6 @@ export class BankScene extends GameScene {
     const existing = this.uiContainer?.getChildByLabel?.("bank-toast");
     if (existing) existing.destroy();
 
-    // `rawColor` keeps the semantic `BANK_TOAST` hue exact — these are already
-    // bright/intentional colours, so the dark-panel readability floor must not
-    // shift them (the salmon error tone sits just under the floor).
     const toast = scaledText(text, 15, color, {
       fontWeight: "bold",
       align: "center",
@@ -763,14 +690,6 @@ export class BankScene extends GameScene {
     this.toastTimers.push(handle);
   }
 
-  // ── E2E seams (CLAUDE.md: scene-owned, __DEBUG__-guarded) ────────────────────
-
-  /**
-   * Book a market posting through the *real* production credit facade
-   * ({@link adjustPlayerCredits} → bus → ledger), so an e2e can show "a trade
-   * shows up as a posting" without standing up the whole market UI. Positive =
-   * a sale (credit), negative = a purchase (debit).
-   */
   e2eSimulateTrade(signedAmount: number, reason = "Продажа товара"): void {
     if (!__DEBUG__) return;
     const engine = this.gameEngine;
@@ -786,7 +705,6 @@ export class BankScene extends GameScene {
     this.render();
   }
 
-  /** Current-account statement rows (for e2e assertions). */
   e2eStatement(): Array<{
     date: number;
     reason: string;
@@ -797,7 +715,6 @@ export class BankScene extends GameScene {
     return this.statement().map((r) => ({ ...r }));
   }
 
-  /** Customer account balances by type (for e2e assertions). */
   e2eAccounts(): Array<{ id: string; type: AccountType; balance: number }> {
     if (!__DEBUG__) return [];
     return this.accountRows().map((r) => ({
@@ -817,14 +734,6 @@ export class BankScene extends GameScene {
     this.doTakeLoan();
   }
 
-  /**
-   * Drive the «Погасить» button — the real `doRepay()` handler (one `REPAY_STEP`
-   * of debt per call, exactly like a player press). Sibling of the existing
-   * {@link e2eTakeLoan} seam; used by the live dev autopilot's loan executor
-   * (`bankingQueries.executeRepayLoan`) so a `repay-loan` action is watchable
-   * through the real bank UI instead of a silent bank-bus mutation
-   * (Task 6, docs/plans/20260727-autopilot-ui-parity-fixes.md).
-   */
   e2eRepayLoan(): void {
     if (!__DEBUG__) return;
     this.doRepay();

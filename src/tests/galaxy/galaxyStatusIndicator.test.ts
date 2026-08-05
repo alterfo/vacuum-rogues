@@ -43,7 +43,6 @@ describe("computeGalaxyThreat — threat level at representative shares", () => 
   });
 
   it("warning at exactly warningThreshold boundary — 10.5/30 rounded: use 11", () => {
-    // smallest integer share >= 0.35 × 30 = 10.5 → 11
     const r = computeGalaxyThreat(ids(11), [], TOTAL);
     expect(r.threatLevel).toBe<ThreatLevel>("warning");
   });
@@ -55,7 +54,6 @@ describe("computeGalaxyThreat — threat level at representative shares", () => 
   });
 
   it("pirate share reported separately; does NOT affect threat level", () => {
-    // 2 overmind (safe), 10 pirate (high, but pirate doesn't drive threat)
     const r = computeGalaxyThreat(ids(2, "o"), ids(10, "p"), TOTAL);
     expect(r.overmindCount).toBe(2);
     expect(r.pirateCount).toBe(10);

@@ -89,7 +89,6 @@ describe("NpcSimulator.battleSystemIds", () => {
   it("treats a regular (unflagged) PIRATE-role ship as the hostile side", () => {
     const galaxy = makeGalaxy();
     galaxy.npcShips.push(
-      // Wandering pirate spawned via spawnOne: hostile defaults to false.
       makeShip("sys_a", { hostile: false, role: NpcRole.PIRATE }),
       makeShip("sys_a", { hostile: false, role: NpcRole.RANGER }),
     );
@@ -129,7 +128,6 @@ describe("NpcSimulator.battleSystemIds", () => {
   it("ignores ships in transit (TRAVELING) — they are not present in the system", () => {
     const galaxy = makeGalaxy();
     galaxy.npcShips.push(
-      // Hostile merely passing through sys_a (in transit): not a live fight.
       makeShip("sys_a", {
         hostile: true,
         role: NpcRole.PIRATE,
@@ -160,10 +158,8 @@ describe("NpcSimulator.battleSystemIds", () => {
   it("detects battles per-system independently", () => {
     const galaxy = makeGalaxy();
     galaxy.npcShips.push(
-      // sys_a: live fight
       makeShip("sys_a", { hostile: true, role: NpcRole.PIRATE }),
       makeShip("sys_a", { hostile: false, role: NpcRole.RANGER }),
-      // sys_b: only friendlies — no fight
       makeShip("sys_b", { hostile: false, role: NpcRole.TRADER }),
     );
 

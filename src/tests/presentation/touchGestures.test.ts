@@ -10,7 +10,6 @@ import {
   type TapIntent,
 } from "@/presentation/flight/touchGestures";
 
-/** Replay a recorded pointer sequence and collect every intent it produced. */
 function replay(seq: PointerInput[]): GestureIntent[] {
   const gi = new TouchGestureInterpreter();
   return seq.flatMap((evt) => gi.handle(evt));
@@ -93,10 +92,8 @@ describe("TouchGestureInterpreter — pan (one-finger drag)", () => {
       { phase: "up", id: 1, x: 35, y: 10 },
     ]);
     const p = pans(out);
-    // First pan is the move that crossed the threshold (delta from the down point).
     expect(p[0]).toEqual({ type: "pan", dx: 20, dy: 0 });
     expect(p[1]).toEqual({ type: "pan", dx: 15, dy: 10 });
-    // Net pan equals total finger travel.
     const net = p.reduce((a, i) => ({ x: a.x + i.dx, y: a.y + i.dy }), {
       x: 0,
       y: 0,
@@ -120,7 +117,6 @@ describe("TouchGestureInterpreter — pinch (two fingers)", () => {
     const gi = new TouchGestureInterpreter();
     gi.handle({ phase: "down", id: 1, x: 100, y: 100 });
     gi.handle({ phase: "down", id: 2, x: 200, y: 100 }); // initial dist 100
-    // spread finger 2 out to dist 200
     const out = gi.handle({ phase: "move", id: 2, x: 300, y: 100 });
     const pi = pinches(out);
     expect(pi).toHaveLength(1);
@@ -147,21 +143,15 @@ describe("TouchGestureInterpreter — pinch (two fingers)", () => {
     const b = pinches(gi.handle({ phase: "move", id: 2, x: 400, y: 0 })); // ×2 → 400
     expect(a[0].scale).toBeCloseTo(2, 5);
     expect(b[0].scale).toBeCloseTo(2, 5);
-    // Product = total zoom factor (100 → 400 = ×4).
     expect(a[0].scale * b[0].scale).toBeCloseTo(4, 5);
   });
 
   it("does NOT emit a scale-0 pinch when the two fingers coincide", () => {
-    // Fingers crossing mid-pinch (dist → 0) must not yield scale 0, which
-    // CameraController.zoomByFactor clamps to MIN_ZOOM — a jarring, sticky
-    // snap-to-min. The interpreter re-baselines silently and resumes after.
     const gi = new TouchGestureInterpreter();
     gi.handle({ phase: "down", id: 1, x: 0, y: 0 });
     gi.handle({ phase: "down", id: 2, x: 200, y: 0 }); // dist 200
     const collide = pinches(gi.handle({ phase: "move", id: 2, x: 0, y: 0 })); // dist 0
     expect(collide).toHaveLength(0); // no scale-0 emission
-    // Spreading back out re-baselines (one frame) then resumes a normal, finite
-    // pinch — no NaN/Infinity, no MIN_ZOOM snap.
     gi.handle({ phase: "move", id: 2, x: 100, y: 0 }); // dist 100 → re-baseline
     const apart = pinches(gi.handle({ phase: "move", id: 2, x: 300, y: 0 })); // dist 300
     expect(apart).toHaveLength(1);
@@ -201,8 +191,6 @@ describe("TouchGestureInterpreter — multi-touch disambiguation & cleanup", () 
     gi.handle({ phase: "down", id: 2, x: 200, y: 100 });
     gi.handle({ phase: "move", id: 2, x: 260, y: 100 });
     gi.handle({ phase: "up", id: 2, x: 260, y: 100 }); // back to one finger (id 1)
-    // id 1 sat at (100,100); now drag it — the first delta must be small, not a
-    // jump to wherever the lifted finger was.
     const out = gi.handle({ phase: "move", id: 1, x: 130, y: 100 });
     const p = pans(out);
     expect(p).toHaveLength(1);

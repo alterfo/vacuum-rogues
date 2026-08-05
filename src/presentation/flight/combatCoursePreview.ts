@@ -1,16 +1,3 @@
-/**
- * Draw the tactical-planning movement preview (Task 3). The pure trajectory math
- * lives in {@link combatTrajectory}; this thin presentation seam clamps a planning
- * click to reach, records it on the planned turn, and draws the achievable-arc
- * preview onto the shared {@link RouteRenderer}.
- *
- * **Renderer decision (Task 3):** reuse the existing {@link RouteRenderer} rather
- * than a new combat-scoped renderer — its `drawRoute` already dashes an arbitrary
- * polyline and `drawNavigationMarker` marks the endpoint, which is exactly the shape
- * the preview needs (the combat-specific length/arc logic is the polyline fed in,
- * from `previewTrajectory`). No new draw class is warranted.
- */
-
 import type { RouteRenderer } from "./RouteRenderer";
 import {
   combatReach,
@@ -22,12 +9,10 @@ import {
 import { COMBAT_ROUND_MS } from "@/config/balance";
 import { clampOutsideRadius } from "@/utils/flightGeometry";
 
-/** The planned-turn draft the click records its destination on. */
 export interface PlanningDestinationSink {
   setDestination(dest: { x: number; y: number } | null): void;
 }
 
-/** The live ship kinematics the preview reads (structural subset of `ShipPhysics`). */
 export interface ShipKinematics {
   getMaxSpeed(): number;
   shipX: number;
@@ -35,12 +20,6 @@ export interface ShipKinematics {
   shipAngle: number;
 }
 
-/**
- * Handle a planning-phase movement click at world `(x,y)`: clamp it to this round's
- * reach (engine potency × round duration), record the clamped destination on the
- * planned turn, and draw the achievable-arc preview line + destination marker. The
- * clamped destination is returned for callers/tests.
- */
 export function previewCombatCourse(
   routeRenderer: RouteRenderer,
   planning: PlanningDestinationSink,
@@ -63,13 +42,6 @@ export function previewCombatCourse(
   return dest;
 }
 
-/**
- * Route a raw pointer-down through the planning-phase movement branch (extracted
- * verbatim from `SpaceFlightScene.onPointerDown` for the line guard, 14.5c). A
- * primary un-shifted click during PLANNING becomes this round's destination —
- * screen→world, clamped outside the star's avoid radius, then
- * {@link previewCombatCourse}. Returns whether the click was consumed.
- */
 export function routePlanningClick(
   event: {
     button: number;

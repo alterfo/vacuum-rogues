@@ -10,7 +10,6 @@ import { StarType, NpcRole, NpcState, FactionType } from "@/types";
 import type { NewsEvent } from "@/types";
 import { Faction } from "@/types/faction";
 
-/** sys_a (target) ←→ sys_b (staging), two-system chain. */
 function makeGalaxy(): Galaxy {
   const sysA = new StarSystem(
     "sys_a",
@@ -35,7 +34,6 @@ function makeGalaxy(): Galaxy {
   return new Galaxy("galaxy_liberation", [sysA, sysB], new Overmind(), [], []);
 }
 
-/** A stationary RANGER NPC parked in the given system. */
 function makeRanger(id: string, systemId: string): NpcShip {
   return new NpcShip({
     id,
@@ -66,8 +64,6 @@ describe("NpcSimulator liberation campaigns", () => {
     const sim = new NpcSimulator();
     const collected: NewsEvent[] = [];
     for (let i = 0; i < 50; i++) {
-      // Keep sys_a hostile so the campaign at day 50 always has a target,
-      // regardless of any convoy that might liberate it earlier.
       galaxy.addOvermindSystem("sys_a");
       galaxy.simulateDay();
       const events = sim.tick(galaxy, new SeededRNG(`lib_tick_${i}`));
@@ -78,7 +74,6 @@ describe("NpcSimulator liberation campaigns", () => {
     expect(campaign).toBeDefined();
     expect(campaign?.targetSystemId).toBe("sys_a");
     expect(campaign?.stagingSystemId).toBe("sys_b");
-    // liberationDate is an absolute day number 30 days after the announcement.
     expect(campaign?.liberationDate).toBe((campaign?.day ?? 0) + 30);
   });
 
@@ -116,7 +111,6 @@ describe("NpcSimulator liberation campaigns", () => {
     );
     expect(event?.liberationDate).toBe(30);
 
-    // Jump to the rally date and tick once: rangers depart at start of day.
     galaxy.gameDays = 30;
     sim.tick(galaxy, new SeededRNG("rally_tick"));
 
@@ -138,12 +132,9 @@ describe("NpcSimulator liberation campaigns", () => {
     );
     expect(event?.liberationDate).toBe(30);
 
-    // Liberation date reached but the staging system is empty — the campaign must
-    // NOT be consumed (regression: it used to mark itself dispatched and fizzle).
     galaxy.gameDays = 30;
     sim.tick(galaxy, new SeededRNG("retry_tick_empty"));
 
-    // A ranger arrives at the staging system afterwards; the next tick rallies it.
     const r1 = makeRanger("r1", "sys_b");
     galaxy.npcShips.push(r1);
     galaxy.gameDays = 31;

@@ -6,11 +6,6 @@ import {
 import { Faction } from "@/types/faction";
 import { NpcRole } from "@/types";
 
-/**
- * A live fight = a system holding BOTH a hostile (pirate/Overmind) ship and a
- * friendly/Ranger (non-hostile) ship. The half-red/half-green star-map marker
- * renders this transient set; this helper is the pure source for it.
- */
 describe("systemsWithActiveBattle", () => {
   const pirate = (systemId: string): BattleShip => ({
     systemId,
@@ -27,7 +22,6 @@ describe("systemsWithActiveBattle", () => {
     hostile: false,
     faction: Faction.BASTIONS,
   });
-  // Regular wandering pirate: not flagged hostile, but PIRATE role is hostile.
   const roguePirate = (systemId: string): BattleShip => ({
     systemId,
     hostile: false,

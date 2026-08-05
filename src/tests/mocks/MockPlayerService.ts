@@ -8,10 +8,6 @@ import { Inventory } from "@/domain/Inventory";
 import { SkillTree } from "@/domain/SkillTree";
 import { FactionRegistry } from "@/systems/FactionRegistry";
 
-/**
- * Mock implementation of IPlayerService for testing.
- * Follows LSP: creates real Player objects but tracks calls.
- */
 export class MockPlayerService implements IPlayerService {
   private player: Player | null = null;
   public createCallCount = 0;

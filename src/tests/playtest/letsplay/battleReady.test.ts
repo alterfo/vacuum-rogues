@@ -1,14 +1,3 @@
-/**
- * Task 2 regression: the "battle-ready" capability signal + the military-
- * progression ladder tiers that drive toward it.
- *
- * `isBattleReady` reads the ship's *derived* combat stats (`maxHull` +
- * installed `weaponDamage`) — distinct from the health-fraction
- * `BATTLE_READY_HULL_FRACTION`. The ladder must, while NOT battle-ready, arm up
- * at a station (raise firepower) and dock-to-refit from flight when a concrete
- * upgrade is available — pure decisions over hand-built fixtures, exactly as
- * `MemoryHeuristicPolicy.test.ts`.
- */
 import { describe, it, expect } from "vitest";
 import { SceneType, StationType } from "@/types";
 import {

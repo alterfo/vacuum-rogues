@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 
-// The pure prefix resolver lives in NpcShipSprite.ts, which imports PixiJS at
-// module level — mock it (same pattern as the other presentation tests) so the
-// resolver is testable in jsdom without a renderer.
 vi.mock("pixi.js", () => ({
   Container: class {},
   Graphics: class {},
@@ -25,11 +22,6 @@ function npcLike(
   return { role, faction, sizeTier };
 }
 
-/**
- * Task 2 of 20260709-overmind-ship-identity-and-balance: Overmind-faction
- * ships resolve size-tier-specific hull art (`overmind_<tier>`); every other
- * faction/role keeps its existing role-keyed prefix.
- */
 describe("shipArtPrefix — Overmind size-tier art selection", () => {
   it("resolves overmind_<tier> for Overmind-faction ships", () => {
     expect(
@@ -62,16 +54,12 @@ describe("shipArtPrefix — Overmind size-tier art selection", () => {
     expect(shipArtPrefix(npcLike(NpcRole.PATROL, Faction.PROGRESSORS))).toBe(
       "patrol",
     );
-    // A sizeTier on a non-Overmind ship is ignored — no parallel art axis.
     expect(
       shipArtPrefix(npcLike(NpcRole.PATROL, Faction.PROGRESSORS, "large")),
     ).toBe("patrol");
   });
 
   it("an ungenerated overmind_* variant degrades gracefully (pickVariant → undefined, no throw)", () => {
-    // Nothing is preloaded in the unit env, mirroring the not-yet-generated
-    // art state in production: pickVariant returns undefined and the sprite
-    // constructor falls back to its procedural Graphics hull.
     expect(pickVariant("ships", "overmind_medium", "npc_x")).toBeUndefined();
   });
 });

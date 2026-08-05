@@ -23,11 +23,6 @@ export class TextQuestRuntime {
     return node;
   }
 
-  /**
-   * Process a player choice.
-   * Returns the next QuestNode, or null if the quest is complete (terminal node).
-   * Throws GameBusinessException when a condition is not met.
-   */
   choose(nodeId: string, choiceIdx: number, player: Player): QuestNode | null {
     if (!this.quest) {
       throw new GameBusinessException(
@@ -67,9 +62,6 @@ export class TextQuestRuntime {
     player: Player,
     bank?: BankAccess | null,
   ): void {
-    // Route the credit move through the bus (a gain credits the player, a loss
-    // is clamped to the balance so credits never go negative — the old rule),
-    // booking against rewards/fines so it shows up as a balanced GL posting.
     if (outcome.creditsDelta >= 0) {
       adjustPlayerCredits(
         bank,

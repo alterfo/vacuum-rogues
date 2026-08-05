@@ -5,7 +5,6 @@ test.describe('Star Map Scene', () => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
     
-    // Navigate to star map
     const canvas = page.locator('canvas');
     const box = await canvas.boundingBox();
     
@@ -25,7 +24,6 @@ test.describe('Star Map Scene', () => {
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
     
-    // Star map should show celestial bodies
     const box = await canvas.boundingBox();
     expect(box?.width).toBeGreaterThan(0);
   });
@@ -35,7 +33,6 @@ test.describe('Star Map Scene', () => {
     const box = await canvas.boundingBox();
     
     if (box) {
-      // Click on a star system (random position in center)
       await canvas.click({
         position: {
           x: box.width / 2,
@@ -46,14 +43,12 @@ test.describe('Star Map Scene', () => {
 
     await page.waitForTimeout(500);
     
-    // UI should update
     await expect(canvas).toBeVisible();
   });
 
   test('should navigate between systems', async ({ page }) => {
     const canvas = page.locator('canvas');
     
-    // Click on different areas to navigate
     const box = await canvas.boundingBox();
     if (box) {
       await canvas.click({

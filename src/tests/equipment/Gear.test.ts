@@ -110,7 +110,6 @@ describe("ShopGenerator", () => {
       day: 0,
       priceFactor: 1.2,
     });
-    // Same stock (same seed), but every dear price ≥ its cheap counterpart.
     for (const c of cheap) {
       const d = dear.find((x) => x.gear.id === c.gear.id);
       expect(d).toBeDefined();

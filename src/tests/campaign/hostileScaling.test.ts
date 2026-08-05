@@ -1,21 +1,3 @@
-/**
- * Adaptive hostile combat scaling (three-year-campaign Task 4) — the pure
- * `hostileScaling(powerIndex, gameMode)` helper that revives the dead
- * OVERMIND_COMBAT_HP_MULT / OVERMIND_COMBAT_DAMAGE_MULT levers.
- *
- * Contract locked here:
- *  - weak player (ratcheted index 0) faces a gentle ~0.5× garrison (lowered
- *    from ~0.9× by the win-rate-100pct plan's Task 5 — see that plan for the
- *    measured death-taxonomy rationale; kept strictly above
- *    NEUTRAL_SCALING_WEAK_MULT so a held garrison stays harder than neutral
- *    wandering-pack combat);
- *  - maxed player (index 1) faces the full OVERMIND_COMBAT_*_MULT (1.5×);
- *  - monotone in power; input clamped to [0,1];
- *  - HARD composes an extra multiplier from DIFFICULTY_HOSTILE_SCALING —
- *    config-only, never at call sites; NORMAL and GOD are identical baselines;
- *  - garrison count bonus on Overmind systems: 0 while weak, up to
- *    OVERMIND_GARRISON_POWER_MAX_BONUS extra ships at full power.
- */
 import { describe, it, expect } from "vitest";
 import {
   hostileScaling,
@@ -46,8 +28,6 @@ describe("hostileScaling — endpoints", () => {
   it("the weak multiplier is gentle: below 1, at ~0.5 (win-rate-100pct plan, Task 5)", () => {
     expect(HOSTILE_SCALING_WEAK_MULT).toBeLessThan(1);
     expect(HOSTILE_SCALING_WEAK_MULT).toBeCloseTo(0.5, 5);
-    // Held-system garrison must stay strictly harder than neutral wandering
-    // combat — see combatScaling's own "held is harder than neutral" test.
     expect(HOSTILE_SCALING_WEAK_MULT).toBeGreaterThan(
       NEUTRAL_SCALING_WEAK_MULT,
     );
@@ -230,7 +210,6 @@ describe("overmindGarrisonPowerBonus", () => {
   });
 
   it("steps up gently (floor, not round) and clamps the input", () => {
-    // Just below the halfway step stays at 0 extra ships.
     expect(overmindGarrisonPowerBonus(0.49)).toBe(0);
     expect(overmindGarrisonPowerBonus(0.5)).toBe(1);
     expect(overmindGarrisonPowerBonus(-1)).toBe(0);
@@ -278,11 +257,6 @@ describe("overmindGarrisonPowerDiscount", () => {
   });
 
   it("at the shipped max discount (4), the early-death power band (0.02-0.15) gets a graded, near-maximal discount — not a knife-edge", () => {
-    // win-rate-100pct plan, Task 2: raised from the old maxDiscount=1, where
-    // Math.floor((1 - p) * 1) was 1 only at the literal p === 0 and 0 for
-    // every p in (0, 1] — a knife-edge that made the whole vulnerable early
-    // band read as undiscounted. At maxDiscount=4, floor((1-p)*4) stays at 3
-    // across this entire band, a real interior step rather than an edge case.
     expect(overmindGarrisonPowerDiscount(0.02)).toBe(
       OVERMIND_GARRISON_POWER_MAX_DISCOUNT - 1,
     );
@@ -298,9 +272,6 @@ describe("overmindGarrisonPowerDiscount", () => {
   });
 
   it("does have a real interior step once maxDiscount gives floor() room (e.g. 2)", () => {
-    // Proves the formula itself is a genuine ramp, mirroring the bonus's own
-    // 0.5 step at maxBonus=2 — the knife-edge above is a consequence of the
-    // currently shipped maxDiscount=1, not a defect in this function.
     expect(overmindGarrisonPowerDiscount(0.49, 2)).toBe(1);
     expect(overmindGarrisonPowerDiscount(0.5, 2)).toBe(1);
     expect(overmindGarrisonPowerDiscount(0.51, 2)).toBe(0);

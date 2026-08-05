@@ -16,21 +16,6 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-// ---------------------------------------------------------------------------
-// Playtest bug pass 2 — Task 1: the active combat pause must freeze NPC ship
-// movement, not just the player ship. A playtester saw enemy ships keep flying
-// their pursuit/orbit courses (circling) while the pause overlay was up.
-//
-// NpcShipManager.update advances every NPC sprite at `sprite.update(dt * scale)`.
-// In the wired scene that loop early-returns because the scene happens to fold
-// the pause into the `isTurnRunning` dep — so the live-fight test is green only
-// by that coincidence. This regression drives the manager DIRECTLY with the turn
-// running BUT the active pause raised (`isPaused: () => true`): the manager
-// itself must honour the single `combatPause.paused` freeze signal at the
-// movement step and not advance the sprite. It is RED before the `:450` gate
-// (the sprite keeps pursuing while paused) and GREEN after.
-// ---------------------------------------------------------------------------
-
 const WR = GAME_BALANCE.weaponRange; // 240
 
 function renderer(): Renderer {
@@ -108,8 +93,6 @@ describe("Active pause freezes NPC ship movement (Task 1)", () => {
       getShipPhysics: () => physics,
       getPlanetSprites: () => [],
       getStarCenter: () => ({ x: 400, y: 300 }),
-      // The turn is held open by the fight — the manager must NOT rely on the
-      // scene folding pause into isTurnRunning; it must check isPaused itself.
       isTurnRunning: () => true,
       showMessage: () => {},
       showTooltip: () => {},
@@ -137,29 +120,23 @@ describe("Active pause freezes NPC ship movement (Task 1)", () => {
     sprite.x = WR + 300; // outside weapon range, so it actively closes in
     sprite.y = 0;
 
-    // Player attacks → the enemy becomes an active combatant and pursues.
     (
       manager as unknown as { launchCombatWithNpc(n: NpcShip): void }
     ).launchCombatWithNpc(npc);
     expect(sprite.aggressive).toBe(true);
 
-    // CONTROL: real-time (not paused) — the sprite is on a live pursuit course
-    // and moves toward the parked player. Proves the freeze below is a real halt.
     const before = { x: sprite.x, y: sprite.y };
     for (let i = 0; i < 5; i++) manager.update(100, 0);
     expect(
       Math.hypot(sprite.x - before.x, sprite.y - before.y),
     ).toBeGreaterThan(0);
 
-    // FREEZE: raise the active pause. Several frames pass — a paused fight must
-    // move nothing (no circling, no closing the gap).
     paused = true;
     const frozen = { x: sprite.x, y: sprite.y };
     for (let i = 0; i < 10; i++) manager.update(100, 0);
     expect(sprite.x).toBe(frozen.x);
     expect(sprite.y).toBe(frozen.y);
 
-    // RESUME: unpause and the same sprite advances again.
     paused = false;
     for (let i = 0; i < 5; i++) manager.update(100, 0);
     expect(
@@ -173,9 +150,6 @@ describe("Active pause freezes NPC ship movement (Task 1)", () => {
     const physics = new ShipPhysics(0, 0, 0.3);
     let paused = false;
 
-    // Two mutually-hostile sprites (Overmind drone vs pirate) — the crossfire the
-    // active pause must also freeze. The Overmind id is NOT `overmind_core`, so it
-    // is a real crossfire participant (the core is excluded as the player's duel).
     const drone = makeNpc("ovm_drone", NpcRole.PATROL, Faction.OVERMIND);
     const pirate = makeNpc("prt_1", NpcRole.PIRATE, Faction.INDEPENDENT);
     const galaxy = {
@@ -217,7 +191,6 @@ describe("Active pause freezes NPC ship movement (Task 1)", () => {
 
     const sprites = (manager as unknown as { npcSprites: NpcShipSprite[] })
       .npcSprites;
-    // Place both well inside weapon range so the hostility matrix engages them.
     (sprites[0] as unknown as { x: number; y: number }).x = 400;
     (sprites[0] as unknown as { x: number; y: number }).y = 300;
     (sprites[1] as unknown as { x: number; y: number }).x = 420;
@@ -229,16 +202,12 @@ describe("Active pause freezes NPC ship movement (Task 1)", () => {
     };
     const hull0 = drone.hullHP;
 
-    // FREEZE: paused — many fire intervals pass but crossfire deals no damage and
-    // the fire timer must NOT accrue (else unpause would fire an instant volley).
     paused = true;
     mgr.resolveNpcVsNpcCombat(GAME_BALANCE.combatFireIntervalMs * 3);
     expect(drone.hullHP).toBe(hull0);
     expect(pirate.hullHP).toBe(hull0);
     expect(mgr.npcCrossfireTimer).toBe(0);
 
-    // CONTROL: unpause — one fire interval now lands mutual crossfire damage,
-    // proving the freeze above is a real gate (and the setup can actually fire).
     paused = false;
     mgr.resolveNpcVsNpcCombat(GAME_BALANCE.combatFireIntervalMs);
     expect(drone.hullHP).toBeLessThan(hull0);

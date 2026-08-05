@@ -1,23 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { waitForEngine, waitForScene } from './fixtures/mockHeavySystems';
 
-/**
- * Task 5 (20260610-letsplay-fixes): F4 sun band reproduction harness.
- *
- * Reproduces the horizontal band artifact on the sun (letsplay finding F4,
- * `lp-05-sun.png`) and isolates its source by toggling the StarRenderer's
- * layers one at a time via page.evaluate:
- *   - full composite (halo + surface + limb mask)
- *   - halo hidden
- *   - limb-fade mask detached
- *   - texture addressMode forced to clamp (tests the v-wrap blending theory)
- *
- * Real visuals (no `__hideFlightBackground`) so the capture matches what the
- * player sees. Exploration harness: judgement happens on the output PNGs in
- * `e2e/screenshots/exploration/`, the only assertions are that the scene
- * boots and the equirect sun path is active (the procedural fallback cannot
- * exhibit the texture-band bug).
- */
 
 const SHOT_DIR = 'e2e/screenshots/exploration';
 
@@ -69,7 +52,6 @@ test.describe('Sun band artifact exploration (F4)', () => {
     });
     await waitForScene(page, 'SpaceFlightScene', 30_000);
 
-    // Wait for the lazy equirect star map to upgrade the procedural sun.
     await page.waitForFunction(
       () => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
@@ -82,7 +64,6 @@ test.describe('Sun band artifact exploration (F4)', () => {
       { timeout: 30_000 },
     );
 
-    // Which render path + which texture is on the sun?
     const diag = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -109,7 +90,6 @@ test.describe('Sun band artifact exploration (F4)', () => {
     console.log('SUN_DIAG', JSON.stringify(diag));
     expect(diag.path).not.toBe('procedural');
 
-    // Tight close-up: the disc fills most of the viewport.
     await page.evaluate(
       ({ wx, wy }) => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
@@ -133,7 +113,6 @@ test.describe('Sun band artifact exploration (F4)', () => {
 
     await shot(page, 'sun-band-00-full');
 
-    // Layer toggle 1: hide the blurred glow halo.
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -147,8 +126,6 @@ test.describe('Sun band artifact exploration (F4)', () => {
     });
     await shot(page, 'sun-band-01-no-halo');
 
-    // Layer toggle 2: detach the limb-fade mask (hide its sprite too — an
-    // unmasked white radial gradient would otherwise wash out the disc).
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -168,8 +145,6 @@ test.describe('Sun band artifact exploration (F4)', () => {
     });
     await shot(page, 'sun-band-02-no-limbmask');
 
-    // Layer toggle 3: force clamp addressing on the sun texture — if the band
-    // is v-wrap bleed (repeat blending top row into bottom), it disappears.
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;

@@ -7,7 +7,6 @@ import {
 import type { TrackKey } from "@/systems/AudioManager";
 import { SceneType } from "@/types";
 
-/** Fake AudioManager: records every track it is asked to play. */
 function fakeSink(): MusicSink & { plays: TrackKey[] } {
   const plays: TrackKey[] = [];
   return {
@@ -55,14 +54,11 @@ describe("musicDriver — combat engage/end (per-frame loop)", () => {
     const driver = new MusicDriver();
     const sink = fakeSink();
 
-    // Frame the flight scene runs every tick: ambient → fight → fight over.
     driver.apply(sink, ctx({ inCombat: false, now: 0 })); // explore_calm
     driver.apply(sink, ctx({ inCombat: true, now: 100 })); // combat
     driver.apply(sink, ctx({ inCombat: false, now: 200 })); // held → combat (no swap)
     driver.apply(sink, ctx({ inCombat: false, now: 200 + COMBAT_HOLD_MS + 1 })); // ambient
 
-    // playTrack is a no-op for the already-playing track, but the fake records
-    // every call; the *distinct* sequence is what matters for the cross-fade.
     const distinct = sink.plays.filter(
       (t, i) => i === 0 || sink.plays[i - 1] !== t,
     );
@@ -83,7 +79,6 @@ describe("musicDriver — combat engage/end (per-frame loop)", () => {
     for (let i = 0; i < 6; i++) {
       driver.apply(sink, ctx({ inCombat: i % 2 === 0, now: i * 100 }));
     }
-    // Only ever combat after the first engage — no ambient track played.
     expect(sink.plays).not.toContain("explore_calm");
     expect(sink.plays.every((t) => t === "combat")).toBe(true);
   });
@@ -92,8 +87,6 @@ describe("musicDriver — combat engage/end (per-frame loop)", () => {
     const driver = new MusicDriver();
     const sink = fakeSink();
     driver.apply(sink, ctx({ inCombat: true, now: 0 })); // combat
-    // Dock at a planet while the combat hold is still nominally open: the scene
-    // is no longer a flight scene, so combat music does not apply.
     expect(
       driver.apply(
         sink,

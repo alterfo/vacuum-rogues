@@ -1,12 +1,3 @@
-/**
- * Task 6 — the launch-denied message must name the ACTUAL blocker.
- *
- * Both hub scenes gate launch on `derivedStats().canTakeOff`, which is
- * `hasEngine && hasFuel`. They historically blamed a missing engine in every
- * case, so an empty/absent fuel tank produced the wrong message. These tests
- * pin the pure resolver and assert each scene reports the matching reason for
- * each real failure cause (no engine vs. no fuel tank).
- */
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("pixi.js", () => ({
@@ -46,7 +37,6 @@ describe("launchDenialReason (pure resolver)", () => {
   });
 });
 
-/** derivedStats slice for a given failure cause. */
 function stats(reason: "engine" | "fuel") {
   return reason === "engine"
     ? { canTakeOff: false, speed: 0, fuelCapacity: 100 }

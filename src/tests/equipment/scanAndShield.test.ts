@@ -159,14 +159,12 @@ describe("CombatSystem — shield absorbs damage before hull (Task 8)", () => {
     return new CombatSystem({} as AdaptiveQualityProfile);
   }
 
-  /** Force the player to go first regardless of initiative roll. */
   function forcePlayerFirst(system: CombatSystem): void {
     const enc = system.encounter!;
     const playerIdx = enc.turnOrder.findIndex(
       (e) => e.id === enc.playerShip.id,
     );
     if (playerIdx > 0) {
-      // Swap player to front of turn order
       const tmp = enc.turnOrder[0];
       enc.turnOrder[0] = enc.turnOrder[playerIdx];
       enc.turnOrder[playerIdx] = tmp;
@@ -188,7 +186,6 @@ describe("CombatSystem — shield absorbs damage before hull (Task 8)", () => {
     const initialHull = enemy.hullHP;
     system.processPlayerAction({ type: "ATTACK" });
 
-    // Hull should have taken damage; shields stay at 0
     expect(enemy.hullHP).toBeLessThan(initialHull);
     expect(enemy.shields).toBe(0);
   });
@@ -208,7 +205,6 @@ describe("CombatSystem — shield absorbs damage before hull (Task 8)", () => {
     const initialShields = enemy.shields;
     system.processPlayerAction({ type: "ATTACK" });
 
-    // Shields should have taken the hit; hull should be untouched
     expect(enemy.shields).toBeLessThan(initialShields);
     expect(enemy.hullHP).toBe(initialHull);
   });
@@ -227,7 +223,6 @@ describe("CombatSystem — shield absorbs damage before hull (Task 8)", () => {
     const initialHull = enemy.hullHP;
     system.processPlayerAction({ type: "ATTACK" });
 
-    // Shields depleted to 0, remainder spills to hull
     expect(enemy.shields).toBe(0);
     expect(enemy.hullHP).toBeLessThan(initialHull);
   });

@@ -24,42 +24,14 @@ import {
 import type { GalaxyGlobalEvent, NewsEvent } from "@/types";
 import type { Faction } from "@/types/faction";
 
-/**
- * Per-day probability of a global galaxy event firing (~1 event per 10 days on
- * average, which falls comfortably within the stated 7–15 day range).
- */
 const GLOBAL_EVENT_CHANCE = 0.1;
 
-/** Duration of a TradeBoom effect in days. */
 const TRADE_BOOM_DURATION = 10;
 
-/**
- * Minimum allowed distance (in raw `(q,r)` coordinate units) between any two
- * generated systems — live report 2026-07-19: a screenshot showed two-three
- * star-map system markers (and their name labels) rendered directly on top
- * of each other, completely unreadable. The old generator picked each
- * system's `{q, r}` independently and uniformly at random in a 100×100 grid
- * with no minimum-distance check, so a close pair was a real, reproducible
- * outcome at typical system counts (12-30), not a rare edge case. At
- * `StarMapScene.MAP_SCALE = 4`, this floor is 48 screen px apart before
- * zoom — enough room for `pickLabelPosition`'s existing per-label collision
- * avoidance to actually find a clear spot, since the underlying markers are
- * no longer touching in the first place.
- */
 export const MIN_SYSTEM_DISTANCE = 12;
 
-/** Bounded rejection-sampling attempts before falling back (see {@link pickSystemCoordinate}). */
 const MAX_PLACEMENT_ATTEMPTS = 200;
 
-/**
- * Pick a new system's `{q, r}` at least {@link MIN_SYSTEM_DISTANCE} from
- * every already-placed coordinate. Bounded retry, not an unbounded loop: at
- * very high system counts the 100×100 grid can't fit every pair that far
- * apart (packing math), so after `MAX_PLACEMENT_ATTEMPTS` failed draws this
- * falls back to the single best (farthest-nearest-neighbour) candidate seen
- * so far — generation always terminates and every system still gets a
- * placement, just not guaranteed to clear the floor in that dense a galaxy.
- */
 function pickSystemCoordinate(
   rng: SeededRNG,
   placed: readonly { q: number; r: number }[],
@@ -81,8 +53,6 @@ function pickSystemCoordinate(
       best = candidate;
     }
   }
-  // Every attempt fell short of the floor (a dense galaxy) — take the best
-  // (farthest-nearest-neighbour) candidate seen rather than looping forever.
   return best ?? { q: rng.nextInt(-50, 50), r: rng.nextInt(-50, 50) };
 }
 
@@ -105,26 +75,17 @@ export class GalaxySimulator {
     void this._eventQueue; // referenced for future use
     this.rng = new SeededRNG(seed);
 
-    // Generate unique system names
     const systemNames = SystemNameGenerator.generate(this.rng, systemCount);
 
-    // Generate systems with deterministic coordinates
     const generatedSystems: StarSystem[] = [];
     const placedCoords: { q: number; r: number }[] = [];
     for (let i = 0; i < systemCount; i++) {
-      // Independent per-system sub-seed (mirrors pickStarType/pickSystemFaction
-      // below): rejection sampling needs a variable number of draws, and
-      // pulling those from the SHARED `this.rng` stream would shift every
-      // downstream consumer (tech levels, warp paths, NPC/faction seeding)
-      // for any seed that ever needed a retry — reshuffling a whole galaxy's
-      // layout/outcome, not just nudging a close pair apart.
       const coord = pickSystemCoordinate(
         new SeededRNG(`${seed}_coord_${i}`),
         placedCoords,
       );
       placedCoords.push(coord);
 
-      // Deterministically assign economy type and political system from seed
       const economyTypes = [
         EconomyType.AGRICULTURAL,
         EconomyType.INDUSTRIAL,
@@ -142,27 +103,16 @@ export class GalaxySimulator {
       const politicalSystem =
         politicalSystems[this.rng.nextInt(0, politicalSystems.length - 1)];
 
-      // Pick a varied star type from a per-system seed (mirrors PlanetGenerator)
-      // so the galaxy is no longer a field of identical yellow suns — and so we
-      // don't perturb the shared `this.rng` stream that downstream NPC/faction
-      // seeding depends on for determinism.
       const starType = pickStarType(new SeededRNG(`${seed}_star_${i}`));
 
-      // Generate planets for this system
       const planetGen = new PlanetGenerator(seed, `sys_${i}`);
       const planets = await planetGen.generate(systemNames[i]);
 
-      // Propagate economy type to each planet's market and seed it with real
-      // supply/demand so the dynamic-pricing layer has data to act on.
       for (const planet of planets) {
         planet.market.economyType = economyType;
         planet.market.populate(seedMarket(economyType, planet.id));
       }
 
-      // Generate 1 station per system (type depends on index/seed). Faction
-      // is a weighted per-system pick from an independent seed (mirrors
-      // pickStarType) so a galaxy is no longer a field of identical
-      // INDEPENDENT owners, without perturbing the shared `this.rng` stream.
       const faction = pickSystemFaction(new SeededRNG(`${seed}_faction_${i}`));
       const stations = generateStations(
         `sys_${i}`,
@@ -186,13 +136,8 @@ export class GalaxySimulator {
       generatedSystems.push(system);
     }
 
-    // Spread system tech levels so gear is buyable across the galaxy (weapons/
-    // hulls, not just the lone tech-1 fuel tank) — mutates each system's
-    // techLevel from an independent per-system seed, so the shared generation
-    // RNG stream (and thus all downstream determinism) is untouched.
     assignSystemTechLevels(generatedSystems, seed);
 
-    // Ensure minimum 2 warp paths per system using simplified distance-based connections
     for (const system of generatedSystems) {
       const distances = generatedSystems
         .filter((s) => s.id !== system.id)
@@ -217,30 +162,12 @@ export class GalaxySimulator {
       }
     }
 
-    // The 3-nearest-neighbour pass can leave isolated "?" clusters that are
-    // unreachable from the rest of the galaxy. Merge any disconnected
-    // components so every system is reachable (no orphan clusters).
     ensureConnectivity(generatedSystems);
 
     this.systems = generatedSystems;
     this.overmind = new Overmind();
     this._eventQueue = [];
 
-    // Assign OVERMIND starting systems: the most distant from the galactic
-    // centre (highest q²+r² magnitude) becomes the core. The SECOND starter
-    // is a WARP-CONNECTED NEIGHBOUR of the core (preferring the most isolated
-    // one when several qualify) rather than an independently-chosen distant
-    // point — two unrelated far-apart seeds grew as two disconnected blobs
-    // from day one (`frontierSystems` in `overmindSpread.ts` merges every
-    // Overmind system into one hash-ranked pool), which read as the front
-    // "appearing from all sides" instead of one coherent advancing line.
-    // Starting as a single connected pair means the very first frontier is
-    // already one cluster. The player's own start system
-    // (`generatedSystems[0]`) is excluded from BOTH the core pick and the
-    // neighbour search — coordinates are random per system, so home can
-    // itself be the single most isolated point, and the core becoming the
-    // player's own start system would put the Overmind's origin on top of
-    // the player from day one.
     const homeId = generatedSystems[0]?.id ?? "";
     const sortedByDistance = [...generatedSystems].sort((a, b) => {
       const da = a.coordinates.q ** 2 + a.coordinates.r ** 2;
@@ -253,13 +180,6 @@ export class GalaxySimulator {
     const overmindCoreId = core?.id ?? "";
     if (core) overmindStart.push(core.id);
     if (sortedByDistance.length >= 2 && core) {
-      // Bidirectional: the nearest-neighbour generation pass adds each edge on
-      // only ONE side, but the engine allows warping either direction (the
-      // same asymmetry `reachableNeighbors` in the autopilot's `engineQueries`
-      // works around) — reading only `core.connections` missed every system
-      // whose edge to `core` was recorded on the other side, silently
-      // starving the primary branch below and falling through to the
-      // no-adjacency-guarantee fallback far more often than intended.
       const coreNeighbourIds = new Set(
         core.connections.map((c) => c.toSystemId),
       );
@@ -268,13 +188,6 @@ export class GalaxySimulator {
           coreNeighbourIds.add(s.id);
         }
       }
-      // Fallback candidates (no direct warp edge to core found above) are
-      // ranked by actual hex distance TO CORE, nearest first — not reused
-      // from `sortedByDistance` (ordered by distance from the galactic
-      // CENTRE), which would rank the fallback by isolation from the middle
-      // of the map, unrelated to proximity to `core`, and previously could
-      // hand back the single most-isolated-after-core system regardless of
-      // how far it actually sat from the core cluster.
       const byDistanceToCore = [...generatedSystems]
         .filter((s) => s.id !== core.id && s.id !== homeId)
         .sort((a, b) => {
@@ -293,24 +206,9 @@ export class GalaxySimulator {
         ) ??
         byDistanceToCore[0] ??
         sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId);
-      // Only a 2-system galaxy (core + home, nothing else) reaches here — every
-      // branch above excludes both `core.id` and `homeId`. `core.id` is
-      // already the sole entry in `overmindStart` (pushed above) — leave it
-      // as the single starter rather than falling back to an unfiltered
-      // `sortedByDistance[1]` (which could reintroduce the player's home
-      // system) or re-pushing `core.id` (which would duplicate the entry and
-      // break `overmindSystems.length`-based share/win-condition math).
       if (secondStart) overmindStart.push(secondStart.id);
     }
 
-    // Seed 1 pirate-controlled system at galaxy start: the most isolated
-    // system not already claimed by the OVERMIND seed above (spatially
-    // separated from it). Without an initial pirate system the balance tick
-    // can never create pirates (the capture branch only fires for systems
-    // adjacent to existing pirates). Excludes the player's own home system —
-    // same reasoning as the OVERMIND seed exclusion above: coordinates are
-    // random per system, so home can itself be the most isolated point, and a
-    // pirate-controlled home system aggros the player from turn 0.
     const overmindStartSet = new Set(overmindStart);
     const pirateStart: string[] = [];
     const pirateCandidate = sortedByDistance.find(
@@ -318,9 +216,6 @@ export class GalaxySimulator {
     );
     if (pirateCandidate) pirateStart.push(pirateCandidate.id);
 
-    // Assign one home system per faction from the non-OVERMIND systems.
-    // Spread them across the galaxy by sorting remaining systems by spatial
-    // quadrant and picking the most central one per quadrant.
     assignFactionHomeSystems(generatedSystems, overmindStart, this.rng);
 
     const galaxy = new Galaxy(
@@ -334,7 +229,6 @@ export class GalaxySimulator {
       pirateStart,
     );
 
-    // Populate the galaxy with autonomous NPC ships (Feature 8).
     this.npcSimulator.spawnInitial(galaxy, this.rng);
 
     logger.info(`Galaxy generated with ${systemCount} systems`);
@@ -344,10 +238,8 @@ export class GalaxySimulator {
   simulateDay(galaxy: Galaxy): void {
     galaxy.simulateDay();
 
-    // Advance galaxy-wide tech levels each day tick.
     advanceTech(galaxy);
 
-    // Invoke overmind every 7 days
     if (galaxy.gameDays % 7 === 0) {
       const action = this.overmind.makeMove(galaxy);
       logger.info(
@@ -355,7 +247,6 @@ export class GalaxySimulator {
       );
     }
 
-    // Process active events
     for (const event of [...galaxy.activeEvents]) {
       event.durationDays--;
       if (event.durationDays <= 0) {
@@ -365,15 +256,12 @@ export class GalaxySimulator {
       }
     }
 
-    // Roll for Chaos Gate spawn (5% per ~30 days)
     if (galaxy.gameDays % 30 === 0 && this.rng.next() < 0.05) {
       logger.info("Chaos Gate spawn triggered");
     }
 
-    // Update market vectors
     for (const system of galaxy.systems) {
       for (const planet of system.planets) {
-        // Slight random drift in supply/demand
         for (let i = 0; i < planet.market.demandVector.length; i++) {
           planet.market.demandVector[i] = Math.max(
             0.1,
@@ -394,20 +282,13 @@ export class GalaxySimulator {
     }
   }
 
-  /**
-   * Roll and apply random galaxy-wide events every ~10 days (seeded per day so
-   * events are deterministic for a given galaxy + day combination).
-   * Returns news events describing what happened.
-   */
   tickGlobalEvents(galaxy: Galaxy, rng: SeededRNG): NewsEvent[] {
     const events: NewsEvent[] = [];
 
-    // Expire any TradeBoom whose duration has elapsed.
     galaxy.expireGlobalEvents();
 
     if (rng.next() >= GLOBAL_EVENT_CHANCE) return events;
 
-    // Pick a target system at random (exclude systems with no planets).
     const candidates = galaxy.systems.filter((s) => s.planets.length > 0);
     if (candidates.length === 0) return events;
     const target = candidates[rng.nextInt(0, candidates.length - 1)];
@@ -433,9 +314,6 @@ export class GalaxySimulator {
     return events;
   }
 
-  /**
-   * Apply a global event's effect and return the corresponding news event.
-   */
   private applyGlobalEvent(
     event: GalaxyGlobalEvent,
     galaxy: Galaxy,
@@ -445,7 +323,6 @@ export class GalaxySimulator {
 
     switch (event.type) {
       case GalaxyEventType.PIRATE_SURGE: {
-        // Spawn +3 pirate NPCs in target system; prices rise +20%.
         const pirateCount = 3 * event.severity;
         for (let i = 0; i < pirateCount; i++) {
           const id = `npc_surge_${event.systemId}_${event.day}_${i}`;
@@ -476,7 +353,6 @@ export class GalaxySimulator {
       }
 
       case GalaxyEventType.TRADE_BOOM: {
-        // All prices in target system drop -15% for 10 days.
         galaxy.applyTradeBoom(event.systemId, TRADE_BOOM_DURATION);
         logger.info(
           `TRADE_BOOM in ${system?.name ?? event.systemId}: prices -15% for ${TRADE_BOOM_DURATION} days`,
@@ -490,7 +366,6 @@ export class GalaxySimulator {
       }
 
       case GalaxyEventType.PLAGUE: {
-        // Target planet population -= 30%.
         if (system) {
           const habitable = system.planets.filter((p) => p.isHabitable);
           const planet =
@@ -512,7 +387,6 @@ export class GalaxySimulator {
       }
 
       case GalaxyEventType.DISCOVERY: {
-        // Reveal a previously foggy system adjacent to the target.
         const foggyNeighbors = galaxy.systems.filter((s) => {
           if (!s.fogOfWar) return false;
           return (
@@ -558,24 +432,13 @@ export class GalaxySimulator {
   }
 
   getVisibleSystems(_player: Player): StarSystem[] {
-    // Systems within 2 warp jumps of any visited system
-    // In a full implementation, visited systems would be tracked on the player
-    // For now, return all systems as a placeholder
     return this.systems.filter((s) => {
       if (s.explored) return true;
-      // Check if within 2 jumps of explored system
       return false;
     });
   }
 }
 
-// ── Warp-graph connectivity ─────────────────────────────────────────────────
-
-/**
- * Partition `systems` into connected components over the *undirected* warp graph
- * (a link `A → B` makes A and B reachable from each other — gameplay treats warp
- * links as traversable in either direction). Returns one array per component.
- */
 function undirectedComponents(systems: StarSystem[]): StarSystem[][] {
   const byId = new Map(systems.map((s) => [s.id, s]));
   const adj = new Map<string, Set<string>>();
@@ -611,19 +474,10 @@ function undirectedComponents(systems: StarSystem[]): StarSystem[][] {
   return components;
 }
 
-/**
- * Guarantee the warp graph is fully connected. After the nearest-neighbour pass,
- * find all disconnected components and, while more than one exists, splice the
- * smallest component into the largest via the cheapest (spatially closest)
- * cross-component link. Links are added bidirectionally so reachability holds in
- * both directions. Exported for direct unit testing.
- */
 export function ensureConnectivity(systems: StarSystem[]): void {
   if (systems.length <= 1) return;
 
   let components = undirectedComponents(systems);
-  // Worst case one merge per extra component; the +1 guards against any
-  // pathological non-progress so the loop can never spin forever.
   let guard = systems.length + 1;
   while (components.length > 1 && guard-- > 0) {
     components.sort((a, b) => b.length - a.length);
@@ -656,17 +510,10 @@ export function ensureConnectivity(systems: StarSystem[]): void {
   }
 }
 
-// ── Tech advancement ───────────────────────────────────────────────────────
-
 const TECH_MAX = 8;
 const TECH_ADVANCE_INTERVAL_RESEARCH_LAB = 50;
 const TECH_ADVANCE_INTERVAL_PLAIN = 100;
 
-/**
- * Advance techLevel on ranger-controlled systems every N days.
- * RESEARCH_LAB systems advance every 50 days; all others every 100 days.
- * Overmind- or pirate-controlled systems stagnate.
- */
 export function advanceTech(galaxy: Galaxy): void {
   const day = galaxy.gameDays;
   const shouldAdvanceResearchLab =
@@ -696,9 +543,6 @@ export function advanceTech(galaxy: Galaxy): void {
   }
 }
 
-// ── Faction home system assignment ─────────────────────────────────────────
-
-/** Economy type each faction's home system receives. */
 const FACTION_HOME_ECONOMY: Record<string, EconomyType> = {
   [FactionType.PROGRESSORS]: EconomyType.INDUSTRIAL,
   [FactionType.OUTLANDERS]: EconomyType.AGRICULTURAL,
@@ -715,11 +559,6 @@ const HOME_FACTIONS = [
   FactionType.PROGRESSORS,
 ];
 
-/**
- * Pick one home system per faction from the candidate pool (excludes OVERMIND
- * systems). Each faction gets the system furthest from all already-chosen homes,
- * ensuring they are spread across the galaxy.
- */
 function assignFactionHomeSystems(
   systems: StarSystem[],
   overmindSystemIds: string[],
@@ -736,11 +575,8 @@ function assignFactionHomeSystems(
     let bestScore = -Infinity;
 
     for (const sys of candidates) {
-      // Skip already-assigned home systems
       if (sys.isFactionHome) continue;
 
-      // Score = minimum distance to any already-chosen home (spread them out).
-      // If no homes chosen yet, use distance from origin (prefer non-central).
       let score: number;
       if (chosen.length === 0) {
         score =
@@ -755,7 +591,6 @@ function assignFactionHomeSystems(
           }),
         );
       }
-      // Add a small random jitter (seeded) so ties break deterministically.
       score += rng.nextFloat(0, 0.01);
 
       if (score > bestScore) {
@@ -768,21 +603,13 @@ function assignFactionHomeSystems(
     best.isFactionHome = true;
     best.homeFactionId =
       faction as unknown as import("@/types/faction").Faction;
-    // A faction's home system must display that faction as owner — override
-    // whatever the generation-time roll produced. `ownerFaction` is readonly;
-    // cast needed for assignment (same pattern as the economyType override
-    // just below).
     (best as unknown as { ownerFaction: Faction }).ownerFaction =
       best.homeFactionId;
 
-    // Override economy type to match faction identity.
     const econOverride = FACTION_HOME_ECONOMY[faction];
     if (econOverride) {
-      // StarSystem.economyType is readonly; cast needed for assignment.
       (best as unknown as { economyType: EconomyType }).economyType =
         econOverride;
-      // Propagate to each planet's market and re-seed under the override
-      // economy so faction-home prices reflect their identity.
       for (const planet of best.planets) {
         planet.market.economyType = econOverride;
         planet.market.populate(seedMarket(econOverride, planet.id));
@@ -791,8 +618,6 @@ function assignFactionHomeSystems(
     chosen.push(best);
   }
 }
-
-// ── Station generation helpers ──────────────────────────────────────────────
 
 const STATION_TYPES = [
   StationType.TRADE_POST,
@@ -816,15 +641,11 @@ function generateStations(
   faction: Faction,
   rng: SeededRNG,
 ): Station[] {
-  // Each system gets exactly 1 station. Type is pseudo-random but reproducible.
   const typeIdx = rng.nextInt(0, STATION_TYPES.length - 1);
   const type = STATION_TYPES[typeIdx];
   const name = STATION_NAME[type](systemName);
 
-  // Place station between the innermost and outermost planet orbits.
-  // PlanetGenerator uses ORBITAL_RADII ≈ [600..2500]; we split that range.
   const orbitRadius = 900 + rng.nextInt(0, 800); // 900–1700 px
-  // Use a seeded angle unique to this system to spread stations around the star.
   const hash = [...systemId].reduce((acc, c) => acc + c.charCodeAt(0), 0);
   const orbitAngle = ((hash * 137.508) % 360) * (Math.PI / 180);
 

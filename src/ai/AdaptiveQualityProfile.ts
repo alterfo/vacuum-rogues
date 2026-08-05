@@ -1,17 +1,18 @@
-import type { ProfileLevel } from '@/types';
+import type { ProfileLevel } from "@/types";
 
 export class AdaptiveQualityProfile {
-  public level: ProfileLevel = 'MEDIUM' as ProfileLevel;
+  public level: ProfileLevel = "MEDIUM" as ProfileLevel;
   public targetFPS = 60;
   public enableGenerativeDialogs = true;
   public enableShaders = true;
   public enableOffscreenCanvas = true;
 
   benchmark(): ProfileLevel {
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    const canvas = document.createElement("canvas");
+    const gl =
+      canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
     if (!gl) {
-      this.level = 'LOW' as ProfileLevel;
+      this.level = "LOW" as ProfileLevel;
       this.targetFPS = 30;
       this.enableGenerativeDialogs = false;
       this.enableShaders = false;
@@ -19,7 +20,6 @@ export class AdaptiveQualityProfile {
       return this.level;
     }
 
-    // Simple benchmark: measure RAF timing over 500ms
     const samples: number[] = [];
     let lastTime = performance.now();
     const startTime = lastTime;
@@ -37,19 +37,19 @@ export class AdaptiveQualityProfile {
           const fps = 1000 / avgDelta;
 
           if (fps >= 55) {
-            this.level = 'HIGH' as ProfileLevel;
+            this.level = "HIGH" as ProfileLevel;
             this.targetFPS = 60;
             this.enableGenerativeDialogs = true;
             this.enableShaders = true;
             this.enableOffscreenCanvas = true;
           } else if (fps >= 30) {
-            this.level = 'MEDIUM' as ProfileLevel;
+            this.level = "MEDIUM" as ProfileLevel;
             this.targetFPS = 45;
             this.enableGenerativeDialogs = true;
             this.enableShaders = true;
             this.enableOffscreenCanvas = false;
           } else {
-            this.level = 'LOW' as ProfileLevel;
+            this.level = "LOW" as ProfileLevel;
             this.targetFPS = 30;
             this.enableGenerativeDialogs = false;
             this.enableShaders = false;

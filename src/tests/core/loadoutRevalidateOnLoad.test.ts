@@ -1,18 +1,3 @@
-/**
- * Save-compat safety net (Task 2): load-time loadout revalidation.
- *
- * A catalog rebalance can shrink a hull's slot/mass capacity *after* a save was
- * written. Because `ShipLoadout.fromJSON` restores the persisted fitting
- * verbatim (no auto-eviction — canon: an existing loadout is read as-is), a
- * previously-valid loadout can come back over-capacity. The load path must
- * revalidate it against the **current** hull and drop the excess to the
- * inventory bag instead of loading an invalid over-fit state — so a catalog
- * shrink can never brick a progressed beta save.
- *
- * The pure `ShipLoadout.revalidateToCurrentHull()` is unit-tested here; the
- * GameEngine.loadGame wiring (excess → bag, normal save untouched) is exercised
- * with the real engine + mock services, mirroring loadout-persistence.test.ts.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";
 import { FactionType, SceneType } from "@/types";
@@ -85,9 +70,6 @@ vi.mock("pixi.js", () => ({
 
 describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
   it("drops weapons that overflow the current hull's weapon bank", () => {
-    // Corvette: 2 weapon slots. A snapshot with 4 weapons restores verbatim
-    // (fromJSON does not auto-evict), simulating a save written when the hull
-    // had more slots than the current catalog gives it.
     const snapshot: ShipLoadoutSnapshot = {
       hullId: "hull_corvette",
       slotted: [
@@ -104,7 +86,6 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
 
     const dropped = loadout.revalidateToCurrentHull();
 
-    // 4 weapons − 2 slots = 2 dropped; the engine + tank are kept.
     expect(dropped.map((d) => d.gearId)).toEqual(["wpn_pulse", "wpn_pulse"]);
     expect(loadout.derivedStats().categories.weapon.used).toBe(2);
     expect(loadout.installedGearIds()).toEqual([
@@ -116,8 +97,6 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
   });
 
   it("drops gear that overflows the mass budget while keeping engine + fuel", () => {
-    // Scout: massCapacity 30, weapon cap 2. engine_i(6) + tank(3) + two
-    // torpedoes(12 each) = 33 mass: within every category cap but over МАССА.
     const snapshot: ShipLoadoutSnapshot = {
       hullId: "hull_scout",
       slotted: [
@@ -132,8 +111,6 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
 
     const dropped = loadout.revalidateToCurrentHull();
 
-    // One torpedo (the last non-essential part) is shed; engine + tank survive
-    // so the ship can still take off. 6 + 3 + 12 = 21 ≤ 30.
     expect(dropped.map((d) => d.gearId)).toEqual(["wpn_torpedo"]);
     const stats = loadout.derivedStats();
     expect(stats.massUsed).toBe(21);
@@ -142,7 +119,6 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
   });
 
   it("leaves a within-capacity loadout untouched (no drops)", () => {
-    // The fully-fitted starter corvette: 16 mass, every bank within cap.
     const snapshot: ShipLoadoutSnapshot = {
       hullId: "hull_corvette",
       slotted: [
@@ -162,8 +138,6 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
   });
 
   it("preserves the micromodule + upgrades on a dropped slot record", () => {
-    // The returned drop record carries the attached micromodule and upgrade
-    // count so the load path can re-bag losslessly via slotToBagModule.
     const snapshot: ShipLoadoutSnapshot = {
       hullId: "hull_corvette",
       slotted: [
@@ -175,7 +149,6 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
     const loadout = ShipLoadout.fromJSON(snapshot)!;
     const dropped = loadout.revalidateToCurrentHull();
 
-    // 3 weapons − 2 slots = 1 dropped: the last-installed weapon (the modded one).
     expect(dropped).toHaveLength(1);
     expect(dropped[0]).toEqual({
       gearId: "wpn_pulse",
@@ -185,11 +158,6 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
   });
 
   it("keeps fitted hull micromodules when trimming over-capacity slots", () => {
-    // The one behavior that distinguishes revalidateToCurrentHull from swapHull
-    // (which clears hull micromodules): the hull is unchanged on a load, so its
-    // fitted micromodules must survive even while over-capacity gear is shed.
-    // A regression that cleared hullMicromoduleIds in the shared eviction path
-    // would silently strip a beta-tester's fitted hull micromodules on load.
     const snapshot: ShipLoadoutSnapshot = {
       hullId: "hull_corvette",
       slotted: [
@@ -207,15 +175,11 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
 
     const dropped = loadout.revalidateToCurrentHull();
 
-    // The 2 over-cap weapons are shed, but the hull micromodule is untouched.
     expect(dropped).toHaveLength(2);
     expect(loadout.hullMicromodules()).toEqual(["mm_hull_armor_1"]);
   });
 
   it("sheds a duplicate single-slot part carried over from a legacy save", () => {
-    // Engine/radar are dedicated cap-1 banks. A legacy/corrupt save with two
-    // engines fitted must drop the duplicate on load (not keep an invalid 2nd
-    // engine) while staying takeoff-capable on the surviving engine + fuel.
     const snapshot: ShipLoadoutSnapshot = {
       hullId: "hull_corvette",
       slotted: [
@@ -263,8 +227,6 @@ describe("GameEngine.loadGame loadout revalidation", () => {
 
   it("an over-capacity save loads with the excess moved to the inventory bag", async () => {
     await makeLiveGame();
-    // A save whose corvette carries 4 weapons (2 over the 2-slot bank) — exactly
-    // the shape a catalog shrink would leave behind.
     const overfit: ShipLoadoutSnapshot = {
       hullId: "hull_corvette",
       slotted: [
@@ -291,22 +253,15 @@ describe("GameEngine.loadGame loadout revalidation", () => {
 
     expect(await engine.loadGame("auto")).toBe(true);
 
-    // Loadout trimmed to the valid 2-weapon fitting…
     expect(engine.playerLoadout!.derivedStats().categories.weapon.used).toBe(2);
-    // …and the 2 dropped weapons re-homed in the inventory bag, not destroyed.
     const added = engine.player!.inventory.modules.slice(bagBefore);
     expect(added).toHaveLength(2);
     expect(added.every((m) => m.id === "wpn_pulse")).toBe(true);
-    // Still flyable.
     expect(engine.playerLoadout!.derivedStats().canTakeOff).toBe(true);
   });
 
   it("re-homes a dropped slot's micromodule + upgrades into the bag losslessly", async () => {
     await makeLiveGame();
-    // The over-cap weapon that gets dropped carries a fitted micromodule and
-    // artifact upgrades. The load path must re-bag it via slotToBagModule (not a
-    // bare id), so the player doesn't lose the artifacts they spent. Per-category
-    // eviction drops the LAST-installed weapons, so the modded copy is among them.
     const overfit: ShipLoadoutSnapshot = {
       hullId: "hull_corvette",
       slotted: [
@@ -335,7 +290,6 @@ describe("GameEngine.loadGame loadout revalidation", () => {
 
     const added = engine.player!.inventory.modules.slice(bagBefore);
     expect(added).toHaveLength(2);
-    // The modded weapon kept its micromodule + upgrade count through the re-bag.
     const modded = added.find((m) => m.micromoduleId === "mm_amplifier_1");
     expect(modded).toBeDefined();
     expect(modded!.id).toBe("wpn_pulse");

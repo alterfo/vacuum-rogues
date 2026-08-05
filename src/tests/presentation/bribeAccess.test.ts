@@ -11,14 +11,6 @@ import { FactionType } from "@/types";
 import { PlayerSchema } from "@/validation/schemas";
 import type { Player } from "@/domain/Player";
 
-/**
- * Task 7: the customs bribe/fine is a **one-time access** path, not a reputation
- * dead-end. Paying the fine charges a meaningful credit cost through the ledger
- * but no longer docks −20 standing (recovery lives in faction quests / the
- * pirate-rep payoff), and every low-standing / denial surface carries a hint
- * telling the player *how* to climb back.
- */
-
 function makePlayer(startingMoney = 2000): {
   bank: { bus: BankBus; service: BankingService };
   player: Player;
@@ -45,11 +37,8 @@ describe("payCustomsFine — one-time access, no rep dead-end", () => {
     const ok = payCustomsFine(bank, player, 500);
 
     expect(ok).toBe(true);
-    // Guard: the credit cost stays meaningful — smuggling is not free.
     expect(player.credits).toBe(1500);
-    // The dead-end is gone: standing is untouched (the old path docked −20).
     expect(player.getReputation(FACTION)).toBe(repBefore);
-    // Whole-credit projection the schema accepts (no fractional desync).
     expect(PlayerSchema.shape.credits.safeParse(player.credits).success).toBe(
       true,
     );
@@ -77,7 +66,6 @@ describe("payCustomsFine — one-time access, no rep dead-end", () => {
     player.adjustReputation(FACTION, -50);
     expect(player.getReputation(FACTION)).toBe(-50);
     payCustomsFine(bank, player, 300);
-    // No further decay — paying the fine never makes standing worse.
     expect(player.getReputation(FACTION)).toBe(-50);
     expect(player.credits).toBe(1700);
   });

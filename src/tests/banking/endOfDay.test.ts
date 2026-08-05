@@ -7,15 +7,6 @@ import {
 import { BankBus, type BankEvent } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
 
-/**
- * Task 5 — the end-of-day (EOD) batch on the daily tick. Closing a business day
- * must: accrue interest on interest-bearing accounts as one balanced posting
- * each, leave the books balanced, cut statements, roll the business date, and be
- * idempotent per business date (re-closing a day never double-accrues).
- *
- * Round-number rates (1 %/2 % per day) so the interest math reads exactly.
- */
-
 const PLAYER = "cur:player";
 const SAVINGS = "sav:player";
 const LOAN = "loan:player";
@@ -29,7 +20,6 @@ interface Harness {
   events: BankEvent[];
 }
 
-/** Fresh seeded bank with a player current account open and explicit rates. */
 function makeHarness(startDate = 1): Harness {
   const bus = new BankBus();
   const service = new BankingService(bus, {
@@ -140,7 +130,6 @@ describe("EOD — loan interest accrual", () => {
 
     h.bus.dispatch({ kind: "RunEndOfDay" });
 
-    // -5000 owed → -2 % accrues → -5100 owed.
     expect(h.service.balanceOf(LOAN)).toBeCloseTo(-5100, 6);
     expect(h.service.balanceOf(INTERNAL_ACCOUNTS.INTEREST_INCOME)).toBeCloseTo(
       100,
@@ -171,9 +160,6 @@ describe("EOD — interest accrual flows on the bus (teaching panel visibility)"
 
     h.bus.dispatch({ kind: "RunEndOfDay" });
 
-    // The EOD batch is itself a bus consumer: each interest leg is dispatched as an
-    // AccrueInterest command (not a silent direct handler call), so the Bank UI's
-    // observeCommands panel can show them like any other consumer traffic.
     expect(accruals).toContain(SAVINGS);
     expect(accruals).toContain(LOAN);
     expect(accruals).toHaveLength(2);

@@ -141,7 +141,6 @@ describe("FlightPositionTracker", () => {
       tracker.registerFlightHideAutosave();
       expect(addSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
 
-      // Calling again is a no-op (guarded by the retained handler).
       addSpy.mockClear();
       tracker.registerFlightHideAutosave();
       expect(addSpy).not.toHaveBeenCalled();

@@ -1,23 +1,3 @@
-/**
- * Review 2026-07-15 regressions for the pause-and-plan combat loop wiring
- * (`docs/plans/20260713-tactical-pause-combat-rework.md`) — each pins a live
- * scene bug the 14.5/15 suites missed:
- *
- * 1. a confirmed planned DESTINATION must actually fly: the combat
- *    auto-pursuit used to re-`setPath` its orbit carrot every unfrozen frame,
- *    clobbering the planned course (kiting/gravity-pass plans were cosmetic);
- * 2. PLANNING freezes NPC movement (Task 1b's whole-sim freeze) — hostiles
- *    used to keep flying while the player planned;
- * 3. the HUD «Ход»/«Пауза» button mid-execute-window must be a no-op — its
- *    combat-abort `endTurn()` froze `CombatModule` (`isPaused` includes
- *    `!isTurnRunning`) while the round clock kept cycling: a permanent
- *    zero-fire planning loop with no recovery gesture;
- * 4. an `endTurn()` landing mid-window from ANY path (the low-hull auto-stop
- *    class) must not freeze the fight — the window runs on the round timer;
- * 5. a REFUSED engagement (weaponless ship) must not open the planning
- *    freeze — no fight ever becomes active to end it, so the freeze would
- *    soft-lock the sim.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "./realEngineHarness";
 import type { NpcShipManager } from "@/presentation/flight/NpcShipManager";
@@ -32,8 +12,6 @@ import { NpcRole, SceneType } from "@/types";
 
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
-/** Stationary controlled hostile that COUNTS its movement-advance calls
- *  (mirrors combatPlanningLiveWiring's stub + an `updates` probe). */
 function makeStaticHostile(
   id: string,
   x: number,
@@ -95,7 +73,6 @@ function engage(scene: FlightPrivates, foe: NpcShipSprite): void {
   ).launchCombatWithNpc(foe.npc);
 }
 
-/** Arm the starter gun and assign it to `foe` through the live planning UI. */
 function assignGun(scene: FlightPrivates, foe: NpcShipSprite): void {
   const gun = scene.combatModule.fittedWeapons()[0];
   expect(gun).toBeTruthy();
@@ -140,8 +117,6 @@ describe("Pause-and-plan loop guards live in the wired scene (review 2026-07-15)
     scene.combatPlanning.setDestination(dest);
     scene.combatPlanning.confirm();
 
-    // A combat target IS selected, so without the confirm-time break-off the
-    // pursuit re-setPaths its far orbit carrot on the very next frame.
     expect(scene.combatModule.selectedTarget).toBe(foe);
     for (let i = 0; i < 5; i++) harness.tick(100);
     expect(scene.combatPlanning.isExecuting).toBe(true);

@@ -1,10 +1,6 @@
 import type { IExceptionHandler } from "@/core/ports/IExceptionHandler";
 import type { ErrorResponse, ErrorSeverity } from "@/types";
 
-/**
- * Mock implementation of IExceptionHandler for testing.
- * Records all handled errors instead of logging.
- */
 export class MockExceptionHandler implements IExceptionHandler {
   public handledErrors: Array<{ error: Error; response: ErrorResponse }> = [];
   public onCriticalError?: (response: ErrorResponse) => void;

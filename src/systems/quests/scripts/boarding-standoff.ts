@@ -1,30 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A negotiation-under-pressure puzzle. A raider boarding party has
-// forced your airlock and you are badly outgunned. Two meters drive it: a
-// `tension` gauge that, if it boils over (a `critMax` redirect to
-// ending_firefight — the pressure spine), triggers a shoot-out you can't win;
-// and a `leverage` gauge — your negotiating position — that decides how the
-// standoff resolves if you keep the peace. The puzzle is to build leverage
-// while keeping tension below the boiling point. Distinct from hostage-rescue
-// (you are the VICTIM here) and first-contact (a rising-tension timer, not a
-// slow trust build).
-// Choice points:
-//   1. Opening move — hands up (cool it), stall for information (+leverage,
-//      +tension), or reach for a weapon (+tension).
-//   2. The captain's demand — buy them off (credits, +leverage, cools it),
-//      bluff a patrol (roll: lands for +leverage or backfires into +tension),
-//      or flat refusal (+tension, +leverage).
-//   3. The resolution — talk it down, or pull the trigger first. The resolve
-//      scene branches by how you got here (paid off / defiant / bluffed) so the
-//      "moment of truth" reads differently per path, though all three funnel
-//      into the same leverage-keyed resolution_gate.
-// Outcomes (by `leverage` at the talk-down):
-//   - ending_negotiated (>=4 — a fair deal, they leave paid off)        SUCCESS
-//   - ending_bought_off (>=2 — grudging retreat, no reward)             SUCCESS
-//   - ending_robbed     (<2 — stripped but spared)                      SUCCESS
-//   - ending_bloodbath  (you drew first and lost the fight)             FAILURE
-//   - ending_firefight  (tension boiled over into a shoot-out)          FAILURE
 export const boardingStandoffScript: QuestScript = {
   id: "boarding-standoff",
   title: "Переговоры на абордаже",
@@ -149,10 +124,6 @@ export const boardingStandoffScript: QuestScript = {
       ],
     },
     {
-      // Bluff path: the captain is still weighing whether your patrol story was
-      // real. Each resolve variant reflects HOW the standoff got here so the
-      // "moment of truth" no longer reads identically after a payoff, a
-      // stand-off of defiance, or a bluff.
       id: "resolve",
       text: "Капитан ещё вслушивается в эфир, не разобрав до конца, блеф это был или чистая правда. Стволы замерли на полпути — и в этой заминке решится всё.\nНапряжение: {tension} | Позиция: {leverage}",
       transitions: [
@@ -171,7 +142,6 @@ export const boardingStandoffScript: QuestScript = {
       ],
     },
     {
-      // Payoff path: your cargo is already crossing the airlock into their hold.
       id: "resolve_paid",
       text: "Ваш груз уже плывёт по трапу в чужой трюм. Капитан провожает контейнеры взглядом, прикидывая — довольно ли этого, или содрать с вас вдобавок и шкуру.\nНапряжение: {tension} | Позиция: {leverage}",
       transitions: [
@@ -190,7 +160,6 @@ export const boardingStandoffScript: QuestScript = {
       ],
     },
     {
-      // Defiance path: your flat refusal is hanging in the cramped airlock.
       id: "resolve_defiant",
       text: "Ваш отказ повис в тесном шлюзе. Капитан медленно ведёт взглядом с вас на своих людей и обратно: проглотить дерзость — или сделать из вас урок остальным.\nНапряжение: {tension} | Позиция: {leverage}",
       transitions: [

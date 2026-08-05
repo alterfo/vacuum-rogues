@@ -1,19 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { applyMockHeavySystems, waitForEngine, waitForScene } from './fixtures/mockHeavySystems';
 
-/**
- * Task 1 (20260609-e2e-visual-spaceflightscene): Browser exploration session.
- *
- * Drives the real SpaceFlightScene through the `__gameEngine` / `e2e*` hooks
- * (never pixel clicks — CLAUDE.md E2E rules) and captures a screenshot of every
- * visually interesting state into `e2e/screenshots/exploration/`. The captured
- * PNGs are inspected by hand (and by the agent) to find remaining visual
- * regressions: planet circular masking, ship visibility/glow, sun corona, HUD.
- *
- * This is an exploration harness, not an assertion suite — it asserts only that
- * the scene loads and screenshots are produced. Visual judgement happens by
- * reviewing the output PNGs. Proper assertion tests land in Task 4.
- */
 
 const SHOT_DIR = 'e2e/screenshots/exploration';
 
@@ -51,7 +38,6 @@ async function setupNewGame(page: Page): Promise<void> {
   await waitForScene(page, 'SpaceFlightScene', 20_000);
 }
 
-/** Read internal scene geometry (world coords of star, planets, ship). */
 async function readDiag(page: Page): Promise<SceneDiag> {
   return page.evaluate(() => {
     const engine = (window as Record<string, unknown>).__gameEngine as {
@@ -88,7 +74,6 @@ async function readDiag(page: Page): Promise<SceneDiag> {
   });
 }
 
-/** Park the camera so world point (wx,wy) sits at screen centre at given zoom. */
 async function focusWorld(page: Page, wx: number, wy: number, zoom: number): Promise<void> {
   await page.evaluate(
     ({ wx, wy, zoom }) => {
@@ -110,7 +95,6 @@ async function focusWorld(page: Page, wx: number, wy: number, zoom: number): Pro
   );
 }
 
-/** Wait for a few render frames so the WebGL canvas has a fresh composited frame. */
 async function settle(page: Page): Promise<void> {
   await page.evaluate(
     () =>
@@ -134,31 +118,25 @@ test.describe('SpaceFlightScene visual exploration', () => {
     await setupNewGame(page);
 
     const diag = await readDiag(page);
-    // Surface geometry in the test log for the exploration write-up.
     // eslint-disable-next-line no-console
     console.log('SCENE_DIAG', JSON.stringify(diag));
 
     expect(diag.planets.length).toBeGreaterThan(0);
 
-    // 1. Initial scene — default camera, full system in view.
     await shot(page, 'space-01-initial');
 
-    // 2. Each planet, zoomed in close to inspect circular masking.
     for (let i = 0; i < diag.planets.length; i++) {
       const p = diag.planets[i];
       await focusWorld(page, p.wx, p.wy, 3);
       await shot(page, `space-02-planet-${i}-${p.name.replace(/[^a-zA-Z0-9]/g, '_')}`);
     }
 
-    // 3. Sun close-up — corona/glow quality.
     await focusWorld(page, diag.centerX, diag.centerY, 1.6);
     await shot(page, 'space-03-sun');
 
-    // 4. Ship close-up — outline + engine glow.
     await focusWorld(page, diag.ship.x, diag.ship.y, 3.5);
     await shot(page, 'space-04-ship');
 
-    // 5. Route line — plan a route to the first planet, then screenshot.
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -180,7 +158,6 @@ test.describe('SpaceFlightScene visual exploration', () => {
       ) => void;
       fn.call(scene, first.planet.id, first.screenX, first.screenY);
     });
-    // Reset camera to default so the whole route line is visible.
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: { e2eSetCameraZoom?: (z: number) => void } | null;
@@ -197,7 +174,6 @@ test.describe('SpaceFlightScene visual exploration', () => {
     });
     expect(routeSet).toBe(true);
 
-    // 6. Ход (play/pause) → ship starts moving → capture mid-flight.
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: { e2ePlayPause?: () => void } | null;
@@ -208,7 +184,6 @@ test.describe('SpaceFlightScene visual exploration', () => {
     await settle(page);
     await shot(page, 'space-06-after-turn');
 
-    // 7. NPC ships (if any spawned) — focus on the first.
     if (diag.npcCount > 0) {
       const npcPos = await page.evaluate(() => {
         const engine = (window as Record<string, unknown>).__gameEngine as {

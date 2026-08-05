@@ -6,15 +6,11 @@ import {
 } from "@/presentation/flight/combatPlanning";
 import { COMBAT_ROUND_MS } from "@/config/balance";
 
-// Opaque handles — the controller never inspects them beyond identity.
 type Target = { id: string };
 type Weapon = { id: string };
 
 const ROUND = 4000; // explicit test window (distinct from the default so tickExecute math is unambiguous)
 
-// ---------------------------------------------------------------------------
-// CombatPlanningController — pure pause-and-plan state machine (Task 2)
-// ---------------------------------------------------------------------------
 describe("CombatPlanningController phase transitions (Task 2)", () => {
   it("starts idle; beginCombat opens planning (freeze) with a fresh empty draft", () => {
     const onEnterPlanning = vi.fn();
@@ -71,7 +67,6 @@ describe("CombatPlanningController phase transitions (Task 2)", () => {
     expect(c.isExecuting).toBe(true);
     expect(onEnterExecuting).toHaveBeenCalledTimes(1);
 
-    // onConfirm received the confirmed draft.
     expect(onConfirm).toHaveBeenCalledTimes(1);
     const handed = onConfirm.mock.calls[0][0] as PlannedTurn<Target, Weapon>;
     expect(handed.destination).toEqual({ x: 100, y: 50 });
@@ -88,18 +83,15 @@ describe("CombatPlanningController phase transitions (Task 2)", () => {
     c.beginCombat(); // planning #1 → onEnterPlanning call 1
     c.confirm(); // executing
 
-    // Ticks below the round budget do NOT end the window early.
     expect(c.tickExecute(1000)).toBe(false);
     expect(c.tickExecute(1000)).toBe(false);
     expect(c.executeProgress()).toBeCloseTo(0.5, 5);
     expect(c.phase).toBe("executing");
 
-    // Crossing the round budget completes the round and re-opens planning.
     expect(c.tickExecute(2000)).toBe(true);
     expect(c.phase).toBe("planning");
     expect(onEnterPlanning).toHaveBeenCalledTimes(2);
 
-    // The re-opened draft is fresh (previous turn's plan cleared).
     expect(c.plan.destination).toBeNull();
     expect(c.plan.weaponTargets.size).toBe(0);
   });
@@ -159,7 +151,6 @@ describe("CombatPlanningController malformed / incomplete plan confirms (Task 2)
   it("draft mutations outside planning are ignored (the confirmed plan can't be edited mid-execute)", () => {
     const c = new CombatPlanningController<Target, Weapon>({ roundMs: ROUND });
 
-    // Before combat: no effect.
     c.setAfterburner(true);
     expect(c.plan.afterburner).toBe(false);
 
@@ -190,16 +181,13 @@ describe("CombatPlanningController terminal fight-end (Task 2)", () => {
     c.confirm(); // executing
     c.tickExecute(1500); // mid-window
 
-    // Player killed (or last hostile destroyed) — the host ends the fight early.
     expect(c.endCombat()).toBe(true);
     expect(c.phase).toBe("idle");
     expect(onCombatEnd).toHaveBeenCalledTimes(1);
 
-    // No re-plan happens after a terminal end.
     expect(c.tickExecute(ROUND)).toBe(false);
     expect(c.phase).toBe("idle");
     expect(onEnterPlanning).toHaveBeenCalledTimes(1); // only the opening planning
-    // Draft is cleared on end.
     expect(c.plan.destination).toBeNull();
   });
 

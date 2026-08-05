@@ -1,9 +1,5 @@
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Threat levels for the star-map galaxy state indicator.
- * Driven by the OVERMIND-only share (the actual loss condition).
- */
 export type ThreatLevel = "safe" | "caution" | "warning" | "critical";
 
 export interface GalaxyThreatState {
@@ -12,21 +8,9 @@ export interface GalaxyThreatState {
   totalSystems: number;
   overmindShare: number;
   pirateShare: number;
-  /** Derived from overmindShare vs OVERMIND_WARNING_THRESHOLD and the 0.45 pre-loss ceiling. */
   threatLevel: ThreatLevel;
 }
 
-/**
- * Pure function — compute the star-map threat indicator state from raw arrays.
- *
- * Threat levels:
- *   safe     overmindShare < 0.20
- *   caution  [0.20, OVERMIND_WARNING_THRESHOLD)
- *   warning  [OVERMIND_WARNING_THRESHOLD, 0.45)
- *   critical ≥ 0.45  (loss imminent — majority is >0.50)
- *
- * Only overmindShare drives the level; pirate share is informational.
- */
 export function computeGalaxyThreat(
   overmindSystems: readonly string[],
   pirateSystems: readonly string[],

@@ -12,7 +12,6 @@ import { selectPlayerPolicy } from "../playtest/letsplay/policyGate";
 import { HeuristicPolicy } from "../playtest/letsplay/HeuristicPolicy";
 import { NeuralPolicy } from "../playtest/letsplay/NeuralPolicy";
 
-/** In-memory Storage subset for the feature-flag persistence tests. */
 function fakeStore(initial: Record<string, string> = {}): SettingsStore & {
   map: Map<string, string>;
 } {
@@ -52,17 +51,13 @@ describe("featureFlags — generalised on/off flags (neural is the first)", () =
   it("isNeuralEnabled/setNeuralEnabled are thin aliases over the generic flag", () => {
     const store = fakeStore();
     setNeuralEnabled(true, store);
-    // The generic reader sees the same write…
     expect(isFeatureEnabled("neural", store)).toBe(true);
-    // …and the generic writer is visible to the neural alias.
     setFeatureEnabled("neural", false, store);
     expect(isNeuralEnabled(store)).toBe(false);
   });
 });
 
 describe("policyGate — isNeuralEnabled is the single neural gate", () => {
-  // The "live flag" test below writes the real `localStorage` neuralEnabled key;
-  // clear it after each test so the flag can't leak into a later test/worker.
   afterEach(() => {
     try {
       localStorage.removeItem(NEURAL_ENABLED_KEY);
@@ -82,13 +77,10 @@ describe("policyGate — isNeuralEnabled is the single neural gate", () => {
     const policy = selectPlayerPolicy({ enabled: true });
     expect(policy).toBeInstanceOf(NeuralPolicy);
     expect(policy.name).toBe("neural");
-    // No weights passed ⇒ not loaded; decide still works via the heuristic fallback.
     expect((policy as NeuralPolicy).isLoaded).toBe(false);
   });
 
   it("reads the live flag when `enabled` is not overridden", () => {
-    // The no-override path consults the live `isNeuralEnabled()` (localStorage),
-    // so drive it explicitly in both directions and restore the lean default.
     setNeuralEnabled(false);
     expect(selectPlayerPolicy().name).toBe("heuristic");
     setNeuralEnabled(true);

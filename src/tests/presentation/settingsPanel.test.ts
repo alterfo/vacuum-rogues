@@ -1,14 +1,3 @@
-/**
- * Task 3 (settings interface): the unified in-flight settings panel
- * (СКОРОСТЬ / ШРИФТ / НЕЙРОСЕТЬ). These drive the `SettingsPanel` component
- * directly with mocked pixi.js so no WebGL/texture context is needed. They pin
- * that the panel:
- *   • reads the current settings (neural defaults OFF),
- *   • writes each change through the shared `gameSettings` store and fans the
- *     live effect out (`applySpeed` / `applyFont` / `onNeuralToggle`),
- *   • requests a close after a font pick (the historical ⚙-panel contract),
- *   • is Esc-closable through the flight key router.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -129,7 +118,6 @@ function makeDeps(overrides: Partial<SettingsPanelDeps> = {}): {
   };
 }
 
-/** All pixi Graphics pointerdown handlers, in creation order. */
 function graphicsPointerdownHandlers(): Array<
   (e: { stopPropagation: () => void }) => void
 > {
@@ -146,7 +134,6 @@ function graphicsPointerdownHandlers(): Array<
     );
 }
 
-/** Texts created so far, by their string content. */
 function allTexts(): string[] {
   return vi
     .mocked(Text)
@@ -166,7 +153,6 @@ describe("SettingsPanel", () => {
     const texts = allTexts();
     expect(texts).toContain("ВЫКЛ");
     expect(texts).not.toContain("ВКЛ");
-    // Surfaces all three controls.
     expect(texts).toContain("СКОРОСТЬ");
     expect(texts).toContain("ШРИФТ");
     expect(texts).toContain("НЕЙРОСЕТЬ (ИИ)");
@@ -184,7 +170,6 @@ describe("SettingsPanel", () => {
     const { deps, speedTarget } = makeDeps();
     const panel = new SettingsPanel(deps);
     panel.selectSpeed(99); // not a selectable step
-    // setSpeed clamps unknown values to the default (1×).
     expect(speedTarget.gameSpeedMultiplier).toBe(1);
   });
 
@@ -205,7 +190,6 @@ describe("SettingsPanel", () => {
     expect(store.data.get(NEURAL_ENABLED_KEY)).toBe("true");
     expect(panel.isNeuralOn()).toBe(true);
     expect(onNeuralToggle).toHaveBeenLastCalledWith(true);
-    // After flipping on, the re-rendered toggle reads ВКЛ.
     expect(allTexts()).toContain("ВКЛ");
 
     panel.toggleNeural();
@@ -220,7 +204,6 @@ describe("SettingsPanel", () => {
     const handlers = graphicsPointerdownHandlers();
     expect(handlers.length).toBeGreaterThanOrEqual(7); // 3 font + 3 speed + 1 neural
     handlers[0]({ stopPropagation: vi.fn() });
-    // Tapping the first cell drives the font path (smallest, "S").
     expect(localStorage.getItem("fontScale")).toBe("S");
     expect(applyFont).toHaveBeenCalledTimes(1);
     expect(onRequestClose).toHaveBeenCalledTimes(1);
@@ -230,7 +213,6 @@ describe("SettingsPanel", () => {
     const { deps, store } = makeDeps();
     new SettingsPanel(deps);
     const handlers = graphicsPointerdownHandlers();
-    // Last of the cell hit areas is the neural toggle (built last on purpose).
     handlers[handlers.length - 1]({ stopPropagation: vi.fn() });
     expect(store.data.get(NEURAL_ENABLED_KEY)).toBe("true");
   });
@@ -241,7 +223,6 @@ describe("SettingsPanel", () => {
     expect(panel.currentLanguage()).toBe("ru");
     const texts = allTexts();
     expect(texts).toContain("ЯЗЫК"); // settings.language (RU, the default)
-    // Both options are always shown in their own script (autonyms).
     expect(texts).toContain("Русский");
     expect(texts).toContain("English");
   });
@@ -261,7 +242,6 @@ describe("SettingsPanel", () => {
     const { deps } = makeDeps();
     const panel = new SettingsPanel(deps);
     expect(panel.currentLanguage()).toBe("en");
-    // The whole panel now renders in English (settings.language EN value).
     expect(allTexts()).toContain("LANGUAGE");
   });
 
@@ -269,26 +249,20 @@ describe("SettingsPanel", () => {
     const { deps } = makeDeps();
     new SettingsPanel(deps);
     const handlers = graphicsPointerdownHandlers();
-    // 3 font + 3 speed + 2 language + 1 neural = 9 cells.
     expect(handlers.length).toBe(9);
-    // The 8th cell (index 7) is the second language button (EN).
     handlers[7]({ stopPropagation: vi.fn() });
     expect(localStorage.getItem("language")).toBe("en");
   });
 
   it("hides the НЕЙРОСЕТЬ row in prod (showNeural=false) — no dead toggle", () => {
-    // In prod the autopilot/letsplay (the only neural-flag consumers) don't
-    // exist, so the toggle would be inert; the row is gated out entirely.
     const { deps } = makeDeps({ showNeural: false });
     new SettingsPanel(deps);
     const texts = allTexts();
     expect(texts).not.toContain("НЕЙРОСЕТЬ (ИИ)");
     expect(texts).not.toContain("ВЫКЛ");
-    // The other three controls still render…
     expect(texts).toContain("ШРИФТ");
     expect(texts).toContain("СКОРОСТЬ");
     expect(texts).toContain("ЯЗЫК");
-    // …and only their 8 cells remain (3 font + 3 speed + 2 language, no neural).
     expect(graphicsPointerdownHandlers().length).toBe(8);
   });
 });

@@ -9,7 +9,6 @@ import {
 } from "@/presentation/flight/combatStatusBars";
 import { SHIELD_COMBAT } from "@/config/balance";
 
-// Minimal fake Graphics recorder — the seam only touches these three methods.
 function fakeGraphics() {
   const calls: { x: number; y: number; w: number; h: number }[] = [];
   return {
@@ -46,7 +45,6 @@ describe("drawShipStatusBars — floating hull/shield bars (Task 12)", () => {
     const g = fakeGraphics();
     drawShipStatusBars(g as never, [ship()], geom);
     expect(g.clear).toHaveBeenCalledTimes(1);
-    // 2 tracks + 2 fills = 4 rounded rects for a half-hull, half-shield ship.
     expect(g.roundRect).toHaveBeenCalledTimes(4);
     const fillColors = g.fill.mock.calls.map((c) => c[0].color);
     expect(fillColors).toContain(HULL_BAR_COLOR);
@@ -61,7 +59,6 @@ describe("drawShipStatusBars — floating hull/shield bars (Task 12)", () => {
       [ship({ hull: 25, maxHull: 100, shields: 20, maxShields: 80 })],
       geom,
     );
-    // Track widths are full barWidth; fill widths are frac × barWidth.
     const widths = g.calls.map((c) => c.w);
     expect(widths).toContain(geom.barWidth); // full-width tracks
     expect(widths).toContain(geom.barWidth * 0.25); // hull fill 25/100
@@ -71,7 +68,6 @@ describe("drawShipStatusBars — floating hull/shield bars (Task 12)", () => {
   it("centres the bar on the ship x and floats it above the ship y", () => {
     const g = fakeGraphics();
     drawShipStatusBars(g as never, [ship({ x: 200, y: 100 })], geom);
-    // Hull track left edge = x - width/2; the whole stack is above y (y - yOffset ...).
     for (const c of g.calls) {
       expect(c.x).toBeCloseTo(200 - geom.barWidth / 2);
       expect(c.y).toBeLessThan(100); // floats above the ship centre
@@ -90,7 +86,6 @@ describe("drawShipStatusBars — floating hull/shield bars (Task 12)", () => {
   it("a shield-less ship (no/zero maxShields) shows only a hull bar", () => {
     const g = fakeGraphics();
     drawShipStatusBars(g as never, [ship({ maxShields: 0 })], geom);
-    // Only hull track + fill = 2 rects, no empty shield slot.
     expect(g.roundRect).toHaveBeenCalledTimes(2);
     const fillColors = g.fill.mock.calls.map((c) => c[0].color);
     expect(fillColors).not.toContain(SHIELD_BAR_COLOR);
@@ -113,7 +108,6 @@ describe("drawShipStatusBars — floating hull/shield bars (Task 12)", () => {
       [ship({ hull: 0, maxHull: 100, maxShields: 0 })],
       geom,
     );
-    // Hull track only — no fill rect for a 0-width bar.
     expect(g.roundRect).toHaveBeenCalledTimes(1);
     expect(g.fill.mock.calls.map((c) => c[0].color)).not.toContain(
       HULL_BAR_COLOR,

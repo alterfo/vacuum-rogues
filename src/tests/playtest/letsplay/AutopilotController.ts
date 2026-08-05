@@ -1,121 +1,38 @@
-/**
- * Dev-only autopilot — the controller (observe → decide → apply on a timer).
- *
- * Where the headless {@link PlayerAgent} plays the *real* engine through the
- * harness as fast as a test loop can drive it, the **autopilot** plays the
- * *live, rendered* game at a human-watchable pace. The {@link AutopilotController}
- * closes that loop: while engaged it periodically `observe`s the live engine,
- * asks its {@link PlayerPolicy} to `decide`, and applies the chosen {@link Action}
- * onto the live scene via {@link applyLiveAction} over a {@link LiveSceneController}
- * port — `observe → decide → apply`, once per tick.
- *
- * It is deliberately **pure logic over ports** so it never imports PixiJS / the
- * real scene and is unit-testable against a fake scene + clock:
- *  - `observe` is a thunk (live: `() => observe(engine)`), so the controller is
- *    decoupled from the concrete engine;
- *  - the recurring timer is the injectable {@link AutopilotScheduler} (live: a
- *    `setInterval` wrapper; test: a hand-driven fake clock);
- *  - human input arrives through the {@link HumanInputSource} port — the **first**
- *    real pointer/key press disengages the autopilot (reclaim-on-input), since the
- *    autopilot drives the scene through the port (never via synthesized DOM
- *    events), so only a genuine human event reaches the listeners;
- *  - the small "AUTOPILOT" overlay is the {@link AutopilotIndicator} port.
- *
- * For parity with {@link PlayerAgent} it carries a fresh per-engagement
- * {@link AgentMemory} and folds each observation into it before deciding, so a
- * belief-using policy (`MemoryHeuristicPolicy`) behaves identically here; the
- * default heuristic simply ignores it.
- *
- * Dev-only: lives under `src/tests/`, imported by no production module (enforced
- * by `letsplayDevOnly.test.ts`).
- */
 import { applyLiveAction, type LiveSceneController } from "./LiveApplier";
 import type { Observation } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { type AgentMemory, createMemory, updateMemory } from "./AgentMemory";
 import { flagOddity } from "./oddityFlags";
 
-/** Default tick cadence — slow enough that a human can follow each decision. */
 export const DEFAULT_AUTOPILOT_TICK_MS = 800;
 
-/**
- * Ceiling on one tick's `dismiss → observe → decide → apply` chain. An order of
- * magnitude above any legitimate verb (the slowest, a driven combat round, is
- * ~3 s) — this only ever fires on a genuinely hung await. Without it a single
- * never-settling promise latched `busy` forever and every later tick no-op'd
- * silently while the «● АВТОПИЛОТ» pill stayed up (live stuck-in-combat report,
- * 2026-07-29).
- */
 export const DEFAULT_TICK_TIMEOUT_MS = 15_000;
 
-/**
- * Recurring-timer port. The live wiring backs it with `setInterval`; a test backs
- * it with a hand-driven fake clock so ticks are deterministic. `start` begins
- * invoking `onTick` every `intervalMs` and returns a function that cancels it.
- */
 export interface AutopilotScheduler {
   start(onTick: () => void, intervalMs: number): () => void;
 }
 
-/**
- * Human-input port for reclaim-on-input. `subscribe(onInput)` registers `onInput`
- * to fire on the first human pointer/key event and returns an unsubscribe. The
- * autopilot never synthesizes such events (it drives the scene through the
- * controller port), so any event reaching here is a genuine human take-over.
- */
 export type HumanInputSource = (onInput: () => void) => () => void;
 
-/** The tiny on-screen "AUTOPILOT" indicator port (shown while engaged). */
 export interface AutopilotIndicator {
   show(): void;
   hide(): void;
 }
 
-/** Everything the {@link AutopilotController} needs; only the first three are required. */
 export interface AutopilotDeps {
-  /** Snapshot the live engine each tick (live: `() => observe(engine)`). */
   readonly observe: () => Observation;
-  /** The brain choosing the next legal action. */
   readonly policy: PlayerPolicy;
-  /** The port that drives the live scene with the chosen action. */
   readonly controller: LiveSceneController;
-  /** Recurring timer; defaults to a `setInterval` wrapper. */
   readonly scheduler?: AutopilotScheduler;
-  /** Human-input subscription; defaults to live `window` pointer/key listeners. */
   readonly onHumanInput?: HumanInputSource;
-  /**
-   * When the default input source is in use, a `keydown` matching this
-   * predicate is excluded from reclaim-on-input (e.g. the silent `Shift+F`
-   * oddity-flag hotkey should never disengage the autopilot). Ignored when
-   * `onHumanInput` is supplied.
-   */
   readonly ignoreReclaimKey?: (e: KeyboardEvent) => boolean;
-  /** "AUTOPILOT" overlay; defaults to a DOM badge (no-op without a `document`). */
   readonly indicator?: AutopilotIndicator;
-  /** Tick cadence (ms); defaults to {@link DEFAULT_AUTOPILOT_TICK_MS}. */
   readonly tickIntervalMs?: number;
-  /**
-   * Ceiling (ms) on one tick's async apply chain before the busy latch is
-   * force-released (routed to `onError`, next tick retries). Defaults to
-   * {@link DEFAULT_TICK_TIMEOUT_MS}.
-   */
   readonly tickTimeoutMs?: number;
-  /** Sink for a swallowed decision/apply fault (live: `logger.warn`). */
   readonly onError?: (err: unknown) => void;
-  /**
-   * Whether the game has reached a terminal screen (GAME_OVER/WIN_SCREEN) —
-   * checked at the top of every tick; when true the autopilot stops itself
-   * instead of deciding (live: only "wait" is legal there, so it would
-   * otherwise sit "engaged" forever showing the indicator with nothing left
-   * to do — a real 2026-07-18 live report: the pilot kept "playing" through a
-   * Game Over screen whose only real next step is a human restarting).
-   * Optional so existing tests/deps that don't care about terminal scenes are
-   * unaffected.
-   */
   readonly isTerminal?: () => boolean;
 }
 
-/** Run `fn`, routing any throw to `onError` instead of propagating. */
 function guard(fn: () => void, onError: (err: unknown) => void): void {
   try {
     fn();
@@ -124,7 +41,6 @@ function guard(fn: () => void, onError: (err: unknown) => void): void {
   }
 }
 
-/** Run `fn`, returning its result or `null` if it throws (routed to `onError`). */
 function guardReturn<T>(
   fn: () => T,
   onError: (err: unknown) => void,
@@ -137,7 +53,6 @@ function guardReturn<T>(
   }
 }
 
-/** `setInterval`-backed scheduler — the default for the live build. */
 const defaultScheduler: AutopilotScheduler = {
   start(onTick, intervalMs) {
     const handle = setInterval(onTick, intervalMs);
@@ -145,14 +60,6 @@ const defaultScheduler: AutopilotScheduler = {
   },
 };
 
-/**
- * Live `window` input source — the first pointer/key/wheel/touch disengages the
- * autopilot. Degrades to a no-op without a `window` (e.g. under Vitest), so it is
- * safe as a default the controller resolves lazily. A `keydown` matching
- * `ignoreKey` (e.g. the oddity-flag hotkey) is excluded so flagging never stops
- * the autopilot.
- */
-/** Bare modifier keys should never disengage the autopilot (Shift alone != Shift+F). */
 const MODIFIER_ONLY_KEYS = new Set([
   "Shift",
   "Control",
@@ -184,14 +91,8 @@ function makeDefaultInputSource(
   };
 }
 
-/** A no-op indicator — used when no `document` is available (tests / Node). */
 const noopIndicator: AutopilotIndicator = { show() {}, hide() {} };
 
-/**
- * Default on-screen badge: a small fixed-position "АВТОПИЛОТ" pill toggled in the
- * DOM. Created lazily and only with a `document`, so it never touches the DOM at
- * import time and degrades to {@link noopIndicator} under Node / Vitest.
- */
 function domIndicator(): AutopilotIndicator {
   if (typeof document === "undefined") return noopIndicator;
   let el: HTMLDivElement | null = null;
@@ -229,22 +130,13 @@ function domIndicator(): AutopilotIndicator {
   };
 }
 
-/**
- * The controller. Construct with at least `{ observe, policy, controller }`, then
- * {@link start}/{@link stop}. Engaged, it runs one {@link tickOnce} per scheduler
- * tick; any human input or an explicit {@link stop} disengages it.
- */
 export class AutopilotController {
   private engaged = false;
-  /** Re-entrancy guard so a slow async apply can't overlap the next tick. */
   private busy = false;
   private cancelTimer: (() => void) | null = null;
   private cancelInput: (() => void) | null = null;
-  /** Fresh per engagement — a human handing the ship over starts a clean belief. */
   private memory: AgentMemory = createMemory();
-  /** Ticks completed since the last `start()` — the `step` a flag is recorded at. */
   private step = 0;
-  /** The most recent `observe()`/decision, kept for `flag()` (null before the first tick). */
   private lastObs: Observation | null = null;
   private lastAction: Action | null = null;
 
@@ -273,41 +165,18 @@ export class AutopilotController {
     this.isTerminal = deps.isTerminal;
   }
 
-  /** Whether the autopilot is currently flying the ship. */
   get isEngaged(): boolean {
     return this.engaged;
   }
 
-  /**
-   * The controller's live belief state. Exposed so the concrete
-   * {@link LiveSceneController} (constructed before this controller, over the
-   * same engine) can read the trading memory a `MemoryHeuristicPolicy` decide
-   * just folded an observation into — e.g. `openTrade` needs the known
-   * cross-planet margin to buy the right good, not just sell.
-   */
   currentMemory(): AgentMemory {
     return this.memory;
   }
 
-  /**
-   * Force a fresh belief state without touching engagement/scheduler state
-   * (unlike {@link start}, which also re-arms the timer/indicator). Exposed
-   * for `installAutopilotHook` to call when it detects a new-game/galaxy
-   * identity change while the autopilot stayed continuously engaged across it
-   * (F6, live-session finding): a player who starts «Новая игра» WITHOUT first
-   * disengaging the autopilot never calls `start()` again, so the stale
-   * memory — poisoned counters like `consecutiveWarpsWithoutLanding`/
-   * `foldsSinceDayAdvance` from the finished run — would otherwise carry into
-   * the fresh game and can immediately arm a stagnation deadlock at day 0.
-   */
   resetMemory(): void {
     this.memory = createMemory();
   }
 
-  /**
-   * Engage the autopilot: show the indicator, subscribe to reclaim-on-input, and
-   * begin ticking. Idempotent — a second `start()` while engaged is a no-op.
-   */
   start(): void {
     if (this.engaged) return;
     this.engaged = true;
@@ -327,11 +196,6 @@ export class AutopilotController {
     );
   }
 
-  /**
-   * Disengage: cancel the timer + input subscription and hide the indicator.
-   * Idempotent and the single reclaim path (called by `stop()` and by the
-   * reclaim-on-input handler alike).
-   */
   stop(): void {
     if (!this.engaged) return;
     this.engaged = false;
@@ -346,42 +210,13 @@ export class AutopilotController {
     guard(() => this.indicator.hide(), this.onError);
   }
 
-  /**
-   * One `observe → remember → decide → apply` step. Public so a test (or the live
-   * wiring) can drive a single step directly. **Never throws**: a fault in the
-   * policy or applier is routed to `onError` and swallowed so the live game keeps
-   * running and the next tick simply retries. A no-op when disengaged or while a
-   * previous async apply is still in flight (the re-entrancy guard).
-   *
-   * Gated on {@link LiveSceneController.dismissBlockingModal} FIRST, before the
-   * policy ever decides — `observe()` has no notion of a blocking modal (a
-   * pirate's shakedown hail, an exploration-encounter prompt, ...), so a
-   * hostile-present observation can legally pick `attack`/`flee` while one is
-   * open; those verbs dispatch straight to their own executors, never through
-   * `tick()`, so the modal was never being closed (live-session finding,
-   * 2026-07-12 — a distant pirate's hail hung the autopilot indefinitely).
-   * When something was dismissed this cycle, skip deciding entirely and let
-   * the next tick observe the now-clean state.
-   */
   async tickOnce(): Promise<void> {
     if (!this.engaged || this.busy) return;
-    // Game Over / Win screen: only "wait" is ever legal there (`observe.ts`'s
-    // legalActionsForScene), so deciding would just spin harmlessly forever —
-    // but "harmless" still means the "● АВТОПИЛОТ" indicator stays up and the
-    // pilot visibly keeps "playing" a screen whose only real next step is a
-    // human restarting (live report, 2026-07-18). Stop cleanly instead of
-    // deciding once the game itself is over.
     if (this.isTerminal?.()) {
       this.stop();
       return;
     }
     this.busy = true;
-    // The busy latch is bounded: a never-settling await used to latch it
-    // forever (every later tick no-op'd silently — live stuck-in-combat,
-    // 2026-07-29). Racing against a timeout means the latch always releases;
-    // the abandoned promise's late side effects are tolerable, a permanent
-    // wedge is not. The timer is cleared on the fast path so a healthy tick
-    // never leaks one.
     let timer: ReturnType<typeof setTimeout> | null = null;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(
@@ -404,7 +239,6 @@ export class AutopilotController {
     }
   }
 
-  /** The tick body `tickOnce` races against its timeout. */
   private async runTick(): Promise<void> {
     if (await this.controller.dismissBlockingModal?.()) return;
     const obs = this.observeFn();
@@ -416,12 +250,6 @@ export class AutopilotController {
     await applyLiveAction(action, obs, this.controller);
   }
 
-  /**
-   * Record an oddity flag for the most recently observed/decided step (see
-   * {@link flagOddity}). A no-op before the first tick (nothing observed yet)
-   * — never throws, so a human calling this from the console can't crash the
-   * autopilot.
-   */
   flag(note?: string): void {
     if (!this.lastObs) return;
     guard(

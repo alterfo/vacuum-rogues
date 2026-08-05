@@ -1,24 +1,3 @@
-/**
- * Galactic information registry (EPIC-009, US-090/091/092/093/094).
- *
- * A derived, query-friendly index over the galaxy: where each significant ship
- * is, and what each planet's market sells and at what price. It answers the
- * "who/what/where" questions the in-game info center surfaces — including
- * parameter-style searches ranked by price or by hyperjump distance from the
- * player's current system.
- *
- * Pure logic: no PixiJS / DOM. It indexes existing domain state (it does not own
- * or mutate it); rebuild (or construct anew) after the simulation advances.
- * Gear/weapon/hull search (EPIC-007 catalog) plugs in here once that data
- * model exists; for now market goods are the searchable inventory.
- *
- * All jump-distance ranking is `jumpDistances(..., { undirected: true })` — the
- * warp graph has one-way links, but the star-map nav lets the player jump an
- * edge either direction, so a directed-only BFS under-counted reachability and
- * a real, in-range ship/planet/system silently vanished from search (Bug 6,
- * `docs/plans/20260706-ui-flight-bugfixes.md`). Same metric `QuestGenerator`
- * and `GameEngine` already use.
- */
 import type { StarSystem } from "@/domain/StarSystem";
 import type { NpcShip } from "@/domain/NpcShip";
 import type { ResourceType, NpcRole, NewsEvent } from "@/types";
@@ -33,7 +12,6 @@ import {
   type EquipmentSpec,
 } from "@/systems/equipment/GearCatalog";
 
-/** Where a ship is right now (US-091). */
 export interface ShipLocation {
   readonly id: string;
   readonly name: string;
@@ -42,7 +20,6 @@ export interface ShipLocation {
   readonly systemId: string;
 }
 
-/** A single market listing for a resource (US-092). */
 export interface MarketListing {
   readonly systemId: string;
   readonly planetId: string;
@@ -50,20 +27,15 @@ export interface MarketListing {
   readonly price: number;
 }
 
-/** A search hit with the hyperjump distance from the query origin (US-094). */
 export interface ResourceHit extends MarketListing {
   readonly jumps: number;
 }
 
 export interface ResourceQuery {
   readonly resource: ResourceType;
-  /** System the player is in (for jump-distance ranking). */
   readonly originSystemId: string;
-  /** Drop results farther than this many jumps (omit = no limit). */
   readonly maxJumps?: number;
-  /** Rank by cheapest price (default) or by nearest in jumps. */
   readonly sort?: "price" | "jumps";
-  /** Cap the number of results (omit = all). */
   readonly limit?: number;
 }
 
@@ -72,11 +44,9 @@ export interface ShipQuery {
   readonly role?: NpcRole;
   readonly faction?: Faction;
   readonly maxJumps?: number;
-  /** Case-insensitive substring filter on ship name. */
   readonly name?: string;
 }
 
-/** A planet location result for the "Объекты" info-center tab. */
 export interface PlanetHit {
   readonly systemId: string;
   readonly planetId: string;
@@ -86,13 +56,11 @@ export interface PlanetHit {
 }
 
 export interface PlanetQuery {
-  /** Case-insensitive substring to match against planet names. */
   readonly name: string;
   readonly originSystemId: string;
   readonly maxJumps?: number;
 }
 
-/** A star-system location result for the "Объекты" info-center tab. */
 export interface SystemHit {
   readonly systemId: string;
   readonly systemName: string;
@@ -100,13 +68,11 @@ export interface SystemHit {
 }
 
 export interface SystemQuery {
-  /** Case-insensitive substring to match against system names. */
   readonly name: string;
   readonly originSystemId: string;
   readonly maxJumps?: number;
 }
 
-/** A piece of gear for sale somewhere (US-092, gear half). */
 export interface GearListing {
   readonly systemId: string;
   readonly planetId: string;
@@ -114,12 +80,10 @@ export interface GearListing {
   readonly price: number;
 }
 
-/** A gear search hit annotated with hyperjump distance (US-093/094). */
 export interface GearHit extends GearListing {
   readonly jumps: number;
 }
 
-/** Parameter search over gear (US-093): "best hull/weapon for criterion X". */
 export interface GearQuery {
   readonly originSystemId: string;
   readonly kind?: GearKind;
@@ -128,18 +92,15 @@ export interface GearQuery {
   readonly maxSize?: number;
   readonly maxPrice?: number;
   readonly maxJumps?: number;
-  // Hull criteria
   readonly minHp?: number;
   readonly minSlots?: number;
   readonly minCargo?: number;
-  // Weapon criteria
   readonly minDamage?: number;
   readonly minRange?: number;
   readonly sort?: "price" | "jumps" | "damage" | "hp" | "tech";
   readonly limit?: number;
 }
 
-/** Faceted equipment filter type for the InfoCenter gear tab. */
 export type EquipmentFacet =
   | "engine"
   | "hull"
@@ -148,7 +109,6 @@ export type EquipmentFacet =
   | "shield"
   | "other";
 
-/** Equipment search hit with resolved planet/system names. */
 export interface EquipmentHit {
   readonly gear: Gear;
   readonly planet: string;
@@ -161,9 +121,7 @@ export interface EquipmentHit {
 
 export interface EquipmentQuery {
   readonly originSystemId: string;
-  /** Single-facet filter (legacy). Ignored when `types` is provided. */
   readonly type?: EquipmentFacet;
-  /** Multi-facet filter — item matches if it matches any entry. Empty array = no filter (all types). */
   readonly types?: EquipmentFacet[];
   readonly name?: string;
   readonly maxPrice?: number;
@@ -174,11 +132,8 @@ export class GalacticRegistry {
   private readonly systems: StarSystem[];
   private readonly shipById = new Map<string, ShipLocation>();
   private readonly shipsBySystem = new Map<string, ShipLocation[]>();
-  /** Flat list of every (planet, resource, price) the markets offer. */
   private readonly listings: MarketListing[] = [];
-  /** Gear for sale across the galaxy (from the shop generator). */
   private readonly gearListings: GearListing[];
-  /** Living-galaxy simulation events (news feed), newest last. */
   readonly newsFeed: NewsEvent[];
 
   constructor(
@@ -229,19 +184,14 @@ export class GalacticRegistry {
     }
   }
 
-  // --- Ship location queries (US-091) -------------------------------------
-
-  /** Where is this ship now, or null if it isn't tracked. */
   findShip(id: string): ShipLocation | null {
     return this.shipById.get(id) ?? null;
   }
 
-  /** Ships currently in a given system. */
   shipsInSystem(systemId: string): ShipLocation[] {
     return this.shipsBySystem.get(systemId) ?? [];
   }
 
-  /** Ships matching role/faction/name, within an optional jump radius, nearest first. */
   findShips(query: ShipQuery): (ShipLocation & { jumps: number })[] {
     const dist = jumpDistances(this.systems, query.originSystemId, {
       undirected: true,
@@ -262,7 +212,6 @@ export class GalacticRegistry {
     return out;
   }
 
-  /** Find planets by (partial, case-insensitive) name match, nearest first. */
   findPlanet(query: PlanetQuery): PlanetHit[] {
     const dist = jumpDistances(this.systems, query.originSystemId, {
       undirected: true,
@@ -292,7 +241,6 @@ export class GalacticRegistry {
     return out;
   }
 
-  /** Find star systems by (partial, case-insensitive) name match, nearest first. */
   findSystem(query: SystemQuery): SystemHit[] {
     const dist = jumpDistances(this.systems, query.originSystemId, {
       undirected: true,
@@ -312,13 +260,6 @@ export class GalacticRegistry {
     return out;
   }
 
-  // --- Market / resource queries (US-092/093/094) -------------------------
-
-  /**
-   * Find where a resource is sold, ranked by price (default) or distance, each
-   * hit annotated with hyperjumps from the query origin. This is the "where can
-   * I buy X best / cheapest, and how far is it" lookup (US-094).
-   */
   findResource(query: ResourceQuery): ResourceHit[] {
     const dist = jumpDistances(this.systems, query.originSystemId, {
       undirected: true,
@@ -340,19 +281,10 @@ export class GalacticRegistry {
     return query.limit !== undefined ? hits.slice(0, query.limit) : hits;
   }
 
-  /** The single cheapest place to buy a resource within range, or null. */
   cheapestResource(query: ResourceQuery): ResourceHit | null {
     return this.findResource({ ...query, sort: "price" })[0] ?? null;
   }
 
-  // --- Gear parameter search (US-093/094, "buy the best hull/weapon") ------
-
-  /**
-   * Search gear for sale by parameters (kind, tech, size, price, and
-   * kind-specific minima like hull HP/slots or weapon damage/range), each hit
-   * annotated with hyperjumps from the origin. Answers "where can I buy the best
-   * hull/weapon meeting criterion X, and how far is it" (US-094).
-   */
   findGear(query: GearQuery): GearHit[] {
     const dist = jumpDistances(this.systems, query.originSystemId, {
       undirected: true,
@@ -376,17 +308,10 @@ export class GalacticRegistry {
     return query.limit !== undefined ? hits.slice(0, query.limit) : hits;
   }
 
-  /** Best single gear match for a criterion (default cheapest), or null. */
   bestGear(query: GearQuery): GearHit | null {
     return this.findGear(query)[0] ?? null;
   }
 
-  // --- Faceted equipment search (US-093, InfoCenter tab) --------------------
-
-  /**
-   * Equipment search by human-friendly facet type with resolved planet/system
-   * names. Used by the InfoCenter gear tab faceted filter.
-   */
   findEquipment(query: EquipmentQuery): EquipmentHit[] {
     const dist = jumpDistances(this.systems, query.originSystemId, {
       undirected: true,
@@ -438,12 +363,10 @@ export class GalacticRegistry {
     return hits;
   }
 
-  /** Total market listings indexed (diagnostics/tests). */
   get listingCount(): number {
     return this.listings.length;
   }
 
-  /** Total gear listings indexed (diagnostics/tests). */
   get gearListingCount(): number {
     return this.gearListings.length;
   }

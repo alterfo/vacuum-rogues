@@ -1,19 +1,3 @@
-/**
- * Playtest: the pulsing heading crosshair is redundant while auto-flying a
- * plotted route — the dashed route line + destination marker already show where
- * the ship is going, so the crosshair is just noise. It must be hidden during
- * route flight (setPath) and kept for a bare point-move (setTarget).
- *
- * Two layers under test:
- *  - ShipPhysics.isFollowingRoute() — the route-active signal. Set by setPath,
- *    cleared on arrival / stop / setTarget / teleport. Unlike hasPath() it stays
- *    true on the final leg (after the last queued waypoint is consumed).
- *  - PlayerShipRenderer.updateTargetIndicator() — gates the crosshair Graphics
- *    visibility on isMoving && distance > 20 && !isFollowingRoute().
- *
- * Uses real PixiJS Graphics (no WebGL); the renderer reads the private
- * targetIndicator's `.visible` flag after update().
- */
 import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { PlayerShipRenderer } from "@/presentation/flight/PlayerShipRenderer";
@@ -29,7 +13,6 @@ function makeRenderer(gameLayer: Container): Renderer {
   } as unknown as Renderer;
 }
 
-/** Read the renderer's private crosshair visibility after an update tick. */
 function crosshairVisible(module: PlayerShipRenderer): boolean {
   const ind = (module as unknown as { targetIndicator: { visible: boolean } })
     .targetIndicator;
@@ -57,7 +40,6 @@ describe("ShipPhysics.isFollowingRoute (route-active signal)", () => {
       { x: 60, y: 0 },
       { x: 1000, y: 0 },
     ]);
-    // Advance just enough to consume the first waypoint but not yet arrive.
     for (let i = 0; i < 5; i++) p.update(50);
     expect(p.hasPath()).toBe(false); // queue drained → final leg
     expect(p.isMoving).toBe(true);

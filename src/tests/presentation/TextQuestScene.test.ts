@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { TextQuest, QuestNode, QuestOutcome } from "@/types";
 
-// ── PixiJS mock (must come before imports that load pixi.js) ─────────────────
-
 vi.mock("pixi.js", () => ({
   Container: vi.fn().mockImplementation(() => ({
     addChild: vi.fn(),
@@ -50,13 +48,9 @@ vi.mock("pixi.js", () => ({
   })),
 }));
 
-// ── Imports under test ────────────────────────────────────────────────────────
-
 import { TextQuestScene } from "@/presentation/TextQuestScene";
 import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeRenderer() {
   return {
@@ -139,8 +133,6 @@ function makeGameEngine(player: ReturnType<typeof makePlayer>) {
     transitionTo: vi.fn().mockResolvedValue(undefined),
   } as any;
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("TextQuestScene.initialize", () => {
   it("initializes without throwing given a valid quest and player", () => {

@@ -7,15 +7,6 @@ import {
   type GeneratedQuest,
 } from "@/systems/quests/QuestGenerator";
 
-/**
- * Task 3 ("widen procedural quest flavor"): the routine ROUTINE_TYPES board must
- * read distinctly across repeated quests — more issuer titles + more flavor-text
- * templates — while staying fully deterministic for a fixed (seed, planet, day).
- * This suite asserts the *added* flavor is reachable and that no new variety
- * broke determinism or the per-type structural invariants other tests rely on.
- */
-
-/** Minimal star-system stub (same shape the generator reads). */
 function sys(id: string, name: string, toIds: string[]): StarSystem {
   return {
     id,
@@ -29,7 +20,6 @@ function sys(id: string, name: string, toIds: string[]): StarSystem {
   } as unknown as StarSystem;
 }
 
-/** A linear chain A—B—C—D (origin A): B=1 jump, C=2, D=3. */
 function chainGalaxy(): StarSystem[] {
   return [
     sys("A", "Альфа", ["B"]),
@@ -46,8 +36,6 @@ function routineOpts(over: Partial<BoardOptions> = {}): BoardOptions {
     planetId: "A_p1",
     day: 0,
     seed: "galaxy-seed",
-    // Routine-only board: no text-quests / elites / chains, so every slot runs
-    // the real per-type flavor functions we're widening.
     textRatio: 0,
     eliteRatio: 0,
     chainRatio: 0,
@@ -56,7 +44,6 @@ function routineOpts(over: Partial<BoardOptions> = {}): BoardOptions {
   };
 }
 
-/** Sweep many deterministic boards across planet/day/seed → flat routine list. */
 function sampleRoutine(): GeneratedQuest[] {
   const out: GeneratedQuest[] = [];
   for (let s = 0; s < 4; s++) {
@@ -91,7 +78,6 @@ describe("QuestGenerator routine flavor variety", () => {
       set.add(q.issuerTitle);
       titlesByType.set(q.template.type, set);
     }
-    // One distinctive *new* title from each routine type's widened pool.
     const wantNew: Array<[QuestType, string]> = [
       [QuestType.DELIVERY, "Логист"],
       [QuestType.BOUNTY, "Егерь"],
@@ -110,7 +96,6 @@ describe("QuestGenerator routine flavor variety", () => {
 
   it("surfaces the newly added flavor-text templates per routine type", () => {
     const descs = sampleRoutine().map((q) => q.template.description);
-    // A distinctive substring unique to one *new* template per routine type.
     const newFragments = [
       "Холодильник в трюме", // DELIVERY
       "крепкую ненависть", // BOUNTY
@@ -135,23 +120,19 @@ describe("QuestGenerator routine flavor variety", () => {
     };
     for (const q of sample) {
       const d = q.template.description;
-      // Every routine description stays substantial.
       expect(d.length).toBeGreaterThanOrEqual(50);
       switch (q.template.type) {
         case QuestType.DELIVERY:
-          // Mentions destination system name + a credit reward.
           expect(d).toContain(nameOf[q.targetSystemId]);
           expect(d).toMatch(/\d+ ₢/);
           break;
         case QuestType.BOUNTY: {
-          // Template body (before the appended "Цель:" line) names the ship.
           const ship = q.targetNpcName as string;
           const [body] = d.split("\nЦель:");
           expect(body).toContain(ship);
           break;
         }
         case QuestType.ESCORT:
-          // Names a "Транспорт «…»" convoy.
           expect(d).toMatch(/Транспорт\s+«[^»]+»/);
           break;
         case QuestType.DIPLOMACY:

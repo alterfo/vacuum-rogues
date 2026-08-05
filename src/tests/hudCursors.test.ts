@@ -1,11 +1,3 @@
-/**
- * Sprint 3 Task 3: pointer cursor on all interactive elements.
- *
- * The HUD buttons (Ход/Pause, quest, star map) must keep their "pointer" cursor
- * at all times. updateInteractiveCursors() drives the planet / NPC hover cursors
- * during a turn, and must NEVER touch the HUD buttons — so the Ход button stays
- * clickable-looking even while a turn is running.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   NpcShipManager,
@@ -16,8 +8,6 @@ import {
   type PlanetManagerDeps,
 } from "@/presentation/flight/PlanetManager";
 
-// Mirror the pixi.js + presentation mocks from playPauseImmediate.test.ts so the
-// SpaceFlightScene can be constructed in jsdom without a real renderer.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -209,14 +199,8 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
       npc: { role: NpcRole.TRADER },
       restoreInteractivity: () => {},
     };
-    // Sentinel value that nothing in updateInteractiveCursors should ever
-    // write: if the HUD button were swept into the planet/NPC cursor loop, this
-    // would flip to "default"/"pointer" and the assertions below would bite.
     playBtnContainer = { cursor: "__sentinel__" };
 
-    // NPC cursors are owned by the NPC module now — inject a real manager
-    // holding the pirate/trader stubs so updateInteractiveCursors() delegates to
-    // its setCursors() exactly as it does in the live scene.
     const deps: NpcShipManagerDeps = {
       getShipPhysics: () => null,
       getPlanetSprites: () => [],
@@ -238,9 +222,6 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
     );
     (mgr as unknown as { npcSprites: unknown[] }).npcSprites = [pirate, trader];
 
-    // Planet cursors are owned by the PlanetManager module now — inject a real
-    // manager holding the planet stub so updateInteractiveCursors() delegates to
-    // its setCursors() exactly as it does in the live scene.
     const planetDeps: PlanetManagerDeps = {
       getShipPhysics: () => null,
       getStarCenter: () => ({ x: 0, y: 0 }),
@@ -276,12 +257,10 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
   it("does not touch the Ход/Pause button when a turn starts running", () => {
     updateInteractiveCursors(true);
 
-    // Planet + NPC hover cursors are suppressed mid-turn...
     expect(planet.graphics.cursor).toBe("default");
     expect(pirate.container.cursor).toBe("default");
     expect(trader.container.cursor).toBe("default");
 
-    // ...but the HUD play button is never written to (cursor untouched).
     expect(playBtnContainer.cursor).toBe("__sentinel__");
   });
 
@@ -292,7 +271,6 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
     expect(planet.graphics.cursor).toBe("pointer");
     expect(pirate.container.cursor).toBe("target");
     expect(trader.container.cursor).toBe("pointer");
-    // HUD button still never touched across the full turn-start/turn-end cycle.
     expect(playBtnContainer.cursor).toBe("__sentinel__");
   });
 });

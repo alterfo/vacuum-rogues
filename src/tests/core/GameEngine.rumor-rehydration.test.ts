@@ -70,14 +70,6 @@ vi.mock("pixi.js", () => ({
   BlurFilter: vi.fn().mockImplementation(() => ({})),
 }));
 
-/**
- * Regression: SaveManager returns plain JSON (the Zod `.default([])` is applied
- * only to a discarded validated copy), and reparenting via setPrototypeOf does
- * not run the `activeRumors = []` class field initializer. A save created before
- * the trade-rumor feature therefore loads with `galaxy.activeRumors === undefined`,
- * which throws in getActiveRumors()/updateRumors() on the first daily tick.
- * rehydrateLoadedState must coerce the missing field back to an empty array.
- */
 describe("GameEngine — trade-rumor rehydration on load", () => {
   let diDeps: GameEngineDIDependencies;
   let engine: GameEngine;
@@ -106,8 +98,6 @@ describe("GameEngine — trade-rumor rehydration on load", () => {
       factionType: FactionType.OUTLANDERS,
     });
 
-    // JSON round-trip strips prototypes (like SaveManager); explicitly drop the
-    // field so the save looks exactly like a pre-feature one that never had it.
     const plainGalaxy = JSON.parse(JSON.stringify(galaxy));
     delete plainGalaxy.activeRumors;
     const plainPlayer = JSON.parse(JSON.stringify(player));
@@ -126,12 +116,9 @@ describe("GameEngine — trade-rumor rehydration on load", () => {
     const ok = await engine.loadGame("auto");
     expect(ok).toBe(true);
 
-    // The guard restored the field, so the live store is queryable...
     expect(Array.isArray(engine.galaxy!.activeRumors)).toBe(true);
     expect(() => engine.galaxy!.getActiveRumors()).not.toThrow();
 
-    // ...and the first daily tick (which iterates activeRumors via updateRumors)
-    // does not crash.
     expect(() => engine.advanceGalaxyDay()).not.toThrow();
   });
 });

@@ -1,14 +1,3 @@
-/**
- * Tests for the context-inject.sh ralphex task-orientation helper.
- *
- * The script parses a ralphex plan, finds the target Task section (an explicit
- * number, or the first with an unchecked [ ] box), and prints its **Files:**
- * block annotated with each file's on-disk status. We shell out to the real
- * script against a fixture plan written to a temp file, and assert the report
- * and the documented exit codes. File paths in a plan are resolved relative to
- * the repo root, so the fixture references a file that really exists
- * (package.json) and one that cannot (a sentinel name).
- */
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -49,7 +38,6 @@ x
 ignored
 `;
 
-/** Run the script; return {stdout, status}. Captures non-zero exits without throwing. */
 function run(args: string[]): { stdout: string; status: number } {
   try {
     const stdout = execFileSync("bash", [SCRIPT, ...args], { encoding: "utf8" });
@@ -91,7 +79,6 @@ describe("context-inject.sh", () => {
       expect(status).toBe(0);
       expect(stdout).toContain("Active task 1: Already done");
       expect(stdout).toMatch(/package\.json — exists/);
-      // Task 1's file block only lists package.json — not the sentinel.
       expect(stdout).not.toContain("__ci_nonexistent_sentinel__");
     });
   });

@@ -7,7 +7,6 @@ import {
   type HyperbolaParams,
 } from "@/utils/flightGeometry";
 
-/** Deterministic 0..1 generator (mulberry32) so the builder is reproducible. */
 function seededRng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -50,10 +49,8 @@ describe("hyperbolaPoint", () => {
       dists.push(distToFocus(hyperbolaPoint(params, theta)));
     }
     const minIdx = dists.indexOf(Math.min(...dists));
-    // Closest approach is at the centre of the sweep (theta ≈ 0).
     expect(minIdx).toBeGreaterThan(N / 2 - 3);
     expect(minIdx).toBeLessThan(N / 2 + 3);
-    // Strictly decreasing before perihelion, strictly increasing after.
     for (let i = 1; i <= minIdx; i++) {
       expect(dists[i]).toBeLessThan(dists[i - 1] + 1e-6);
     }
@@ -66,7 +63,6 @@ describe("hyperbolaPoint", () => {
     const range = hyperbolaAsymptoteAngle(params.eccentricity) * 0.9;
     const start = hyperbolaPoint(params, -range);
     const end = hyperbolaPoint(params, range);
-    // Both ends are far out (escaping) and distinct from each other.
     expect(distToFocus(start)).toBeGreaterThan(params.perihelion * 2);
     expect(distToFocus(end)).toBeGreaterThan(params.perihelion * 2);
     expect(Math.hypot(end.x - start.x, end.y - start.y)).toBeGreaterThan(
@@ -81,7 +77,6 @@ describe("hyperbolaPoint", () => {
         6,
       );
     }
-    // The two asymptote bearings straddle the perihelion direction symmetrically.
     const thetaMax = hyperbolaAsymptoteAngle(params.eccentricity);
     const inBearing = params.orientation - thetaMax;
     const outBearing = params.orientation + thetaMax;
@@ -93,7 +88,6 @@ describe("hyperbolaAsymptoteAngle", () => {
   it("exceeds 90° (the bound branch wraps the focus) and shrinks toward 90° as eccentricity grows", () => {
     const nearParabolic = hyperbolaAsymptoteAngle(1.2);
     const veryOpen = hyperbolaAsymptoteAngle(2.5);
-    // θ_max = acos(−1/e) ∈ (π/2, π); larger e ⇒ −1/e nearer 0 ⇒ smaller θ_max.
     expect(veryOpen).toBeGreaterThan(Math.PI / 2);
     expect(nearParabolic).toBeGreaterThan(veryOpen);
     expect(nearParabolic).toBeLessThan(Math.PI);
@@ -118,7 +112,6 @@ describe("buildCometFlyby", () => {
   it("puts the perihelion inside the field and enters/exits at the field edge", () => {
     const flyby = buildCometFlyby(FOCUS_X, FOCUS_Y, fieldRadius, seededRng(7));
     expect(flyby.params.perihelion).toBeLessThan(fieldRadius);
-    // Entry (thetaStart) and exit (thetaEnd) both land on the field edge.
     expect(
       distToFocus(hyperbolaPoint(flyby.params, flyby.thetaStart)),
     ).toBeCloseTo(fieldRadius, 4);

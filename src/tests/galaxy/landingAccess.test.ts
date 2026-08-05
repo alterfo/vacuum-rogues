@@ -6,12 +6,10 @@ import {
 import { GOOD_PIRATE_REP_THRESHOLD } from "@/config/balance";
 import { Faction } from "@/types/faction";
 
-/** Minimal planet stub carrying only the captured-control flag the rule reads. */
 function planet(capturedBy: string | null) {
   return { capturedBy } as unknown as Parameters<typeof canLandOnPlanet>[0];
 }
 
-/** Minimal player stub returning `rep` for the pirate faction (0 otherwise). */
 function player(rep: number) {
   return {
     getReputation: (factionId: string) =>

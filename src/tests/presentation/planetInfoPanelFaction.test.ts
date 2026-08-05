@@ -1,13 +1,3 @@
-/**
- * Task 5 (quest-and-hub polish pass): the `PlanetInfoPanel` faction line must
- * fall back to the project's established "Независимая" (independent) for an
- * unowned/unset system — the old hardcoded fallback rendered "Окраинники",
- * silently mislabelling every ownerless planet as the OUTLANDERS faction.
- * A known owner id still resolves through `factionDisplayLabel`.
- *
- * A lightweight `pixi.js` mock records every `Text` string so the rendered
- * faction line is directly inspectable without a canvas.
- */
 import { describe, it, expect, vi } from "vitest";
 import { Faction } from "@/types/faction";
 
@@ -59,7 +49,6 @@ vi.mock("pixi.js", () => {
   return { Container, Graphics, Text };
 });
 
-// Imported AFTER the mock so the panel sees the fake pixi.
 import { PlanetInfoPanel } from "@/presentation/PlanetInfoPanel";
 
 function habitablePlanet() {

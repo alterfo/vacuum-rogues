@@ -1,16 +1,3 @@
-/**
- * Task 6 (docs/plans/20260708-font-scale-and-faction-bugs.md): the star-map
- * system info-panel used to render `` `Владелец: ${system.ownerFaction}` `` —
- * the raw `Faction` enum string (e.g. "INDEPENDENT") — instead of a
- * localized label. This asserts `showSystemInfo` now renders the localized
- * `FACTION_LABEL` text for an `INDEPENDENT`-owned system.
- *
- * PixiJS `Text` needs real canvas metrics unavailable in jsdom, so this
- * mirrors the existing scene-level test convention (`equipmentShopFontScaleLayout.test.ts`):
- * a lightweight `pixi.js` mock whose `Graphics`/`Text`/`Container` are plain
- * mutable objects, so the source's real child/text assignments are directly
- * inspectable after render.
- */
 import { describe, it, expect, vi } from "vitest";
 import type { Renderer } from "@/presentation/Renderer";
 import { Faction } from "@/types/faction";
@@ -80,7 +67,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scene sees the fake pixi.
 const { StarMapScene } = await import("@/presentation/StarMapScene");
 
 function makeSystem(ownerFaction: Faction): StarSystem {

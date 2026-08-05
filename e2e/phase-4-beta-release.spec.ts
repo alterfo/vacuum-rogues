@@ -8,10 +8,6 @@ import {
   expectNoJavaScriptErrors,
 } from './fixtures/game-fixtures';
 
-/**
- * Phase 4: Beta & Release
- * Testing tutorial, monetization integration, and polish
- */
 test.describe('Phase 4: Tutorial System (Beta)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;
@@ -27,7 +23,6 @@ test.describe('Phase 4: Tutorial System (Beta)', () => {
   }) => {
     await mainMenu.expectMainMenuVisible();
 
-    // New game should trigger tutorial
     await mainMenu.clickNewGame();
     await page.waitForTimeout(2000);
 
@@ -41,11 +36,9 @@ test.describe('Phase 4: Tutorial System (Beta)', () => {
     await mainMenu.navigateTo();
     await mainMenu.clickNewGame();
 
-    // Tutorial steps
     await page.waitForTimeout(3000);
     await starMap.expectStarMapVisible();
 
-    // Interactive tutorial
     await starMap.clickOnSystemPercent(0.5, 0.5);
     await page.waitForTimeout(1000);
 
@@ -56,7 +49,6 @@ test.describe('Phase 4: Tutorial System (Beta)', () => {
     await mainMenu.navigateTo();
     await mainMenu.clickNewGame();
 
-    // Skip tutorial if available
     await page.waitForTimeout(1000);
 
     const canvas = page.locator('canvas');
@@ -69,15 +61,10 @@ test.describe('Phase 4: Tutorial System (Beta)', () => {
 
     await page.waitForTimeout(5000);
 
-    // Game should remain responsive
     await starMap.expectStarMapVisible();
   });
 });
 
-/**
- * Phase 4: Monetization (Stub)
- * Testing shop interface and purchase flow (without real payments)
- */
 test.describe('Phase 4: Monetization System (Beta)', () => {
   let mainMenu: MainMenuPage;
 
@@ -89,7 +76,6 @@ test.describe('Phase 4: Monetization System (Beta)', () => {
   test('TC-P4-M001: Shop interface is accessible', async ({ page }) => {
     await mainMenu.expectMainMenuVisible();
 
-    // Shop button might be in settings or main menu
     await mainMenu.clickSettings();
     await page.waitForTimeout(1000);
 
@@ -100,7 +86,6 @@ test.describe('Phase 4: Monetization System (Beta)', () => {
   test('TC-P4-M002: Skins are displayed in shop', async ({ page }) => {
     await mainMenu.navigateTo();
 
-    // Navigate to shop (if available)
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });
@@ -117,16 +102,11 @@ test.describe('Phase 4: Monetization System (Beta)', () => {
   test('TC-P4-M004: Purchase is disabled in beta', async ({ page }) => {
     await mainMenu.navigateTo();
 
-    // Purchase flow should be stubbed
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });
 });
 
-/**
- * Phase 4: Cross-Browser Compatibility
- * Testing on different browsers
- */
 test.describe('Phase 4: Cross-Browser Testing (Beta)', () => {
   test('TC-P4-C001: Game works on Chromium', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium');
@@ -159,10 +139,6 @@ test.describe('Phase 4: Cross-Browser Testing (Beta)', () => {
   });
 });
 
-/**
- * Phase 4: End-to-End User Journey
- * Complete gameplay loop testing
- */
 test.describe('Phase 4: Full Gameplay Loop (Beta)', () => {
   test('TC-P4-F001: Complete journey: Launch → Explore → Trade → Save', async ({
     page,
@@ -171,27 +147,19 @@ test.describe('Phase 4: Full Gameplay Loop (Beta)', () => {
     const starMap = new StarMapPage(page);
     const trade = new TradePage(page);
 
-    // 1. Launch game
     await mainMenu.navigateTo();
     await mainMenu.expectMainMenuVisible();
 
-    // 2. Create new game
     await mainMenu.clickNewGame();
     await starMap.expectStarMapVisible();
 
-    // 3. Explore systems
     await starMap.clickOnSystemPercent(0.3, 0.4);
     await starMap.clickOnSystemPercent(0.6, 0.6);
 
-    // (Combat is real-time in-flight only now — no separate encounter scene —
-    // so it is exercised by the in-flight combat unit/integration suites, not
-    // this scene-hop journey test.)
 
-    // 4. Trade
     await trade.navigateFromStarMap();
     await trade.expectTradeVisible();
 
-    // 5. Save is auto-created
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });
@@ -199,7 +167,6 @@ test.describe('Phase 4: Full Gameplay Loop (Beta)', () => {
   test('TC-P4-F002: Multiple playthroughs are possible', async ({ page }) => {
     const mainMenu = new MainMenuPage(page);
 
-    // First playthrough
     await mainMenu.navigateTo();
     await mainMenu.clickNewGame();
     await page.waitForTimeout(3000);
@@ -207,7 +174,6 @@ test.describe('Phase 4: Full Gameplay Loop (Beta)', () => {
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
 
-    // Reload and start again
     await page.reload();
     await mainMenu.waitForGameInitialization();
 
@@ -218,29 +184,21 @@ test.describe('Phase 4: Full Gameplay Loop (Beta)', () => {
   });
 });
 
-/**
- * Phase 4: Regression Testing
- * Ensuring existing features still work
- */
 test.describe('Phase 4: Regression Suite (Beta)', () => {
   test('TC-P4-R001: All core features remain functional', async ({ page }) => {
     const mainMenu = new MainMenuPage(page);
     const starMap = new StarMapPage(page);
     const inventory = new InventoryPage(page);
 
-    // Game launch
     await mainMenu.navigateTo();
     await mainMenu.expectMainMenuVisible();
 
-    // Star map
     await mainMenu.clickNewGame();
     await starMap.expectStarMapVisible();
 
-    // Inventory
     await inventory.navigateFromStarMap();
     await inventory.expectInventoryVisible();
 
-    // Return to star map
     await inventory.closeInventory();
     await starMap.expectStarMapVisible();
   });
@@ -261,16 +219,8 @@ test.describe('Phase 4: Regression Suite (Beta)', () => {
     await expect(page.locator('canvas')).toBeVisible();
   });
 
-  // TC-P4-R003 (combat regression) removed: combat is real-time in-flight only
-  // now (the hex CombatScene / SceneType.COMBAT was deleted,
-  // docs/plans/20260623-space-combat-realtime-fix-remove-hex.md). In-flight
-  // combat regressions are covered by the combat unit/integration suites.
 });
 
-/**
- * Phase 4: Performance Baseline
- * Ensuring performance standards are met
- */
 test.describe('Phase 4: Performance Baseline (Beta)', () => {
   test('TC-P4-P001: Game loads within 10 seconds', async ({ page }) => {
     const startTime = Date.now();
@@ -302,7 +252,6 @@ test.describe('Phase 4: Performance Baseline (Beta)', () => {
 
     await mainMenu.navigateTo();
 
-    // Extended gameplay
     for (let i = 0; i < 5; i++) {
       await mainMenu.clickNewGame();
       await page.waitForTimeout(2000);
@@ -315,10 +264,6 @@ test.describe('Phase 4: Performance Baseline (Beta)', () => {
   });
 });
 
-/**
- * Phase 4: Acceptance Criteria Validation
- * Verifying all AC from REQ-001-base.md
- */
 test.describe('Phase 4: Acceptance Criteria Validation', () => {
   test('AC-Phase0-001: ONNX runtime loads and infers', async ({ page }) => {
     await page.goto('/');
@@ -338,10 +283,6 @@ test.describe('Phase 4: Acceptance Criteria Validation', () => {
     await starMap.expectMinimumSystemsCount(10);
   });
 
-  // AC-Phase1-002 (combat won with loot) removed: combat is real-time in-flight
-  // only now (the hex CombatScene / SceneType.COMBAT was deleted,
-  // docs/plans/20260623-space-combat-realtime-fix-remove-hex.md). The in-flight
-  // loot drop on a kill is covered by the combat unit/integration suites.
 
   test('AC-Phase1-003: Quests can be completed', async ({ page }) => {
     const mainMenu = new MainMenuPage(page);
@@ -384,7 +325,6 @@ test.describe('Phase 4: Acceptance Criteria Validation', () => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
 
-    // Reload without network (simulated)
     await page.reload();
     await page.waitForSelector('canvas', { timeout: 10000 });
 

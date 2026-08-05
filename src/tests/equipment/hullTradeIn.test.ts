@@ -23,14 +23,6 @@ import {
   HULL_TRADE_IN_RATE,
 } from "@/systems/equipment/sellHull";
 
-/**
- * Task 7 (install/micromodule overhaul): the planet Верфь has no «Продать» action
- * for a hull, so buying a replacement instead trades in the old hull for a
- * fraction of its value. These tests pin the pure trade-in price and the shared
- * buy-with-trade-in flow — the net charge (`price − tradeIn`), the balanced bus
- * postings, and the "never hull-less" invariant.
- */
-
 function hull(id: string): HullSpec {
   const g = gearById(id);
   if (!g || g.kind !== GearKind.HULL) throw new Error(`not a hull: ${id}`);
@@ -122,15 +114,12 @@ describe("hull trade-in — buy a replacement", () => {
       price,
     );
 
-    // Equipment counterparty nets what the player paid minus the trade-in credit.
     expect(h.service.balanceOf(GL_COUNTERPARTY.EQUIPMENT)).toBe(
       price - tradeIn,
     );
-    // The double-entry books stay balanced…
     expect(Math.abs(h.service.getLedger().totalBalance())).toBeLessThanOrEqual(
       BALANCE_EPSILON,
     );
-    // …and the credits projection mirrors the ledger.
     expect(h.player.credits).toBe(before - (price - tradeIn));
     expect(h.player.credits).toBe(
       h.service.balanceOf(h.player.currentAccountId),
@@ -146,17 +135,13 @@ describe("hull trade-in — buy a replacement", () => {
       8000,
     );
 
-    // The loadout always holds exactly one valid hull…
     expect(h.loadout.hull.id).toBe("hull_warden");
-    // …and the live ship is re-projected from it.
     expect(h.player.ship.hullClass).toBe(hull("hull_warden").hullClass);
     expect(h.player.ship.maxHull).toBe(h.loadout.derivedStats().maxHull);
   });
 
   it("re-bags gear that no longer fits a smaller replacement hull (lossless)", () => {
-    // Start big (4 weapon slots), fill weapons, then downsize to the scout (2).
     const big = makeHarness(50000, "hull_bastion");
-    // Install three pulse weapons onto the bastion.
     for (let i = 0; i < 3; i++) big.loadout.install("wpn_pulse");
     const bagBefore = big.player.inventory.modules.length;
 
@@ -168,9 +153,7 @@ describe("hull trade-in — buy a replacement", () => {
       1500,
     );
 
-    // The scout has fewer weapon slots, so at least one weapon was dropped…
     expect(result.dropped.length).toBeGreaterThan(0);
-    // …and returned to the bag rather than destroyed.
     expect(big.player.inventory.modules.length).toBeGreaterThan(bagBefore);
     expect(big.loadout.hull.id).toBe("hull_scout");
   });

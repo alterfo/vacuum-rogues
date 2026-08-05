@@ -1,22 +1,3 @@
-/**
- * Campaign Task 1 regression: the trade-reserve refit gate + the STATION repair
- * no-op gate that shipped alongside the tech-level generation fix.
- *
- * Two failure modes both collapsed real sessions into churn:
- *  - **Refit bankruptcy**: with buyable weapons finally generated, a fresh ship
- *    blew its whole ~1000cr wallet on the first affordable gun, going broke and
- *    unable to fund a single trade (100-run diag: 0 quests, avg −944cr). The
- *    policy now spends on a military refit only from genuine surplus:
- *    `credits − cost ≥ MILITARY_SPEND_TRADE_RESERVE`.
- *  - **Docked repair soft-lock**: STATION ranked `repair` above `move`, and a
- *    full-hull repair is a no-op — so a patched-up docked agent re-picked the
- *    no-op forever instead of undocking. `repair` legality is now gated on
- *    actual hull damage (`needsRepair`).
- *
- * Pure ladder decisions over hand-built fixtures (as `battleReady.test.ts`),
- * plus real-engine coverage through `observe()`/`executeArmUp` so the gates
- * can't diverge from what the engine actually surfaces.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { SceneType, StationType } from "@/types";
 import { Faction } from "@/types/faction";
@@ -239,8 +220,6 @@ describe("real engine: observe() surfaces the gates, executor honors the reserve
     localStorage.clear();
     harness = await RealEngineHarness.boot({ seed: "RESERVE-GATE" });
     await harness.newGame();
-    // A refit-capable system: tech high enough to stock the full gear
-    // catalogue, plus a station to dock at (mirrors armUp.test.ts).
     const sys = currentSystem(harness.engine)!;
     sys.techLevel = 6;
     sys.stations.push(
@@ -261,7 +240,6 @@ describe("real engine: observe() surfaces the gates, executor honors the reserve
     localStorage.clear();
   });
 
-  /** Set the player's spendable credits to an exact target via the ledger. */
   function setCredits(target: number): void {
     const engine = harness.engine;
     adjustPlayerCredits(
@@ -281,7 +259,6 @@ describe("real engine: observe() surfaces the gates, executor honors the reserve
     expect(fullHull.scene).toBe(SceneType.STATION);
     expect(fullHull.player!.hull).toBe(fullHull.player!.maxHull);
     expect(fullHull.legalActions).not.toContain("repair");
-    // The policy undocks rather than soft-locking on a no-op.
     const action = decideWithMemory(fullHull, createMemory());
     expect(action.kind).not.toBe("repair");
 
@@ -307,26 +284,21 @@ describe("real engine: observe() surfaces the gates, executor honors the reserve
     const sys = currentSystem(engine)!;
     await harness.goTo(SceneType.STATION, { station: sys.stations[0] });
 
-    // Learn the strongest gun's price, then squeeze the wallet around it.
     setCredits(500_000);
     const price = planArmUp(engine)!.buyPrice;
     expect(price).toBeGreaterThan(0); // fresh ship owns no spare gun
 
-    // 1 credit short of (price + reserve): legal, surfaced, but declined.
     setCredits(price! + RESERVE - 1);
     const tight = observe(engine);
     expect(tight.canArmUp).toBe(true);
     expect(tight.armUpCost).toBe(price);
     expect(decideWithMemory(tight, createMemory()).kind).not.toBe("arm-up");
 
-    // Genuine surplus: the policy arms up…
     setCredits(price! + RESERVE + 1);
     const flush = observe(engine);
     const action = decideWithMemory(flush, createMemory());
     expect(action.kind).toBe("arm-up");
 
-    // …and after the real executor runs, the trade reserve survives intact
-    // and installed firepower actually rose (no bankrupt no-op).
     const damageBefore = flush.player!.weaponDamage ?? 0;
     executeArmUp(engine);
     expect(engine.player!.credits).toBeGreaterThanOrEqual(RESERVE);
@@ -336,9 +308,6 @@ describe("real engine: observe() surfaces the gates, executor honors the reserve
   });
 
   it("battle-ready weapon threshold is reachable within the reserve discipline", async () => {
-    // The gate must slow the refit, not forbid it: with a working income the
-    // agent eventually clears BATTLE_READY_WEAPON_DAMAGE while keeping the
-    // reserve — sanity that the two constants aren't mutually unsatisfiable.
     const engine = harness.engine;
     const sys = currentSystem(engine)!;
     await harness.goTo(SceneType.STATION, { station: sys.stations[0] });

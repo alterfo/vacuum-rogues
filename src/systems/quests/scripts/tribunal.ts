@@ -1,32 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A courtroom-defense puzzle. You stand before a sector tribunal,
-// accused of running the blockade that cost a freighter its cargo — and, the
-// prosecutor claims, its crew. You build a `defense` case while the judge's
-// `hostility` rises; push too hard and the bench holds you in contempt and
-// convicts on the spot (a `critMax` redirect to ending_contempt — the
-// patience-pressure spine). The verdict is an auto gate on `defense`. The puzzle
-// is reading the room: aggression builds the strongest case but inflames the
-// judge, while conceding minor points buys goodwill you can spend later.
-// Choice points:
-//   1. Plea — contrite (cools the bench), defiant (strong but inflames), or lay
-//      your logs on the table up front (solid, neutral).
-//   2. Cross-examination — discredit the hostile witness (roll: it lands or it
-//      backfires), concede a point (cools the bench), or table the manifest.
-//   3. Summation — a reasoned appeal, a plea for mercy (cools the bench), or a
-//      theatrical grandstand (roll: brilliant or a contempt-baiting disaster).
-//   4. Verdict — an auto gate on `defense`.
-// Outcomes (by `defense` at verdict, unless held in contempt first):
-//   - ending_vindicated (defense >= 12 — total vindication, damages)   SUCCESS
-//   - ending_acquitted  (defense >= 8  — full acquittal, name cleared) SUCCESS
-//   - ending_lenient    (defense >= 4  — reduced to a fine)            SUCCESS
-//   - ending_guilty     (defense < 4   — convicted, record stained)    FAILURE
-//   - ending_contempt   (judge's patience broke — jailed for contempt) FAILURE
-// Pattern-A note: the top tier (vindication) is deliberately out of reach of
-// the safe, roll-free line — the deterministic defense ceiling is exactly 8
-// (plea_defiant +3, table_manifest +3, closing_appeal +2). Clearing 12 forces
-// BOTH risky rolls to land (discredit +4 and grandstand +5) while riding the
-// judge's hostility, so the safest strategy is no longer also the richest one.
 export const tribunalScript: QuestScript = {
   id: "tribunal",
   title: "Трибунал",

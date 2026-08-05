@@ -1,16 +1,3 @@
-/**
- * Task 7 (quest-and-hub polish pass,
- * `docs/plans/20260726-quest-and-hub-polish-pass.md`): wire up silent
- * purchase/upgrade toast feedback.
- *
- * `showToast` is a no-op unless `this.toast` is a live node, and that node is
- * only mounted by `addToastSlot`. The gear/micromodule/research shop views in
- * StationScene and the СНАРЯЖЕНИЕ/КОРПУС tabs in EquipmentShopScene never called
- * `addToastSlot`, so buying/selling/upgrading gave zero on-screen feedback. This
- * suite drives the real scenes (through the standard fake-pixi mock) and asserts
- * a confirmation toast is queued (`this.toast` is live and carries the message)
- * after each newly-wired action.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -111,7 +98,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scenes + their helpers see the fake pixi.
 import { StationScene } from "@/presentation/StationScene";
 import { EquipmentShopScene } from "@/presentation/EquipmentShopScene";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
@@ -129,7 +115,6 @@ const renderer = {
   clearUILayer: vi.fn(),
 } as unknown as Renderer;
 
-/** Minimal player/engine stub sufficient for the shop render + buy paths. */
 function makeEngine(opts?: {
   loadout?: ShipLoadout | null;
   artifacts?: number;
@@ -184,7 +169,6 @@ function toast(scene: object): FakeNode | null {
   return (scene as { toast: FakeNode | null }).toast;
 }
 
-/** First created Text with the given exact label that has a click handler. */
 function clickableLabel(label: string): FakeNode | undefined {
   return created.find(
     (n) => n.text === label && typeof n.handlers?.pointerdown === "function",
@@ -270,8 +254,6 @@ describe("StationScene — shop-view toast feedback (Task 7)", () => {
     created.length = 0;
     (scene as unknown as { render: () => void }).render();
 
-    // A live toast slot exists in the research view (the reported bug: it was
-    // null, so the panel's showToast callback no-op'd).
     expect(toast(scene)).not.toBeNull();
 
     const upgradeBtn = clickableLabel("[Улучшить]");
@@ -319,7 +301,6 @@ describe("EquipmentShopScene — gear/hull tab toast feedback (Task 7)", () => {
 
   it("confirms a gear sale on the СНАРЯЖЕНИЕ tab", () => {
     const engine = makeEngine({ loadout: new ShipLoadout("hull_scout") });
-    // Own an uninstalled item to sell (sellUninstalledGear reads the warehouse).
     (
       engine.player!.inventory as unknown as { ownedGearIds: string[] }
     ).ownedGearIds.push("wpn_pulse");

@@ -24,14 +24,6 @@ import {
   MICROMODULE_TIER_PRICE,
 } from "@/systems/equipment/micromoduleShop";
 
-/**
- * Task 5 (install/micromodule overhaul): CRAFT_CENTER (science) stations stock the
- * micromodules. A buy is a balanced player→equipment GL transfer through the
- * banking bus, and the bought module lands in the player's owned inventory. These
- * tests pin the catalog (gear + hull families), the price, and the balanced
- * posting — the shared purchase path the StationScene shop UI calls.
- */
-
 interface Harness {
   bus: BankBus;
   service: BankingService;
@@ -54,11 +46,9 @@ function makeHarness(startingMoney = 10000): Harness {
 describe("micromodule shop — catalog", () => {
   it("stocks the full catalog: gear micromodules plus the hull family", () => {
     const catalog = micromoduleShopCatalog();
-    // Every gear micromodule is offered…
     for (const mm of MICRO_MODULES) {
       expect(catalog.some((c) => c.id === mm.id)).toBe(true);
     }
-    // …and so is every hull micromodule (defense / cargo / energy-redirect).
     for (const mm of HULL_MICRO_MODULES) {
       expect(catalog.some((c) => c.id === mm.id)).toBe(true);
     }
@@ -72,7 +62,6 @@ describe("micromodule shop — catalog", () => {
       expect(micromodulePrice(mm)).toBe(MICROMODULE_TIER_PRICE[mm.bonusTier]);
       expect(micromodulePrice(mm)).toBeGreaterThan(0);
     }
-    // Stronger tiers cost more.
     expect(MICROMODULE_TIER_PRICE[1]).toBeGreaterThan(
       MICROMODULE_TIER_PRICE[2],
     );
@@ -107,11 +96,6 @@ describe("micromodule shop — buying", () => {
   });
 
   it("a bought hull micromodule survives save validation (regression: HULL targetCategory)", () => {
-    // HULL_MICRO_MODULES carry targetCategory "HULL"; buying one pushes it into
-    // inventory.micromodules, persisted via z.array(MicroModuleSchema). If the
-    // schema enum omits "HULL", the next load throws SAVE_VALIDATION_FAILED and
-    // the save is unrecoverable. Validate the persisted shape for every hull
-    // micromodule the shop can sell.
     for (const hull of HULL_MICRO_MODULES) {
       const fresh = makeHarness(10000);
       const result = buyMicromodule(fresh.access, fresh.player, hull);
@@ -130,15 +114,11 @@ describe("micromodule shop — buying", () => {
 
     buyMicromodule(h.access, h.player, mm);
 
-    // The player paid exactly the price…
     expect(h.player.credits).toBe(before - price);
-    // …the equipment GL counterparty received it…
     expect(h.service.balanceOf(GL_COUNTERPARTY.EQUIPMENT)).toBe(price);
-    // …and the double-entry books stay balanced.
     expect(Math.abs(h.service.getLedger().totalBalance())).toBeLessThanOrEqual(
       BALANCE_EPSILON,
     );
-    // The projection mirrors the ledger.
     expect(h.player.credits).toBe(
       h.service.balanceOf(h.player.currentAccountId),
     );

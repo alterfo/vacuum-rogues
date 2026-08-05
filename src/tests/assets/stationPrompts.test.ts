@@ -1,14 +1,3 @@
-/**
- * Station art-prompt shape guard (plan 20260624-off-planet-base-art).
- *
- * The `station` ComfyUI category's per-type prompt keys are the literal art-file
- * prefixes (`station/<prefix>_NN`), so they MUST stay in lockstep with the code
- * map `STATION_TEXTURE_PREFIX`. This test pins that contract both ways: every
- * prefix has a prompt and every prompt key is a known prefix — a drift in either
- * direction (renamed station type, edited art prompt) goes red here, before any
- * GPU art is generated against a stale prefix. (Texture generation itself is a
- * manual GPU-host step; this only guards the JSON shape.)
- */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";

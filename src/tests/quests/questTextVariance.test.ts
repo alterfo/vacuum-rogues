@@ -6,16 +6,8 @@ import {
 } from "@/systems/quests/QuestVM";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 
-// Task 14 (quest-and-hub-polish-pass): the text-pool variance primitive.
-// A `QuestLocation.text` may be a `string[]`; the resolver picks ONE variant
-// deterministically from `(seed, locationId)` via a stable hash that must NOT
-// consume the VM's SeededRNG stream (so adding/removing variants never desyncs
-// a shipped quest's numeric `random(min,max)` rolls).
-
 const POOL = ["Вариант А", "Вариант Б", "Вариант В", "Вариант Г"];
 
-// A script whose start location advances through a random() roll, letting us
-// prove the text pool does not perturb the RNG stream.
 function rollScript(startText: string | string[]): QuestScript {
   return {
     id: "variance_probe",
@@ -132,9 +124,6 @@ describe("Task 14 — quest text-pool variance resolver", () => {
     });
 
     it("does NOT consume the RNG stream (pool vs scalar roll identically)", () => {
-      // Same seed, same graph, only text shape differs — the downstream
-      // random() roll must be byte-identical, proving variant selection never
-      // advances `this.rng`.
       const scalarVm = new QuestVM(rollScript("plain"), "seed-XYZ");
       scalarVm.currentLocationText();
       scalarVm.execute("go");

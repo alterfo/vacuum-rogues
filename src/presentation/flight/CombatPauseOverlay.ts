@@ -3,40 +3,25 @@ import { scaledFont } from "@/utils/fontScale";
 import { UiButton } from "../ui/UiButton";
 import type { PauseReason } from "./combatPause";
 
-/**
- * One selectable target row for the active-pause overlay. The overlay stays
- * generic over the concrete handle (`TTarget` binds {@link NpcShipSprite} in the
- * scene) and only reads the label + hull fraction it is given, so it imports no
- * domain/presentation combat types (Low Coupling).
- */
 export interface PauseTargetOption<TTarget> {
   readonly value: TTarget;
   readonly label: string;
-  /** Hull fill 0..1, appended to the label as a percentage. */
   readonly hpFraction: number;
 }
 
-/** One selectable weapon row for the active-pause overlay. */
 export interface PauseWeaponOption<TWeapon> {
   readonly value: TWeapon;
   readonly label: string;
 }
 
-/** Host accessors the overlay needs without depending on the concrete scene. */
 export interface CombatPauseOverlayDeps {
-  /** Current viewport size, used to centre the modal. */
   getScreenSize(): { width: number; height: number };
 }
 
-/** Click handlers the scene wires to the {@link CombatPauseController}. */
 export interface CombatPauseOverlayCallbacks<TTarget, TWeapon> {
-  /** A target row was clicked — route to `controller.selectTarget`. */
   onSelectTarget(target: TTarget): void;
-  /** A weapon row was clicked — route to `controller.selectWeapon`. */
   onSelectWeapon(weapon: TWeapon): void;
-  /** The Fire button was clicked — route to `controller.confirm`. */
   onConfirm(): void;
-  /** The Resume button was clicked — route to `controller.resume`. */
   onResume(): void;
 }
 
@@ -57,20 +42,6 @@ const ROW_GAP = 6;
 const SECTION_GAP = 10;
 const ROW_W = PANEL_W - PAD * 2;
 
-/**
- * Active-pause combat overlay (PixiJS): a centred modal that opens when an
- * incoming attack (or a lost target) freezes the flight turn. It lists the
- * engaged enemies and the player's fitted weapons and lets the player pick one
- * of each, then **Огонь!** (fire one shot + resume) or **Продолжить** (resume
- * without firing). The overlay is purely a view — every click routes back
- * through {@link CombatPauseOverlayCallbacks} to the pure
- * {@link CombatPauseController}, which owns the state and side effects.
- *
- * It owns its display objects on the UI layer handed in; the scene opens it from
- * the controller's `onPause` hook and closes it from `onResume`. A weaponless or
- * target-less open is handled gracefully with a message and only the resume
- * action (the player can't fire, so the overlay never strands them).
- */
 export class CombatPauseOverlay<TTarget, TWeapon> {
   private readonly uiLayer: Container;
   private readonly deps: CombatPauseOverlayDeps;
@@ -79,7 +50,6 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
   private root: Container | null = null;
   private panel: Container | null = null;
 
-  /** Selectable rows kept for re-highlighting as the selection changes. */
   private readonly targetRows: { value: TTarget; button: UiButton }[] = [];
   private readonly weaponRows: { value: TWeapon; button: UiButton }[] = [];
 
@@ -96,16 +66,10 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
     this.callbacks = callbacks;
   }
 
-  /** Whether the modal is currently mounted. */
   get isOpen(): boolean {
     return this.root !== null;
   }
 
-  /**
-   * Open (or re-open) the overlay for a fresh pause: rebuild the target + weapon
-   * lists and centre the modal. `selectedTarget`/`selectedWeapon` pre-highlight
-   * the default selection so a quick **Огонь!** works without first picking.
-   */
   open(args: {
     reason: PauseReason;
     targets: readonly PauseTargetOption<TTarget>[];
@@ -122,8 +86,6 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
     this.uiLayer.addChild(root);
     this.root = root;
 
-    // Full-screen scrim: dims the world and swallows clicks so a stray click
-    // behind the modal can't build a route / hit a sprite while paused.
     const scrim = new Graphics();
     const { width, height } = this.deps.getScreenSize();
     scrim.rect(0, 0, width, height).fill({ color: 0x000000, alpha: 0.55 });
@@ -166,17 +128,12 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
     this.applyHighlight();
   }
 
-  /**
-   * Update which target/weapon read as selected (re-highlight the rows). Called
-   * by the scene after the controller's selection changes from a row click.
-   */
   setSelection(target: TTarget | null, weapon: TWeapon | null): void {
     this.selectedTarget = target;
     this.selectedWeapon = weapon;
     this.applyHighlight();
   }
 
-  /** Tear down every display object the overlay owns (idempotent). */
   close(): void {
     this.targetRows.length = 0;
     this.weaponRows.length = 0;
@@ -188,10 +145,6 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
     }
     this.root = null;
   }
-
-  // ---------------------------------------------------------------------------
-  // Internals
-  // ---------------------------------------------------------------------------
 
   private addTitle(panel: Container, reason: PauseReason, y: number): number {
     const text =
@@ -336,7 +289,6 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
       resume.y = y;
       panel.addChild(resume.container);
     } else {
-      // No firing possible (no weapon / no target): only let the player resume.
       const resume = new UiButton(
         "▶",
         "Продолжить",
@@ -355,7 +307,6 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
     return y + ROW_H + 4;
   }
 
-  /** Recolour every row so the selected target/weapon read as success-green. */
   private applyHighlight(): void {
     for (const row of this.targetRows) {
       row.button.setAccentColor(
@@ -369,7 +320,6 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
     }
   }
 
-  /** Draw the panel background + border behind the already-laid-out content. */
   private drawPanelBg(panel: Container, panelH: number): void {
     const bg = new Graphics();
     bg.roundRect(0, 0, PANEL_W, panelH, 8).fill({
@@ -385,7 +335,6 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
     panel.addChildAt(bg, 0); // behind the content laid out above
   }
 
-  /** Centre the panel of the given height in the viewport. */
   private positionPanel(panelH: number): void {
     if (!this.panel) return;
     const { width, height } = this.deps.getScreenSize();

@@ -9,7 +9,6 @@ import { SeededRNG } from "@/utils/seededRNG";
 import { StarType, NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 
-/** sys_a (friendly) ←→ sys_b, two-system chain. */
 function makeGalaxy(): Galaxy {
   const sysA = new StarSystem(
     "sys_a",
@@ -42,7 +41,6 @@ describe("NpcSimulator.assembleCaptureFleet", () => {
     const sim = new NpcSimulator();
     sim.assembleCaptureFleet(galaxy, new SeededRNG("capture_seed"));
 
-    // Fleet of OVERMIND ships now travels sys_b → sys_a (still friendly).
     expect(galaxy.isHostileSystem("sys_a")).toBe(false);
 
     for (let i = 0; i < 20 && !galaxy.isHostileSystem("sys_a"); i++) {
@@ -93,9 +91,6 @@ describe("NpcSimulator.assembleCaptureFleet", () => {
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_b");
 
-    // Indestructible PATROL defender holding sys_a. A PATROL (vs RANGER) takes no
-    // quest-accept RNG draw, so a constant seed keeps its single per-tick depart
-    // roll identical every tick — the defender provably never wanders off.
     const defender = new NpcShip({
       id: "defender",
       name: "Defender",
@@ -120,16 +115,8 @@ describe("NpcSimulator.assembleCaptureFleet", () => {
     const sim = new NpcSimulator();
     sim.assembleCaptureFleet(galaxy, new SeededRNG("defended_seed"));
 
-    // Tick well past arrival; the indestructible defender keeps sys_a free.
-    // Seed re-picked for the win-rate-100pct plan's Task 2/3 garrison-discount
-    // retune: raising the discount changed how many draws `fillGarrison`
-    // consumes per tick, which shifted this test's fixed per-tick seed enough
-    // to occasionally roll the defender's own departure chance — collateral
-    // RNG-stream drift, not a capture-logic regression (re-verified against a
-    // spread of seeds, all stable under the new discount).
     for (let i = 0; i < 15; i++) {
       sim.tick(galaxy, new SeededRNG("def_hold_1"));
-      // Defense-in-depth: keep the defender pinned and whole between ticks.
       defender.currentSystemId = "sys_a";
       defender.state = NpcState.PATROLLING;
       defender.destinationSystemId = null;
@@ -145,7 +132,6 @@ describe("NpcSimulator.assembleCaptureFleet", () => {
     const sim = new NpcSimulator();
     sim.assembleCaptureFleet(galaxy, new SeededRNG("noop_seed"));
 
-    // No hostile system → no capture fleet spawned.
     expect(npcsPresentInSystem(galaxy, "sys_b")).toHaveLength(0);
     expect(
       galaxy.npcShips.filter((n) => n.faction === Faction.OVERMIND),

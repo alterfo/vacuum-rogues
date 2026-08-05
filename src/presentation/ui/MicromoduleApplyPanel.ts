@@ -7,50 +7,26 @@ import { gearById } from "@/systems/equipment/GearCatalog";
 import { gearMicromoduleCategory } from "@/systems/equipment/GearBridge";
 import { logger } from "@/utils/logger";
 
-/** Per-tier bonus copy for the micromodule rows (T1 strongest). */
 const TIER_BONUS = ["", "+20%", "+12%", "+6%"] as const;
 
-/**
- * Which fitted slot the modal targets + the scene-owned concerns it needs. The
- * panel mutates the canonical `ShipLoadout` (via `applyMicromoduleAt`) and the
- * player's owned-micromodule list; everything else (toast, navigation, re-render)
- * is delegated so the modal behaves identically wherever it is mounted.
- */
 export interface MicromoduleApplyContext {
-  /** Container the modal draws into (the host scene's main container). */
   readonly container: Container;
   readonly player: Player;
   readonly loadout: ShipLoadout;
-  /** The fitted slot the chosen micromodule lands on (by index + gear id). */
   readonly target: { slotIndex: number; gearId: string };
-  /** Flash a status message in the host scene's toast. */
   showToast(msg: string, color: number): void;
-  /** Close the modal and return to the hangar (the host re-renders). */
   onClose(): void;
 }
 
-/**
- * The shared "choose a micromodule for this fitted slot" modal — the click-path
- * alternative to the hangar's drag-drop tray. Lists the player's owned
- * micromodules whose `targetCategory` matches the fitted item, and applies the
- * chosen one onto the exact slot (by index, so a duplicate-fitted item targets
- * the clicked copy), consuming it from the inventory.
- *
- * Extracted out of `StationScene` so the planet Верфь (`EquipmentShopScene`) gets
- * the identical apply flow when the shared `HangarPanel` opens it — one source of
- * truth for the modal, mirroring how `HangarPanel` is the one source for fitting.
- */
 export class MicromoduleApplyPanel {
   constructor(private readonly renderer: Renderer) {}
 
-  /** Draw the modal into the host container at centred geometry. */
   render(ctx: MicromoduleApplyContext): void {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
     const { container, player, loadout, target } = ctx;
     const targetGear = gearById(target.gearId);
     if (!targetGear) {
-      // The fitted item vanished (e.g. it was unfitted) — bail back to the hangar.
       ctx.onClose();
       return;
     }
@@ -81,7 +57,6 @@ export class MicromoduleApplyPanel {
     title.eventMode = "none";
     container.addChild(title);
 
-    // Micromodules in inventory matching the fitted item's category.
     const targetCategory = gearMicromoduleCategory(targetGear);
     const matching = player.inventory.micromodules.filter(
       (mm) => mm.targetCategory === targetCategory,
@@ -136,9 +111,6 @@ export class MicromoduleApplyPanel {
         applyBtn.cursor = "pointer";
         applyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          // Canonical apply: the micromodule lands on the exact fitted slot (by
-          // index, so the clicked copy is targeted with duplicate gear),
-          // consuming it from the inventory bag.
           const applied = loadout.applyMicromoduleAt(target.slotIndex, mm.id);
           if (applied) {
             const idx = player.inventory.micromodules.indexOf(mm);

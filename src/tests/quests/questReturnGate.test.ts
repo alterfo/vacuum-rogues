@@ -276,15 +276,12 @@ describe("QuestManager re-acceptance guard for pending-return quests", () => {
     const accepted = qm.acceptQuestFromTemplate(tpl, "planet_origin");
     expect(accepted).not.toBeNull();
 
-    // Objectives done in flight → quest moves to pending-return.
     qm.markObjectivesDone(tpl.id);
     expect(qm.getActiveQuests()).toHaveLength(0);
     expect(qm.getPendingReturnQuests()).toHaveLength(1);
 
-    // The board would re-offer the same template id; re-accepting must be refused.
     const reAccepted = qm.acceptQuestFromTemplate(tpl, "planet_origin");
     expect(reAccepted).toBeNull();
-    // No duplicate id across the two collections.
     expect(qm.getActiveQuests()).toHaveLength(0);
     expect(qm.getPendingReturnQuests()).toHaveLength(1);
   });
@@ -341,7 +338,6 @@ describe("BOUNTY return-gate integration: bountyByNpcKill flow", () => {
     const quest = makeBountyQuest("q_b", "planet_origin", "sys_B");
     qm["activeQuests"].set(quest.id, quest);
 
-    // Simulate what QuestCompletion.bountyByNpcKill does
     const npcId = "npc_target_1";
     for (const q of qm.getActiveQuests()) {
       if (
@@ -359,7 +355,6 @@ describe("BOUNTY return-gate integration: bountyByNpcKill flow", () => {
     expect(player.credits).toBe(1000); // no reward yet
     expect(qm.getPendingReturnQuests()).toHaveLength(1);
 
-    // Then player returns to planet and claims reward
     const claimed = qm.claimReturnReward(quest.id, player);
     expect(claimed).toBe(true);
     expect(player.credits).toBe(1000 + REWARD.credits);

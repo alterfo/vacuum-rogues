@@ -1,13 +1,8 @@
-/**
- * Tests run against the real vacuum-mcp source tree itself — so the package
- * acts as its own integration fixture.
- */
 import { describe, it, expect } from "vitest";
 import { resolve } from "node:path";
 import { findSymbol, findSymbolText, findTestsFor } from "./find-symbol.js";
 
 const ROOT = resolve(import.meta.dirname, "..");
-// Search inside the package's own src/ directory
 const OPTS = { searchDirs: ["src"] };
 
 describe("findSymbol", () => {

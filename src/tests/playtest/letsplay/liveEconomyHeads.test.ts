@@ -1,24 +1,3 @@
-/**
- * Task 6 regression: the LIVE autopilot's 7 previously-no-op verbs
- * (repair/buyGear/upgradeHull/buyModule/takeLoan/repayLoan/sellCargo) now
- * drive their real executor through `createLiveSceneController`, exactly as
- * the headless `PlayerAgent` applier already does (`engineQueries`/
- * `equipmentQueries`/`bankingQueries` — see `newActions.test.ts`/
- * `repairQuest.test.ts` for the executors' own real-engine coverage). This
- * file exercises the LIVE wiring itself (previously a safe no-op comment),
- * not the executors in isolation.
- *
- * Also covers the live buy-accounting skew fix: `openTrade` executes the
- * trade then transitions straight to SPACE_FLIGHT (never back to PLANET, to
- * avoid a stuck TRADE-scene loop), so the inventory delta is only visible on
- * the *next* `updateMemory` fold — by which point `obs.currentPlanet` is
- * already null. `AgentMemory.lastCurrentPlanetId` lets that fold still
- * recover the real buy price from the price book instead of defaulting to 0.
- * Since the 20260703 plan's no-speculation fix, `executeTradeOnPlanet`
- * (`preferredGood=null`) is sell-only, so this test drives
- * `executeMemoryAwareTrade` directly with an explicit preferred good to still
- * exercise a real buy.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { GameEngine } from "@/systems/GameEngine";
 import { RealEngineHarness } from "../realEngineHarness";
@@ -56,8 +35,6 @@ describe("createLiveSceneController — the 7 wired economy heads (Task 6)", () 
     harness = await RealEngineHarness.boot({ seed: "LIVE-ECON-HEADS-TEST" });
     await harness.newGame();
 
-    // Guarantee a shoppable system: a CRAFT_CENTER station, plus a tech level
-    // high enough to unlock hull listings (mirrors newActions.test.ts).
     const sys = currentSystem(harness.engine)!;
     sys.techLevel = 5;
     sys.stations.push(
@@ -244,15 +221,9 @@ describe("live buy-accounting skew — AgentMemory recovers the real buy price (
         "test seed",
       );
 
-      // Fold 1: land, observe the market (mirrors AutopilotController.tickOnce
-      // observing BEFORE the trade executes).
       await harness.goTo(SceneType.PLANET, { planet });
       let mem = updateMemory(createMemory(), observe(engine));
 
-      // Pick the cheapest available good as the explicit preferred good and
-      // record its price BEFORE the trade executes — sell-only null-good
-      // buys nothing since the 20260703 no-speculation fix, so this test
-      // drives a real buy via `executeMemoryAwareTrade` directly.
       const ts = new TradeSystem();
       let good = planet.market.availableResources[0];
       let expectedBuyPrice = ts.getBuyPrice(planet, good, engine.player!);
@@ -264,13 +235,9 @@ describe("live buy-accounting skew — AgentMemory recovers the real buy price (
         }
       }
 
-      // The live `openTrade` verb executes the real trade, THEN transitions
-      // to SPACE_FLIGHT — mirroring `createLiveSceneController.openTrade`.
       executeMemoryAwareTrade(engine, planet, good);
       await harness.goTo(SceneType.SPACE_FLIGHT);
 
-      // Fold 2: the next tick's observation — currentPlanet is now null, but
-      // the cargo delta from the trade is visible for the first time here.
       mem = updateMemory(mem, observe(engine));
 
       const boughtLot = mem.inventoryLots.find((l) => l.good === good);
@@ -285,13 +252,6 @@ describe("live buy-accounting skew — AgentMemory recovers the real buy price (
 
 describe("live openTrade() consults the known cross-planet margin (not sell-only forever)", () => {
   it("buys the memory's known-margin good when landed at that margin's own buy planet", async () => {
-    // Regression: `openTrade` used to hardcode `executeTradeOnPlanet(engine,
-    // planet)` — `executeMemoryAwareTrade(engine, planet, null)` — which the
-    // 20260703 no-speculation fix redefined as sell-only. The live autopilot
-    // could therefore never execute a `buy-low`/price-discovery buy the
-    // heuristic ladder decided on, only ever sell, unlike the headless
-    // PlayerAgent (which passes a real preferred good). `createLiveSceneController`
-    // now takes a `getMemory` so `openTrade` can mirror PlayerAgent's lookup.
     const harness = await RealEngineHarness.boot({
       seed: "LIVE-OPEN-TRADE-MARGIN-TEST",
     });
@@ -313,8 +273,6 @@ describe("live openTrade() consults the known cross-planet margin (not sell-only
     const buyPrice = ts.getBuyPrice(planet, good, engine.player!);
     expect(buyPrice).toBeGreaterThan(0);
 
-    // A known margin whose buy planet IS the one the player is standing on
-    // — bestKnownMargin should pick this good, and openTrade should buy it.
     const memory = createMemory();
     memory.priceBook.set(
       planet.id,
@@ -363,8 +321,6 @@ describe("live openTrade() consults the known cross-planet margin (not sell-only
 
     await createLiveSceneController(engine).openTrade();
 
-    // No margin known (fresh memory) ⇒ no preferred good ⇒ sell-only: credits
-    // never drop (no speculative buy), matching the no-speculation fix.
     expect(engine.player!.credits).toBeGreaterThanOrEqual(creditsBefore);
     expect(harness.errors()).toHaveLength(0);
 

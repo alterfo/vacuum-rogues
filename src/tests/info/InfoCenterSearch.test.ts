@@ -60,7 +60,6 @@ function listing(systemId: string, gearId: string, price: number): GearListing {
   return { systemId, planetId: `${systemId}1`, gear: gearById(gearId)!, price };
 }
 
-/** A — B — C chain */
 function chain(withPlanets = false): StarSystem[] {
   return [
     sys("A", "Альфа", ["B"], withPlanets ? [planet("A1", "Аврора")] : []),
@@ -108,11 +107,9 @@ describe("GalacticRegistry — findPlanet", () => {
     const reg = new GalacticRegistry(systems, []);
 
     const hits = reg.findPlanet({ name: "бе", originSystemId: "A" });
-    // "Беллорус" and "Бета-2" are both in system B (1 jump), nothing else starts with "бе"
     expect(hits).toHaveLength(2);
     expect(hits.every((h) => h.systemId === "B")).toBe(true);
     expect(hits.every((h) => h.jumps === 1)).toBe(true);
-    // sorted alphabetically within same distance
     expect(hits[0].planetName).toBe("Беллорус");
     expect(hits[1].planetName).toBe("Бета-2");
   });
@@ -144,7 +141,6 @@ describe("GalacticRegistry — findPlanet", () => {
       originSystemId: "A",
       maxJumps: 1,
     });
-    // All planets in A (0 jumps) + B (1 jump)
     expect(close.every((h) => h.jumps <= 1)).toBe(true);
     const far = reg.findPlanet({ name: "", originSystemId: "A" });
     expect(far.length).toBeGreaterThan(close.length);
@@ -166,7 +162,6 @@ describe("GalacticRegistry — findGear with tech sort", () => {
       kind: GearKind.HULL,
       sort: "tech",
     });
-    // highest tech first
     expect(hits[0].gear.id).toBe("hull_bastion"); // T5
     expect(hits[hits.length - 1].gear.id).toBe("hull_courier"); // T1
   });
@@ -203,7 +198,6 @@ describe("Data fog — isStaleSystem via lastVisitedDay", () => {
   it("systems never visited (undefined) are always stale", () => {
     const s = sys("A", "Альфа", []);
     expect(s.lastVisitedDay).toBeUndefined();
-    // undefined → treated as stale regardless of current day
     const isStale =
       s.lastVisitedDay === undefined || 100 - (s.lastVisitedDay ?? 0) > 30;
     expect(isStale).toBe(true);

@@ -103,17 +103,13 @@ describe("NpcShipManager hostility escalation", () => {
     const manager = makeManager([trader1, trader2, other, farTrader]);
     manager.initialize();
 
-    // The player attacks one neutral trader (real player-attack entry point).
     (manager as unknown as { onAttackNpc(npc: NpcShip): void }).onAttackNpc(
       trader1,
     );
 
-    // The attacked ship and its same-faction neighbour in-system turn hostile…
     expect(trader1.hostile).toBe(true);
     expect(trader2.hostile).toBe(true);
-    // …but a different faction in the same system is spared…
     expect(other.hostile).toBe(false);
-    // …and a same-faction ship in a different system is untouched.
     expect(farTrader.hostile).toBe(false);
 
     manager.destroy();

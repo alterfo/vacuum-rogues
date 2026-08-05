@@ -10,15 +10,6 @@ import {
 } from "@/systems/quests/QuestGenerator";
 import { SeededRNG } from "@/utils/seededRNG";
 
-/**
- * Task 16 ("procedural board text variety"): every procedural `QuestType`
- * (DELIVERY / BOUNTY / ESCORT / DIPLOMACY / EXPLORATION / DEFENSE) must offer
- * ≥ 4 seeded phrasing variants that thread issuer / system / cargo details, are
- * fully deterministic for a fixed (seed, planet, day), never leak a broken
- * interpolation, and preserve the board dedupe contract.
- */
-
-/** Minimal star-system stub (same shape the generator reads). */
 function sys(id: string, name: string, toIds: string[]): StarSystem {
   return {
     id,
@@ -32,7 +23,6 @@ function sys(id: string, name: string, toIds: string[]): StarSystem {
   } as unknown as StarSystem;
 }
 
-/** A linear chain A—B—C—D (origin A): B=1 jump, C=2, D=3. */
 function chainGalaxy(): StarSystem[] {
   return [
     sys("A", "Альфа", ["B"]),
@@ -42,10 +32,6 @@ function chainGalaxy(): StarSystem[] {
   ];
 }
 
-/**
- * A galaxy where the OVERMIND (s2) sits one hop past a contestable frontier
- * system (s1), so `generateQuestBoard` injects a DEFENSE quest targeting s1.
- */
 function frontierGalaxy(): StarSystem[] {
   return [
     sys("s0", "Хаб", ["s1"]),
@@ -61,8 +47,6 @@ function routineOpts(over: Partial<BoardOptions> = {}): BoardOptions {
     planetId: "A_p1",
     day: 0,
     seed: "variety-seed",
-    // Routine-only board: no text-quests / elites / chains, so every slot runs
-    // the real per-type flavor functions.
     textRatio: 0,
     eliteRatio: 0,
     chainRatio: 0,
@@ -71,7 +55,6 @@ function routineOpts(over: Partial<BoardOptions> = {}): BoardOptions {
   };
 }
 
-/** A rendered description is broken if any `${…}` slot rendered empty/invalid. */
 function assertNoBrokenInterpolation(desc: string): void {
   expect(desc).not.toContain("undefined");
   expect(desc).not.toContain("NaN");
@@ -80,7 +63,6 @@ function assertNoBrokenInterpolation(desc: string): void {
   expect(desc.trim().length).toBeGreaterThanOrEqual(40);
 }
 
-/** Sweep many deterministic routine boards → flat quest list. */
 function sampleRoutine(): GeneratedQuest[] {
   const out: GeneratedQuest[] = [];
   for (let s = 0; s < 4; s++) {
@@ -183,8 +165,6 @@ describe("QuestGenerator board text variety (Task 16)", () => {
   });
 
   it("keeps board dedupe intact — no duplicate quest keys on a board", () => {
-    // Dedupe is opt-in via `excludeKeys`; an empty exclude set still enforces
-    // in-board uniqueness.
     for (let p = 0; p < 40; p++) {
       const board = generateQuestBoard(
         routineOpts({ planetId: `D${p}`, excludeKeys: [] }),

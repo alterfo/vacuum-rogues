@@ -14,9 +14,7 @@ export class Planet {
     public readonly availableQuests: Quest[],
     public readonly isHabitable: boolean = true,
     public drones: number = 0,
-    /** Population count; affected by Plague events and market capacity. */
     public population: number = 0,
-    /** Faction that has captured this planet (null = not captured). */
     public capturedBy: FactionType | null = null,
   ) {}
 }

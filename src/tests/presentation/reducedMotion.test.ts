@@ -11,7 +11,6 @@ import {
   type ReducedMotionStore,
 } from "@/presentation/ui/reducedMotion";
 
-/** An in-memory store for the explicit-setting cases (no jsdom dependency). */
 function memStore(initial: Record<string, string> = {}): ReducedMotionStore {
   const map = new Map(Object.entries(initial));
   return {
@@ -22,7 +21,6 @@ function memStore(initial: Record<string, string> = {}): ReducedMotionStore {
   };
 }
 
-/** A `matchMedia` stub that reports `matches` for the reduce-motion query. */
 function mm(matches: boolean): MatchMedia {
   return (query) => ({
     matches: query === REDUCED_MOTION_QUERY ? matches : false,
@@ -68,7 +66,6 @@ describe("reducedMotion — explicit player setting", () => {
       },
     };
     expect(isReducedMotionSet(throwing)).toBe(false);
-    // setReducedMotion is best-effort: a throwing store must not propagate.
     expect(() => setReducedMotion(true, throwing)).not.toThrow();
   });
 });
@@ -127,7 +124,6 @@ describe("reducedMotion — live environment (jsdom)", () => {
     expect(reducedMotion({ matchMedia: mm(false) })).toBe(false);
     setReducedMotion(true);
     expect(isReducedMotionSet()).toBe(true);
-    // Default env reads live localStorage; jsdom matchMedia reports no preference.
     expect(reducedMotion({ matchMedia: mm(false) })).toBe(true);
   });
 

@@ -2,15 +2,6 @@ import { Graphics, Text } from "pixi.js";
 import type { IOverlayPresenter } from "@/core/ports/IOverlayPresenter";
 import type { Renderer } from "@/presentation/Renderer";
 
-/**
- * Renderer-backed {@link IOverlayPresenter}: builds the raw-PixiJS full-screen
- * modal/loading/outcome overlays that used to live directly on GameEngine
- * (`systems/` must never import `pixi.js` — see CLAUDE.md's layer rule).
- *
- * The renderer is created lazily inside `GameEngine.initialize()`, well after
- * this presenter must already exist (it's a constructor DI dependency), so it
- * is obtained on demand via `getRenderer` rather than held as a fixed field.
- */
 export class OverlayPresenter implements IOverlayPresenter {
   private modalObjects: (Graphics | Text)[] = [];
   private loadingOverlayObjects: (Graphics | Text)[] = [];
@@ -86,7 +77,6 @@ export class OverlayPresenter implements IOverlayPresenter {
     }
   }
 
-  /** Port method — see `IOverlayPresenter.dismissAll` for the F4 rationale. */
   dismissAll(): void {
     this.clearModal();
     this.hideLoading();
@@ -204,8 +194,6 @@ export class OverlayPresenter implements IOverlayPresenter {
     renderer.uiLayer.addChild(msgText);
     this.modalObjects.push(msgText);
 
-    // A small helper to build a clickable text button (the outcome overlay's
-    // only interactive elements).
     const makeButton = (
       label: string,
       y: number,

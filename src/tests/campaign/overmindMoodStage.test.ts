@@ -1,10 +1,3 @@
-/**
- * Overmind mood-art stage derivation (three-year-campaign plan, Task 18).
- *
- * Pure mapping from the same escalation bands Task 5 uses for news notices
- * (`activeEscalationStages`) down to a single mood-art key — the most severe
- * currently-active band, or `"dormant"` before any band is crossed.
- */
 import { describe, it, expect } from "vitest";
 import { overmindMoodStage } from "@/systems/campaign/overmindMoodStage";
 import type { EscalationInputs } from "@/systems/campaign/escalationNotices";

@@ -16,15 +16,6 @@ import {
 } from "@/config/balance";
 import { QuestType, type OvermindStatus } from "@/types";
 
-/**
- * Overmind campaign quest chain — gating predicate + quest builder (Task 12).
- *
- * The chain is a fixed, ordered sequence gated on player milestones, not days.
- * These tests pin the two invariants the plan demands: steps unlock **in order
- * and only in order**, and the builder emits catalog quests that reuse existing
- * completion paths with a stable id that lands in `completedQuests`.
- */
-
 const STEP = {
   distress: "campaign-overmind-1-distress",
   recon: "campaign-overmind-2-recon",
@@ -81,8 +72,6 @@ describe("campaignChain — nextCampaignChainStep ordering", () => {
   });
 
   it("offers ONLY step 1 even when later milestones are already crossed", () => {
-    // Fully armed, front collapsed — but no step completed, so the chain must
-    // still start at step 1 (in order and only in order).
     const step = nextCampaignChainStep(
       inputs({ peakPower: 1, overmindShare: 0.05, arcStatus: "contained" }),
     );
@@ -114,8 +103,6 @@ describe("campaignChain — nextCampaignChainStep ordering", () => {
   });
 
   it("never skips ahead when an out-of-order completion is present", () => {
-    // recon marked complete but distress not (corrupted order): must offer the
-    // first INCOMPLETE step (distress) — never jump ahead to requisition.
     expect(
       nextCampaignChainStep(inputs({ completedStepIds: [STEP.recon] }))?.id,
     ).toBe(STEP.distress);
@@ -171,7 +158,6 @@ describe("campaignChain — milestone bands", () => {
 
   it("gates step 6 (core assault) on the Overmind being a positive remnant", () => {
     const done5 = [...priorThree, STEP.liberation, STEP.counteroffensive];
-    // Front still broad — not yet the final push.
     expect(
       nextCampaignChainStep(
         inputs({
@@ -182,7 +168,6 @@ describe("campaignChain — milestone bands", () => {
         }),
       ),
     ).toBeNull();
-    // Remnant remains — core assault available.
     expect(
       nextCampaignChainStep(
         inputs({
@@ -193,7 +178,6 @@ describe("campaignChain — milestone bands", () => {
         }),
       )?.id,
     ).toBe(STEP.core);
-    // Overmind already gone (share 0): the remnant step is moot.
     expect(
       nextCampaignChainStep(
         inputs({
@@ -223,8 +207,6 @@ describe("campaignChain — milestone bands", () => {
       STEP.requisition,
       STEP.liberation,
     ];
-    // A stricter liberation band would keep step 5 gated on containment as usual,
-    // but a looser core-assault band changes when step 6 opens.
     const done5 = [...done4, STEP.counteroffensive];
     const strict = nextCampaignChainStep(
       inputs({
@@ -257,7 +239,6 @@ describe("campaignChain — buildCampaignChainQuest", () => {
     expect(q.template.objectives[0].locationId).toBe("planet-front");
     expect(q.template.targetSystemId).toBe("sys-front");
     expect(q.template.reward.credits).toBe(CAMPAIGN_CHAIN_STEP_REWARDS[0]);
-    // The prose names the destination and reads as a life-and-death briefing.
     expect(q.template.description).toContain("Тау Кита");
     expect(q.template.description.length).toBeGreaterThan(80);
     expect(q.issuerPlanetId).toBe("issuer-planet");

@@ -1,21 +1,5 @@
-/**
- * Task 11b — customs-inspection modal seam (autopilot behavior when caught with
- * contraband). The customs modal used to be a plain local variable in
- * `showCustomsModal`, so the dev autopilot's `dismissBlockingModal()` had no way
- * to detect or resolve it — a human saw a blocking modal while the autopilot kept
- * acting underneath it (live report 2026-07-19).
- *
- * These tests lock the scene-state seam (`isCustomsModalOpen` /
- * `customsBribeCost` / `applyCustomsChoice`) and the shared resolution logic
- * behind both the modal's buttons and the autopilot. The autopilot wiring on top
- * of this seam is covered by `installAutopilotHook.test.ts`.
- */
 import { describe, it, expect, vi } from "vitest";
 
-// PlanetScene imports pixi.js at module load; mock it so the scene can be
-// imported without a real renderer. The seam methods under test never construct
-// display objects (showMessage/refreshCreditsHud early-return without a
-// uiContainer/creditsHudText), and the modal is a hand-built stand-in.
 vi.mock("pixi.js", () => ({
   Container: vi.fn(),
   Graphics: vi.fn(),
@@ -58,8 +42,6 @@ function makeScene(opts: {
     contrabandGoods: illegal.map((g) => g.type),
   };
   const modal: FakeModal = { destroyed: false, destroy: vi.fn() };
-  // Faithful to PixiJS Container.destroy: flip `destroyed` so the seam's
-  // `!customsModal.destroyed` guard is exercised, not just the null-reference path.
   modal.destroy.mockImplementation(() => {
     modal.destroyed = true;
   });
@@ -166,8 +148,6 @@ describe("PlanetScene customs seam (Task 11b)", () => {
   it("reports closed via the destroyed guard even while the modal reference lingers", () => {
     const s = makeScene({ credits: 5000, penalty: 1500, bribeCost: 900 });
     expect(s.isCustomsModalOpen()).toBe(true);
-    // Modal destroyed but reference not yet nulled — the `!customsModal.destroyed`
-    // guard (not the null check) must report it closed.
     s.modal.destroyed = true;
     expect(s.isCustomsModalOpen()).toBe(false);
   });

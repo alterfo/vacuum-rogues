@@ -35,17 +35,12 @@ export function validatePlayerSettings(data: unknown): PlayerSettings {
 export const MicroModuleSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
-  // "HULL" covers the hull-micromodule family (HULL_MICRO_MODULES) that science
-  // stations sell into inventory.micromodules; omitting it bricks any save made
-  // while the player owns one (load-time validateSaveState rejects it).
   targetCategory: z.enum(["WEAPON", "SHIELD", "ENGINE", "EQUIPMENT", "HULL"]),
   bonusType: z.string(),
   bonusTier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });
 
 export const ShipModuleSchema = z.object({
-  // Module ids are stable semantic identifiers (e.g. "weapon_laser_1"), not
-  // UUIDs — requiring .uuid() here rejected every valid save on load.
   id: z.string().min(1),
   category: z.enum(["WEAPON", "SHIELD", "ENGINE", "EQUIPMENT"]),
   name: z.string(),
@@ -55,8 +50,6 @@ export const ShipModuleSchema = z.object({
   }),
   level: z.number().int().min(1),
   micromoduleId: z.string().optional(),
-  // Artifact-upgrade count carried on an unfitted item (parity with the loadout
-  // slot's `upgrades`, capped at 2) so unequip→re-fit keeps research upgrades.
   upgrades: z.number().int().min(0).max(2).optional(),
 });
 
@@ -82,10 +75,6 @@ export const PlayerShipSchema = z.object({
       "CRUISER",
     ])
     .default("CORVETTE"),
-  // Legacy 3-slot fitting — removed from PlayerShip in the dual-hull
-  // unification (Task 5); the canonical ShipLoadout is now authoritative. Kept
-  // optional so pre-migration saves (which still carry it) validate, while new
-  // saves omit it. The migration (v22→23) folds these into `loadout`.
   modules: z
     .tuple([
       ShipModuleSchema.nullable(),
@@ -116,15 +105,7 @@ export const InventorySchema = z.object({
   micromodules: z.array(MicroModuleSchema).default([]),
   resources: z.array(ResourceStackSchema),
   cosmetics: z.array(z.object({ id: z.string(), name: z.string() })),
-  // Canonical owned-but-uninstalled gear store (catalog gear ids). Defaults to
-  // [] so pre-existing saves (which lack the field) validate and load with an
-  // empty hold rather than failing.
   ownedGearIds: z.array(z.string()).default([]),
-  // Persisted combat-consumable (tactical device) inventory — catalog consumable
-  // ids the player carries between fights (`combatConsumable.ts`). Additive-optional
-  // (mirrors `ownedGearIds`): absent old saves default to [] and load with an empty
-  // consumable inventory, so no migration / CURRENT_VERSION bump is required
-  // (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 9).
   ownedConsumableIds: z.array(z.string()).default([]),
 });
 
@@ -151,7 +132,6 @@ export const QuestFailurePenaltySchema = z.object({
 });
 
 export const QuestSchema = z.object({
-  // Quest ids are semantic template ids (e.g. "quest_delivery_ore"), not UUIDs.
   id: z.string().min(1),
   title: z.string(),
   type: z.enum([
@@ -173,8 +153,6 @@ export const QuestSchema = z.object({
   failurePenalty: QuestFailurePenaltySchema.nullable(),
   targetSystemId: z.string().nullable().default(null),
   targetObjectId: z.string().nullable().default(null),
-  // Specific target planet (local-delivery neighbour). Optional + nullable so
-  // saves made before it existed validate and default to null (no version bump).
   targetPlanetId: z.string().nullable().default(null),
   minReputation: z.number().int().min(0).default(0),
   chainId: z.string().nullable().default(null),
@@ -184,20 +162,14 @@ export const QuestSchema = z.object({
 
 export const QuestLogSchema = z.object({
   activeQuests: z.array(QuestSchema),
-  // QuestManager tracks completed quests by id only, so persist ids (not full
-  // Quest objects) to match the runtime shape.
   completedQuests: z.array(z.string()),
-  // completedChainParts: chainId → sorted list of completed part indices (0/1/2).
-  // Persisted so cross-session chain completion works correctly.
   completedChainParts: z
     .record(z.string(), z.array(z.number().int()))
     .default({}),
-  // Quests waiting for the player to return to the issuer planet to claim reward.
   pendingReturnQuests: z.array(QuestSchema).default([]),
 });
 
 export const JournalEntrySchema = z.object({
-  // Journal entry ids are stable string ids, not necessarily UUIDs.
   id: z.string().min(1),
   date: z.number().int(),
   text: z.string(),
@@ -376,8 +348,6 @@ export const NpcShipSchema = z.object({
   worldX: z.number().nullable().default(null),
   worldY: z.number().nullable().default(null),
   hostile: z.boolean().default(false),
-  // Additive/optional (plan 20260709 Task 2): absent on old saves and on
-  // non-Overmind ships — no migration needed.
   sizeTier: z.enum(["small", "medium", "large", "boss"]).optional(),
 });
 
@@ -404,14 +374,12 @@ export const NewsEventSchema = z.object({
   targetSystemId: z.string().optional(),
   stagingSystemId: z.string().optional(),
   liberationDate: z.number().int().min(0).optional(),
-  // TRADE_OPPORTUNITY rumor fields (optional — absent on all other event types).
   resource: z.string().optional(),
   fromSystemId: z.string().optional(),
   toSystemId: z.string().optional(),
   marginPct: z.number().optional(),
 });
 
-/** Tradeable goods enum, mirrored from ResourceType (see ResourceStackSchema). */
 export const ResourceTypeSchema = z.enum([
   "FUEL",
   "METALS",
@@ -425,10 +393,6 @@ export const ResourceTypeSchema = z.enum([
   "DATA_CORES",
 ]);
 
-/**
- * A lifecycle-tracked trade-route rumor persisted on the Galaxy. Mirrors
- * `RouteRumor` in src/domain/RouteRumor.ts (wired into GalaxySchema in Task 3).
- */
 export const RouteRumorSchema = z.object({
   id: z.string(),
   resource: ResourceTypeSchema,
@@ -443,8 +407,6 @@ export const RouteRumorSchema = z.object({
   lastMarginPct: z.number(),
 });
 
-// Transient space-loot items (in-memory only; not part of SaveState). Schema
-// kept here for shape validation/consistency with the SpaceLootItem type.
 export const SpaceLootItemSchema = z.object({
   id: z.string(),
   moduleId: z.string().optional(),
@@ -454,7 +416,6 @@ export const SpaceLootItemSchema = z.object({
   spawnedAt: z.number(),
 });
 
-/** Overmind endgame-arc status enum (mirrors OvermindStatus in @/types). */
 export const OvermindStatusSchema = z.enum([
   "dormant",
   "advancing",
@@ -463,13 +424,6 @@ export const OvermindStatusSchema = z.enum([
   "lost",
 ]);
 
-/**
- * Persisted Overmind endgame-arc state (mirrors OvermindSpreadState in @/types).
- * The arc clock + threat snapshot the EOD spread tick advances; the captured set
- * itself is the separate `overmindSystems`. Optional-on-input via the GalaxySchema
- * `.default(...)` below so saves made before it existed validate, then get the
- * dormant default backfilled by the v27→28 migration.
- */
 export const OvermindSpreadStateSchema = z.object({
   dayZero: z.number(),
   lastSpreadDay: z.number(),
@@ -479,7 +433,6 @@ export const OvermindSpreadStateSchema = z.object({
   playerLiberations: z.number().int().min(0).optional(),
 });
 
-/** The dormant default arc state (mirrors initialOvermindSpreadState()). */
 const DORMANT_OVERMIND_ARC = {
   dayZero: -1,
   lastSpreadDay: -1,
@@ -515,12 +468,8 @@ export const DialogueSessionSchema = z.object({
   currentEmotion: EmotionVectorSchema,
 });
 
-/** Canonical GearCatalog loadout snapshot (ShipLoadoutSnapshot in types). */
 export const ShipLoadoutSnapshotSchema = z.object({
   hullId: z.string(),
-  // `hullMicromoduleIds` is canonical (multi-slot). `hullMicromoduleId` (legacy,
-  // single) stays optional because validation runs BEFORE migration — a pre-v26
-  // save still carries the single id and must validate before v25→26 converts it.
   hullMicromoduleIds: z.array(z.string()).optional(),
   hullMicromoduleId: z.string().optional(),
   slotted: z.array(
@@ -532,7 +481,6 @@ export const ShipLoadoutSnapshotSchema = z.object({
   ),
 });
 
-/** Saved КОМПЛЕКТАЦИЯ gear-loadout preset (mirrors LoadoutPreset in types). */
 export const LoadoutPresetSchema = z.object({
   name: z.enum(["1", "2", "3"]),
   slots: z.array(
@@ -545,7 +493,6 @@ export const LoadoutPresetSchema = z.object({
   hullMicromoduleIds: z.array(z.string()).optional(),
 });
 
-/** Account flavours the АБС ledger persists (mirrors AccountType in domain/banking/Ledger). */
 export const LedgerAccountTypeSchema = z.enum([
   "CURRENT",
   "SAVINGS",
@@ -553,7 +500,6 @@ export const LedgerAccountTypeSchema = z.enum([
   "GL_INTERNAL",
 ]);
 
-/** One persisted GL account (mirrors `Account` in domain/banking/Ledger). */
 export const LedgerAccountSchema = z.object({
   id: z.string(),
   type: LedgerAccountTypeSchema,
@@ -561,14 +507,12 @@ export const LedgerAccountSchema = z.object({
   ownerId: z.string().optional(),
 });
 
-/** One signed posting leg (mirrors `Posting` in domain/banking/Ledger). */
 export const LedgerPostingSchema = z.object({
   accountId: z.string(),
   amount: z.number(),
   valueDate: z.number(),
 });
 
-/** One balanced journal entry (mirrors `JournalEntry` in domain/banking/Ledger). */
 export const LedgerJournalEntrySchema = z.object({
   id: z.string(),
   date: z.number(),
@@ -576,7 +520,6 @@ export const LedgerJournalEntrySchema = z.object({
   postings: z.array(LedgerPostingSchema),
 });
 
-/** One persisted per-loan arrears record (mirrors `LoanDefaultSnapshot` in domain/banking/Ledger). */
 export const LoanDefaultSnapshotSchema = z.object({
   loanAccountId: z.string(),
   missedPayments: z.number(),
@@ -586,13 +529,6 @@ export const LoanDefaultSnapshotSchema = z.object({
   owedAtLastDue: z.number(),
 });
 
-/**
- * The persisted АБС core-banking state — accounts + journal + EOD cursors + the
- * per-loan arrears state (mirrors `BankingSnapshot` in domain/banking/Ledger).
- * `restoreLedger` re-posts every entry on load, so the double-entry invariant is
- * re-checked there too. `loanDefaults` is optional: saves made before it existed
- * carry none and re-seed each outstanding loan lazily at the next EOD.
- */
 export const BankingSnapshotSchema = z.object({
   businessDate: z.number(),
   lastEodDate: z.number().nullable(),
@@ -611,30 +547,13 @@ export const SaveStateSchema = z.object({
   player: PlayerSchema,
   persistentDialogs: z.array(DialogueSessionSchema),
   currentSceneType: z.string().optional(),
-  // Optional: saves made before loadout persistence (≤ 2026-06-10) lack it.
   loadout: ShipLoadoutSnapshotSchema.optional(),
-  // Optional: saves made before the ledger was persisted lack it; those migrate
-  // by re-seeding the player current account from `player.credits` on load.
   banking: BankingSnapshotSchema.optional(),
-  // Optional: last in-flight ship position (system-relative, with its own
-  // systemId). Saves made before this existed lack it (no version bump) and fall
-  // back to the default edge spawn on load. See GameEngine.saveGame/loadGame.
   flightShipPos: z
     .object({ x: z.number(), y: z.number(), systemId: z.string() })
     .optional(),
-  // Optional additive (three-year-campaign Task 2): highest playerPowerIndex
-  // reached this run — the adaptive-difficulty ratchet. Saves made before the
-  // campaign lack it and derive it from the restored loadout on load
-  // (GameEngine.loadGame → restoredPeakPower); no migration, no version bump.
   campaignPeakPower: z.number().min(0).max(1).optional(),
-  // Optional additive (gear-variety-and-hangar Task 6): saved КОМПЛЕКТАЦИЯ
-  // presets. Saves made before presets existed lack it; the hangar treats
-  // absent as "no presets saved yet" (all three tabs empty).
   loadoutPresets: z.array(LoadoutPresetSchema).max(3).optional(),
-  // Optional additive (autosave-autopilot-resume): whether the DEV-only live
-  // autopilot was engaged at save time. Saves made before this existed lack it;
-  // absent ⇒ no auto-resume. Production/tests use a no-op provider so this is
-  // false/absent there. No migration, no version bump. See GameEngine.saveGame.
   autopilotEngaged: z.boolean().optional(),
 });
 

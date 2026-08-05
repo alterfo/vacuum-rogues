@@ -23,12 +23,6 @@ export interface E2ETestHooksDeps {
   getBackground(): SpaceBackgroundLayer | null;
 }
 
-/**
- * Owns the SpaceFlightScene's `e2e*` driver-method bodies (Playwright-only,
- * `__DEBUG__`-gated). Extracted verbatim from SpaceFlightScene to keep it under
- * the 1900-line guard — the scene keeps every `e2e*` method as a 1-line
- * forwarder so the public surface Playwright drives is unchanged.
- */
 export class E2ETestHooks {
   constructor(private readonly deps: E2ETestHooksDeps) {}
 

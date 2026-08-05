@@ -10,21 +10,6 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * The FTL-style active pause must freeze the *whole* fight — not just stop new
- * shots. Three fire/projectile paths have to honour the single `isFrozen()` gate:
- *  - the player multi-weapon fire loop (`advancePlayerWeapons`),
- *  - the NPC fire loop (`advanceNpcTimers`), and
- *  - **tracers already in flight** — the escaping path the plan called out.
- *
- * The Task 1 regression below is the in-flight-tracer repro: before the fix,
- * {@link CombatModule.update} advanced the HUD tracers (`this.hud?.update(...)`)
- * at the *top* of the frame, **before** the freeze early-return, so a projectile
- * launched the instant before the pause kept streaking toward its target while the
- * world was supposed to be frozen. Task 2 gates that advance on `!isFrozen()`, so
- * the test now asserts the frozen behaviour as a plain `it` (green regression).
- */
-
 const FIRE = GAME_BALANCE.combatFireIntervalMs; // 2500 ms
 
 function makePhysics(x = 0, y = 0): ShipPhysics {
@@ -50,12 +35,6 @@ function makeSprite(
   } as unknown as NpcShipSprite;
 }
 
-/**
- * A {@link CombatModule} wired with render layers (so the HUD spawns traveling
- * tracers) and a *manually controllable* active-pause flag. The first volley
- * fires while unpaused, leaving tracers in flight; flipping `paused` then lets us
- * assert the whole world — fire **and** projectiles — freezes.
- */
 function makePausableFight(): {
   module: CombatModule;
   hud: CombatHud;
@@ -90,11 +69,9 @@ describe("combat freezes fully during the active pause", () => {
   it("freezes an in-flight tracer while paused (the escaping projectile)", () => {
     const { module, hud, setPaused } = makePausableFight();
 
-    // First volley fires while unpaused → player + NPC tracers spawn (age 0).
     module.update(FIRE);
     expect(hud.tracerStates.length).toBeGreaterThan(0);
 
-    // Snapshot every live tracer, then pause the world.
     const before = hud.tracerStates.map((t) => ({
       age: t.age,
       x: t.pos.x,
@@ -102,8 +79,6 @@ describe("combat freezes fully during the active pause", () => {
     }));
     setPaused(true);
 
-    // Several frames pass while the overlay is open — a frozen world must not
-    // advance any projectile already in flight (no travel).
     module.update(16);
     module.update(16);
     module.update(16);
@@ -124,11 +99,9 @@ describe("combat freezes fully during the active pause", () => {
   it("resumes an in-flight tracer's travel once unpaused", () => {
     const { module, hud, setPaused } = makePausableFight();
 
-    // First volley fires while unpaused → tracers spawn at age 0.
     module.update(FIRE);
     expect(hud.tracerStates.length).toBeGreaterThan(0);
 
-    // Freeze the world: a short frame must not advance the tracer.
     setPaused(true);
     module.update(16);
     const frozen = hud.tracerStates.map((t) => ({
@@ -138,9 +111,6 @@ describe("combat freezes fully during the active pause", () => {
     }));
     expect(frozen.length).toBeGreaterThan(0);
 
-    // Unpause: the same tracer must resume travelling — age and position advance
-    // again (the freeze is a pause, not a destroy). 16 ms < the fire interval, so
-    // no new shot spawns and the snapshots line up 1:1.
     setPaused(false);
     module.update(16);
     const resumed = hud.tracerStates.map((t) => ({
@@ -152,7 +122,6 @@ describe("combat freezes fully during the active pause", () => {
     for (let i = 0; i < frozen.length; i++) {
       expect(resumed[i].age).toBeGreaterThan(frozen[i].age); // travel resumed
     }
-    // At least one tracer actually moved in space (player→enemy bolt travels).
     expect(
       resumed.some((r, i) => r.x !== frozen[i].x || r.y !== frozen[i].y),
     ).toBe(true);
@@ -160,8 +129,6 @@ describe("combat freezes fully during the active pause", () => {
 
   it("fires no player or NPC shot while paused (no new tracers, no damage)", () => {
     const { module, hud, ship, enemy, setPaused } = makePausableFight();
-    // Pause before any fire cadence elapses: a fully frozen world must emit no
-    // shot at all, however many fire-interval-long frames pass.
     setPaused(true);
     for (let i = 0; i < 5; i++) module.update(FIRE);
 
@@ -173,15 +140,12 @@ describe("combat freezes fully during the active pause", () => {
   it("resumes player + NPC fire on cadence once unpaused", () => {
     const { module, hud, ship, enemy, setPaused } = makePausableFight();
 
-    // Paused: the fire timers are frozen too (update returns before advancing
-    // them), so two interval-long frames still produce nothing.
     setPaused(true);
     module.update(FIRE);
     module.update(FIRE);
     expect(enemy.npc.hullHP).toBe(100);
     expect(ship.hullHP).toBe(100);
 
-    // Unpause: one fire interval later both weapons fire on cadence again.
     setPaused(false);
     module.update(FIRE);
     expect(enemy.npc.hullHP).toBeLessThan(100); // player shot landed

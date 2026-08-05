@@ -1,16 +1,6 @@
 import { FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 
-// Faction title / description / bonus copy now lives in the i18n catalogs
-// (`race.faction.*` keys in `src/i18n/{ru,en}.ts`) and is read through `t()` by
-// `RaceSelectionScene` — the single source of truth, so EN renders correctly. The
-// former `FACTION_TITLES`/`FACTION_DESCRIPTIONS`/`FACTION_BONUSES` maps were removed
-// to avoid a second, drift-prone copy of the same strings.
-
-// Faction colours moved to `src/presentation/ui/palette.ts` (the colorblind-safe
-// palette, accessibility pass). Read them through `factionColor(faction)`, which
-// renders the historical hues in the default mode and remaps for dichromat modes.
-
 export const FACTION_STATS: Record<
   FactionType,
   { hull: number; shields: number; speed: number; evasion: number }
@@ -32,10 +22,6 @@ export const FACTION_STATS: Record<
   },
 };
 
-// Keyed by `Faction` (system-ownership enum, 7 values) rather than `FactionType`
-// (player-race enum, 5 values) so it covers non-playable owners (`INDEPENDENT`,
-// `OVERMIND`) too — every `StarSystem.ownerFaction` value needs a label, not just
-// the player-selectable races.
 export const FACTION_LABEL: Record<Faction, string> = {
   [Faction.OUTLANDERS]: "Окраинники",
   [Faction.BASTIONS]: "Бастионы",
@@ -46,10 +32,6 @@ export const FACTION_LABEL: Record<Faction, string> = {
   [Faction.OVERMIND]: "Сверхразум",
 };
 
-// Display label for a possibly-untyped faction id (scene call sites carry
-// `string`, e.g. `system.ownerFaction ?? "INDEPENDENT"`). Falls back to the raw
-// id so an unexpected value renders visibly instead of blanking — the same
-// `?? faction` contract the scenes' former private dicts had.
 export function factionDisplayLabel(faction: string): string {
   return FACTION_LABEL[faction as Faction] ?? faction;
 }

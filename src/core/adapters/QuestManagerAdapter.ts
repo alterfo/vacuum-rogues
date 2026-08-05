@@ -8,9 +8,6 @@ import type { Player } from "@/domain/Player";
 import { QuestManager } from "@/systems/QuestManager";
 import type { BankAccess } from "@/systems/banking/economy";
 
-/**
- * Adapter: makes QuestManager compatible with IQuestService port.
- */
 export class QuestManagerAdapter implements IQuestService {
   private readonly delegate = new QuestManager();
 

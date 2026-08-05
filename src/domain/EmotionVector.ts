@@ -1,4 +1,4 @@
-import type { EmotionVectorData } from '@/types';
+import type { EmotionVectorData } from "@/types";
 
 export class EmotionVector implements EmotionVectorData {
   trust: number;
@@ -16,7 +16,6 @@ export class EmotionVector implements EmotionVectorData {
   }
 
   compute(_context: unknown, _history: unknown[]): EmotionVector {
-    // Placeholder for GRU-driven computation
     return new EmotionVector({
       trust: this.clamp(this.trust + Math.random() * 10 - 5),
       fear: this.clamp(this.fear + Math.random() * 10 - 5),

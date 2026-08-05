@@ -1,7 +1,3 @@
-/**
- * Task 7: QuestJournalUI must render a "ВЫПОЛНЕНО — ЗАБРАТЬ НАГРАДУ" section
- * for quests in pending-return state (objectives done, reward not yet claimed).
- */
 import { describe, it, expect, vi } from "vitest";
 import type { IQuestService } from "@/core/ports/IQuestService";
 
@@ -133,7 +129,6 @@ describe("QuestJournalUI pending-return section", () => {
     );
     const texts = collectTexts(ui.container as unknown as TextNode);
 
-    // The readable name is shown; the raw id is not leaked to the player.
     const returnPrompt = texts.find(
       (t) => t.includes("Вернитесь") && t.includes("Альдебаран"),
     );
@@ -193,7 +188,6 @@ describe("QuestJournalUI pending-return section", () => {
   it("names the issuer planet's system in the return prompt when a galaxy is wired", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
 
-    // Galaxy whose system "Сириус" hosts the issuer planet "planet-alpha".
     const galaxy = {
       systems: [
         {
@@ -233,8 +227,6 @@ describe("QuestJournalUI pending-return section", () => {
     const qs = makeQuestServiceWithPending([
       makePendingReturnQuest({ planetId: "planet-alpha" }),
     ]);
-    // No galaxy arg → the system name can't be resolved; the prompt must not
-    // dangle a "— система" with nothing after it.
     const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
     const texts = collectTexts(ui.container as unknown as TextNode);
 
@@ -246,8 +238,6 @@ describe("QuestJournalUI pending-return section", () => {
   it("grows the card box for a long title (no overflow) but keeps a short card at the historical 80 px", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
 
-    // The pending-return card draws its bg via Graphics.fill({color: 0x1a1500}).
-    // Find that node and read the height arg of its rect(20, 0, width, height).
     type GfxNode = {
       rect?: { mock: { calls: unknown[][] } };
       fill?: { mock: { calls: unknown[][] } };
@@ -314,14 +304,6 @@ describe("QuestJournalUI pending-return section", () => {
     expect(rewardLine).toBeDefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Task 3: «Проложить маршрут» (plot-route) button on the pending-return card.
-// It dispatches the pure questRouteAction onto the existing navigate hook:
-// the system id for a cross-system target (star-map warp) and the planet id
-// for a same-system target (in-flight approach). It is hidden when there is
-// no resolvable target (no galaxy) or no navigate hook.
-// ---------------------------------------------------------------------------
 
 type ClickNode = {
   text?: string;
@@ -397,7 +379,6 @@ describe("QuestJournalUI plot-route button (Task 3)", () => {
     expect(btn).not.toBeNull();
     clickPointerdown(btn!);
 
-    // Cross-system → dispatch the SYSTEM id (the scene opens the star-map warp).
     expect(navigate).toHaveBeenCalledWith("sys-home");
   });
 
@@ -425,7 +406,6 @@ describe("QuestJournalUI plot-route button (Task 3)", () => {
     expect(btn).not.toBeNull();
     clickPointerdown(btn!);
 
-    // Same-system → dispatch the PLANET id (the scene plots an in-flight route).
     expect(navigate).toHaveBeenCalledWith("planet-alpha");
   });
 
@@ -461,7 +441,6 @@ describe("QuestJournalUI plot-route button (Task 3)", () => {
     const qs = makeQuestServiceWithPending([
       makePendingReturnQuest({ planetId: "planet-alpha" }),
     ]);
-    // Galaxy omitted → returnDestination is null → no button.
     const ui = new QuestJournalUI(qs, 1280, 720, vi.fn(), vi.fn());
 
     const btn = findPlotRouteButton(ui.container as unknown as ClickNode);
@@ -476,7 +455,6 @@ describe("QuestJournalUI plot-route button (Task 3)", () => {
     const qs = makeQuestServiceWithPending([
       makePendingReturnQuest({ planetId: "planet-alpha" }),
     ]);
-    // onNavigateToObjective omitted (undefined) → nothing to dispatch to → no button.
     const ui = new QuestJournalUI(
       qs,
       1280,
@@ -492,9 +470,6 @@ describe("QuestJournalUI plot-route button (Task 3)", () => {
 
     const btn = findPlotRouteButton(ui.container as unknown as ClickNode);
     expect(btn).toBeNull();
-    // Belt-and-suspenders: the label text must not be drawn either (guards
-    // against a future regression that renders the button but leaves it inert,
-    // which `findPlotRouteButton`'s eventMode==="static" predicate would miss).
     const texts = collectTexts(ui.container as unknown as TextNode);
     expect(texts.some((t) => t.includes("Проложить маршрут"))).toBe(false);
   });
@@ -505,8 +480,6 @@ describe("QuestJournalUI plot-route button (Task 3)", () => {
     const qs = makeQuestServiceWithPending([
       makePendingReturnQuest({ planetId: "planet-ghost" }),
     ]);
-    // Galaxy is wired but does NOT host the issuer planet → returnDestination is
-    // null, so neither the « — система …» suffix nor the route button render.
     const ui = new QuestJournalUI(
       qs,
       1280,

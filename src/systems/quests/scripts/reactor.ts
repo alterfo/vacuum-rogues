@@ -1,22 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: Emergency reactor aboard the stranded Maelon station «Горнило». 4 control rods (A/B/C/D),
-// each at level 0–5. The unique stable state satisfying all 4 conditions is A=3, B=4, C=4, D=2:
-//   A + B = 7  ✓ (3+4)
-//   C − D = 2  ✓ (4-2)
-//   A × C = 12 ✓ (3×4)
-//   B + D = 6  ✓ (4+2)
-// Each rod adjustment costs 5 seconds from time_left=120. At time_left<1 the reactor explodes.
-// Max Manhattan distance to solution from any random(0,5) start = 14 moves; budget = 24 moves.
-//
-// Two beats break the ±1-rod monotony (Task 30):
-//   - A single `check_stable` sensor sweep resolves all four conditions in ONE auto-beat instead of a
-//     four-node chain (four sequential auto-advances used to force up to ~3.2 s of unclickable wait per
-//     turn — the pressure timer competed with itself). First mismatching rod (in A→B→C→D order) routes
-//     back to the panel; if none mismatch, the unconditional fallback wins to `stable`.
-//   - An emergency steam-vent (`coolant_vent`): a coarse panic button, not a precise nudge. Bounded to
-//     `vents_left` uses so it can't farm time; each pull buys 15 s but kicks rod D loose to a random
-//     position — a genuine gamble the precise ±1 loop never offers.
 export const reactorScript: QuestScript = {
   id: "reactor",
   title: "Реактор",
@@ -74,7 +57,6 @@ export const reactorScript: QuestScript = {
   ],
   startLocation: "init_reactor",
   locations: [
-    // Init: player reads the alarm message, then manually advances to the control panel
     {
       id: "init_reactor",
       text: "СИРЕНА РАЗРЫВАЕТ УШИ.\n\nАварийные лампы заливают отсек станции «Горнило» багровым. Реактор потерял контроль: температура ползёт в красную зону, где-то с шипением стравливается хладагент. Голос станционной автоматики монотонно повторяет одно слово — «Критично. Критично. Критично».\n\nПанель управления стержнями оживает под ладонью. Секунды идут. Либо ты выведешь конфигурацию к стабильной — либо от станции останется облако раскалённого металла.",
@@ -87,8 +69,6 @@ export const reactorScript: QuestScript = {
         },
       ],
     },
-    // Main control panel — the eight ±1 rod nudges plus the emergency steam-vent all lead through
-    // the check sweep.
     {
       id: "reactor_control",
       text: "РЕАКТОР НЕСТАБИЛЕН. По ладони течёт пот, палец подрагивает над кнопками.\n\nТекущее положение стержней:\n  Стержень A: {rod_a} | Стержень B: {rod_b} | Стержень C: {rod_c} | Стержень D: {rod_d}\nДО ВЗРЫВА: {time_left} сек   (каждое движение стержня — минус 5 сек)\n\nНА ТАБЛО МИГАЮТ УСЛОВИЯ СТАБИЛЬНОСТИ — все четыре должны сойтись разом:\n  A + B = 7\n  C − D = 2\n  A × C = 12\n  B + D = 6\n\nСлева мигает клапан аварийного сброса пара: рывок за рычаг выигрывает секунды, но сшибает стержень D с позиции. Аварийных сбросов осталось: {vents_left}.\n\nТолько одна комбинация гасит цепную реакцию. Считай в уме, двигай стержни — и не промахнись со временем.",
@@ -149,8 +129,6 @@ export const reactorScript: QuestScript = {
           condition: "rod_d > 0",
           effects: ["rod_d -= 1", "time_left -= 5"],
         },
-        // A genuinely different beat: the emergency steam-vent. Coarse panic button, bounded to
-        // `vents_left` pulls so it can't farm time; buys 15 s but scrambles rod D.
         {
           id: "vent_steam",
           label: "⚠ Аварийный сброс пара — +15 сек, но собьёт D",
@@ -164,7 +142,6 @@ export const reactorScript: QuestScript = {
         },
       ],
     },
-    // The steam-vent aftermath beat — a distinct screen, then straight into the sensor sweep.
     {
       id: "coolant_vent",
       text: "Ты рвёшь рычаг аварийного сброса. С оглушительным шипением контур стравливает перегретый пар, стрелка манометра валится из красной зоны — на табло отыграно вспять пятнадцать секунд.\n\nНо отдача бьёт по D-линии: стержень D срывается с места и застревает в положении {rod_d}. На табло: {time_left} сек. Аварийных сбросов осталось: {vents_left}.",
@@ -178,11 +155,6 @@ export const reactorScript: QuestScript = {
         },
       ],
     },
-    // Single-sweep victory check: all four rods must match the unique stable state (A=3 B=4 C=4 D=2).
-    // Ordering is critical — the four mismatch guards are tried A→B→C→D, and the first that fires routes
-    // back to the panel; only when none mismatch does the unconditional fallback win to `stable`. This
-    // resolves all four conditions in ONE auto-beat (the old four-node chain forced up to ~3.2 s of
-    // dead wait per turn).
     {
       id: "check_stable",
       text: "Датчики стройной цепочкой уходят на сверку — четыре условия, одно решение...",

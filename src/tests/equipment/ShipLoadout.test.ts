@@ -9,15 +9,11 @@ describe("ShipLoadout — fitting (US-073)", () => {
   });
 
   it("enforces per-category slot caps from the hull, not a flat total", () => {
-    // SR-canon: the hull dictates slots per category, not one shared total.
-    // hull_scout = weapon 2 / engine 1 / radar 1 / equipment 2.
     const lo = new ShipLoadout("hull_scout");
-    // Weapon bank holds two, then refuses a third.
     expect(lo.install("wpn_pulse")).toBe(true);
     expect(lo.install("wpn_railgun")).toBe(true);
     expect(lo.canInstall("wpn_scatter")).toBe(false);
     expect(lo.install("wpn_scatter")).toBe(false);
-    // Additional-equipment bank holds two, then refuses a third.
     expect(lo.install("eq_tank")).toBe(true);
     expect(lo.install("eq_scanner")).toBe(true);
     expect(lo.canInstall("eq_droid")).toBe(false);
@@ -53,13 +49,9 @@ describe("ShipLoadout — fitting (US-073)", () => {
     expect(s.cargo).toBe(35);
     expect(s.weaponCount).toBe(2);
     expect(s.weaponDamage).toBe(56); // 30 + 26
-    // eq_engine_iii: tech 5 → 0.066 + 5*0.022 = 0.176 px/ms
     expect(s.speed).toBeCloseTo(0.176);
-    // eq_radar: tech 4 → 600 + 4*200 = 1400 px
     expect(s.radarRange).toBe(1400);
-    // eq_shield: tech 6 → 6*30 = 180 HP
     expect(s.shields).toBe(180);
-    // eq_tank: 50 base + 40 potency = 90 units
     expect(s.fuelCapacity).toBe(90);
     expect(s.canTakeOff).toBe(true); // engine + fuel
   });
@@ -76,15 +68,12 @@ describe("ShipLoadout — fitting (US-073)", () => {
   });
 
   it("keeps a single engine slot (a new engine replaces the old) and sums fuel tanks", () => {
-    // SR-canon single-engine model: the engine is one dedicated slot, so a
-    // better engine *replaces* the current one rather than stacking a second.
     const lo = new ShipLoadout("hull_bastion");
     expect(lo.install("eq_engine_i")).toBe(true); // tech 2 → 0.11 px/ms
     expect(lo.install("eq_engine_iii")).toBe(true); // tech 5 → 0.176 px/ms, replaces
     expect(
       lo.installedGearIds().filter((id) => id.startsWith("eq_engine")),
     ).toEqual(["eq_engine_iii"]);
-    // Fuel tanks live in the equipment bank and still sum.
     lo.install("eq_tank"); // 50 + 40 = 90
     lo.install("eq_tank"); // +90 → 180
     const s = lo.derivedStats();
@@ -105,7 +94,6 @@ describe("ShipLoadout — micromodules (US-075)", () => {
     expect(lo.applyMicromodule("wpn_beam", "mm_amplifier_1")).toBe(true);
     const boosted = lo.derivedStats().weaponDamage;
     const beamDmg = (gearById("wpn_beam") as WeaponSpec).damage;
-    // Only the beam is boosted by the level-1 (+20%) bonus.
     expect(boosted - base).toBe(Math.round(beamDmg * micromoduleBonus(1)));
   });
 
@@ -113,7 +101,6 @@ describe("ShipLoadout — micromodules (US-075)", () => {
     const lo = new ShipLoadout("hull_warden");
     lo.install("wpn_beam");
     expect(lo.applyMicromodule("wpn_beam", "mm_amplifier_2")).toBe(true);
-    // Second attempt on the same item is refused (one per item, no replace).
     expect(lo.applyMicromodule("wpn_beam", "mm_amplifier_1")).toBe(false);
   });
 
@@ -148,7 +135,6 @@ describe("ShipLoadout — persistence (toJSON/fromJSON)", () => {
       "eq_engine_iii",
       "eq_tank",
     ]);
-    // Derived stats (which fold in both micromodules) must match exactly.
     expect(restored!.derivedStats()).toEqual(lo.derivedStats());
   });
 
@@ -167,8 +153,6 @@ describe("ShipLoadout — persistence (toJSON/fromJSON)", () => {
   });
 
   it("restores micromodules per slot when the same gear is installed twice", () => {
-    // Two copies of the same gear, each with its own micromodule: restore must
-    // bind each micromodule to its own slot, not the first gearId match.
     const restored = ShipLoadout.fromJSON({
       hullId: "hull_bastion",
       slotted: [
@@ -177,7 +161,6 @@ describe("ShipLoadout — persistence (toJSON/fromJSON)", () => {
       ],
     });
     expect(restored).not.toBeNull();
-    // eq_shield: techLevel 6 → 180 HP per copy before the micromodule bonus.
     const expected =
       Math.round(180 * (1 + micromoduleBonus(1))) +
       Math.round(180 * (1 + micromoduleBonus(2)));
@@ -189,10 +172,6 @@ describe("ShipLoadout — persistence (toJSON/fromJSON)", () => {
   });
 
   it("restores an over-cap saved fitting as-is (no auto-eviction on load)", () => {
-    // The v22→v23 migration legitimately packs 3 weapons onto a corvette whose
-    // weapon bank is 2 (it reserves engine+tank, then keeps the installed
-    // weapons). fromJSON must read that snapshot verbatim — funnelling it
-    // through `install` would silently drop the 3rd weapon on every load.
     const restored = ShipLoadout.fromJSON({
       hullId: "hull_corvette", // weaponSlots 2
       slotted: [
@@ -211,8 +190,6 @@ describe("ShipLoadout — persistence (toJSON/fromJSON)", () => {
       "eq_engine_i",
       "eq_tank",
     ]);
-    // The over-cap weapon bank is read as-is: used (3) exceeds total (2), which
-    // the category model explicitly permits for an already-saved loadout.
     expect(restored!.derivedStats().categories.weapon).toEqual({
       used: 3,
       total: 2,

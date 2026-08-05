@@ -12,16 +12,6 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { NEUTRAL_AGGRO_POWER_THRESHOLD } from "@/config/balance";
 
-// ---------------------------------------------------------------------------
-// Task 9 (iii): power-keyed neutral-pack aggro gating — "a weak ship isn't
-// hunted." A wandering NEUTRAL-system Overmind interceptor does NOT break orbit
-// to chase a ship whose ratcheted `campaignPeakPower` is below the battle-ready
-// band; the hunt switches on as the player arms (power ≥ threshold). A captured
-// system's garrison (isHostileSystem) and an already-engaged combatant are NEVER
-// shielded. The gate is inert without a wired campaign context (legacy DI reads
-// `undefined` ⇒ hunted, byte-identical — proven by overmindCombat.test.ts).
-// ---------------------------------------------------------------------------
-
 function makeOvermind(id: string): NpcShip {
   const npc = new NpcShip({
     id,
@@ -60,12 +50,6 @@ function sprites(manager: NpcShipManager): Array<{ aggressive: boolean }> {
     .npcSprites;
 }
 
-/**
- * `peakPower` distinguishes the three wiring cases the gate cares about:
- *  - `undefined` ⇒ no campaign context (legacy stub) — the getter is absent,
- *  - `null` ⇒ real engine before the first ratchet tick (weak starter),
- *  - a number ⇒ the ratcheted campaign power.
- */
 function makeManager(
   npcs: NpcShip[],
   opts: { hostile: boolean; peakPower?: number | null; withContext?: boolean },
@@ -79,8 +63,6 @@ function makeManager(
     galaxy,
     player: { currentSystemId: "sys_a" },
   } as Record<string, unknown>;
-  // A campaign-aware engine exposes the `campaignPeakPower` getter (number|null);
-  // a legacy stub omits it entirely (reads as `undefined`).
   if (opts.withContext) base.campaignPeakPower = opts.peakPower ?? null;
   const gameEngine = base as unknown as GameEngine;
 
@@ -168,8 +150,6 @@ describe("NpcShipManager.checkGarrisonAggro — neutral-pack aggro gating", () =
     manager.initialize();
     manager.checkGarrisonAggro("sys_a", true);
 
-    // A weak ship in a captured system is still hunted — only the wandering
-    // neutral hunt is gated, garrisons are relentless.
     expect(sprites(manager)[0].aggressive).toBe(true);
     manager.destroy();
   });

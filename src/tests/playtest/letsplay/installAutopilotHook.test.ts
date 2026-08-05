@@ -2,9 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SceneType, QuestType } from "@/types";
 import type { GameEngine } from "@/systems/GameEngine";
 
-// Mocked so tests can drive the F3 "a help panel is open" branch without
-// constructing a real PixiJS HelpPanel (this file never mocks pixi.js —
-// the `createLiveSceneController` tests below use hand-built engine fakes).
 vi.mock("@/presentation/ui/mountSceneHelp", () => ({
   isHelpPanelOpen: vi.fn(() => false),
   dismissHelpPanel: vi.fn(),
@@ -14,11 +11,6 @@ import {
   dismissHelpPanel,
 } from "@/presentation/ui/mountSceneHelp";
 
-// `observe` is wrapped in a call-through spy so the OVERMIND-core boss-prompt
-// tests below can hand `dismissBlockingModal()` a battle-ready / hull-hurt
-// observation without booting the full observe pipeline (galaxy front seeds,
-// npc scan, quest board, …). Every other test in this file keeps the REAL
-// `observe` (the spy calls through by default), so no existing behaviour moves.
 vi.mock("@/tests/playtest/letsplay/observe", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/tests/playtest/letsplay/observe")>();
@@ -34,21 +26,10 @@ import {
 } from "@/tests/playtest/letsplay/installAutopilotHook";
 import type { AutopilotScheduler } from "@/tests/playtest/letsplay/AutopilotController";
 
-/**
- * Task 3: the live install hook. Two concerns:
- *  - {@link installAutopilotHook} publishes `window.__autopilot`, delegates
- *    start/stop/toggle to the controller, binds the toggle hotkey, and is
- *    idempotent.
- *  - {@link createLiveSceneController} maps each verb onto the real engine
- *    `transitionTo` / scene call (the live mirror of the headless applier).
- */
-
-/** A scheduler that captures `onTick` but never fires it — no real timer in tests. */
 const inertScheduler: AutopilotScheduler = {
   start: () => () => {},
 };
 
-/** Deps that keep the controller off real timers / window listeners / the DOM. */
 const quietDeps = {
   scheduler: inertScheduler,
   onHumanInput: () => () => {},
@@ -68,8 +49,6 @@ describe("installAutopilotHook — window hook + hotkey", () => {
     clearWindowHook();
     localStorage.clear();
     keydownHandlers.length = 0;
-    // Capture listeners instead of really binding them, so installs don't leak
-    // across tests and we can invoke the hotkey handler directly.
     const capture = (
       type: string,
       handler: EventListenerOrEventListenerObject,
@@ -124,7 +103,6 @@ describe("installAutopilotHook — window hook + hotkey", () => {
 
   it("the bound hotkey toggles only on AUTOPILOT_HOTKEY_CODE", () => {
     const hook = installAutopilotHook({} as GameEngine, quietDeps);
-    // Exactly one keydown listener (the hotkey) is bound at install time.
     expect(keydownHandlers).toHaveLength(1);
     const onKey = keydownHandlers[0];
 
@@ -189,7 +167,6 @@ describe("installAutopilotHook — auto game-speed on engage/disengage", () => {
     clearWindowHook();
   });
 
-  /** A minimal engine exposing the HUD speed seam through `currentScene`. */
   function fakeEngineWithHud(initialSpeed: number) {
     const setGameSpeed = vi.fn();
     const engine = {
@@ -246,7 +223,6 @@ describe("installAutopilotHook — AgentMemory reset on galaxy-identity change (
     clearWindowHook();
   });
 
-  /** A minimal no-player engine — `observe()` early-returns for it (cheap, no scene rendering). */
   function fakeEngine(galaxyId: string): GameEngine {
     return {
       currentSceneType: SceneType.SPACE_FLIGHT,
@@ -266,12 +242,9 @@ describe("installAutopilotHook — AgentMemory reset on galaxy-identity change (
     await hook.controller.tickOnce();
     expect(hook.controller.currentMemory().step).toBe(3);
 
-    // Simulate «Новая игра» while the autopilot stayed engaged (never disengaged,
-    // so `start()`'s own reset never re-fires) — a fresh galaxy, same engine instance.
     (engine as unknown as { galaxy: { id: string } }).galaxy.id = "galaxy-B";
     await hook.controller.tickOnce();
 
-    // Reset-then-incremented-once, not carried over from the previous galaxy.
     expect(hook.controller.currentMemory().step).toBe(1);
   });
 
@@ -288,9 +261,6 @@ describe("installAutopilotHook — AgentMemory reset on galaxy-identity change (
 });
 
 describe("createLiveSceneController — verb → live engine call", () => {
-  // The F3 help-panel tests below mutate the module-level `isHelpPanelOpen`
-  // mock inline. Reset it here so a mid-test failure or a reorder can't leave
-  // sibling tests silently taking the help-panel early-return branch.
   beforeEach(() => {
     vi.mocked(isHelpPanelOpen).mockReturnValue(false);
     vi.mocked(dismissHelpPanel).mockClear();
@@ -360,12 +330,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dock() saves the station marker position as lastFlightShipPos before teleporting (undock edge-spawn fix)", async () => {
-    // Live-session finding (2026-07-12): dock() always teleports — the ship
-    // never actually travels there, so nothing else records "near the
-    // station" as its position. SPACE_FLIGHT's entry logic only ever reads
-    // `lastFlightShipPos`; without saving it here, undocking fell back to the
-    // plain system-edge spawn (confirmed live: dock right after a warp-in,
-    // then undock — the ship was back at the boundary, not by the station).
     const engine = mockEngine({
       currentScene: {
         performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
@@ -413,8 +377,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
         }
       ).planetManager.routeTargetStationId,
     ).toBe("s1");
-    // The scene's own proactive docking (DOCKING_RANGE) completes this later —
-    // no scene transition/refuel yet, unlike the teleport fallback.
     expect(engine.transitionTo).not.toHaveBeenCalled();
   });
 
@@ -473,8 +435,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
       },
     });
 
-    // find-sell-destination must stay blind to the carried quest's target —
-    // falls back to the generic "explore the unknown" pick (first connection).
     await createLiveSceneController(engine).warp(
       undefined,
       "mem:find-sell-destination",
@@ -483,15 +443,11 @@ describe("createLiveSceneController — verb → live engine call", () => {
 
     engine.currentScene.performWarpJumpTo.mockClear();
 
-    // Any other warp reason still biases toward the quest target.
     await createLiveSceneController(engine).warp(undefined, "mem:explore");
     expect(engine.currentScene.performWarpJumpTo).toHaveBeenCalledWith("sys3");
   });
 
   it("openTrade() opens the real TRADE scene with the resolved planet (Task 4: no more domain bypass)", async () => {
-    // Task 4 (docs/plans/20260727-autopilot-ui-parity-fixes.md): openTrade now
-    // routes through the real market UI instead of executing the trade inline;
-    // the actual buy/sell is realised by the next tick's `executeTrade()`.
     const engine = mockEngine({
       player: {
         currentSystemId: "sys1",
@@ -572,8 +528,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(e2eAcceptBoardQuest).toHaveBeenCalledWith(board[0]);
     expect(e2eAcceptBoardQuest).toHaveBeenCalledTimes(1);
     expect(e2eCloseJobBoard).toHaveBeenCalledTimes(1);
-    // The visual path drives the accept itself — no double-accept via the
-    // direct domain call too.
     expect(engine.acceptBoardQuest).not.toHaveBeenCalled();
   });
 
@@ -608,7 +562,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
       },
     });
     await createLiveSceneController(engine).attack("npc1");
-    // The Fire modal is driven (one aimed shot + resume), NOT re-engaged.
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(e2eEngageCombat).not.toHaveBeenCalled();
   });
@@ -627,12 +580,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("attack(targetId) routes through the real onAttackNpc handler when the interaction seam is modeled, not the unconditional E2E seam", async () => {
-    // Live-session finding (2026-07-12): `e2eEngageCombat` registers a
-    // combatant with NO range check, so the policy attacking a system-wide
-    // hostile thousands of pixels away latched `combatModule.isActive` on an
-    // unreachable target and the ship never moved — "under attack" with
-    // nothing nearby, forever. `onAttackNpc` (the real "Атаковать" handler)
-    // does its own range check: pursue if far, engage only in weapon range.
     const e2eEngageCombat = vi.fn();
     const onAttackNpc = vi.fn();
     const targetNpc = { id: "npc-far" };
@@ -703,13 +650,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("warp() resumes the active-pause overlay before jumping (flee-stagnant-jump combat-pause deadlock)", async () => {
-    // Live-observed (2026-07-12): the SPACE_FLIGHT survive tier's
-    // `flee-stagnant-jump` escalation can pick `warp` while the ship is
-    // sitting on the «Огонь!» active-pause overlay (an outmatched standoff
-    // that never advanced a day). Without resuming the overlay first,
-    // `performWarpJumpTo` races the frozen pause and the ship parks on the
-    // combat frame instead of the system boundary — the same class of freeze
-    // `attack()`/`flee()` already guard against.
     const resume = vi.fn();
     const engine = mockEngine({
       currentScene: {
@@ -751,9 +691,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
 
     await createLiveSceneController(engine).flee();
 
-    // The ship sits at (100, 0), 100 px from centre (0,0) along +x — the
-    // near-edge escape point is the SAME direction, scaled out to the
-    // boundary radius (1000, 0), never a NaN/degenerate result.
     expect(executeRouteTo).toHaveBeenCalledTimes(1);
     const [x, y] = executeRouteTo.mock.calls[0] as [number, number];
     expect(x).toBeCloseTo(1000);
@@ -811,8 +748,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
     createLiveSceneController(engine).tick();
 
     expect(dismissHelpPanel).toHaveBeenCalledTimes(1);
-    // The help-panel check runs FIRST and returns — the encounter-overlay
-    // dismissal (a separate, later concern) must not also fire this tick.
     expect(closeModals).not.toHaveBeenCalled();
 
     vi.mocked(isHelpPanelOpen).mockReturnValue(false);
@@ -857,11 +792,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() closes an open modal AND re-arms a turn a shakedown hail froze", () => {
-    // Mirrors `NpcInteractionController.openShakedownHail`: `endTurn()` froze
-    // the turn, then a contact-panel modal opened. `hasOpenModal()` covers
-    // that panel; the autopilot has no follow-up click to re-arm the turn the
-    // way a human's pay/attack/flee response eventually does, so this must do
-    // it itself once the modal is gone.
     const closeModals = vi.fn();
     const e2eStartTurn = vi.fn();
     const engine = mockEngine({
@@ -904,10 +834,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() ATTACKS the OVERMIND core when battle-ready with a healthy hull", () => {
-    // The win-condition fight. The blanket `closeModals()` retreat path used to
-    // fire for the boss prompt too — the autopilot never once pressed «Атаковать
-    // ядро». A capability-battle-ready ship with a healthy hull must spawn the
-    // core combatant instead of retreating.
     const spawnOvermindCoreCombatant = vi.fn();
     const closeModals = vi.fn();
     const engine = mockEngine({
@@ -918,8 +844,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
           isOvermindPromptOpen: true,
           spawnOvermindCoreCombatant,
           closeModals,
-          // The generic surface is "open" too — the boss branch must win the
-          // race and be checked FIRST (it also matches `hasOpenModal`).
           hasOpenModal: () => true,
         },
       },
@@ -935,9 +859,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() RETREATS from the OVERMIND core when the hull is hurt (locks the safe default)", () => {
-    // Battle-ready by capability but hull below the front-avoidance threshold —
-    // it must still retreat via the existing `closeModals()` path, never open
-    // the boss fight it can't survive.
     const spawnOvermindCoreCombatant = vi.fn();
     const closeModals = vi.fn();
     const engine = mockEngine({
@@ -963,10 +884,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() ATTACKS a pirate shakedown hail when battle-ready with a healthy hull", () => {
-    // «Кошелёк или жизнь!». The blanket `closeModals()` used to close this
-    // exactly like declining — the autopilot never once fought. A
-    // capability-battle-ready ship with a healthy hull must call the real
-    // «Атаковать» handler, not blind-close.
     const pirate = { id: "pirate-1", name: "Пират" };
     const onAttackNpc = vi.fn();
     const onFleeShakedown = vi.fn();
@@ -982,8 +899,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
           onFleeShakedown,
           onPayTribute,
           closeModals,
-          // The generic surface is "open" too — the shakedown branch must win
-          // the race and be checked FIRST (it also matches `hasOpenModal`).
           hasOpenModal: () => true,
         },
       },
@@ -1001,8 +916,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() FLEES a pirate shakedown hail when the hull is genuinely hurt", () => {
-    // Below the flee-vs-fight cutoff (`LOW_HULL_FRACTION`) the ship runs rather
-    // than trade itself down — it calls the real «Бежать» handler.
     const pirate = { id: "pirate-2", name: "Пират" };
     const onAttackNpc = vi.fn();
     const onFleeShakedown = vi.fn();
@@ -1035,9 +948,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() PAYS a pirate shakedown hail when neither battle-ready nor badly hurt", () => {
-    // Mid-hull but not capability-battle-ready (weak gun): can't win the fight,
-    // isn't hurt enough to run — so buy the pirate off via the real «Откупиться»
-    // handler and move on, instead of blind-declining.
     const pirate = { id: "pirate-3", name: "Пират" };
     const onAttackNpc = vi.fn();
     const onFleeShakedown = vi.fn();
@@ -1057,8 +967,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
         },
       },
     });
-    // Healthy hull but a weak gun (below BATTLE_READY_WEAPON_DAMAGE) ⇒ not
-    // battle-ready; hull above LOW_HULL_FRACTION ⇒ not fleeing.
     vi.mocked(observe).mockReturnValueOnce({
       player: { maxHull: 200, weaponDamage: 14, hullFraction: 0.9 },
     } as unknown as Observation);
@@ -1072,10 +980,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() falls through to closeModals()+e2eStartTurn() when a shakedown double lacks the real handlers", () => {
-    // A headless test double can expose the shakedown `openContactNpc` context
-    // without the real pay/attack/flee methods. The three branches must all
-    // no-op-skip and fall through to the existing generic re-arm path so the
-    // frozen-turn fix (`e2eStartTurn`) still fires — no regression.
     const closeModals = vi.fn();
     const e2eStartTurn = vi.fn();
     const engine = mockEngine({
@@ -1098,9 +1002,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
         e2eStartTurn,
       },
     });
-    // The shakedown branch runs `observe()` before deciding; the handlers are
-    // absent so the value is irrelevant, but observe must not touch the minimal
-    // mock engine's (absent) player state.
     vi.mocked(observe).mockReturnValueOnce({
       player: { hullFraction: 0.9 },
     } as unknown as Observation);
@@ -1173,13 +1074,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() resumes a stuck active-pause («Огонь!») overlay", () => {
-    // Live-session finding (2026-07-12): a multi-ship garrison re-pauses combat
-    // faster than a single per-verb resume can make progress — from
-    // SPACE_FLIGHT, a `warp` decision dispatches to `openStarMap()` first
-    // (LiveApplier's two-step warp), which had no pause awareness at all, so
-    // the flee-stagnant-jump escape valve never actually fired. Confirmed
-    // live: `combatPause.paused` stayed true across a full 10s window with
-    // zero net ship displacement.
     const closeModals = vi.fn();
     const resume = vi.fn();
     const engine = mockEngine({
@@ -1259,12 +1153,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() closes the prompt BEFORE applying the choice — never re-applies on the next tick (2026-07-19 regression: infinite credits from re-scanning the same encounter)", () => {
-    // A real `EncounterController`: `closeEncounterPrompt()` actually clears
-    // `isEncounterPromptOpen`/`activeEncounter`, exactly like the production
-    // class. The first version of this fix called `applyEncounterChoice`
-    // without ever closing the prompt, so a second tick saw the identical
-    // still-open prompt and applied "engage" again — live-confirmed as an
-    // infinite "+300 кр" loop from a single anomaly.
     const applyEncounterChoice = vi.fn();
     const fakeEncounter = { id: "enc1" };
     const npcManager = {
@@ -1323,10 +1211,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("dismissBlockingModal() bribes an open customs modal when the bribe is affordable (Task 11b, #contraband)", () => {
-    // Live report 2026-07-19: "unclear what the autopilot does if caught with
-    // contraband." The PlanetScene customs modal is a blocking overlay the
-    // autopilot otherwise acts underneath. Prefer the cheapest clearance (bribe,
-    // no reputation cost) when the ship can afford it.
     const applyCustomsChoice = vi.fn().mockReturnValue(true);
     const engine = mockEngine({
       currentSceneType: SceneType.PLANET,
@@ -1421,12 +1305,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("tick() does not force-close the settings panel with zero grace when the quest journal is already idle-due to close", () => {
-    // Regression for the co-occurrence race: journal opens first and earns
-    // its grace tick; before the journal's idle-close fires, the settings
-    // panel ALSO opens (the two are independently openable — neither toggle
-    // closes the other). The shared closeModals() call must not destroy the
-    // freshly-opened settings panel as collateral damage of the journal's
-    // own overdue close.
     let journalOpen = false;
     let settingsOpen = false;
     const closeModals = vi.fn(() => {
@@ -1455,7 +1333,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
 
     settingsOpen = true;
     controller.tick(); // tick 3: journal's grace is spent, but settings just opened —
-    // must defer the close entirely rather than nuke settings via closeModals().
     expect(closeModals).not.toHaveBeenCalled();
     expect(journalOpen).toBe(true);
     expect(settingsOpen).toBe(true);
@@ -1507,9 +1384,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("tick() closes a stale-open in-flight system menu immediately on the first-ever tick (no grace)", () => {
-    // Mirrors the planet-info stale-leftover case: a system menu already open
-    // when the controller's very first tick runs (tickCount <= 1) is treated as
-    // a leftover the human didn't just open, so it closes with zero grace.
     const closeSystemMenu = vi.fn();
     const engine = mockEngine({
       currentScene: {
@@ -1525,9 +1399,6 @@ describe("createLiveSceneController — verb → live engine call", () => {
   });
 
   it("tick() gives a mid-session system menu one grace tick, then closes it on the next tick", () => {
-    // Mirrors the quest-journal grace shape: a menu that OPENS mid-session (not
-    // on the first tick) survives one tick so a human's own «[МЕНЮ]» click isn't
-    // stomped, then closes on the following tick if it's still open.
     let menuOpen = false;
     const closeSystemMenu = vi.fn(() => {
       menuOpen = false;

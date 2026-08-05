@@ -1,12 +1,3 @@
-/**
- * Round-based combat scheduler (campaign Task 9 (v)) — pure arithmetic.
- *
- * Locks the invariant that carries the whole feature: a round can NEVER remove a
- * ship's full hull, so full → zero is impossible in a single resolution step and
- * the defender always gets a between-rounds reaction window. Also: a round always
- * accepts at least one shot (a committed fight never dead-locks), and malformed
- * config can neither freeze the fight nor allow a full-hull one-shot.
- */
 import { describe, it, expect } from "vitest";
 import {
   roundDamageBudget,
@@ -45,14 +36,11 @@ describe("combatRounds — roundDamageBudget", () => {
   });
 
   it("clamps a malformed fraction so it can neither freeze nor one-shot the ship", () => {
-    // fraction 0 → still ≥ 1 (fight progresses), and < maxHull (survivable).
     const zero = roundDamageBudget(100, { hullFraction: 0 });
     expect(zero).toBeGreaterThanOrEqual(1);
     expect(zero).toBeLessThan(100);
-    // fraction ≥ 1 → capped strictly below full hull.
     const over = roundDamageBudget(100, { hullFraction: 5 });
     expect(over).toBeLessThan(100);
-    // NaN → falls back to a sane mid budget, still bounded.
     const nan = roundDamageBudget(100, { hullFraction: Number.NaN });
     expect(nan).toBeGreaterThan(0);
     expect(nan).toBeLessThan(100);
@@ -79,7 +67,6 @@ describe("combatRounds — roundAcceptsShot", () => {
   });
 
   it("simulates a committed fight capping at ≤ budget + one crossing shot", () => {
-    // Each shot is 18 damage; keep firing while the round accepts a shot.
     const maxHull = 130;
     const budget = roundDamageBudget(maxHull, HALF); // 65
     let taken = 0;
@@ -88,9 +75,7 @@ describe("combatRounds — roundAcceptsShot", () => {
       taken += 18;
       shots += 1;
     }
-    // The last (crossing) shot lands in full, so total ≤ budget + one shot.
     expect(taken).toBeLessThanOrEqual(budget + 18);
-    // From full hull the round can never reach zero: 130 - taken > 0.
     expect(maxHull - taken).toBeGreaterThan(0);
     expect(shots).toBeGreaterThan(0);
   });
@@ -110,15 +95,7 @@ describe("combatRounds — roundIsComplete", () => {
     expect(roundIsComplete(100, 0, 100, HALF)).toBe(false);
   });
 
-  // Combat-mechanics escalation (win-rate-100pct plan): the budget is now
-  // computed off min(hull, maxHull), not maxHull alone. A damaged ship gets a
-  // correspondingly SMALLER round allowance — the old maxHull-only basis let a
-  // half-dead ship absorb the same full-hull-sized volley as a fresh one.
   it("scales the budget DOWN off current hull, not max hull, for a damaged ship", () => {
-    // hull=51/max=100: old basis (maxHull=100, HALF) gave budget=50, so 49
-    // damage read as still-unspent. New basis (hull=51) gives budget=25.5 —
-    // the same 49 damage now correctly reads as spent (the round must halt
-    // fire well before a half-dead ship's actual remaining hull is at risk).
     expect(roundIsComplete(49, 51, 100, HALF)).toBe(true);
   });
 

@@ -3,12 +3,6 @@ import { Galaxy } from "@/domain/Galaxy";
 import { Overmind } from "@/domain/Overmind";
 import type { StarSystem } from "@/domain/StarSystem";
 
-/**
- * `Galaxy.tryLiberate`'s `source` param (F10, three-year-campaign Task 16b):
- * only a `"player"`-sourced liberation of an OVERMIND system should count
- * toward `overmindArc.playerLiberations`, the counter `advanceOvermind` reads
- * to gate the arc's `won` derivation on genuine player participation.
- */
 function makeGalaxy(): Galaxy {
   const systems: StarSystem[] = ["sys_0", "sys_1"].map((id, i) => ({
     id,

@@ -1,39 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A containment-ethics dilemma (distinct from plague-crisis, which is a
-// race against a draining time budget). A colony station reports a viral
-// outbreak in Sector 7, and you hold the quarantine authority. Two pressures run
-// in parallel: `containment` (the integrity of the seal) and `panic` among the
-// uninfected. Let the seal fail and the pathogen breaks loose station-wide
-// (a `critMin` on containment → ending_outbreak); let panic boil over and a mob
-// tears the quarantine open themselves (a `critMax` on panic → ending_riot).
-// Every choice trades containment against `saved` lives and against panic. The
-// puzzle is holding both meters inside their bounds while pulling as many people
-// out as possible.
-// Choice points:
-//   1. First protocol — hard-seal (max containment, feeds panic), screening
-//      checkpoint (saves many, risks a carrier), or a calming broadcast.
-//   2. Triage ward — send medics in (saves lives, breaks the seal a little),
-//      isolate and treat remotely (safe, few saved), or call a med-frigate
-//      (roll: it arrives, or the wait spikes panic).
-//   3. Final call — vent the infected section (guarantees containment, its own
-//      grim ending when many were pulled out first — you gassed the rest),
-//      reinforce the seals (safe hold), or throw the doors for a last evac
-//      (saves many, strains containment).
-//   4. Outcome — an auto gate on `saved`, reached only if the seal held. Venting
-//      routes to its own gate (`purge_gate`) so the dark choice never borrows the
-//      clean "санитарный контроль doverяet you" ending.
-// The critical thresholds are surfaced in-fiction on every decision screen
-// (the seal tears at 0 герметичности → ending_outbreak; the mob breaks it open
-// at 10 паники → ending_riot) so a "good" combo can't walk into a hidden fail.
-// The med-frigate roll narrates its own arrival/silence beat instead of a mute
-// jump. Outcomes (by `saved`, unless containment or panic broke first):
-//   - ending_contained (saved >= 12 — sealed and most pulled out)  SUCCESS
-//   - ending_partial   (saved >= 6  — sealed, a hard toll)         SUCCESS
-//   - ending_grim      (saved < 6   — sealed, but few made it)     SUCCESS
-//   - ending_purged    (vented the sector after pulling many out)  SUCCESS
-//   - ending_outbreak  (seal breached — station-wide spread)       FAILURE
-//   - ending_riot      (panic broke the quarantine open)           FAILURE
 export const quarantineScript: QuestScript = {
   id: "quarantine",
   title: "Карантин",

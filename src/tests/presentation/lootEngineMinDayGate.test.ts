@@ -8,15 +8,6 @@ import { ROLE_LOADOUT } from "@/systems/npc/NpcSimulator";
 import { gearIdForToken } from "@/systems/equipment/GearCatalog";
 import { APEX_ENGINE_MIN_DAY } from "@/config/balance";
 
-/**
- * Regression: an Overmind garrison ship's loadout carries the same
- * "Двигатель ур.3" token (→ eq_engine_v) as its display scan summary, and
- * combat loot resolves that token into a real, installable gear pickup with
- * no day check anywhere in the pickup path. Without gating, killing any
- * Overmind ship — encountered from day 1 in every hostile system — lets a
- * player acquire the apex engine long before APEX_ENGINE_MIN_DAY, bypassing
- * the exact calendar gate ShopGenerator enforces for shop stock.
- */
 function makeOvermind(id: string): NpcShip {
   return new NpcShip({
     id,
@@ -40,7 +31,6 @@ function makeOvermind(id: string): NpcShip {
   });
 }
 
-/** Deterministic RNG cycling through a fixed sequence of [0,1) values. */
 function seqRng(values: number[]): () => number {
   let i = 0;
   return () => values[i++ % values.length];
@@ -49,8 +39,6 @@ function seqRng(values: number[]): () => number {
 describe("LootDropHandler — apex engine loot respects APEX_ENGINE_MIN_DAY", () => {
   it("never drops the eq_engine_v token before the gate day", () => {
     const handler = new LootDropHandler(new Container());
-    // count roll 0.5 -> exactly 1 item; artifact roll 0.9 (>=0.25) -> module
-    // branch; module-pick roll 0.0 -> index 0 of the *available* pool.
     handler.spawn(
       makeOvermind("ov1"),
       0,

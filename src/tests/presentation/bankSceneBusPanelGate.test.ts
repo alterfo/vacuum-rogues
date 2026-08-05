@@ -1,19 +1,3 @@
-/**
- * Task 13 (Quest & Hub polish pass,
- * `docs/plans/20260726-quest-and-hub-polish-pass.md`): the "ШИНА: команды →
- * проводки" live bus-log panel is, by its own code comment, a teaching/debug
- * artifact taking up the bottom half of the right column — meaningless to a
- * real player. It is now gated on the build's `__DEBUG__` flag via the pure
- * `showBankBusPanel(debug)` predicate in `bankSceneView`.
- *
- * Two layers of coverage:
- *  1. Pure predicate — `showBankBusPanel(false)` is false (production hides it),
- *     `showBankBusPanel(true)` is true (dev/e2e keep it).
- *  2. Real-scene render — with the gate forced OFF the "ШИНА" section header
- *     never renders (production behaviour); with the gate ON (the real vitest
- *     `__DEBUG__ === true` build) it does. Mirrors `bankSceneFontScaleLayout`'s
- *     fake-pixi convention so `Text` nodes are directly inspectable.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   AccountType,
@@ -35,8 +19,6 @@ describe("showBankBusPanel (pure gate)", () => {
     expect(showBankBusPanel(true)).toBe(true);
   });
 });
-
-// ── Real-scene render, with the gate override-able ───────────────────────────
 
 const gate = vi.hoisted(() => ({ override: null as boolean | null }));
 
@@ -127,7 +109,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mocks so the scene sees the fakes.
 import { BankScene } from "@/presentation/BankScene";
 
 const renderer = {
@@ -188,8 +169,6 @@ describe("BankScene ШИНА panel render gating", () => {
     scene.initialize({ gameEngine: makeHost() });
 
     expect(created.some((n) => n.text === BUS_HEADER)).toBe(false);
-    // The rest of the screen still renders — the ВЫПИСКА statement header is
-    // present, proving we hid only the bus panel, not the whole right column.
     expect(created.some((n) => n.text === "ВЫПИСКА — текущий счёт")).toBe(true);
 
     scene.destroy();

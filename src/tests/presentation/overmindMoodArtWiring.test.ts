@@ -1,12 +1,3 @@
-/**
- * Overmind mood-art resolver WIRING guard (three-year-campaign plan, Task 18).
- *
- * `overmind_mood/` ships no art yet (generation happens on the GPU box,
- * Post-Completion), so nothing else exercises the "lights up when art lands"
- * path. Mirrors `stationArtWiring.test.ts`: mock `pickVariantKey` so the
- * exact category/prefix/seed call and the resolved-key passthrough are
- * pinned without any real asset on disk.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { EscalationInputs } from "@/systems/campaign/escalationNotices";
 

@@ -37,7 +37,6 @@ function makeNpc(
   });
 }
 
-/** Deterministic RNG cycling through a fixed sequence of [0,1) values. */
 function seqRng(values: number[]): () => number {
   let i = 0;
   return () => values[i++ % values.length];
@@ -68,8 +67,6 @@ describe("LootDropHandler — size-tier-scaled artifact drops", () => {
         OVERMIND_ARTIFACT_DROP[t].bonusLootRolls;
       expect(rolls("small")).toBe(0);
       expect(rolls("boss")).toBeGreaterThan(rolls("small"));
-      // Boss must GUARANTEE an artifact: capped chance 1.0 + at least one
-      // guaranteed loot roll even when the count roll comes up 0.
       expect(
         Math.min(1, ARTIFACT_DROP_CHANCE * chance("boss")),
       ).toBeGreaterThanOrEqual(1);
@@ -80,8 +77,6 @@ describe("LootDropHandler — size-tier-scaled artifact drops", () => {
   describe("boss tier", () => {
     it("guarantees at least one artifact even on the worst count roll", () => {
       const handler = makeHandler();
-      // count roll 0.1 → base count 0; boss bonus rolls still produce items,
-      // and the capped 1.0 artifact chance makes every one an artifact.
       handler.spawn(
         makeNpc("boss", { faction: Faction.OVERMIND, sizeTier: "boss" }),
         0,
@@ -95,8 +90,6 @@ describe("LootDropHandler — size-tier-scaled artifact drops", () => {
 
   describe("large vs small", () => {
     it("large tier converts a roll that small would miss into an artifact", () => {
-      // Artifact roll 0.4: small misses (0.4 >= 0.25 flat), large hits
-      // (0.4 < 0.25 × its >1 multiplier).
       const largeChance = Math.min(
         1,
         ARTIFACT_DROP_CHANCE * OVERMIND_ARTIFACT_DROP.large.artifactChanceMult,
@@ -149,7 +142,6 @@ describe("LootDropHandler — size-tier-scaled artifact drops", () => {
 
   describe("small tier — unchanged flat odds", () => {
     it("hits exactly at the flat ARTIFACT_DROP_CHANCE boundary", () => {
-      // Just below the flat chance → artifact.
       const hit = makeHandler();
       hit.spawn(
         makeNpc("s1", { faction: Faction.OVERMIND, sizeTier: "small" }),
@@ -161,7 +153,6 @@ describe("LootDropHandler — size-tier-scaled artifact drops", () => {
       expect(artifactCount(hit)).toBe(1);
       hit.destroy();
 
-      // Exactly at the flat chance → miss (module instead), same as today.
       const miss = makeHandler();
       miss.spawn(
         makeNpc("s2", { faction: Faction.OVERMIND, sizeTier: "small" }),

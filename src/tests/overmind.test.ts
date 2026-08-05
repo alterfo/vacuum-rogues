@@ -5,8 +5,6 @@ import { generateQuestBoard } from "@/systems/quests/QuestGenerator";
 import type { StarSystem } from "@/domain/StarSystem";
 import { QuestType } from "@/types";
 
-// ── Galaxy OVERMIND helpers ───────────────────────────────────────────────────
-
 function makeGalaxy(systemCount = 6): Galaxy {
   const systems: StarSystem[] = Array.from({ length: systemCount }, (_, i) => ({
     id: `sys_${i}`,
@@ -73,8 +71,6 @@ describe("Galaxy.removeOvermindSystem", () => {
   });
 });
 
-// ── Loss condition ────────────────────────────────────────────────────────────
-
 describe("Galaxy.isOvermindMajority", () => {
   it("returns false when OVERMIND controls ≤50%", () => {
     const galaxy = makeGalaxy(6); // 6 systems
@@ -94,15 +90,11 @@ describe("Galaxy.isOvermindMajority", () => {
   });
 });
 
-// ── Expansion helper ──────────────────────────────────────────────────────────
-
 describe("Galaxy.getOvermindAdjacentSystems", () => {
   it("returns systems connected to an OVERMIND system but not themselves OVERMIND", () => {
     const galaxy = makeGalaxy(4);
-    // sys_0 — sys_1 — sys_2 — sys_3 (linear chain)
     galaxy.addOvermindSystem("sys_0");
     const adjacent = galaxy.getOvermindAdjacentSystems();
-    // sys_1 is the only neighbor of sys_0 that is not OVERMIND
     expect(adjacent.map((s) => s.id)).toContain("sys_1");
     expect(adjacent.map((s) => s.id)).not.toContain("sys_0");
   });
@@ -121,8 +113,6 @@ describe("Galaxy.getOvermindAdjacentSystems", () => {
     expect(galaxy.getOvermindAdjacentSystems()).toHaveLength(0);
   });
 });
-
-// ── DEFENSE quest generation ──────────────────────────────────────────────────
 
 const SYSTEMS: StarSystem[] = [
   {
@@ -196,7 +186,6 @@ describe("QuestGenerator DEFENSE quests", () => {
     );
     expect(defenseQuests.length).toBe(1);
     expect(defenseQuests[0].targetSystemId).toBe("s1");
-    // targetObjectId should point to the adjacent OVERMIND system (s2)
     expect(defenseQuests[0].template.targetObjectId).toBe("s2");
   });
 

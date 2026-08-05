@@ -2,11 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { Graphics } from "pixi.js";
 import { SystemMiniMap } from "@/presentation/SystemMiniMap";
 
-/**
- * Incoming-attacker threat marker (Task 5): an aggressive NPC dot on the
- * mini-map gets a distinct red ring so a closing hostile reads at a glance,
- * separate from its faction-colour dot.
- */
 describe("SystemMiniMap incoming-attacker marker (Task 5)", () => {
   it("draws a red threat ring only around aggressive NPC dots", () => {
     const strokeSpy = vi.spyOn(Graphics.prototype, "stroke");

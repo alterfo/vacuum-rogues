@@ -1,21 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A smuggling gauntlet from the smuggler's side. Run contraband past 3
-// blockade checkpoints, then deliver to the buyer. At each checkpoint pick:
-//   - bribe  : pay 150 cr, pass clean (safe, expensive)
-//   - bluff  : free, but never risk-free — even a calm low-heat bluff can trip
-//              a thorough scan (~10%), and higher heat sharply raises the catch
-//              chance (30% in the medium band, certain once heat >= 6)
-//   - dump   : jettison 2 units of cargo to cool off (less payout)
-//   - officer_deal (checkpoint 2 only): a corrupt captain scrubs your ship from
-//              the blockade net for 400 cr, wiping ALL accumulated heat — a
-//              distinct heat-management play, useful only after you've run hot
-// Heat rises when you bluff; bribing keeps it down. Final payout scales with how
-// much cargo survives, and the delivery reads differently per payout tier
-// (payout_full/high/mid beats → shared quest_success coda). Outcomes:
-//   - quest_success         (delivered, paid)                 SUCCESS
-//   - quest_failure_caught  (busted at a checkpoint)          FAILURE
-//   - quest_failure_nocargo (arrived empty-handed)            FAILURE
 export const smugglingRunScript: QuestScript = {
   id: "smuggling-run",
   title: "Контрабандный рейс",
@@ -66,11 +50,6 @@ export const smugglingRunScript: QuestScript = {
   startLocation: "checkpoint_decision",
   locations: [
     {
-      // Per-seed encounter pool (Task 14 resolver): each playthrough draws a
-      // different patrol so the three checkpoints don't read identically. The
-      // node is reused across checkpoints (critMax loop), so the variance is
-      // per-run, not per-checkpoint — genuine per-checkpoint distinct nodes are
-      // blocked by the locked tests that assert the loop returns here.
       id: "checkpoint_decision",
       text: [
         "Блокпост {checkpoint} из 3. Из темноты выныривает патрульный крейсер, и прожекторы бьют вам прямо в остекление рубки. В трюме — контрабанда, и таможенный луч уже ползёт по обшивке. По борту скрипит усталый голос: «Приготовьтесь к досмотру».\nЖар подозрения: {heat} | Груз в трюме: {cargo} ед. | На счету: {credits} кр.\n\nЛадони вспотели на штурвале. Как проходим?",
@@ -100,10 +79,6 @@ export const smugglingRunScript: QuestScript = {
           effects: ["cargo -= 2", "heat -= 4"],
         },
         {
-          // Differentiating beat, available only at the second checkpoint: the
-          // patrol captain is on the take and, for a fatter fee than a plain
-          // bribe, scrubs your ship's flags from the whole blockade net —
-          // wiping accumulated heat, not just waving you past this ship.
           id: "officer_deal",
           label:
             "Капитан патруля явно на прикорме — купить у него чистый транспондер (−400 кр, весь жар с сети стирается)",
@@ -134,10 +109,6 @@ export const smugglingRunScript: QuestScript = {
           autoExecute: true,
         },
         {
-          // Even a calm, low-heat bluff isn't free: a thorough scan on a bad
-          // beat (roll 0, ~10%) still trips the alarm. Rarer than the medium
-          // band's 30% catch, but enough that bluffing is a gamble, not a
-          // strictly-better-than-bribe freebie.
           id: "bluff_nervous",
           label: "...",
           toLocation: "quest_failure_caught",
@@ -214,7 +185,6 @@ export const smugglingRunScript: QuestScript = {
         },
       ],
     },
-    // Reached via checkpoint critMax (>3).
     {
       id: "arrival",
       text: "Три блокпоста позади. Впереди — тёмный причал точки сброса, где мигает сигнальный маяк заказчика. Его люди уже подгоняют разгрузочный кран, вглядываясь в ваш трюм: {cargo} ед. груза дошло.",
@@ -222,8 +192,6 @@ export const smugglingRunScript: QuestScript = {
         {
           id: "deliver",
           label: "...",
-          // Reset checkpoint below critMax so the crit redirect stops firing
-          // (otherwise it would bounce payout_gate back to arrival every step).
           toLocation: "payout_gate",
           effects: ["checkpoint = 0"],
           autoExecute: true,
@@ -267,10 +235,6 @@ export const smugglingRunScript: QuestScript = {
         },
       ],
     },
-    // Payout-tier beats (Task 33 / pattern B): the delivery reads differently
-    // depending on how much cargo survived, instead of one shared success line.
-    // Each auto-executes into the shared `quest_success` coda so the locked
-    // full- and mid-tier tests still land on `quest_success`.
     {
       id: "payout_full",
       text: "Весь груз до последнего контейнера уходит в трюм заказчика. Тот присвистывает — полный борт, ни единой потери — и отсчитывает по высшей ставке, накинув сверху за чистую работу. «Вот это я понимаю рейс».",

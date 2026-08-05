@@ -1,16 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-/**
- * Task 3 (onboarding): the reusable contextual-help wiring. These tests drive the
- * helper directly against a fake pixi.js + a fake "seen" store (no real DOM /
- * localStorage), asserting:
- *  - the pure `shouldAutoShow` decision,
- *  - mountSceneHelp auto-shows the panel exactly once on first entry (+ markSeen),
- *  - a second visit does NOT auto-show, but the «?» button still reopens it,
- *  - teardown removes the «?» button and any open panel,
- *  - the HelpPanel's «Понятно» / «✕» both invoke onClose.
- */
-
 interface FakeNode {
   text?: string;
   children: FakeNode[];
@@ -98,7 +87,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the panel + button see the fake pixi.
 import { Container } from "pixi.js";
 import {
   mountSceneHelp,
@@ -117,15 +105,10 @@ const renderer = {
 
 const fakeEvent = { stopPropagation: vi.fn() };
 
-// The open-help-panel registry (`isHelpPanelOpen`/`dismissHelpPanel`) is
-// module-level by design (F3 — queryable without a scene reference), so a
-// panel a test opens without an explicit teardown would otherwise leak into
-// the next test. Drain it before every test in this file.
 beforeEach(() => {
   while (isHelpPanelOpen()) dismissHelpPanel();
 });
 
-/** A fake injectable "seen" store backed by a plain Set. */
 function makeSeenStore(seeded: HelpKey[] = []) {
   const set = new Set<HelpKey>(seeded);
   return {
@@ -137,7 +120,6 @@ function makeSeenStore(seeded: HelpKey[] = []) {
   };
 }
 
-/** Depth-first find of a button container (one whose children include a Text === label). */
 function findButton(root: FakeNode, label: string): FakeNode | undefined {
   for (const child of root.children) {
     if (child.children.some((c) => c.text === label)) return child;
@@ -181,9 +163,7 @@ describe("mountSceneHelp — first-time auto-hint + «?» reopen", () => {
     );
 
     expect(store.markSeen).toHaveBeenCalledWith("PLANET");
-    // Both the «?» button and the auto-shown panel were mounted.
     expect(container.children.length).toBe(2);
-    // The panel renders the entry's title.
     expect(findButton(container, "Понятно")).toBeDefined();
   });
 
@@ -202,7 +182,6 @@ describe("mountSceneHelp — first-time auto-hint + «?» reopen", () => {
     );
 
     expect(store.markSeen).not.toHaveBeenCalled();
-    // Only the «?» button mounted — no panel.
     expect(container.children.length).toBe(1);
     expect(findButton(container, "Понятно")).toBeUndefined();
     expect(findButton(container, "?")).toBeDefined();
@@ -230,7 +209,6 @@ describe("mountSceneHelp — first-time auto-hint + «?» reopen", () => {
     expect(container.children.length).toBe(2); // panel opened
     expect(findButton(container, "Понятно")).toBeDefined();
 
-    // A second click while open must not stack a duplicate panel.
     helpBtn!.handlers.pointerdown(fakeEvent);
     expect(container.children.length).toBe(2);
   });
@@ -254,7 +232,6 @@ describe("mountSceneHelp — first-time auto-hint + «?» reopen", () => {
     expect(ok).toBeDefined();
     ok!.handlers.pointerdown(fakeEvent);
 
-    // Panel destroyed + removed — only the «?» button remains.
     expect(container.children.length).toBe(1);
     expect(findButton(container, "Понятно")).toBeUndefined();
   });
@@ -274,13 +251,11 @@ describe("mountSceneHelp — first-time auto-hint + «?» reopen", () => {
     );
     expect(container.children.length).toBe(2);
 
-    // Capture the «?» button before teardown removes it from the tree.
     const helpBtn = findButton(container, "?")!;
     expect(helpBtn).toBeDefined();
 
     teardown();
 
-    // Both the «?» button and the open panel were removed from the scene.
     expect(container.children.length).toBe(0);
     expect((helpBtn as unknown as { destroyed?: boolean }).destroyed).toBe(
       true,
@@ -309,7 +284,6 @@ describe("isHelpPanelOpen / dismissHelpPanel — cross-cutting query+dismiss (F3
     dismissHelpPanel();
 
     expect(isHelpPanelOpen()).toBe(false);
-    // The panel is gone; teardown only needs to clean up the «?» button now.
     teardown();
   });
 
@@ -330,12 +304,10 @@ describe("isHelpPanelOpen / dismissHelpPanel — cross-cutting query+dismiss (F3
       },
       "BANK",
     );
-    // container has the «?» button + the auto-shown panel.
     expect(container.children.length).toBe(2);
 
     dismissHelpPanel();
 
-    // Only the «?» button remains — the panel was removed + destroyed.
     expect(container.children.length).toBe(1);
   });
 

@@ -30,7 +30,6 @@ describe("Hard-mode hostile scaling — pure config", () => {
     expect(scaledHostileSystemCount("HARD", 1)).toBeGreaterThan(
       scaledHostileSystemCount("NORMAL", 1),
     );
-    // 2 overmind + 1 pirate baseline → 3 + 2 = 5 hostile systems on HARD.
     expect(scaledHostileSystemCount("HARD", 2)).toBe(3);
     expect(scaledHostileSystemCount("HARD", 1)).toBe(2);
   });
@@ -77,10 +76,8 @@ describe("Hard-mode hostile scaling — additionalHostileSeeds", () => {
       ["s0", "s1"],
       ["s2"],
     );
-    // baseline 2 overmind + 1 pirate → +1 overmind, +1 pirate on HARD.
     expect(extra.overmind).toHaveLength(1);
     expect(extra.pirate).toHaveLength(1);
-    // Picks from the neutral frontier (s3 most isolated of the remaining).
     expect(extra.overmind).toEqual(["s3"]);
     expect(extra.pirate).toEqual(["s4"]);
   });
@@ -96,7 +93,6 @@ describe("Hard-mode hostile scaling — additionalHostileSeeds", () => {
     expect(all).not.toContain("s0");
     expect(all).not.toContain("s1");
     expect(all).not.toContain("s2");
-    // No overlap between the overmind and pirate additions.
     expect(new Set(all).size).toBe(all.length);
   });
 });
@@ -133,11 +129,6 @@ function makeHostileGalaxy(): Galaxy {
 
 describe("Hard-mode hostile scaling — garrison size", () => {
   it("NORMAL garrison at zero ratcheted power is discounted below today's [5,10] baseline (win-rate-100pct plan, Task 3)", () => {
-    // Superseded assertion: this test's `NpcSimulator` never attaches a
-    // campaign-peak-power source, so `fillGarrison` reads peakPower=0 — the
-    // pirate-garrison discount reversal (Task 3) now applies the full
-    // OVERMIND_GARRISON_POWER_MAX_DISCOUNT there, same as the Overmind side.
-    // See garrisonPowerScaling.test.ts for the dedicated discount coverage.
     const galaxy = makeHostileGalaxy();
     galaxy.addPirateSystem("sys_b");
 

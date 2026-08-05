@@ -7,7 +7,6 @@ describe("ShipLoadout.derivedStats — tech-based formulas (Task 6)", () => {
     lo.install("eq_engine_i"); // tech 2
     lo.install("eq_tank");
     const s = lo.derivedStats();
-    // tech 2: 0.066 + 2*0.022 = 0.11
     expect(s.speed).toBeCloseTo(0.11, 3);
   });
 
@@ -77,9 +76,7 @@ describe("ShipLoadout.derivedStats — tech-based formulas (Task 6)", () => {
     const lo = new ShipLoadout("hull_warden");
     lo.install("eq_engine_i"); // tech 2 → base 0.11
     lo.install("eq_tank");
-    // level-1 micromodule = +20%
     lo.applyMicromodule("eq_engine_i", "mm_amplifier_1");
-    // 0.11 * 1.20 = 0.132
     expect(lo.derivedStats().speed).toBeCloseTo(0.11 * 1.2, 3);
   });
 });

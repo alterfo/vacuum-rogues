@@ -14,20 +14,6 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Playtest report (2026-06-27, Issue 1): "ship spins on its own axis + camera
- * circles when attacked at game start." When a combat target sits nearly on top
- * of the player (a too-close spawn attack), the combat strafe orbit collapsed to
- * tight, fast revolutions — the ship wound round and round in place and the
- * auto-follow camera circled with it.
- *
- * Fix (`steerCombatOrbit`): well inside the orbit radius the tangential
- * (circling) steering component fades out, so the ship backs STRAIGHT out to
- * range (radial-dominated) instead of spiralling. This drives the REAL pursuit
- * and asserts the steer direction points away from a nearly-coincident target
- * (no tight orbit), while the steady orbit at full range still circles.
- */
-
 const WR = GAME_BALANCE.weaponRange;
 const ORBIT = WR * 0.6;
 
@@ -62,7 +48,6 @@ function makeNpc(id: string): NpcShip {
   });
 }
 
-/** Build a manager with one combat target, the player physics at the origin. */
 function setup(): {
   manager: NpcShipManager;
   physics: ShipPhysics;
@@ -105,7 +90,6 @@ function setup(): {
   return { manager, physics, target };
 }
 
-/** Angle (rad) between two direction vectors. */
 function angleBetween(ax: number, ay: number, bx: number, by: number): number {
   const dot = ax * bx + ay * by;
   const la = Math.hypot(ax, ay) || 1;
@@ -116,32 +100,23 @@ function angleBetween(ax: number, ay: number, bx: number, by: number): number {
 describe("combat orbit anti-spin (close-range degenerate guard)", () => {
   it("steers AWAY (radial escape), not tangentially, when the target is nearly on top", () => {
     const { manager, physics, target } = setup();
-    // Target almost coincident with the player, and the player happens to face
-    // straight at it (worst case for a tight spin).
     target.x = 12;
     target.y = 0;
 
     manager.updateCombat(50);
 
-    // The combat steer is plotted as a far carrot via setPath — its direction
-    // from the ship is what the hull turns toward.
     const steerX = physics.getTargetX() - physics.shipX;
     const steerY = physics.getTargetY() - physics.shipY;
-    // "Away from target" = from the target toward the ship.
     const awayX = physics.shipX - target.x;
     const awayY = physics.shipY - target.y;
     const deg = (angleBetween(steerX, steerY, awayX, awayY) * 180) / Math.PI;
 
-    // Radial-dominated escape: the steer is within ~30° of straight away from
-    // the target — NOT the ~45°+ tangential heading that span the ship in place.
     expect(deg).toBeLessThan(30);
     manager.destroy();
   });
 
   it("still circles (tangential) at the steady orbit radius", () => {
     const { manager, physics, target } = setup();
-    // Target at the orbit standoff — the tangent must be fully restored so the
-    // ship strafes around it (the orbit fix is unchanged at proper range).
     target.x = ORBIT;
     target.y = 0;
 
@@ -153,8 +128,6 @@ describe("combat orbit anti-spin (close-range degenerate guard)", () => {
     const awayY = physics.shipY - target.y;
     const deg = (angleBetween(steerX, steerY, awayX, awayY) * 180) / Math.PI;
 
-    // At orbit range the steer is essentially perpendicular to the radial (a
-    // tangential strafe), so the angle to "away" is near 90° — it circles.
     expect(deg).toBeGreaterThan(60);
     manager.destroy();
   });

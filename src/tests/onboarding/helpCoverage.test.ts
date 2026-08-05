@@ -1,16 +1,3 @@
-/**
- * Onboarding help COVERAGE + ACCURACY (Task 3 of
- * `docs/plans/20260627-screen-consistency-onboarding.md`).
- *
- * Two guards over the pure help registry (no PixiJS):
- *   • Coverage — every gameplay `SceneType` (i.e. every scene EXCEPT the
- *     intentional terminal/menu omissions) has a `HELP_CONTENT` entry, so a new
- *     gameplay scene can't silently ship without onboarding text. The omission
- *     set is asserted exhaustive, so adding a scene forces a deliberate choice.
- *   • Accuracy — the planet Верфь (`EQUIPMENT_SHOP`) help describes its REAL
- *     capabilities at that entry point: all three tabs (Снаряжение / Корпус /
- *     Ангар), including the hull trade-in the older copy never mentioned.
- */
 import { describe, expect, it } from "vitest";
 import { SceneType } from "@/types";
 import {
@@ -20,11 +7,6 @@ import {
   type HelpKey,
 } from "@/systems/onboarding/helpContent";
 
-/**
- * Scenes that intentionally omit contextual help: terminal screens (win/lose)
- * and menu/transition surfaces. Kept in sync with the plan's Context note
- * ("GameOver/Win/MainMenu/SaveLoad/Dialogue intentionally omit it").
- */
 const HELP_OMITTED_SCENES: ReadonlySet<SceneType> = new Set([
   SceneType.MAIN_MENU,
   SceneType.DIALOGUE,
@@ -55,7 +37,6 @@ describe("onboarding help coverage", () => {
   });
 
   it("the omission set is exhaustive (adding a scene forces a coverage choice)", () => {
-    // Every omitted scene is a real SceneType — guards against a stale entry.
     for (const scene of HELP_OMITTED_SCENES) {
       expect(Object.values(SceneType)).toContain(scene);
     }
@@ -69,8 +50,6 @@ describe("onboarding help accuracy — planet Верфь (EQUIPMENT_SHOP)", () =
     const text = [entry.title, ...entry.body, ...(entry.controls ?? [])]
       .join(" ")
       .toLowerCase();
-    // The three real tab labels from EquipmentShopScene.renderTabs:
-    // [ СНАРЯЖЕНИЕ ] / [ КОРПУС ] / [ АНГАР ].
     expect(text).toContain("снаряжение");
     expect(text).toContain("корпус");
     expect(text).toContain("ангар");
@@ -81,7 +60,6 @@ describe("onboarding help accuracy — planet Верфь (EQUIPMENT_SHOP)", () =
     const text = [...entry.body, ...(entry.controls ?? [])]
       .join(" ")
       .toLowerCase();
-    // The КОРПУС tab buys a new hull crediting the old one (buyHullWithTradeIn).
     expect(text).toContain("зачёт");
   });
 });

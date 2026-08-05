@@ -5,22 +5,7 @@ import type { Renderer } from "../Renderer";
 import type { HelpEntry } from "@/systems/onboarding/helpContent";
 import { t } from "@/i18n/i18n";
 
-/**
- * The reusable, dismissible onboarding / contextual-help panel
- * (`docs/plans/20260623-onboarding-and-contextual-help.md`).
- *
- * A themed dark overlay (the same look as the quest journal / micromodule modal):
- * a full-screen click-swallowing backdrop, a centred panel with a title, the
- * entry's body paragraphs, an optional «Управление» controls list, and two close
- * affordances («Понятно» + «✕»). All text routes through `scaledText` so it
- * tracks the S/M/L setting and stays legible on the dark panel.
- *
- * The panel is content-agnostic: it renders any {@link HelpEntry}, so the
- * first-time auto-hint and the «?»-reopened hint share one component. Mount its
- * `container`; call `destroy()` (or any close affordance → `onClose`) to remove.
- */
 export class HelpPanel {
-  /** Mount this into the scene's UI container. */
   public readonly container: Container;
 
   private static readonly PANEL_PADDING = 22;
@@ -44,12 +29,6 @@ export class HelpPanel {
     const panelW = Math.min(HelpPanel.MAX_PANEL_WIDTH, sw - 60);
     const contentW = panelW - pad * 2;
 
-    // Full-screen click-swallowing backdrop: like QuestJournalUI, it is the one
-    // hit target so every click over the panel stops here instead of bubbling to
-    // the scene's stage handlers (CLAUDE.md Rule 2/3). All panel content below is
-    // eventMode="none" so it falls through to this — only the buttons are live.
-    // The container is offset to the panel position below, so the backdrop uses
-    // an oversized rect to cover the whole screen regardless of that offset.
     const backdrop = new Graphics();
     backdrop
       .rect(-3000, -3000, 6000, 6000)
@@ -62,13 +41,10 @@ export class HelpPanel {
     backdrop.on("pointertap", swallow);
     this.container.addChild(backdrop);
 
-    // Panel background — drawn after we measure the content so its height hugs
-    // the text. Added first so the text/buttons stack on top of it.
     const panel = new Graphics();
     panel.eventMode = "none";
     this.container.addChild(panel);
 
-    // Lay the content out top-down, advancing `y` by each block's real height.
     let y = pad;
 
     const title = scaledText(entry.title, 18, 0x00ffee, {
@@ -122,7 +98,6 @@ export class HelpPanel {
       y += HelpPanel.PARAGRAPH_GAP - 4;
     }
 
-    // «Понятно» (primary) closes the panel; the «✕» in the corner does the same.
     const okBtn = new UiButton(
       "",
       t("help.gotIt"),
@@ -146,7 +121,6 @@ export class HelpPanel {
     this.container.x = panelX;
     this.container.y = panelY;
 
-    // «✕» close button, top-right inside the panel.
     const closeBtn = new UiButton(
       "✕",
       "",
@@ -163,7 +137,6 @@ export class HelpPanel {
     this.container.addChild(closeBtn.container);
   }
 
-  /** Remove the panel (and all its children) from the scene graph. */
   destroy(): void {
     this.container.destroy({ children: true });
   }

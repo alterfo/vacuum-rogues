@@ -6,10 +6,8 @@ import { ResourceType, NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
 import { GalacticRegistry } from "@/systems/info/GalacticRegistry";
 
-/** Build a Market whose getPrice() returns exactly the given price per resource. */
 function market(prices: Partial<Record<ResourceType, number>>): Market {
   const resources = Object.keys(prices) as ResourceType[];
-  // getPrice = round((demand/supply)*100); supply=1 → demand = price/100.
   const demand = resources.map((r) => (prices[r] ?? 0) / 100);
   const supply = resources.map(() => 1);
   return new Market(resources, demand, supply);
@@ -42,7 +40,6 @@ function ship(
   return { id, name: id, role, faction, currentSystemId: systemId } as NpcShip;
 }
 
-/** A—B—C—D chain (origin A). METALS sold in B@200, C@120, D@90. */
 function galaxy(): StarSystem[] {
   return [
     sys("A", "Альфа", ["B"], [{ id: "A1" }]),
@@ -186,9 +183,6 @@ describe("GalacticRegistry", () => {
   });
 
   it("Bug 6: finds ships/planets/systems reachable only via a one-way link's reverse direction", () => {
-    // A --(one-way)--> B, no B->A edge — the star-map nav still lets the
-    // player warp A<->B either direction, so a directed-only BFS from A would
-    // wrongly report B unreachable and silently drop every hit inside it.
     const systems = [
       sys("A", "Альфа", ["B"], []),
       sys("B", "Бета", [], [{ id: "B1" }]),

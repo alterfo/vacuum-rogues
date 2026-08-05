@@ -5,7 +5,6 @@ import {
   type RangedWeapon,
 } from "@/presentation/flight/combatWeaponTargeting";
 
-// Minimal fake Graphics recorder — the seam only touches these four methods.
 function fakeGraphics() {
   return {
     clear: vi.fn(),
@@ -29,11 +28,9 @@ describe("drawWeaponRangeCircles — per-weapon range overlay draw (Task 5)", ()
     drawWeaponRangeCircles(g as never, circles);
 
     expect(g.clear).toHaveBeenCalledTimes(1);
-    // One stroke per (positive-radius) circle, each in its own colour.
     expect(g.stroke).toHaveBeenCalledTimes(2);
     expect(g.stroke.mock.calls[0][0].color).toBe(circles[0].color);
     expect(g.stroke.mock.calls[1][0].color).toBe(circles[1].color);
-    // Dashes were drawn (arc + moveTo used).
     expect(g.arc).toHaveBeenCalled();
     expect(g.moveTo).toHaveBeenCalled();
   });

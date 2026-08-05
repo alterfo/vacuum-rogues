@@ -57,7 +57,6 @@ describe("spawnWreck — inherits the ship's pre-death physics state (Task 14)",
     const slow = spawnWreck(0, 0, 0.05, 0, 0, CFG);
     const fast = spawnWreck(0, 0, 0.25, 0, 0, CFG);
     expect(fast.spinRate).toBeGreaterThan(slow.spinRate);
-    // magnitude = spinRatePerSpeed × speed
     expect(fast.spinRate).toBeCloseTo(CFG.spinRatePerSpeed * 0.25, 10);
   });
 
@@ -131,7 +130,6 @@ describe("advanceWreck — drift with inertia + drag decay + tumble", () => {
 
   it("is idempotent once done (no dangling drift past despawn)", () => {
     let w = spawnWreck(0, 0, 0.1, 0, 0, CFG);
-    // step past life
     w = advanceWreck(w, CFG.lifeMs + 100, CFG);
     expect(isWreckDone(w)).toBe(true);
     const after = advanceWreck(w, 100, CFG);
@@ -154,7 +152,6 @@ describe("isWreckDone / wreckAlpha — despawn + fade timing", () => {
     const fadeStart = CFG.lifeMs - CFG.fadeMs;
     expect(wreckAlpha({ ...w, ageMs: fadeStart - 1 }, CFG)).toBe(1);
     expect(wreckAlpha({ ...w, ageMs: fadeStart }, CFG)).toBe(1);
-    // halfway through the fade window → ~0.5
     expect(
       wreckAlpha({ ...w, ageMs: fadeStart + CFG.fadeMs / 2 }, CFG),
     ).toBeCloseTo(0.5, 6);
@@ -186,7 +183,6 @@ describe("wreckLootEmissionTimes — stagger loot across the drift (Task 14)", (
   it("spreads N emissions evenly over interior instants (never all at the death point)", () => {
     const times = wreckLootEmissionTimes(4, 4000);
     expect(times).toEqual([500, 1500, 2500, 3500]);
-    // none sit on the death instant (t=0) — the whole point of Task 14
     expect(times.every((t) => t > 0)).toBe(true);
   });
 
@@ -222,9 +218,7 @@ describe("dueLootEmissions — which drops peel off this frame", () => {
   });
 
   it("is half-open — a boundary emission fires on the frame it opens, not the one it ends", () => {
-    // t=1500 (index 1) does NOT fire on the frame ending at 1500 (that frame catches t=500)…
     expect(dueLootEmissions(500, 1500, times)).toEqual([0]);
-    // …it fires on the next frame, whose prevAge == 1500 (inclusive lower bound)
     expect(dueLootEmissions(1500, 2500, times)).toEqual([1]);
   });
 
@@ -238,7 +232,6 @@ describe("dueLootEmissions — which drops peel off this frame", () => {
   });
 
   it("returns none once every emission is spent", () => {
-    // last emission is t=3500; a frame entirely past it yields nothing
     expect(dueLootEmissions(3600, 4200, times)).toEqual([]);
   });
 

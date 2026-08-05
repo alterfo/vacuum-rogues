@@ -1,35 +1,3 @@
-/**
- * Execute-window orchestrator for the pause-and-plan combat loop (Task 14.5c of
- * `docs/plans/20260713-tactical-pause-combat-rework.md`).
- *
- * Tasks 2–14 each landed their mechanic as a pure, unit-tested module; 14.5a/b wired
- * the loop trigger + planning UI live. This controller folds the REMAINING mechanics
- * into the live per-frame combat flow, consuming the pure modules verbatim:
- *
- * - **Gravity assist** (Task 4): `gravityAssistTotal` over the live planet discs →
- *   folded into `ShipPhysics.currentSpeed` each execute-window frame.
- * - **Afterburner** (Task 8): `plan.afterburner` → `engageAfterburner` at confirm;
- *   the window multiplier is applied as extra forward displacement for exactly one
- *   window, engine wear persists across the fight and resets on the next engagement.
- * - **Missiles** (Task 7): a `WeaponClass.MISSILE` gun's planned shot launches a
- *   tracked `MissileState` instead of the instant hit-scan; advanced each frame,
- *   settled via `resolveMissileArrival` with an injected roll, damage landed through
- *   the same `CombatModule` kill path. The smoke trail (Task 13) tracks the flown path.
- * - **Consumables** (Task 9): `plan.consumableId` resolved at confirm — shield
- *   restore / AoE blast / weapon jam (the jam suppresses the target's fire gate).
- * - **Comms** (Task 10): `plan.commsAction` resolved at confirm — bribe (tribute via
- *   the bank bus, everyone disengages), demand-surrender (role/hull-gated: yields loot
- *   + flees), call-for-help (nearest eligible ally joins and fires at the hostiles).
- * - **VFX** (Tasks 11–14): banking roll on the player sprite from the live turn rate;
- *   shield-hit flash + floating hull/shield bars; weapon-type shot styles
- *   (beam/burst/distortion) replacing the flat tracer for player fire; drifting wreck
- *   + staggered loot emissions from the wreck's live drift position.
- *
- * The scene ticks {@link CombatExecutionController.update} only while the sim is not
- * frozen (planning/active-pause), so every entity here freezes with the fight.
- * Everything is transient execute-window state — no save/schema impact.
- */
-
 import { Graphics, type Container } from "pixi.js";
 import { t } from "@/i18n/i18n";
 import {
@@ -98,25 +66,13 @@ import {
   type WreckState,
 } from "./combatWreck";
 
-/** How long a hit-scan shot's styled tracer stays on screen (ms). */
 const SHOT_FX_MS = 280;
-/** Rough on-screen ship radius (px) for flash sizing + wreck silhouettes. */
 const SHIP_VISUAL_RADIUS = 16;
-/**
- * Fraction of the wreck's life across which its loot emissions are staggered.
- * Exported so a non-clicking driver (the dev-only live autopilot's
- * `PlayerAgent.driveAttack`) can compute how long to linger near a fresh kill
- * before the last drop has had a chance to spawn — see its "loot lingering"
- * comment.
- */
 export const WRECK_LOOT_SPREAD_FRACTION = 0.6;
-/** Friendly ally tracer tint (distinct from the player's hot cyan). */
 const ALLY_SHOT_COLOR = 0x7dff9a;
-/** Toast tints matching the planning-phase convention. */
 const EXEC_TINT = 0x66ccff;
 const WARN_TINT = 0xffcc00;
 
-/** The minimal `ShipPhysics` surface the execute-window folds drive. */
 export interface ExecutionShipPhysics {
   shipX: number;
   shipY: number;
@@ -126,30 +82,24 @@ export interface ExecutionShipPhysics {
   isMoving: boolean;
 }
 
-/** One live missile the execute loop is tracking. */
 interface TrackedMissile {
   state: MissileState;
   readonly target: NpcShipSprite;
   readonly weapon: WeaponSpec;
-  /** Flown positions for the Task 13 smoke trail. */
   readonly trail: { x: number; y: number }[];
 }
 
-/** A friendly NPC recruited by call-for-help, firing at the hostiles. */
 interface AllyState {
   readonly sprite: NpcShipSprite;
   fireTimerMs: number;
 }
 
-/** A drifting wreck plus its staggered loot-emission schedule. */
 interface TrackedWreck {
   state: WreckState;
   readonly npc: NpcShip;
   readonly emissionTimes: number[];
 }
 
-/** A live shield flash (position re-anchored to the ship each frame is overkill —
- *  the flash is ~350ms; it stays where the hit landed). */
 interface FlashState {
   readonly x: number;
   readonly y: number;
@@ -157,78 +107,46 @@ interface FlashState {
   ageMs: number;
 }
 
-/** A fading styled shot tracer (beam/burst + distortion). */
 interface ShotFxState {
   readonly spec: Omit<WeaponVfxSpec, "alpha">;
   ageMs: number;
 }
 
-/** The live scene state the execute-window orchestrator reads (all closures). */
 export interface CombatExecutionHost {
   getShipPhysics(): ExecutionShipPhysics | null;
   getGameLayer(): Container;
-  /** Live planet discs — position + rendered radius (the gravity mass-proxy). */
   getPlanets(): readonly { x: number; y: number; radius: number }[];
-  /** The player's domain ship (shield pool consumer). */
   getPlayerShip(): {
     hullHP: number;
     maxHull: number;
     shields: number;
     maxShields: number;
   } | null;
-  /** The player ship's world container, for the banking roll (null headless). */
   getPlayerVisual(): { scale: { x: number; y: number } } | null;
   getPlayerInventory(): {
     hasConsumable(id: string): boolean;
     removeConsumable(id: string): boolean;
   } | null;
   getPlayerCredits(): number;
-  /** Move bribe credits through the bank bus (`payTribute`). */
   payBribe(amount: number, npc: NpcShip): void;
-  /** Live engaged hostiles (`CombatModule.combatants`). */
   combatants(): readonly NpcShipSprite[];
   selectedTarget(): NpcShipSprite | null;
   isCombatActive(): boolean;
-  /** True while a confirmed execute window runs (`combatPlanning.isExecuting`). */
   isExecuting(): boolean;
-  /** Land damage through the canonical player-offense path (`CombatModule`). */
   landShot(
     target: NpcShipSprite,
     rawDamage: number,
     from: { x: number; y: number } | null,
   ): void;
-  /** Drop a combatant from the fight without killing it (`CombatModule.disengage`). */
   disengage(sprite: NpcShipSprite): void;
-  /** Every live NPC sprite in-system (call-for-help candidates). */
   npcSprites(): readonly NpcShipSprite[];
-  /** Spawn `count` loot dots at a world point via the existing LootDropHandler path. */
   spawnLoot(npc: NpcShip, x: number, y: number, count?: number): void;
-  /** Roll the total drop count for a kill (the existing loot distribution). */
   rollLootCount(npc: NpcShip): number;
-  /**
-   * Re-arm the round-based incoming-damage budget (`CombatModule.beginCombatRound`).
-   * Optional so partial test hosts stay valid; the live scene MUST wire it —
-   * without a per-window re-arm the `roundComplete` latch permanently halts
-   * BOTH sides' fire once ~34% of max hull has landed (review 2026-07-15).
-   */
   beginRound?(): void;
-  /**
-   * True only while the ship is genuinely still trying to get away — the
-   * combat auto-pursuit is yielding to a player/agent-plotted route, not
-   * driving the ship itself (round-budget hardening, win-rate-100pct plan).
-   * Optional so partial test hosts default to `false` (the safe choice: a
-   * missing dep re-arms every window, same as before this hardening pass).
-   */
   isPursuitSuspended?(): boolean;
   showMessage(text: string, color?: number): void;
 }
 
-/**
- * Owns every execute-window mechanic the scene folds into the live loop each frame.
- * Constructed once per flight scene; `update(dt)` is ticked only while the sim is
- * not frozen, `beginWindow(plan)` on each confirmed turn, `endFight()` when the
- * fight resolves (wrecks keep drifting past the fight's end on purpose).
- */
 export class CombatExecutionController {
   private readonly host: CombatExecutionHost;
 
@@ -240,20 +158,15 @@ export class CombatExecutionController {
   private wrecks: TrackedWreck[] = [];
   private flashes: FlashState[] = [];
   private shotFx: ShotFxState[] = [];
-  /** One-shot loot-deferral marks consumed by the NPC death path. */
   private readonly deferredLootNpcIds = new Set<string>();
-  /** Shield max snapshots per NPC id (NpcShip persists only the live pool). */
   private readonly npcShieldMax = new Map<string, number>();
 
   private clockMs = 0;
   private roll = 0;
   private prevShipAngle: number | null = null;
   private missileSeq = 0;
-  /** Bars drawn on the last draw pass — see {@link statusBarCount}. */
   private lastDrawnBarCount = 0;
 
-  /** Injected RNG (missile evasion rolls) — public setter for deterministic tests,
-   *  the `SettingsPanel.selectFont` testability convention. */
   private rng: () => number = Math.random;
 
   constructor(host: CombatExecutionHost) {
@@ -264,19 +177,14 @@ export class CombatExecutionController {
     this.rng = fn;
   }
 
-  /** The active window's afterburner speed multiplier (1 = no boost). The
-   *  boost lives exactly one execute window: outside EXECUTING it reads 1 even
-   *  before the next (frozen-planning) tick clears the internal value. */
   get windowBoostMultiplier(): number {
     return this.host.isExecuting() ? this.windowMult : 1;
   }
 
-  /** Remaining engine integrity 0..1 (afterburner wear, per-fight). */
   get engineIntegrity(): number {
     return this.engineWear.integrity;
   }
 
-  /** Whether the engine can still afterburn this fight. */
   canAfterburn(): boolean {
     return canAfterburn(this.engineWear, AFTERBURNER);
   }
@@ -289,7 +197,6 @@ export class CombatExecutionController {
     return this.wrecks.length;
   }
 
-  /** Live wreck positions (tests assert drift). */
   wreckPositions(): { x: number; y: number }[] {
     return this.wrecks.map((w) => ({ x: w.state.x, y: w.state.y }));
   }
@@ -306,59 +213,14 @@ export class CombatExecutionController {
     return this.shotFx.length;
   }
 
-  /** The player sprite's current visual banking roll (radians). */
   get bankingRoll(): number {
     return this.roll;
   }
 
-  /**
-   * Count of floating hull/shield bars drawn on the last draw pass — 1 during
-   * PLANNING (player only, via {@link drawPlanningStatusBars}), else every
-   * combatant + the player (via {@link draw}). Test-observable.
-   */
   get statusBarCount(): number {
     return this.lastDrawnBarCount;
   }
 
-  // ---------------------------------------------------------------------------
-  // Confirm-time resolution (planning-phase actions)
-  // ---------------------------------------------------------------------------
-
-  /**
-   * A turn was confirmed: resolve the one-shot planned actions for this window.
-   *
-   * Each confirmed window is one combat round — reset the damage budget.
-   * EXCEPT a re-confirm that leaves an ALREADY-in-flight course untouched
-   * (win-rate-100pct plan, Task 6 — the round-count telemetry's own
-   * root-cause finding): `planningDriver.ts`'s own convention is "destination
-   * untouched (a null destination leaves the current course, so a warp-edge
-   * or fly-forward route keeps flying through the execute window)" — a
-   * committed flee re-confirms with `plan.destination === null` every window
-   * while the ship is still physically moving toward the system boundary
-   * from an EARLIER route, not planning a fresh one. That is a continuation,
-   * not a new tactical decision, so it does not re-arm a fresh
-   * 34%-of-current-hull allowance — restoring `PlayerAgent.completeWarp`'s
-   * own documented (but silently defeated) intent that "a committed
-   * flee/warp crossing is ONE round," for live play too (this class has one
-   * production wiring site, shared by both). A genuinely fresh decision —
-   * an explicit new destination this window, OR no destination while the
-   * ship is stationary (standing to fight) — still arms a fresh round
-   * exactly as before; only an in-flight, unredirected continuation is
-   * exempt.
-   *
-   * **Hardening (round-budget hardening pass):** `isMoving` alone is NOT
-   * enough to detect "in-flight continuation" — ordinary standing combat's
-   * own auto-orbit (`CombatPursuitController.steerCombatOrbit`) also keeps
-   * `isMoving` true throughout a fight (it re-`setPath`s every unfrozen frame
-   * to hold weapon range, by design — see `flight/CLAUDE.md`), which would
-   * otherwise exempt EVERY multi-window fight from re-arming, not just
-   * genuine flees (verified live: an ordinary stand-and-fight with no
-   * destination ever plotted still reads `isMoving === true` by the end of
-   * its first window). `isPursuitSuspended()` is the real signal: it is only
-   * true while the auto-pursuit is actually yielding to a player/agent route
-   * (`CombatPursuitController.pursuitSuspended`) — false for the auto-orbit
-   * case. Both conditions must hold for the exemption.
-   */
   beginWindow(plan: PlannedTurn<NpcShipSprite, WeaponSpec>): void {
     const continuingCourse =
       plan.destination === null &&
@@ -391,8 +253,6 @@ export class CombatExecutionController {
     const def = consumableById(id);
     const inventory = this.host.getPlayerInventory();
     if (!def || !inventory?.hasConsumable(id)) return;
-    // Spend the device only once its branch's precondition holds — a missing
-    // ship/physics/target must not consume it with no effect.
     switch (def.effect) {
       case "shield-restore": {
         const ship = this.host.getPlayerShip();
@@ -470,7 +330,6 @@ export class CombatExecutionController {
     }
   }
 
-  /** Bribe: pay the shakedown tribute through the bank; everyone disengages. */
   private resolveBribeAction(): void {
     const hostiles = [...this.host.combatants()];
     if (hostiles.length === 0) return;
@@ -478,9 +337,6 @@ export class CombatExecutionController {
     const payee = this.host.selectedTarget() ?? hostiles[0];
     this.host.payBribe(bribe.tribute, payee.npc);
     if (bribe.disengages) {
-      // Non-selected first, selected last — the same ordering pruneDisengaged
-      // uses so an intermediate drop never re-pauses onto a ship that is itself
-      // about to leave this same resolution.
       const selected = this.host.selectedTarget();
       for (const s of hostiles) if (s !== selected) this.departAndDisengage(s);
       if (selected) this.departAndDisengage(selected);
@@ -491,7 +347,6 @@ export class CombatExecutionController {
     );
   }
 
-  /** Demand-surrender against the selected (or first) hostile — role/hull gated. */
   private resolveSurrenderAction(): void {
     const target = this.host.selectedTarget() ?? this.host.combatants()[0];
     if (!target) return;
@@ -505,7 +360,6 @@ export class CombatExecutionController {
       );
       return;
     }
-    // Recorded Task 10 decision: a yielding ship flees while dropping its loot.
     this.host.spawnLoot(npc, target.x, target.y);
     this.departAndDisengage(target);
     this.host.showMessage(
@@ -514,7 +368,6 @@ export class CombatExecutionController {
     );
   }
 
-  /** Call-for-help: the closest eligible friendly joins and fires at the hostiles. */
   private resolveCallForHelp(): void {
     const physics = this.host.getShipPhysics();
     if (!physics) return;
@@ -549,22 +402,12 @@ export class CombatExecutionController {
     this.host.disengage(sprite);
   }
 
-  // ---------------------------------------------------------------------------
-  // CombatModule seams (wired through `buildCombatModuleDeps`)
-  // ---------------------------------------------------------------------------
-
-  /** True while a weapon-jam is suppressing this NPC's fire. */
   isNpcJammed(npc: NpcShipSprite): boolean {
     return this.jams.some(
       (j) => j.target === npc && isJamActive(j, this.clockMs),
     );
   }
 
-  /**
-   * A planned execute-window shot is about to resolve: a `WeaponClass.MISSILE`
-   * gun launches a tracked projectile instead of the instant hit-scan. Returns
-   * whether the shot was consumed (the module then skips its instant damage).
-   */
   interceptPlannedShot(target: NpcShipSprite, weapon: WeaponSpec): boolean {
     if (weapon.weaponClass !== WeaponClass.MISSILE) return false;
     const physics = this.host.getShipPhysics();
@@ -586,11 +429,6 @@ export class CombatExecutionController {
     return true;
   }
 
-  /**
-   * A player hit-scan shot fired: draw it in its weapon-type style (Task 13)
-   * instead of the flat legacy tracer. Returns true = handled (the module skips
-   * its own `flashShot` for this shot; NPC fire keeps the legacy tracer).
-   */
   onPlayerShotVfx(
     fromX: number,
     fromY: number,
@@ -608,7 +446,6 @@ export class CombatExecutionController {
     return true;
   }
 
-  /** A ship's shields absorbed a hit — spawn the translucent flash sphere. */
   spawnNpcShieldFlash(target: NpcShipSprite): void {
     this.spawnFlash(
       target.x,
@@ -621,11 +458,6 @@ export class CombatExecutionController {
     this.flashes.push({ x, y, radius, ageMs: 0 });
   }
 
-  /**
-   * An NPC was killed in combat: spawn a drifting wreck inheriting the dying
-   * ship's velocity/heading and schedule its staggered loot emissions. Marks the
-   * NPC so the death path defers its instant loot dump to the drift.
-   */
   onNpcKilled(sprite: NpcShipSprite): void {
     const speed = (sprite as { cruiseSpeed?: number }).cruiseSpeed ?? 0;
     const heading = sprite.container?.rotation ?? 0;
@@ -637,24 +469,13 @@ export class CombatExecutionController {
       WRECK.lifeMs * WRECK_LOOT_SPREAD_FRACTION,
     );
     this.wrecks.push({ state, npc: sprite.npc, emissionTimes });
-    // Mark even a zero-count roll: the wreck's single pre-roll OWNS this kill's
-    // drop. Skipping the mark on 0 would let the death path re-roll the loot
-    // independently, inflating the effective drop rate.
     this.deferredLootNpcIds.add(sprite.npc.id);
     this.npcShieldMax.delete(sprite.npc.id);
   }
 
-  /**
-   * One-shot query the NPC death path makes: defer this kill's instant loot dump
-   * (the wreck's drift emissions own it instead)? Consumes the mark.
-   */
   consumeLootDeferral(npc: NpcShip): boolean {
     return this.deferredLootNpcIds.delete(npc.id);
   }
-
-  // ---------------------------------------------------------------------------
-  // Per-frame fold (ticked by the scene only while the sim is not frozen)
-  // ---------------------------------------------------------------------------
 
   update(dtMs: number): void {
     if (!(dtMs > 0)) return;
@@ -680,13 +501,11 @@ export class CombatExecutionController {
     this.draw();
   }
 
-  /** Gravity assist → `ShipPhysics` velocity; afterburner → extra forward travel. */
   private applyMovementFolds(
     physics: ExecutionShipPhysics,
     dtMs: number,
   ): void {
     if (!physics.isMoving) return;
-    // Mirror ShipPhysics.update's own effective-dt (lag-spike cap × timeScale).
     const dtEff = Math.min(dtMs, 100) * physics.timeScale;
     const speed = physics.currentSpeed;
     if (speed > 0) {
@@ -716,7 +535,6 @@ export class CombatExecutionController {
     }
   }
 
-  /** Presentation-only banking roll from the live turn rate (Task 11). */
   private updateBanking(
     physics: ExecutionShipPhysics | null,
     dtMs: number,
@@ -735,7 +553,6 @@ export class CombatExecutionController {
     this.roll = approachRoll(this.roll, target, dtMs, BANKING);
     const visual = this.host.getPlayerVisual();
     if (visual?.scale) {
-      // A top-down sprite reads a roll as a transverse squash toward cos(roll).
       visual.scale.y = Math.cos(this.roll);
     }
   }
@@ -757,7 +574,6 @@ export class CombatExecutionController {
     this.missiles = this.missiles.filter((m) => !isMissileDone(m.state));
   }
 
-  /** Recruited allies fire at the nearest hostile within their own reach. */
   private advanceAllies(dtMs: number): void {
     if (this.allies.length === 0) return;
     if (!this.host.isCombatActive()) {
@@ -808,7 +624,6 @@ export class CombatExecutionController {
     return best;
   }
 
-  /** Step every wreck's drift and fire its due loot emissions at the LIVE position. */
   private advanceWrecks(dtMs: number): void {
     if (this.wrecks.length === 0) return;
     for (const w of this.wrecks) {
@@ -821,10 +636,6 @@ export class CombatExecutionController {
     }
     this.wrecks = this.wrecks.filter((w) => !isWreckDone(w.state));
   }
-
-  // ---------------------------------------------------------------------------
-  // Drawing (thin — all styles come from the Task 12/13/14 render seams)
-  // ---------------------------------------------------------------------------
 
   private draw(): void {
     const fx = this.ensureGraphics("fx");
@@ -843,8 +654,6 @@ export class CombatExecutionController {
         });
       }
       drawWeaponVfx(fx, shots);
-      // Shield flashes share the fx layer's z-band but keep their own Graphics
-      // so drawWeaponVfx's clear() doesn't erase them (and vice versa).
     }
     const flashG = this.ensureGraphics("flash");
     if (flashG) {
@@ -877,7 +686,6 @@ export class CombatExecutionController {
     }
   }
 
-  /** Floating hull/shield bars: every engaged hostile (red hull) + the player. */
   private statusBarSpecs(): ShipStatusBarSpec[] {
     if (!this.host.isCombatActive()) return [];
     const specs: ShipStatusBarSpec[] = [];
@@ -903,12 +711,6 @@ export class CombatExecutionController {
     return specs;
   }
 
-  /**
-   * The player's own floating hull/shield bar, or null when the ship/physics
-   * aren't wired (headless callers). Broken out of {@link statusBarSpecs} so the
-   * PLANNING freeze can render the player's bar alone (see
-   * {@link drawPlanningStatusBars}).
-   */
   playerStatusBarSpec(): ShipStatusBarSpec | null {
     const physics = this.host.getShipPhysics();
     const ship = this.host.getPlayerShip();
@@ -923,15 +725,6 @@ export class CombatExecutionController {
     };
   }
 
-  /**
-   * Draw ONLY the player's own status bar while the sim is frozen for PLANNING.
-   * The full per-frame {@link update}/{@link draw} pass is gated off during a
-   * freeze (no NPC bars, no VFX, no fire), but the player still needs to read
-   * their own hull/shield while planning a turn — the whole point of the pause.
-   * The scene calls this each frozen-planning frame; it clears the shared "bars"
-   * layer and redraws just the player, so lingering NPC bars from the prior
-   * execute window are wiped. It touches nothing else about the freeze.
-   */
   drawPlanningStatusBars(): void {
     if (!this.host.isCombatActive()) return;
     const bars = this.ensureGraphics("bars");
@@ -959,15 +752,6 @@ export class CombatExecutionController {
     return g;
   }
 
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
-
-  /**
-   * The fight resolved (player death / last hostile gone): clear the per-fight
-   * state. Wrecks + fading flashes deliberately keep drifting past the fight's
-   * end; the engine wear resets so the NEXT engagement starts pristine.
-   */
   endFight(): void {
     for (const m of this.missiles) {
       m.state = { ...m.state, status: "miss" };
@@ -1005,8 +789,6 @@ export class CombatExecutionController {
   }
 }
 
-/** Factory mirroring `createCombatPlanningController` — the scene builds the host
- *  from its own members at the call site. */
 export function createCombatExecution(
   host: CombatExecutionHost,
 ): CombatExecutionController {

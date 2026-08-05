@@ -1,30 +1,8 @@
-/**
- * Task 4 (docs/plans/20260619-keyboard-controls-turn-modals-map-jump.md):
- * "Reliable galaxy-map double-click jump."
- *
- * The old detection hand-rolled a 300 ms `Date.now()` compare on `pointerdown`,
- * which raced the single-click info-panel open and dropped jumps. The robust
- * scheme detects the double on `pointertap` against scene-level state keyed on
- * the STABLE `system.id` + a short time window — NOT PixiJS's native
- * `event.detail` counter. That counter is keyed on object identity, but a
- * single click runs `handleSystemClick` → `renderStarMap`, which destroys and
- * rebuilds every hit-area Graphics; consecutive physical clicks then land on
- * different target objects and the boundary's per-target count resets to 1 (it
- * never reaches 2). Id-keyed scene state survives that rebuild, so the jump is
- * dependable. A double-click (two quick taps on the same system) jumps; a
- * single tap only opens the info panel; a pan that ends over a system
- * (`hasDragged`) is ignored.
- *
- * Tested with the real production-wired hit area (`createSystemHitArea`) and
- * real `pointertap` events. The coordinate-level real-mouse path is covered by
- * the E2E star-map page object (engine-driven `performWarpJumpTo`).
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Graphics, type FederatedPointerEvent } from "pixi.js";
 import { StarMapScene } from "@/presentation/StarMapScene";
 import type { StarSystem } from "@/domain/StarSystem";
 
-// scaledFont()/logger touch localStorage; ensure it exists (Node shadows jsdom's).
 if (typeof globalThis.localStorage === "undefined") {
   const store = new Map<string, string>();
   globalThis.localStorage = {
@@ -43,14 +21,12 @@ type Probe = {
   single: ReturnType<typeof vi.fn>;
   double: ReturnType<typeof vi.fn>;
   setDragged: (v: boolean) => void;
-  /** Build a fresh hit area for a system — models `renderStarMap`'s rebuild. */
   hitAreaFor: (system: StarSystem) => Graphics;
 };
 
 const SYS_1 = { id: "sys-1", name: "Альфа" } as unknown as StarSystem;
 const SYS_2 = { id: "sys-2", name: "Бета" } as unknown as StarSystem;
 
-/** Build a StarMapScene shell wired with the production hit area for one system. */
 function makeProbe(): Probe {
   const scene = Object.create(StarMapScene.prototype) as StarMapScene;
   const fields = scene as unknown as Record<string, unknown>;
@@ -59,8 +35,6 @@ function makeProbe(): Probe {
   fields.lastTapSystemId = null;
   fields.lastTapAt = 0;
 
-  // Stub the routed handlers so the real bodies (render / warp / transition)
-  // don't run — we only assert the routing the hit area performs.
   const single = vi.fn();
   const double = vi.fn();
   fields.handleSystemClick = single;
@@ -83,7 +57,6 @@ function makeProbe(): Probe {
   };
 }
 
-/** Fire a real `pointertap` (the handler reads scene state + Date.now, not detail). */
 function tap(hitArea: Graphics): void {
   hitArea.emit("pointertap", {} as FederatedPointerEvent);
 }
@@ -106,7 +79,6 @@ describe("star-map double-click jump", () => {
     expect(p.hitArea.eventMode).toBe("static");
     expect(p.hitArea.cursor).toBe("pointer");
     expect(p.hitArea.listenerCount("pointertap")).toBe(1);
-    // The hand-rolled pointerdown timestamp scheme is gone.
     expect(p.hitArea.listenerCount("pointerdown")).toBe(0);
   });
 
@@ -125,11 +97,6 @@ describe("star-map double-click jump", () => {
   });
 
   it("REGRESSION: jump survives the renderStarMap hit-area rebuild (second tap on a fresh object)", () => {
-    // Production reality: the first tap's handleSystemClick rebuilds every
-    // hit-area Graphics, so the second physical click lands on a brand-new
-    // object. The native `event.detail` counter (keyed on object identity)
-    // resets to 1 here and never reaches 2 — id-keyed scene state must still
-    // route the second tap to the jump.
     tap(p.hitArea);
     nowMs += 100;
     const rebuilt = p.hitAreaFor(SYS_1); // simulate the destroy/recreate

@@ -81,7 +81,6 @@ describe("applyArtifactUpgrade", () => {
         "INSUFFICIENT_RESOURCES",
       );
     }
-    // Original catalog item unchanged
     expect(base!.techLevel).toBe(3);
     expect(base!.upgrades).toBeUndefined();
   });
@@ -113,7 +112,6 @@ describe("applyArtifactUpgrade", () => {
 
 describe("applyArtifactUpgrade on pre-upgraded gear", () => {
   it("gear with upgrades=1 and 3+ artifacts gets upgrades=2, techLevel+2 from base", () => {
-    // Simulate reading from a saved loadout where upgrades=1 is already stored
     const base = gearById("wpn_scatter")!; // tech 3
     const alreadyUpgraded: Gear = {
       ...base,

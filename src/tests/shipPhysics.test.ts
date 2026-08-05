@@ -19,7 +19,6 @@ describe("ShipPhysics", () => {
     expect(p.shipY).toBe(300);
     expect(p.isMoving).toBe(false);
     expect(p.currentSpeed).toBe(0);
-    // After teleport, update should NOT move toward old target
     p.update(100);
     expect(p.isMoving).toBe(false);
     expect(p.currentSpeed).toBe(0);
@@ -45,7 +44,6 @@ describe("ShipPhysics", () => {
     const p = new ShipPhysics(0, 0, 0.1);
     expect(p.getSpeedFraction()).toBe(0);
     p.setTarget(5000, 0);
-    // Run many frames so the ship reaches cruise speed
     for (let i = 0; i < 50; i++) p.update(50);
     expect(p.getSpeedFraction()).toBeGreaterThan(0.5);
     expect(p.getSpeedFraction()).toBeLessThanOrEqual(1.0);
@@ -76,7 +74,6 @@ describe("ShipPhysics", () => {
       { x: 50, y: 0 },
       { x: 100, y: 0 },
     ]);
-    // Run until arrival
     for (let i = 0; i < 500; i++) p.update(100);
     expect(p.isMoving).toBe(false);
     expect(p.hasPath()).toBe(false);
@@ -97,7 +94,6 @@ describe("ShipPhysics", () => {
     expect(p.isMoving).toBe(false);
     expect(p.currentSpeed).toBe(0);
     expect(p.hasPath()).toBe(false);
-    // Position is unchanged and a further update does not fly back to the target.
     expect(p.shipX).toBe(x);
     expect(p.shipY).toBe(y);
     p.update(100);
@@ -116,7 +112,6 @@ describe("ShipPhysics", () => {
     expect(p1.currentSpeed).toBeCloseTo(p2.currentSpeed, 5);
   });
 
-  // ── Momentum / arc-only movement (no rotate-in-place) ──────────────────────
   describe("arc-only momentum movement", () => {
     const ROTATION_SPEED = Math.PI / 2 / 300; // rad/ms (mirrors ShipPhysics)
 
@@ -150,11 +145,8 @@ describe("ShipPhysics", () => {
 
       expect(arrived).toBe(true); // looped around and reached the target
       expect(p.getDistanceToTarget()).toBeLessThanOrEqual(8); // at the destination
-      // Never pivoted in place: forward speed stayed > 0 the whole way…
       expect(minSpeedWhileMoving).toBeGreaterThan(0);
-      // …and the ship physically moved forward (+x) before looping back to -x.
       expect(maxForwardX).toBeGreaterThan(5);
-      // Heading changes are turn-rate bounded every frame (an arc, not a snap).
       expect(maxHeadingStep).toBeLessThanOrEqual(maxStep + 1e-9);
     });
 
@@ -165,7 +157,6 @@ describe("ShipPhysics", () => {
       for (let i = 0; i < 300; i++) p.update(16);
       expect(p.currentSpeed).toBeCloseTo(maxSpeed, 6); // at cruise
 
-      // Now steer perpendicular & far away so it turns continuously at cruise.
       p.setTarget(0, -100_000);
       const before = { x: p.shipX, y: p.shipY, a: p.shipAngle };
       p.update(16);
@@ -192,10 +183,8 @@ describe("ShipPhysics", () => {
         { x: 500, y: 0 },
         { x: 1000, y: 0 },
       ]);
-      // Reach cruise on the first leg.
       for (let i = 0; i < 80; i++) p.update(16);
       expect(p.currentSpeed).toBeCloseTo(0.1, 2);
-      // Drive across the first waypoint; speed must not dip to a stop at the corner.
       let minSpeedAcrossCorner = Infinity;
       for (let i = 0; i < 60; i++) {
         p.update(16);
@@ -207,15 +196,8 @@ describe("ShipPhysics", () => {
     });
 
     it("a close, off-axis destination is reached — never orbited forever (soft-lock regression)", () => {
-      // Regression: at cruise the turn radius is ≈19px, larger than STOP_THRESHOLD
-      // (8px). A destination that lands close and off to the side sits inside that
-      // turn circle, so without the final-leg speed cap the ship circles it forever
-      // (isMoving never clears → the route-turn never completes → soft-lock). This
-      // failed on the pre-fix model (orbited for 200k frames). Covers both a bare
-      // setTarget and the real plotted-route path (single off-axis waypoint).
       const perpendicularDistances = [10, 15, 20, 25];
       for (const d of perpendicularDistances) {
-        // From rest, pointing +x, with the destination directly off to the side.
         const fromRest = new ShipPhysics(0, 0, 0.1);
         fromRest.shipAngle = 0;
         fromRest.setTarget(0, d);
@@ -225,7 +207,6 @@ describe("ShipPhysics", () => {
         expect(fromRest.getDistanceToTarget()).toBeLessThanOrEqual(8);
         expect(i).toBeLessThan(5000); // within a bounded number of frames
 
-        // Same geometry, but redirected mid-cruise (worst case for the turn radius).
         const atCruise = new ShipPhysics(0, 0, 0.1);
         atCruise.shipAngle = 0;
         atCruise.currentSpeed = 0.1;
@@ -236,7 +217,6 @@ describe("ShipPhysics", () => {
         expect(atCruise.isMoving).toBe(false);
         expect(atCruise.getDistanceToTarget()).toBeLessThanOrEqual(8);
 
-        // The real route path: a short off-axis route returns a single-waypoint path.
         const viaPath = new ShipPhysics(0, 0, 0.1);
         viaPath.shipAngle = 0;
         viaPath.setPath([{ x: 0, y: d }]);

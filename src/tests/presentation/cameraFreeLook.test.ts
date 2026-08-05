@@ -3,12 +3,6 @@ import { CameraController } from "@/presentation/flight/CameraController";
 import type { Renderer } from "@/presentation/Renderer";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 
-/**
- * Regression: the player asked to be able to look around (pan) WHILE the ship is
- * flying. The motion-follow used to re-centre on the ship every frame, snapping
- * the view back over any manual pan. A manual pan now suspends the follow until
- * the next flight leg or an explicit return-to-ship (⊙ button).
- */
 function makeShip(over: Partial<ShipPhysics> = {}): ShipPhysics {
   return {
     isMoving: true,
@@ -48,7 +42,6 @@ describe("CameraController free-look while moving", () => {
     cam.update(16.67); // engages follow on the first moving frame
     const beforeX = cam.panX;
     cam.update(16.67);
-    // The eased follow keeps nudging the pan toward centring the ship.
     expect(cam.panX).not.toBe(beforeX);
   });
 
@@ -57,12 +50,10 @@ describe("CameraController free-look while moving", () => {
     cam.pan(120, -80); // player drags the view away mid-flight
     const panned = { x: cam.panX, y: cam.panY };
 
-    // Several frames pass with the ship still flying.
     cam.update(16.67);
     cam.update(16.67);
     cam.update(16.67);
 
-    // The view stays exactly where the player left it — the follow is suspended.
     expect(cam.panX).toBe(panned.x);
     expect(cam.panY).toBe(panned.y);
   });
@@ -74,7 +65,6 @@ describe("CameraController free-look while moving", () => {
     cam.update(16.67);
     expect(cam.panX).toBe(panned); // still suspended
 
-    // Ship stops, then starts a brand-new flight.
     (ship as { isMoving: boolean }).isMoving = false;
     (ship as { currentSpeed: number }).currentSpeed = 0;
     cam.update(16.67); // prevMoving → false
@@ -94,20 +84,15 @@ describe("CameraController free-look while moving", () => {
     expect(cam.panX).not.toBe(panned); // lerps back toward the ship
   });
 
-  // Playtest report (2026-06-27, Issue 2): looking around via the minimap while
-  // the ship was moving snapped straight back — focusOnWorld (the radar
-  // drag-to-pan) did not suspend the motion-follow the way a manual pan does.
   it("does NOT snap back after a minimap-drag focus while moving (free-look)", () => {
     cam.update(16.67); // prevMoving → true, follow engaged
     cam.focusOnWorld(900, 100); // player drags the radar to look elsewhere
     const focused = { x: cam.panX, y: cam.panY };
 
-    // Several frames pass with the ship still flying.
     cam.update(16.67);
     cam.update(16.67);
     cam.update(16.67);
 
-    // The view stays where the radar drag put it — the follow is suspended.
     expect(cam.panX).toBe(focused.x);
     expect(cam.panY).toBe(focused.y);
   });
@@ -130,8 +115,6 @@ describe("CameraController free-look while moving", () => {
   });
 
   it("disables look-ahead during combat so circling maneuvers don't swing the camera", () => {
-    // Ship rotating in combat (circling target) — the heading changes but the
-    // camera should stay centered on the ship's position, not follow the heading.
     const combatShip = makeShip({
       shipX: 500,
       shipY: 500,
@@ -142,7 +125,6 @@ describe("CameraController free-look while moving", () => {
     });
     const combatCam = makeCamera(combatShip);
 
-    // Override isInCombat to simulate combat
     (
       combatCam as unknown as { deps: { isInCombat: () => boolean } }
     ).deps.isInCombat = () => true;
@@ -151,14 +133,12 @@ describe("CameraController free-look while moving", () => {
     const leadX = (combatCam as unknown as { camLeadX: number }).camLeadX;
     const leadY = (combatCam as unknown as { camLeadY: number }).camLeadY;
 
-    // Ship rotates 90° (circling target)
     (combatShip as { shipAngle: number }).shipAngle = Math.PI / 2;
 
     combatCam.update(16.67);
     const newLeadX = (combatCam as unknown as { camLeadX: number }).camLeadX;
     const newLeadY = (combatCam as unknown as { camLeadY: number }).camLeadY;
 
-    // During combat, the lead should fade toward zero, not follow the heading
     expect(Math.abs(newLeadX)).toBeLessThanOrEqual(Math.abs(leadX));
     expect(Math.abs(newLeadY)).toBeLessThanOrEqual(Math.abs(leadY));
   });

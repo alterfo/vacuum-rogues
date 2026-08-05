@@ -1,48 +1,18 @@
-/**
- * Letsplay engine — a hand-written, dependency-free multi-layer perceptron.
- *
- * The only nets this game needs (the letsplay player policy, and later the
- * Overmind) are **tiny feature-vector MLPs** — e.g. `18→32→10` ≈ 938 weights,
- * ~896 multiply-adds per inference. That is microseconds on the CPU and runs
- * inline, so it needs no wasm runtime, Web Worker, or GPU dispatch. This module
- * is the whole inference path: a dense forward pass (matmul + ReLU on the hidden
- * layers, a linear output head) over weights shipped as a small JSON array
- * (`MlpWeights`). It replaces the former `onnxruntime-web` dependency.
- *
- * Pure and dependency-free apart from the project exception types: `forward` is
- * deterministic and side-effect-free, and `loadWeights` validates the shape of
- * untrusted JSON before it is ever fed to `forward`.
- *
- * **Weight orientation** follows PyTorch's `nn.Linear`: each layer's `W` is
- * `[outDim][inDim]` (one row per output neuron) and `b` is `[outDim]`, so
- * `out[j] = Σ_i W[j][i] * input[i] + b[j]`. Exporting `nn.Linear.weight` /
- * `.bias` straight to JSON therefore matches this layout with no transpose.
- */
 import { GameValidationException } from "@/exceptions/GameValidationException";
 
-/** One dense layer: weight matrix `W` (`[outDim][inDim]`) + bias `b` (`[outDim]`). */
 export interface MlpLayer {
-  /** Weight matrix, shape `[outDim][inDim]` (PyTorch `nn.Linear` orientation). */
   readonly W: number[][];
-  /** Bias vector, length `outDim`. */
   readonly b: number[];
 }
 
-/** A feed-forward net as an ordered list of dense layers. */
 export interface MlpWeights {
   readonly layers: readonly MlpLayer[];
 }
 
-/** Rectified linear unit — the hidden-layer activation. */
 function relu(x: number): number {
   return x > 0 ? x : 0;
 }
 
-/**
- * One dense layer: `out[j] = Σ_i layer.W[j][i] * input[i] + layer.b[j]`. Assumes
- * `layer` has already passed {@link loadWeights} validation; `input.length` must
- * equal the layer's input dim — checked by {@link forward}.
- */
 function dense(layer: MlpLayer, input: readonly number[]): number[] {
   return layer.W.map((row, j) => {
     let sum = layer.b[j];
@@ -51,14 +21,6 @@ function dense(layer: MlpLayer, input: readonly number[]): number[] {
   });
 }
 
-/**
- * Run the net for one input vector. Each layer is a dense projection; the hidden
- * layers apply ReLU, the final layer is linear (raw scores / logits). Pure: same
- * weights + input always yield the same output. Throws
- * {@link GameValidationException} when `input` width does not match the first
- * layer's input dim, so a featurizer/weights mismatch fails loudly rather than
- * silently reading `undefined`s.
- */
 export function forward(
   weights: MlpWeights,
   input: readonly number[],
@@ -87,14 +49,6 @@ export function forward(
   return activation as number[];
 }
 
-/**
- * Validate and adopt an untrusted weights object (e.g. parsed from the exported
- * `*.weights.json`). Checks that every layer's `W` is a non-empty rectangular
- * matrix, `b` length matches `W`'s row count (the output dim), and consecutive
- * layers chain (layer `k`'s input dim equals layer `k-1`'s output dim), and that
- * all entries are finite numbers. Returns the value typed as {@link MlpWeights};
- * throws {@link GameValidationException} on any mismatch.
- */
 export function loadWeights(json: unknown): MlpWeights {
   const obj = json as { layers?: unknown };
   const rawLayers = obj?.layers;

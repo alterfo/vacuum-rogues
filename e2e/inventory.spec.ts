@@ -5,7 +5,6 @@ test.describe('Inventory and Ship Management', () => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
     
-    // Navigate to star map first
     const canvas = page.locator('canvas');
     const box = await canvas.boundingBox();
     
@@ -26,8 +25,6 @@ test.describe('Inventory and Ship Management', () => {
     const box = await canvas.boundingBox();
     
     if (box) {
-      // Inventory button is typically in UI overlay
-      // Click top-right area where inventory icon might be
       await canvas.click({
         position: {
           x: box.width - 50,
@@ -38,7 +35,6 @@ test.describe('Inventory and Ship Management', () => {
 
     await page.waitForTimeout(1000);
     
-    // Inventory scene should be active
     await expect(canvas).toBeVisible();
   });
 
@@ -46,7 +42,6 @@ test.describe('Inventory and Ship Management', () => {
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
     
-    // Ship stats are rendered in canvas
     const box = await canvas.boundingBox();
     expect(box?.width).toBeGreaterThan(0);
   });

@@ -1,16 +1,3 @@
-/**
- * i18n extraction scanner test (Task 2) — guards the migration tracker.
- *
- * Covers the pure `findCyrillicLiterals` (finds Cyrillic in string literals,
- * ignores comments + ASCII-only literals, handles every quote style) and the
- * filesystem walker `scanFiles` (reports a backlog from a temp source tree,
- * skipping the i18n dicts + test files).
- *
- * Lives under `tools/` (not `src/tests/`) like the other tool tests
- * (`tools/optimize-assets.test.ts`) — importing a `tools/` module from `src/`
- * would violate the build's `rootDir: src`. Vitest's `tools/**` glob (see
- * `vitest.config.ts`) picks it up so it runs with the suite.
- */
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -92,7 +79,6 @@ describe("scanFiles — backlog over a temp source tree", () => {
     mkdirSync(join(root, "src", "presentation"), { recursive: true });
     mkdirSync(join(root, "src", "i18n"), { recursive: true });
 
-    // Two scene files with Cyrillic literals (the backlog).
     writeFileSync(
       join(root, "src", "presentation", "A.ts"),
       `const t1 = "Купить"; const t2 = "Продать"; // продаём\n`,
@@ -101,12 +87,10 @@ describe("scanFiles — backlog over a temp source tree", () => {
       join(root, "src", "presentation", "B.ts"),
       `const t = "Назад";\nconst n = 42; // только ASCII в коде\n`,
     );
-    // The i18n dict — Cyrillic values are intentional, must be skipped.
     writeFileSync(
       join(root, "src", "i18n", "ru.ts"),
       `export const ru = { "common.back": "Назад" };\n`,
     );
-    // A test file — must be skipped.
     writeFileSync(
       join(root, "src", "presentation", "A.test.ts"),
       `it("renders", () => { expect("Купить").toBeTruthy(); });\n`,
@@ -121,7 +105,6 @@ describe("scanFiles — backlog over a temp source tree", () => {
     const backlogs = scanFiles(["src/presentation", "src/i18n"], root);
     const files = backlogs.map((b: FileBacklog) => b.file);
 
-    // A.ts (2 hits) before B.ts (1 hit); dict + test excluded entirely.
     expect(files).toEqual(["src/presentation/A.ts", "src/presentation/B.ts"]);
     expect(backlogs[0].hits).toHaveLength(2);
     expect(backlogs[1].hits).toHaveLength(1);
@@ -135,11 +118,8 @@ describe("scanFiles — backlog over a temp source tree", () => {
 
 describe("scanFiles — against the real repo (smoke / migration tracker)", () => {
   it("the default roots still hold an un-migrated backlog (Task 3 pending)", () => {
-    // Project root is two levels up from tools/i18n/.
     const projectRoot = join(__dirname, "..", "..");
     const backlogs = scanFiles(DEFAULT_SCAN_ROOTS, projectRoot);
-    // Nothing migrated yet beyond settings/common → the backlog is non-empty,
-    // proving the scanner actually surfaces inline literals to migrate.
     expect(totalHits(backlogs)).toBeGreaterThan(0);
   });
 });

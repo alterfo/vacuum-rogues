@@ -24,7 +24,6 @@ const makeSystems = (
 };
 
 describe("getSystemVisibility", () => {
-  // Galaxy: A <-> B <-> C   D (isolated)
   const systems = makeSystems([
     ["A", "B"],
     ["B", "A"],
@@ -39,18 +38,14 @@ describe("getSystemVisibility", () => {
   });
 
   it("returns neighbor for a system 1 hop from a visited system (forward connection)", () => {
-    // A is visited; B is connected from A — should be neighbor
     expect(getSystemVisibility("B", ["A"], systems)).toBe("neighbor");
   });
 
   it("returns neighbor for a system 1 hop from a visited system (reverse connection)", () => {
-    // B is visited; A connects back to it — A should be neighbor if not visited
-    // B->A exists, so A is neighbor of B
     expect(getSystemVisibility("A", ["B"], systems)).toBe("neighbor");
   });
 
   it("returns unknown for a system with no connection to any visited system", () => {
-    // A visited, D has no connection to A or B or C
     expect(getSystemVisibility("D", ["A"], systems)).toBe("unknown");
     expect(getSystemVisibility("E", ["A"], systems)).toBe("unknown");
   });
@@ -61,8 +56,6 @@ describe("getSystemVisibility", () => {
   });
 
   it("neighbor takes priority over unknown when multiple systems visited", () => {
-    // A and D both visited; C is 2 hops from A but 1 hop from B, B is neighbor of A
-    // C should be neighbor because B is visited only if... wait, let's check C with B visited
     expect(getSystemVisibility("C", ["B"], systems)).toBe("neighbor");
   });
 
@@ -70,10 +63,6 @@ describe("getSystemVisibility", () => {
     expect(getSystemVisibility("C", ["A", "B", "C"], systems)).toBe("visited");
   });
 });
-
-// ── Fresh player (new-game start) ────────────────────────────────────────────
-// Regression guard for the fog-of-war bug where a brand-new game showed "?" for
-// every system because the starting system was never added to visitedSystems.
 
 function makeFreshPlayer(startSystemId: string): Player {
   return new Player(
@@ -99,7 +88,6 @@ function makeFreshPlayer(startSystemId: string): Player {
 }
 
 describe("getSystemVisibility — fresh player at new-game start", () => {
-  // Galaxy: A <-> B <-> C   D <-> E (separate cluster)
   const systems = makeSystems([
     ["A", "B"],
     ["B", "A"],
@@ -111,7 +99,6 @@ describe("getSystemVisibility — fresh player at new-game start", () => {
 
   it("marks the starting system visited so it is never fogged", () => {
     const player = makeFreshPlayer("A");
-    // Mirrors GameEngine new-game init: starting system marked before any scene.
     player.markVisited(player.currentSystemId);
 
     expect(player.visitedSystems).toEqual(["A"]);

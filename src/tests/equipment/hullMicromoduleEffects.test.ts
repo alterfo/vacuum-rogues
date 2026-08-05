@@ -12,15 +12,6 @@ import {
 import { micromoduleTargetCategory } from "@/systems/equipment/GearBridge";
 import { ModuleCategory } from "@/types";
 
-/**
- * Task 4 (install/micromodule overhaul): hull micromodules become a real upgrade
- * layer. Fitted into a hull's own slots, each applies a *global* multiplier to a
- * derived stat — boost defense (maxHull) or cargo, or redirect energy to weapons
- * or the engine — without a module sitting on the weapon/engine itself. The
- * magnitude is the tiered micromodule bonus (tier 1 = +20%, tier 2 = +12%,
- * tier 3 = +6%).
- */
-
 const ARMOR_1 = "mm_hull_armor_1"; // defense, tier 1 (+20%)
 const HOLD_1 = "mm_hull_hold_1"; // cargo, tier 1 (+20%)
 const PWR_WPN_1 = "mm_hull_pwr_wpn_1"; // energy → weapon, tier 1 (+20%)
@@ -52,7 +43,6 @@ describe("HULL_MICRO_MODULES catalog", () => {
     expect(hullMicromoduleEffectKind(HOLD_1)).toBe("cargo");
     expect(hullMicromoduleEffectKind(PWR_WPN_1)).toBe("weapon");
     expect(hullMicromoduleEffectKind(PWR_ENG_1)).toBe("engine");
-    // A generic/legacy micromodule fitted in a hull slot defaults to defense.
     expect(hullMicromoduleEffectKind("mm_amplifier_1")).toBe("defense");
     expect(hullMicromoduleEffectKind("does_not_exist")).toBe("defense");
   });
@@ -77,7 +67,6 @@ describe("ShipLoadout — hull micromodule effects in derivedStats", () => {
 
     expect(lo.applyMicromodule("hull_scout", ARMOR_1)).toBe(true);
     expect(lo.derivedStats().maxHull).toBe(Math.round(hp * 1.2));
-    // Defense must not bleed into cargo.
     expect(lo.derivedStats().cargo).toBe(cargo);
   });
 
@@ -99,7 +88,6 @@ describe("ShipLoadout — hull micromodule effects in derivedStats", () => {
 
     expect(lo.applyMicromodule("hull_warden", PWR_WPN_1)).toBe(true);
     expect(lo.derivedStats().weaponDamage).toBe(Math.round(wpnDamage * 1.2));
-    // The redirect does not touch engine speed.
     expect(lo.derivedStats().speed).toBe(0); // no engine installed
   });
 
@@ -111,13 +99,10 @@ describe("ShipLoadout — hull micromodule effects in derivedStats", () => {
 
     expect(lo.applyMicromodule("hull_warden", PWR_ENG_1)).toBe(true);
     expect(lo.derivedStats().speed).toBeCloseTo(base * 1.2, 3);
-    // Redirecting to the engine must not change weapon damage.
     expect(lo.derivedStats().weaponDamage).toBe(0);
   });
 
   it("does not redirect energy when the targeted system is absent", () => {
-    // A weapon-redirect on a ship with no weapon leaves damage at 0 (nothing to
-    // amplify); an engine-redirect with no engine leaves speed at 0.
     const lo = new ShipLoadout("hull_scout");
     expect(lo.applyMicromodule("hull_scout", PWR_WPN_1)).toBe(true);
     expect(lo.derivedStats().weaponDamage).toBe(0);
@@ -169,10 +154,6 @@ describe("ShipLoadout — hull micromodule effects in derivedStats", () => {
     expect(hullMicroModuleById("unknown")).toBeUndefined();
   });
 
-  // Regression: the hull family is a *separate* catalog from MICRO_MODULES, so a
-  // hull micromodule id is NOT resolvable via `microModuleById` — any UI that
-  // displays a fitted hull micromodule's name (StationScene's КОРПУС bank) must
-  // use the hull-aware resolver, else it renders the raw id.
   it("hull micromodule ids are not resolvable via the gear-only microModuleById", () => {
     for (const mm of HULL_MICRO_MODULES) {
       expect(microModuleById(mm.id)).toBeUndefined();

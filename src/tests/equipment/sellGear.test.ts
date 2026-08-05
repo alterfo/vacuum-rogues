@@ -10,15 +10,6 @@ import {
   sellUninstalledGear,
 } from "@/systems/equipment/sellGear";
 
-/**
- * Task 4: selling owned-but-uninstalled gear. `sellGearPrice` reuses the trade-in
- * rate (basePrice × 0.4, floored); `sellUninstalledGear` refunds that into the
- * player's credits and removes the copy from the canonical `ownedGearIds` store.
- * Installed gear lives in the loadout, never the owned store, so it can't be sold
- * here — only an explicit unequip puts a copy back in reach of the sell action.
- */
-
-/** Minimal Player stand-in — sellUninstalledGear only touches credits + inventory. */
 function playerWith(inventory: Inventory, credits = 0): Player {
   return { inventory, credits } as unknown as Player;
 }
@@ -31,7 +22,6 @@ describe("sellGearPrice — trade-in rate (basePrice × 0.4)", () => {
   });
 
   it("floors fractional refunds", () => {
-    // eq_scanner basePrice 2600 → 1040 exactly; eq_droid 6000 → 2400.
     expect(sellGearPrice(gearById("eq_scanner")!)).toBe(1040);
     expect(sellGearPrice(gearById("eq_droid")!)).toBe(2400);
   });
@@ -84,8 +74,6 @@ describe("sellUninstalledGear — refund + remove from the owned store", () => {
   });
 
   it("cannot sell installed gear (it is not in the owned store)", () => {
-    // Gear that is only installed lives in the loadout, never ownedGearIds, so
-    // the sell action can't reach it — selling its id is a no-op.
     const inv = new Inventory();
     const loadout = new ShipLoadout("hull_corvette");
     loadout.install("eq_radar");
@@ -98,9 +86,6 @@ describe("sellUninstalledGear — refund + remove from the owned store", () => {
   });
 
   it("sells an owned spare while a fitted duplicate stays installed", () => {
-    // One owned spare, one fitted (a second copy bought with the slots full). The
-    // spare is sellable; selling it drops the copy from the store and leaves the
-    // fitted one in the loadout untouched.
     const inv = new Inventory();
     inv.addOwnedGear("wpn_pulse");
     const loadout = new ShipLoadout("hull_corvette");

@@ -1,18 +1,3 @@
-/**
- * Task 14.5c (`docs/plans/20260713-tactical-pause-combat-rework.md`): the
- * execute-window mechanics are folded into the LIVE per-frame combat loop —
- * this pins the WIRING over the real engine, not the pure math (Tasks 4–14
- * unit-cover that):
- *
- * - afterburner boost applied for exactly one window + engine wear;
- * - gravity assist folding into `ShipPhysics.currentSpeed` near a planet;
- * - a missile-class gun launching a travel-time projectile that lands late;
- * - consumables: shield restore, AoE blast, weapon jam (NPC fire suppressed);
- * - comms: bribe (tribute + everyone disengages), demand-surrender
- *   (role/hull-gated), call-for-help (ally joins and fires);
- * - VFX wiring: banking roll on the player sprite, NPC shield absorb + flash,
- *   weapon-type shot fx, wreck + deferred staggered loot from the drift.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "./realEngineHarness";
 import type { NpcShipManager } from "@/presentation/flight/NpcShipManager";
@@ -30,11 +15,8 @@ import { GAME_BALANCE, COMBAT_ROUND_MS, WRECK } from "@/config/balance";
 
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
-// One player/NPC fire cadence (2500ms) — inside the 3000ms window, so a single
-// window carries exactly one cadence tick.
 const FIRE = GAME_BALANCE.combatFireIntervalMs;
 
-/** Stationary controlled hostile (mirrors combatPlanningLiveWiring's stub). */
 function makeStaticHostile(
   id: string,
   x: number,
@@ -89,7 +71,6 @@ function makeStaticHostile(
   return sprite as unknown as NpcShipSprite;
 }
 
-/** Neutral friendly bystander (call-for-help candidate). */
 function makeFriendly(id: string, x: number, y: number): NpcShipSprite {
   const s = makeStaticHostile(id, x, y, { role: NpcRole.TRADER });
   (s as unknown as { npc: { hostile: boolean; damage: number } }).npc.hostile =
@@ -165,7 +146,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     expect(scene.combatPlanningUi.actionsOpen).toBe(true); // 14.5c action row
     scene.combatPlanningUi.toggleAction("afterburner");
     expect(scene.combatPlanning.plan.afterburner).toBe(true);
-    // A course, so the boosted window has real travel to amplify.
     const p = scene.shipPhysics;
     scene.combatPlanning.setDestination({ x: p.shipX + 250, y: p.shipY });
 
@@ -173,7 +153,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     expect(scene.combatExecution.windowBoostMultiplier).toBeGreaterThan(1);
     expect(scene.combatExecution.engineIntegrity).toBeLessThan(1);
 
-    // The round timer re-opens planning — the boost reverts with the window.
     for (let i = 0; i < 32; i++) harness.tick(100);
     expect(scene.combatPlanning.isPlanning).toBe(true);
     expect(scene.combatExecution.windowBoostMultiplier).toBe(1);
@@ -185,7 +164,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
       (a, b) => b.displayRadius - a.displayRadius,
     )[0];
     expect(planet).toBeTruthy();
-    // Park just off the planet's surface, then fly a course past it.
     const startX = planet.screenX + planet.displayRadius * 1.2;
     scene.shipPhysics.teleport(startX, planet.screenY);
     spawnFoe();
@@ -200,7 +178,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
       harness.tick(100);
       maxSpeed = Math.max(maxSpeed, scene.shipPhysics.currentSpeed);
     }
-    // Plain acceleration is clamped AT maxSpeed — only the slingshot exceeds it.
     expect(maxSpeed).toBeGreaterThan(scene.shipPhysics.getMaxSpeed() + 0.003);
     expect(harness.errors()).toEqual([]);
   });
@@ -220,14 +197,10 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
 
     const hull0 = foe.npc.hullHP;
     scene.combatPlanning.confirm();
-    // The rocket's cadence is cooldownTurns(2) × FIRE = 5000ms, pre-charged to
-    // half on engagement — it launches 2500ms into the window. No instant
-    // hit-scan damage may land at launch.
     for (let i = 0; i < 26; i++) harness.tick(100); // 2600ms > 2500ms launch
     expect(scene.combatExecution.missileCount).toBe(1);
     expect(foe.npc.hullHP).toBe(hull0); // in flight — nothing landed yet
 
-    // 100px at MISSILE_COMBAT.speedPerMs (0.32) ≈ 313ms → lands by ~2820ms.
     for (let i = 0; i < 4; i++) harness.tick(100);
     expect(scene.combatExecution.missileCount).toBe(0);
     expect(foe.npc.hullHP).toBeLessThan(hull0); // the arrival hit landed
@@ -276,8 +249,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     const playerHull0 = player.ship.hullHP;
 
     scene.combatPlanning.confirm();
-    // Without the jam the NPC's shot lands at FIRE (2500ms) — see the 14.5b
-    // hold-fire test. Jammed (4000ms), the whole 2900ms window stays clean.
     for (let i = 0; i < 29; i++) harness.tick(100);
     expect(player.ship.hullHP).toBe(playerHull0);
     expect(harness.errors()).toEqual([]);
@@ -300,7 +271,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
   });
 
   it("comms demand-surrender: a low-hull target yields (flees + drops loot); a healthy one refuses", () => {
-    // PATROL threshold 0.35 — 20% hull yields.
     const weak = spawnFoe({ hullHP: 1000 });
     weak.npc.hullHP = 200;
     vi.spyOn(
@@ -316,7 +286,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     harness.tick(100);
     expect(scene.combatModule.isActive).toBe(false);
 
-    // A healthy target refuses and the fight continues.
     const strong = spawnFoe({ hullHP: 1_000_000 }, 140);
     scene.combatPlanningUi.toggleAction("demand-surrender");
     scene.combatPlanning.confirm();
@@ -339,7 +308,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     scene.combatPlanning.confirm();
     expect(scene.combatExecution.allyCount).toBe(1);
 
-    // No weapon was assigned — the player's guns hold. Any damage is the ally's.
     for (let i = 0; i < 29; i++) harness.tick(100); // > one ally cadence (FIRE)
     expect(foe.npc.hullHP).toBeLessThan(hull0);
     expect(harness.errors()).toEqual([]);
@@ -348,16 +316,11 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
   it("banking: the player sprite rolls into a turning execute course, then levels", () => {
     spawnFoe();
     const p = scene.shipPhysics;
-    // A destination behind the ship forces a hard arc → a visible bank.
     scene.combatPlanning.setDestination({
       x: p.shipX - Math.cos(p.shipAngle) * 220,
       y: p.shipY - Math.sin(p.shipAngle) * 220,
     });
     scene.combatPlanning.confirm();
-    // Sample the roll AND the squash at their peak across the window: with the
-    // confirm-time pursuit break-off (review 2026-07-15) the ship genuinely
-    // flies the planned arc and levels out once the turn completes, so a
-    // fixed-instant read after the arc would miss the applied squash.
     const visual = scene.playerShip.container!;
     let maxRoll = 0;
     let minScaleY = 1;
@@ -369,7 +332,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     expect(maxRoll).toBeGreaterThan(0.05); // banks into the turn
     expect(minScaleY).toBeLessThan(1); // the transverse squash applied
 
-    // The fight ends → the roll resets and the sprite levels out.
     (scene.combatModule as unknown as { endCombat(): void }).endCombat();
     expect(scene.combatExecution.bankingRoll).toBe(0);
     expect(visual.scale.y).toBe(1);
@@ -384,8 +346,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     const hull0 = foe.npc.hullHP;
 
     scene.combatPlanning.confirm();
-    // Track the peak across ticks (each fx expires after SHOT_FX_MS, so a
-    // point-in-time read can miss it — the >= 0 it replaced was a tautology).
     let maxFx = 0;
     for (let i = 0; i < 26; i++) {
       harness.tick(100); // past the 2500ms cadence
@@ -402,7 +362,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
       scene.npcManager as unknown as { rollDeathLootCount(): number },
       "rollDeathLootCount",
     ).mockReturnValue(2);
-    // A fast dying ship so the wreck genuinely drifts.
     const foe = spawnFoe({ hullHP: 5, cruiseSpeed: 0.15 });
     const deathX = foe.x;
     const gun = scene.combatModule.fittedWeapons()[0];
@@ -417,21 +376,13 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
         loot: { spaceLoot: { id: string; x: number }[] };
       }
     ).loot;
-    // Only THIS kill's items count — the live sim's own crossfire kills else-
-    // where in the system may drop unrelated (legacy, undeferred) loot.
     const foeLoot = () =>
       loot.spaceLoot.filter((i) => i.id.includes(foe.npc.id));
     expect(foeLoot().length).toBe(0); // instant dump DEFERRED to the drift
 
-    // The fight ended with the kill; the wreck keeps drifting + emitting. The
-    // live sim would open fresh (unrelated) engagements mid-drift and freeze
-    // the sim for planning — neutralize the bystanders so the drift window
-    // ticks deterministically.
     for (const s of scene.npcManager.getNpcSpritesView()) {
       (s as unknown as { npc: { hostile: boolean } }).npc.hostile = false;
     }
-    // Park the ship far away: the starter grav-tractor would otherwise scoop
-    // the first drift emission the frame it spawns (a real pickup, not a bug).
     scene.shipPhysics.teleport(
       scene.shipPhysics.shipX - 2000,
       scene.shipPhysics.shipY - 2000,
@@ -457,15 +408,12 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     const foe = spawnFoe();
     expect(scene.combatPlanning.isPlanning).toBe(true);
 
-    // The player's own bar spec is available and reflects the live ship.
     const spec = scene.combatExecution.playerStatusBarSpec();
     expect(spec).not.toBeNull();
     expect(spec!.hull).toBe(player.ship.hullHP);
     expect(spec!.maxHull).toBe(player.ship.maxHull);
     expect(spec!.shields).toBe(player.ship.shields);
 
-    // A frozen-planning frame draws exactly ONE bar — the player's — and never
-    // opens the execute loop (freeze semantics for NPC bars unchanged).
     harness.tick(100);
     expect(scene.combatPlanning.isPlanning).toBe(true); // still frozen/planning
     expect(scene.combatExecution.statusBarCount).toBe(1);
@@ -479,8 +427,6 @@ describe("Execute-window mechanics live in the wired scene (14.5c)", () => {
     expect(scene.combatPlanning.isPlanning).toBe(false);
 
     harness.tick(100);
-    // player (1) + the engaged hostile (1): the frozen-planning carve-out did
-    // NOT alter the unfrozen full draw path.
     expect(scene.combatExecution.statusBarCount).toBe(2);
     expect(scene.combatModule.combatants.has(foe)).toBe(true);
     expect(harness.errors()).toEqual([]);

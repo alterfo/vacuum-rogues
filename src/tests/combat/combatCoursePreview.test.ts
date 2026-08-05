@@ -6,7 +6,6 @@ import {
 } from "@/presentation/flight/combatTrajectory";
 import { COMBAT_ROUND_MS } from "@/config/balance";
 
-// Minimal fakes — the helper only touches these narrow surfaces.
 function fakeRenderer() {
   return {
     drawRoute: vi.fn(),
@@ -23,7 +22,6 @@ describe("previewCombatCourse — planning-phase movement click wiring (Task 3)"
     const setDestination = vi.fn();
     const ship = fakeShip(0.11);
 
-    // A near click (within reach) is recorded verbatim.
     const dest = previewCombatCourse(
       renderer as never,
       { setDestination },
@@ -34,7 +32,6 @@ describe("previewCombatCourse — planning-phase movement click wiring (Task 3)"
 
     expect(dest).toEqual({ x: 100, y: 0 });
     expect(setDestination).toHaveBeenCalledWith({ x: 100, y: 0 });
-    // A non-trivial preview polyline was drawn, plus the endpoint marker.
     const drawn = renderer.drawRoute.mock.calls[0][0] as {
       x: number;
       y: number;
@@ -53,7 +50,6 @@ describe("previewCombatCourse — planning-phase movement click wiring (Task 3)"
       COMBAT_ROUND_MS,
     );
 
-    // Far click straight ahead: clamped to exactly `reach` on the same ray.
     const dest = previewCombatCourse(
       renderer as never,
       { setDestination },

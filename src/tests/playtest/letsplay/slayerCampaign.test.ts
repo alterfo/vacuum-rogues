@@ -1,28 +1,3 @@
-/**
- * Task 8 (three-year-campaign plan) — slayer-tier tuning against adaptive pressure.
- *
- * Two layers:
- *
- *  A. **Pure decision tests** (fixtures, deterministic) for the endgame-press
- *     tuning: a capability-BATTLE-READY ship no longer flees a hostile-free
- *     rising front (it holds so the advance/clear/liberate tiers can press), and
- *     in an engaged galaxy it stops taking distracting courier work — the
- *     hysteresis that keeps it from yo-yoing between a delivery run and the war.
- *     A NOT-battle-ready ship keeps every weak-ship survival reflex (no death
- *     regression).
- *
- *  B. **Real-engine slayer loop** (boots the real GameEngine, pixi stubbed): a
- *     battle-ready ship clears a staged garrison (real CombatModule damage over
- *     ticks), then the real `MemoryHeuristicPolicy` liberates the cleared held
- *     system — dropping the Overmind's system count (share declines) — and,
- *     standing on the engaged Overmind CORE, liberating it resolves the arc as
- *     WON (the core-kill path). Plus a campaign-horizon proxy: the agent reaches
- *     battle-ready and liberates at least once with zero deaths.
- *
- * The full-session 99%-win balance (a battle-ready ship soloing the 5-defender
- * `GARRISON_MIN` standing garrison, the adaptive spread/creep levers) is Task 9's
- * config-table iteration — this task proves the BEHAVIORS compose end-to-end.
- */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { SceneType, FactionType, NpcRole, NpcState } from "@/types";
 import { Faction } from "@/types/faction";
@@ -53,9 +28,6 @@ import {
   applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
 
-// ── A. Pure endgame-press decisions ─────────────────────────────────────────
-
-/** A battle-ready starter (both thresholds cleared); overridable per case. */
 function player(over: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
   return {
     credits: 1000,
@@ -121,7 +93,6 @@ function obs(opts: Opts = {}): Observation {
   };
 }
 
-/** A PLANET-scene observation carrying an offered quest. */
 function planetObs(opts: {
   battleReady: boolean;
   overmindShare: number;
@@ -216,11 +187,8 @@ describe("Task 8 — endgame press (battle-ready holds the front)", () => {
   });
 });
 
-// ── B. Real-engine slayer loop ──────────────────────────────────────────────
-
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** Fit a battle-ready loadout: 180-hp freighter + a beam gun (14+30 damage). */
 function makeBattleReady(engine: RealEngineHarness["engine"]): void {
   const p = engine.player!;
   const loadout = engine.playerLoadout!;
@@ -231,7 +199,6 @@ function makeBattleReady(engine: RealEngineHarness["engine"]): void {
   p.ship.hullHP = p.ship.maxHull; // full health for the fight
 }
 
-/** Clear any auto-generated Overmind/pirate ships in a system (staging hygiene). */
 function clearHostiles(
   galaxy: { npcShips: NpcShip[] },
   systemId: string,
@@ -280,8 +247,6 @@ describe("Task 8 — real-engine slayer loop", () => {
   it("a battle-ready slayer clears a staged garrison — the enemy hull falls to death over ticks", async () => {
     localStorage.clear();
     harness = await RealEngineHarness.boot({ seed: "SLAYER-CLEAR" });
-    // GOD floors the player only — the staged garrison's hull and the player's
-    // outgoing damage are NORMAL, so this measures the CLEAR, not a coin-flip.
     await harness.newGame(FactionType.OUTLANDERS, "GOD");
     const engine = harness.engine;
     makeBattleReady(engine);
@@ -305,9 +270,6 @@ describe("Task 8 — real-engine slayer loop", () => {
     const hullStart = npc.hullHP;
     for (let i = 0; i < 40 && npc.hullHP > 0; i++) await agent.run(1);
 
-    // The garrison is cleared: a battle-ready ship (weaponDamage 44) grinds the
-    // forced aggressor down to death over the multi-tick exchange (the damage
-    // accumulated far past a single lucky volley).
     expect(npc.hullHP).toBeLessThanOrEqual(0);
     expect(hullStart).toBeGreaterThan(0);
     expect(harness.errors()).toHaveLength(0);
@@ -322,7 +284,6 @@ describe("Task 8 — real-engine slayer loop", () => {
     const here = engine.player!.currentSystemId;
 
     makeBattleReady(engine);
-    // Two held systems, the agent standing in a garrison-CLEARED one.
     clearHostiles(galaxy, here);
     const other = galaxy.systems.find((s) => s.id !== here)!.id;
     galaxy.overmindSystems = [here, other];
@@ -330,7 +291,6 @@ describe("Task 8 — real-engine slayer loop", () => {
     expect(engine.canLiberateCurrentSystem()).toBe(true);
 
     const agent = new PlayerAgent(harness, new MemoryHeuristicPolicy());
-    // The slayer-liberate tier is top priority once `liberate` is legal.
     const obsNow = observe(
       engine,
       questBaselineForObserve(new MemoryHeuristicPolicy().belief, engine),
@@ -358,13 +318,9 @@ describe("Task 8 — real-engine slayer loop", () => {
     expect(core).not.toBe("");
 
     makeBattleReady(engine);
-    // Teleport the agent to the core and clear its garrison so `liberate` is
-    // legal there (the fight is separately covered above).
     engine.player!.currentSystemId = core;
     clearHostiles(galaxy, core);
     galaxy.overmindSystems = [core];
-    // A genuinely ENGAGED arc sitting on a day whose next EOD skips the churn
-    // (mirrors overmindOutcome.test.ts) so the win can be read on one tick.
     galaxy.gameDays = 6;
     galaxy.overmindArc = {
       dayZero: 1,

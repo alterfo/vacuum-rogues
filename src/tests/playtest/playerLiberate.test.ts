@@ -4,19 +4,8 @@ import { NpcShip } from "@/domain/NpcShip";
 import { Faction } from "@/types/faction";
 import { FactionType, NpcRole, NpcState } from "@/types";
 
-/**
- * Real-engine playtest for player-driven liberation (Task 4 of the
- * late-game-recoverability pass). Boots the genuine `GameEngine` + galaxy and
- * only stubs PixiJS, so it exercises the wiring: `canLiberateCurrentSystem` /
- * `liberateCurrentSystem` over the real `Galaxy` (capture sets + live npcShips),
- * for both pirate- and Overmind-captured systems, gated on the local garrison
- * being cleared. Ends on the error-invariant (`errors()` empty).
- */
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
-/** Simulate the player having cleared the local garrison: mark every present
- *  hostile (pirate-role / Overmind-faction) ship in the system DEAD. Seed-
- *  independent — a freshly generated galaxy may already place a few hostiles. */
 function clearHostiles(
   galaxy: { npcShips: NpcShip[] },
   systemId: string,
@@ -65,12 +54,10 @@ describe("player-driven liberation (real engine)", () => {
     const galaxy = harness.galaxy()!;
     const sys = harness.player()!.currentSystemId;
 
-    // Pirates capture the system the player is sitting in.
     galaxy.addPirateSystem(sys);
     clearHostiles(galaxy, sys);
     expect(galaxy.isPirateSystem(sys)).toBe(true);
 
-    // With no hostile garrison present, the player can liberate it.
     expect(engine.canLiberateCurrentSystem()).toBe(true);
     expect(engine.liberateCurrentSystem()).toBe(true);
     expect(galaxy.isPirateSystem(sys)).toBe(false);
@@ -109,8 +96,6 @@ describe("player-driven liberation (real engine)", () => {
     expect(engine.liberateCurrentSystem()).toBe(false);
     expect(galaxy.isPirateSystem(sys)).toBe(true); // still captured
 
-    // Clearing the defender (it dies) unlocks liberation — the "after a fight"
-    // condition. No map-wide auto-clear: only this one system frees.
     galaxy.npcShips[galaxy.npcShips.length - 1].state = NpcState.DEAD;
     expect(engine.canLiberateCurrentSystem()).toBe(true);
     expect(engine.liberateCurrentSystem()).toBe(true);
@@ -123,7 +108,6 @@ describe("player-driven liberation (real engine)", () => {
     await harness.newGame();
     const engine = harness.engine;
     const sys = harness.player()!.currentSystemId;
-    // The starting system is faction-held.
     expect(harness.galaxy()!.isHostileSystem(sys)).toBe(false);
     expect(engine.canLiberateCurrentSystem()).toBe(false);
     expect(engine.liberateCurrentSystem()).toBe(false);

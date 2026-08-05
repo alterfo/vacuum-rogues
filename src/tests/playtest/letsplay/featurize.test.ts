@@ -15,15 +15,6 @@ import {
   CAMPAIGN_FEATURE_LENGTH,
 } from "./NeuralPolicy";
 
-/**
- * Task 5 of the action-expansion plan: the widened 50-feature vector
- * (20260701-letsplay-action-expansion-and-neural-scale.md). `featurize`'s
- * observation block grew 16 → 30 and the memory block 7 → 20; this file pins
- * every new slot's value for a hand-built mock state, on top of the general
- * `[0,1]`-finite invariant every existing `NeuralPolicy.test.ts` case already
- * covers for the whole vector.
- */
-
 function playerFixture(over: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
   return {
     credits: 5000,
@@ -248,13 +239,6 @@ describe("featurize — campaign Task 10 vector (54 = 30 obs + 20 memory + 4 cam
   });
 
   it("degrades every memory-block feature to 0 with a fresh notebook, even with a rich obs", () => {
-    // Mirrors the existing memoryFeatures.test.ts contract: a fresh AgentMemory
-    // always zeroes the belief block, regardless of what `obs` itself contains
-    // (a well-fed player fixture has non-zero credits/maxHull/etc.). Scoped to the
-    // MEMORY block [OBS_FEATURE_LENGTH, OBS+MEMORY): the campaign block that
-    // follows (indices 50–53, Task 10) is obs-derived, not belief-derived, so it
-    // is not part of this "fresh notebook ⇒ 0" contract (e.g. an absent
-    // hops-to-front reads as maximally-far, not 0).
     const v = featurize(obs(), createMemory());
     for (
       let i = OBS_FEATURE_LENGTH;
@@ -266,7 +250,6 @@ describe("featurize — campaign Task 10 vector (54 = 30 obs + 20 memory + 4 cam
   });
 
   it("encodes the campaign block (indices 50-53) from the Task-10 obs signals", () => {
-    // All four campaign features present + non-trivial.
     const on = featurize(
       obs({
         playerPowerIndex: 0.6,
@@ -280,8 +263,6 @@ describe("featurize — campaign Task 10 vector (54 = 30 obs + 20 memory + 4 cam
     expect(on[52]).toBeCloseTo(2 / 10); // hops-to-front / 10
     expect(on[53]).toBeCloseTo(0.5); // armUpCost / 10_000
 
-    // Standing AT the front reads 0; the defaults (no power, not ready, no front,
-    // no arm-up) read power/ready/armUp = 0 but hops = 1 (maximally far / unknown).
     const atFront = featurize(obs({ hopsToOvermindFront: 0 }));
     expect(atFront[52]).toBe(0);
     const off = featurize(obs());

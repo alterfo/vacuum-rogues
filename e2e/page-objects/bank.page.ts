@@ -14,17 +14,11 @@ type BankSceneHandle = {
   e2eTakeLoan?: () => void;
 };
 
-/**
- * Page Object for the Galactic Bank screen (BankScene, АБС Task 7). Drives the
- * scene through its __DEBUG__-guarded e2e seams rather than pixel clicks
- * (CLAUDE.md E2E rules), so tests assert on the ledger projection directly.
- */
 export class BankPage extends GamePageBase {
   constructor(page: Page) {
     super(page);
   }
 
-  /** Navigate to the bank via engine routing, threading the first planet for "Назад". */
   async open(): Promise<void> {
     await this.page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
@@ -42,7 +36,6 @@ export class BankPage extends GamePageBase {
     });
   }
 
-  /** Book a trade-style posting through the real production credit facade. */
   async simulateTrade(amount: number, reason = 'Продажа товара'): Promise<void> {
     await this.page.evaluate(
       ([amt, why]) => {
@@ -55,7 +48,6 @@ export class BankPage extends GamePageBase {
     );
   }
 
-  /** Read the current-account statement rows (for assertions). */
   async statement(): Promise<
     Array<{ date: number; reason: string; delta: number; balanceAfter: number }>
   > {

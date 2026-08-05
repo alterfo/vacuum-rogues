@@ -8,18 +8,6 @@ import { SkillTree } from "@/domain/SkillTree";
 import { FactionType, ResourceType } from "@/types";
 import type { QuestLog, Journal } from "@/types";
 
-/**
- * Task 4 (EPIC-001): prove the already-shipped dynamic-pricing layer finally
- * engages on PRODUCTION markets. Earlier economy tests
- * (`economy/marketDynamics.test.ts`) construct markets by hand with
- * `new Market(RESOURCES, …)`; this suite instead runs the real
- * `GalaxySimulator.generateGalaxy` path so the markets under test are the ones
- * the game actually ships — non-empty because of `seedMarket`. If population
- * regressed to empty stubs (`new Market([], [], [])`), `advanceMarketDay` would
- * loop zero times and `applyMarketTradeImpact` would early-return, so these
- * assertions would all fail.
- */
-
 const RESOURCES = Object.values(ResourceType) as ResourceType[];
 
 function makePlayer(faction: FactionType, credits = 10_000_000): Player {
@@ -47,23 +35,17 @@ describe("Live pricing — generated production markets drive the dynamic layer"
     const player = makePlayer(FactionType.BASTIONS);
     const good = ResourceType.METALS;
 
-    // Precondition: this is a real, populated market (not the old empty stub).
     expect(planet.market.hasResource(good)).toBe(true);
     expect(planet.market.multiplierFor(good)).toBe(1.0);
 
-    // executeTrade must shift the live price via applyMarketTradeImpact:
-    // buying depletes stock, so the next BUY price is strictly higher.
     const buyBefore = trade.getBuyPrice(planet, good, player);
     trade.executeTrade(player, planet, good, 15, true);
     const buyAfter = trade.getBuyPrice(planet, good, player);
     expect(buyAfter).toBeGreaterThan(buyBefore);
 
-    // The persistent nudge lives in priceMultipliers (resolved by key, not idx).
     const multAfterTrade = planet.market.multiplierFor(good);
     expect(multAfterTrade).toBeGreaterThan(1.0);
 
-    // advanceMarketDay must MOVE that multiplier back toward the neutral 1.0
-    // (the whole point of populating the market — the drift loop now iterates).
     let i = 0;
     const rng = () => (i++ * 0.381) % 1.0;
     for (let day = 0; day < 10; day++) planet.market.advanceMarketDay(rng);
@@ -78,8 +60,6 @@ describe("Live pricing — generated production markets drive the dynamic layer"
     const player = makePlayer(FactionType.BASTIONS);
     const planets = galaxy.systems.flatMap((s) => s.planets);
 
-    // Find the best real arbitrage route the production galaxy actually offers:
-    // buy `good` at `src`, carry it to `dst`, sell for more. Deterministic scan.
     let best = {
       profit: -Infinity,
       good: ResourceType.METALS,
@@ -98,8 +78,6 @@ describe("Live pricing — generated production markets drive the dynamic layer"
       }
     }
 
-    // Populated production markets must expose a real spread to exploit; with
-    // empty stubs every price is 0 and no route is profitable.
     expect(best.profit).toBeGreaterThan(0);
 
     const { good, src, dst } = best;
@@ -116,24 +94,13 @@ describe("Live pricing — generated production markets drive the dynamic layer"
     let lastProfit = firstProfit;
     for (let i = 0; i < 5; i++) lastProfit = roundTrip();
 
-    // The route is worth strictly less by the last trip than the first.
     expect(lastProfit).toBeLessThan(firstProfit);
 
-    // ...and prove the priceMultiplier lever (applyMarketTradeImpact, the same
-    // one NPC traders use) is actually what moved — not just the supply/demand
-    // vector decay executeTrade also applies. Repeated BUYs at `src` must have
-    // ratcheted its multiplier up; repeated SELLs at `dst` must have pushed its
-    // multiplier down. Asserting this directly keeps the test honest: if the
-    // nudge regressed to a no-op, the vector decay alone would still shrink the
-    // spread and this test would otherwise pass blind.
     expect(src.market.multiplierFor(good)).toBeGreaterThan(1.0);
     expect(dst.market.multiplierFor(good)).toBeLessThan(1.0);
   });
 
   it("regression: same-planet buy→sell still loses credits on a populated market (SELL_SPREAD intact)", async () => {
-    // Populating production markets must NOT reopen the money-printing hole the
-    // SELL_SPREAD closes: a same-planet round trip must still lose money, even
-    // for SYNDICATE (the best 1.15 sell multiplier).
     const trade = new TradeSystem();
     const galaxy = await new GalaxySimulator().generateGalaxy("live-spread", 8);
     const planet = galaxy.systems.flatMap((s) => s.planets)[0]!;

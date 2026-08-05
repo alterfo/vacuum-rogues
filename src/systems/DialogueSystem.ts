@@ -27,8 +27,6 @@ export interface DialogueAnchorNode {
 
 export class T5DialogueAdapter {
   async generateResponse(prompt: string): Promise<string> {
-    // Placeholder: rule-based generation (no neural runtime). Real generative
-    // dialogue would run through a FallbackEngine-shaped adapter.
     logger.debug(`T5 generateResponse called with prompt: ${prompt}`);
     return `Generated response for: ${prompt}`;
   }
@@ -39,7 +37,6 @@ export class GRUEmotionAdapter {
     _context: unknown,
     _history: unknown[],
   ): Promise<EmotionVectorData> {
-    // Placeholder: actual GRU inference
     logger.debug("GRU infer called");
     return new EmotionVector({
       trust: 10,
@@ -51,7 +48,6 @@ export class GRUEmotionAdapter {
   }
 }
 
-/** Per-session history cap — applied on restore and after each exchange. */
 const MAX_HISTORY = 50;
 
 export class DialogueSystem {
@@ -83,18 +79,12 @@ export class DialogueSystem {
       baseline.toData(),
     );
 
-    // Load historical messages if previous session exists, then drop the
-    // stale session's timestamped key so the map stays bounded per NPC. The
-    // restored history is capped too: each session adds at least the opening
-    // anchor, so without the cap repeatedly opening a dialogue (no choices —
-    // the only other prune point) grows the per-NPC history without bound.
     const previous = this.sessionHistory.get(npc.id);
     if (previous) {
       session.history.push(...previous.history.slice(-MAX_HISTORY));
       this.sessionHistory.delete(previous.id);
     }
 
-    // Select opening anchor
     const reputation = player.reputation[npc.id] ?? 0;
     const anchor = this.anchorRegistry.getOpeningAnchor(npc, reputation, null);
 
@@ -102,7 +92,6 @@ export class DialogueSystem {
       session.addNPCResponse(anchor.template);
     }
 
-    // Index by both session ID (for submitPlayerChoice) and npc.id (for history recall).
     this.sessionHistory.set(sessionId, session);
     this.sessionHistory.set(npc.id, session);
     logger.info(`Dialogue started with NPC ${npc.name}`);
@@ -123,7 +112,6 @@ export class DialogueSystem {
 
     session.sendPlayerMessage(choice.text);
 
-    // Update emotion via GRU if profile allows
     let emotionData = session.currentEmotion;
     if (
       this.qualityProfile.level !== ("LOW" as import("@/types").ProfileLevel)
@@ -142,7 +130,6 @@ export class DialogueSystem {
     let responseText: string;
     let confidence = 1.0;
 
-    // Try T5 generation if High profile and model loaded
     if (
       this.qualityProfile.level === ("HIGH" as import("@/types").ProfileLevel)
     ) {
@@ -169,7 +156,6 @@ export class DialogueSystem {
       responseText = "";
     }
 
-    // Fallback to anchors if needed
     if (!responseText || confidence < 0.7) {
       const anchors = this.anchorRegistry.getNextAnchors(
         choice.id,
@@ -182,7 +168,6 @@ export class DialogueSystem {
       }
     }
 
-    // Apply reputation delta
     const reputationDelta = choice.tags.includes("friendly")
       ? 5
       : choice.tags.includes("hostile")
@@ -192,7 +177,6 @@ export class DialogueSystem {
 
     session.addNPCResponse(responseText);
 
-    // Prune history if it exceeds the cap
     while (session.history.length > MAX_HISTORY) {
       session.history.shift();
     }

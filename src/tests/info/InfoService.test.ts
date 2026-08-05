@@ -62,20 +62,16 @@ describe("InfoService.buildRegistry", () => {
   it("composes ships, market goods and per-planet gear shops", () => {
     const reg = buildRegistry(galaxy(), "seed", 0);
 
-    // Ship index
     expect(reg.findShip("t1")?.systemId).toBe("B");
-    // Market goods index
     expect(
       reg.cheapestResource({
         resource: ResourceType.METALS,
         originSystemId: "A",
       })?.systemId,
     ).toBe("A");
-    // Gear shops were generated for both planets
     expect(reg.gearListingCount).toBeGreaterThan(0);
 
     const hulls = reg.findGear({ originSystemId: "A", kind: GearKind.HULL });
-    // Every gear hit carries a jump distance from the origin.
     for (const h of hulls) expect(h.jumps).toBeGreaterThanOrEqual(0);
   });
 

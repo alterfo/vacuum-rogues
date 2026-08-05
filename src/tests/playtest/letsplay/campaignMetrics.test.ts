@@ -1,9 +1,3 @@
-/**
- * Unit tests for the pure campaign-metrics core (Task 6, three-year-campaign
- * plan): milestone folding, outcome classification, the bounded-memory gate,
- * aggregation, and formatting — all on synthetic data, no engine boot, so this
- * file stays in the always-on playtest tier.
- */
 import { describe, it, expect } from "vitest";
 import { SceneType } from "@/types";
 import {
@@ -27,7 +21,6 @@ import {
   type CampaignStepSignal,
 } from "./campaignMetrics";
 
-/** A weak-ship, no-Overmind day signal; override per scenario. */
 function mkSignal(over: Partial<CampaignDaySignal> = {}): CampaignDaySignal {
   return {
     day: 1,
@@ -39,7 +32,6 @@ function mkSignal(over: Partial<CampaignDaySignal> = {}): CampaignDaySignal {
   };
 }
 
-/** In-bounds memory stats; override one field to build a breach. */
 function mkStats(over: Partial<CampaignMemoryStats> = {}): CampaignMemoryStats {
   return {
     priceBookPlanets: 10,
@@ -55,7 +47,6 @@ function mkStats(over: Partial<CampaignMemoryStats> = {}): CampaignMemoryStats {
   };
 }
 
-/** A clean winning session report; override per scenario. */
 function mkReport(
   over: Partial<CampaignSessionReport> = {},
 ): CampaignSessionReport {
@@ -89,7 +80,6 @@ function mkReport(
   };
 }
 
-/** A no-progress in-flight step signal; override per scenario. */
 function mkStep(over: Partial<CampaignStepSignal> = {}): CampaignStepSignal {
   return {
     day: 10,
@@ -115,18 +105,15 @@ describe("foldCampaignStep — stall/cycle detectors (Task 9 vi)", () => {
 
   it("measures the longest no-progress repeat-action run (same scene+action, day+credits frozen)", () => {
     let s = emptyStallStats();
-    // Three identical stuck steps in a row → run of 3.
     for (let i = 0; i < 3; i++)
       s = foldCampaignStep(
         s,
         mkStep({ day: 10, credits: 500, actionKind: "warp" }),
       );
-    // Day advances → the streak breaks even with the same action.
     s = foldCampaignStep(
       s,
       mkStep({ day: 11, credits: 500, actionKind: "warp" }),
     );
-    // Two more stuck → run of 2, so the max stays 3.
     s = foldCampaignStep(
       s,
       mkStep({ day: 11, credits: 500, actionKind: "warp" }),
@@ -136,7 +123,6 @@ describe("foldCampaignStep — stall/cycle detectors (Task 9 vi)", () => {
       mkStep({ day: 11, credits: 500, actionKind: "warp" }),
     );
     expect(s.maxRepeatActionRun).toBe(3);
-    // The culprit key names the stuck (scene, action) for diagnosis.
     expect(s.worstRepeatKey).toBe(`${SceneType.SPACE_FLIGHT}|warp`);
   });
 
@@ -163,14 +149,12 @@ describe("foldCampaignStep — stall/cycle detectors (Task 9 vi)", () => {
 
   it("measures the undocked day-frozen streak but exempts a docked/landed stay", () => {
     let s = emptyStallStats();
-    // Four undocked steps with the day frozen → streak of 3 (first has no prior day).
     for (let i = 0; i < 4; i++)
       s = foldCampaignStep(
         s,
         mkStep({ day: 10, scene: SceneType.SPACE_FLIGHT }),
       );
     expect(s.maxDayFrozenStreakUndocked).toBe(3);
-    // A long STATION stay at a frozen day does NOT extend the undocked streak.
     let d = emptyStallStats();
     for (let i = 0; i < 5; i++)
       d = foldCampaignStep(d, mkStep({ day: 10, scene: SceneType.STATION }));
@@ -216,14 +200,12 @@ describe("formatCampaignReport — stall footer", () => {
     expect(withStall).toContain("repeat=7");
     expect(withStall).toContain("dayFrozen=12");
     expect(withStall).toContain("phantom-stance sessions=1/1");
-    // A report with no stall data omits the footer entirely.
     const noStall = formatCampaignReport([mkReport()]);
     expect(noStall).not.toContain("phantom");
     expect(noStall).not.toContain("stalls:");
   });
 });
 
-/** A synthetic death cause; override per scenario. */
 function mkDeathCause(
   over: Partial<CampaignDeathCause> = {},
 ): CampaignDeathCause {
@@ -311,7 +293,6 @@ describe("foldCampaignDay — milestone latching", () => {
     let m = emptyMilestones();
     m = foldCampaignDay(m, mkSignal({ day: 5 }));
     expect(m.battleReadyDay).toBeNull();
-    // Only one threshold met ⇒ not battle-ready yet.
     m = foldCampaignDay(
       m,
       mkSignal({ day: 10, maxHull: BATTLE_READY_MAX_HULL }),
@@ -326,7 +307,6 @@ describe("foldCampaignDay — milestone latching", () => {
       }),
     );
     expect(m.battleReadyDay).toBe(42);
-    // A later (even stronger) day never moves the latch.
     m = foldCampaignDay(
       m,
       mkSignal({ day: 90, maxHull: 400, weaponDamage: 80 }),
@@ -336,15 +316,12 @@ describe("foldCampaignDay — milestone latching", () => {
 
   it("latches first liberation on a count DECREASE, never on growth or the first sample", () => {
     let m = emptyMilestones();
-    // First sample can never be a liberation (no previous count to compare).
     m = foldCampaignDay(m, mkSignal({ day: 1, overmindSystemCount: 3 }));
     expect(m.firstLiberationDay).toBeNull();
-    // Growth is spread, not liberation.
     m = foldCampaignDay(m, mkSignal({ day: 50, overmindSystemCount: 5 }));
     expect(m.firstLiberationDay).toBeNull();
     m = foldCampaignDay(m, mkSignal({ day: 200, overmindSystemCount: 4 }));
     expect(m.firstLiberationDay).toBe(200);
-    // Latched: a later decrease doesn't move it.
     m = foldCampaignDay(m, mkSignal({ day: 300, overmindSystemCount: 2 }));
     expect(m.firstLiberationDay).toBe(200);
     expect(m.peakOvermindCount).toBe(5);
@@ -352,8 +329,6 @@ describe("foldCampaignDay — milestone latching", () => {
 
   it("latches first PLAYER liberation on playerLiberations > 0, distinct from the generic liberation proxy (gear-catalog & garrison-power-ceiling plan Task 3)", () => {
     let m = emptyMilestones();
-    // An Overmind system count decrease (an NPC ranger liberation) fires the
-    // generic proxy but must NOT fire the player-specific one.
     m = foldCampaignDay(
       m,
       mkSignal({ day: 1, overmindSystemCount: 3, playerLiberations: 0 }),
@@ -364,14 +339,11 @@ describe("foldCampaignDay — milestone latching", () => {
     );
     expect(m.firstLiberationDay).toBe(100);
     expect(m.firstPlayerLiberationDay).toBeNull();
-    // The player's own ship liberates one later — only now does the
-    // player-specific milestone latch.
     m = foldCampaignDay(
       m,
       mkSignal({ day: 250, overmindSystemCount: 1, playerLiberations: 1 }),
     );
     expect(m.firstPlayerLiberationDay).toBe(250);
-    // Latched: a later increase doesn't move it.
     m = foldCampaignDay(
       m,
       mkSignal({ day: 400, overmindSystemCount: 0, playerLiberations: 2 }),
@@ -556,7 +528,6 @@ describe("aggregateCampaign", () => {
           peakOvermindCount: 6,
         },
       }),
-      // never solo-liberated — excluded from the rate numerator and the mean
       mkReport({ index: 2, seed: "SYN-2" }),
     ]);
     expect(sum.playerLiberationRate).toBeCloseTo(2 / 3);

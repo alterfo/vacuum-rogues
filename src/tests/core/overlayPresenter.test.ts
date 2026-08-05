@@ -1,18 +1,5 @@
-/**
- * `IOverlayPresenter` port (plan 20260701, Phase 2 Task 8) — the modal/loading
- * /outcome overlays GameEngine used to build directly with `pixi.js` now route
- * through this port so `systems/` stays free of a `pixi.js` import.
- *
- * Two angles:
- *   1. GameEngine routes its public overlay entry points (`handleError`,
- *      `showGameOutcomeScreen`, `showLoadingOverlay`/`hideLoadingOverlay`) to an
- *      injected fake presenter with the right arguments — headless, no renderer.
- *   2. The real `OverlayPresenter` builds the expected PixiJS objects against a
- *      fake renderer and no-ops cleanly when the renderer isn't attached yet.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Broad PixiJS mock — GameEngine still transitively pulls in SceneFactory/scenes.
 vi.mock("pixi.js", () => ({
   Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
@@ -258,7 +245,6 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
 
     presenter.showGameOutcome(true, { onRestart, onNewGamePlus });
 
-    // overlay + title + msg + NG+ button + restart button = 5 uiLayer children
     expect(renderer.uiLayer.addChild).toHaveBeenCalledTimes(5);
     const ngPlusCall = (renderer.uiLayer.addChild as ReturnType<typeof vi.fn>)
       .mock.calls[3][0] as { on: ReturnType<typeof vi.fn> };
@@ -277,7 +263,6 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
 
     presenter.showGameOutcome(false, { onRestart: () => {} });
 
-    // overlay + title + msg + restart button = 4 uiLayer children
     expect(renderer.uiLayer.addChild).toHaveBeenCalledTimes(4);
   });
 
@@ -289,7 +274,6 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
 
     presenter.showGameOutcome(true, { onRestart, onNewGamePlus });
 
-    // overlay(0) + title(1) + msg(2) + NG+ button(3) + restart button(4)
     const restartCall = (renderer.uiLayer.addChild as ReturnType<typeof vi.fn>)
       .mock.calls[4][0] as { on: ReturnType<typeof vi.fn> };
     const pointerdown = restartCall.on.mock.calls.find(
@@ -308,7 +292,6 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
 
     presenter.showGameOutcome(false, { onRestart });
 
-    // overlay(0) + title(1) + msg(2) + restart button(3)
     const restartCall = (renderer.uiLayer.addChild as ReturnType<typeof vi.fn>)
       .mock.calls[3][0] as { on: ReturnType<typeof vi.fn> };
     const pointerdown = restartCall.on.mock.calls.find(
@@ -336,9 +319,6 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
 
     presenter.showError("second");
 
-    // first showError tracked 2 objects (overlay + message); the internal
-    // clearModal() the second call runs must remove exactly those before
-    // drawing the new modal.
     expect(renderer.uiLayer.removeChild).toHaveBeenCalledTimes(2);
   });
 
@@ -349,7 +329,6 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
     presenter.showLoading("first");
     presenter.showLoading("second");
 
-    // 2 children per call (overlay + label) x2 calls = 4
     expect(renderer.uiLayer.addChild).toHaveBeenCalledTimes(4);
   });
 
@@ -361,9 +340,6 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
 
     presenter.dismissAll();
 
-    // showGameOutcome(win, no NG+) tracks 4 objects (overlay/title/msg/restart
-    // button); showLoading tracks 2 (overlay/label) — dismissAll must remove
-    // every one of them, not just the modal or just the loading overlay.
     expect(renderer.uiLayer.removeChild).toHaveBeenCalledTimes(6);
   });
 

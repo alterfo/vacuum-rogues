@@ -12,7 +12,6 @@ import type { Galaxy } from "@/domain/Galaxy";
 import type { NewsEvent } from "@/types";
 import { ResourceType } from "@/types";
 
-/** A RouteScanner-shaped candidate (structurally satisfies RouteLike). */
 const CANDIDATE: RouteLike = {
   resource: ResourceType.METALS,
   fromSystemId: "S1",
@@ -24,7 +23,6 @@ const CANDIDATE: RouteLike = {
   marginPct: 35,
 };
 
-/** Minimal galaxy stub: describeRumor only reads systems[].id + .name. */
 function makeGalaxy(systems: { id: string; name: string }[]): Galaxy {
   return { systems } as unknown as Galaxy;
 }
@@ -49,7 +47,6 @@ describe("RouteRumor — construction & identity", () => {
   it("rumorId is deterministic and keyed by resource + endpoints", () => {
     expect(rumorId(CANDIDATE)).toBe("METALS:S1->S2");
     expect(createRumor(CANDIDATE, 1).id).toBe(rumorId(CANDIDATE));
-    // Same route, different day → same id (so re-scans update in place).
     expect(createRumor(CANDIDATE, 99).id).toBe("METALS:S1->S2");
   });
 });

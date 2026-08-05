@@ -6,8 +6,6 @@ import { Inventory } from "@/domain/Inventory";
 import type { Journal, QuestLog, TextQuest } from "@/types";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 
-// ── helpers ────────────────────────────────────────────────────────────────
-
 function makePlayer(credits = 1000): Player {
   const questLog: QuestLog = { activeQuests: [], completedQuests: [] };
   const journal: Journal = { entries: [] };
@@ -28,8 +26,6 @@ function makePlayer(credits = 1000): Player {
     "SYS_A",
   );
 }
-
-// ── sample quests ─────────────────────────────────────────────────────────
 
 describe("SAMPLE_TEXT_QUESTS", () => {
   it("exports two sample quests with unique ids", () => {
@@ -69,8 +65,6 @@ describe("SAMPLE_TEXT_QUESTS", () => {
   });
 });
 
-// ── TextQuestRuntime ───────────────────────────────────────────────────────
-
 describe("TextQuestRuntime.start", () => {
   it("returns the first node of the quest", () => {
     const runtime = new TextQuestRuntime();
@@ -107,7 +101,6 @@ describe("TextQuestRuntime.choose", () => {
     const quest = getTextQuestById("text_quest_secret_cargo")!;
     const player = makePlayer();
     runtime.start(quest, player);
-    // choice 0 = "Взять груз" → goes to sc_dilemma
     const next = runtime.choose("sc_intro", 0, player);
     expect(next).not.toBeNull();
     expect(next!.id).toBe("sc_dilemma");
@@ -118,7 +111,6 @@ describe("TextQuestRuntime.choose", () => {
     const quest = getTextQuestById("text_quest_secret_cargo")!;
     const player = makePlayer();
     runtime.start(quest, player);
-    // sc_refuse has choice 0 (nextNodeId=null)
     runtime.choose("sc_intro", 1, player); // go to refuse branch
     const next = runtime.choose("sc_refuse", 0, player);
     expect(next).toBeNull();
@@ -139,9 +131,7 @@ describe("TextQuestRuntime.choose", () => {
     const quest = getTextQuestById("text_quest_secret_cargo")!;
     const player = makePlayer(0); // 0 credits, but choice requires 200
     runtime.start(quest, player);
-    // navigate to sc_inspect
     runtime.choose("sc_intro", 0, player); // intro → dilemma
-    // choice 1 on sc_inspect requires credits >= 200
     expect(() => runtime.choose("sc_inspect", 1, player)).toThrow(
       GameBusinessException,
     );
@@ -153,7 +143,6 @@ describe("TextQuestRuntime.choose", () => {
     const player = makePlayer(500); // has 500 credits ≥ 200
     runtime.start(quest, player);
     runtime.choose("sc_intro", 0, player);
-    // choice 1 on sc_inspect requires credits >= 200 → should pass
     const next = runtime.choose("sc_inspect", 1, player);
     expect(next).toBeNull(); // terminal node
   });
@@ -264,7 +253,6 @@ describe("Full quest path traversal", () => {
     runtime.choose("sc_intro", 1, player); // refuse
     const terminal = runtime.choose("sc_refuse", 0, player);
     expect(terminal).toBeNull();
-    // outcome has creditsDelta=0, so credits unchanged
     const refuseNode = quest.nodes.find((n) => n.id === "sc_refuse")!;
     const outcome = refuseNode.choices[0].outcome!;
     runtime.applyOutcome(outcome, player);
@@ -276,15 +264,12 @@ describe("Full quest path traversal", () => {
     const quest = getTextQuestById("text_quest_drifting_ship")!;
     const player = makePlayer(500);
     runtime.start(quest, player);
-    // board the ship
     const rescueNode = runtime.choose("ds_scan", 0, player);
     expect(rescueNode).not.toBeNull();
     expect(rescueNode!.id).toBe("ds_board");
-    // choose rescue
     const rescueResult = runtime.choose("ds_board", 0, player);
     expect(rescueResult).not.toBeNull();
     expect(rescueResult!.id).toBe("ds_rescue");
-    // final choice on ds_rescue (terminal)
     const terminal = runtime.choose("ds_rescue", 0, player);
     expect(terminal).toBeNull();
     const rescueFinalNode = quest.nodes.find((n) => n.id === "ds_rescue")!;

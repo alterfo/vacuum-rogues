@@ -23,7 +23,6 @@ import { FACTION_LABEL } from "@/config/factionConfig";
 export interface StarMapContext {
   galaxy?: Galaxy;
   gameEngine?: GameEngine;
-  /** Pre-select and highlight this system when the map opens (info-center routing). */
   pendingSelectedSystemId?: string;
 }
 
@@ -38,17 +37,10 @@ export class StarMapScene extends GameScene {
 
   private readonly MAP_SCALE = 4;
 
-  // Double-click (→ jump) detection. Keyed on the STABLE system id + a time
-  // window, NOT PixiJS's native per-target click counter: a single click runs
-  // `renderStarMap`, which destroys and rebuilds every hit-area Graphics, so
-  // consecutive physical clicks land on different target objects and the
-  // boundary's `event.detail` count resets to 1 (it can never reach 2). This
-  // scene-level state survives the rebuild because it is keyed by id.
   private readonly DOUBLE_CLICK_MS = 350;
   private lastTapSystemId: string | null = null;
   private lastTapAt = 0;
 
-  // Viewport state for zoom/pan
   private viewportX = 0;
   private viewportY = 0;
   private zoomLevel = 1;
@@ -60,8 +52,6 @@ export class StarMapScene extends GameScene {
   private pointerStartY = 0;
   private mapContainer: Container | null = null;
 
-  // Critical-threat banner (finding #5). Rebuilt each `renderStarMap()`; pulsed
-  // from `update()` only when `shouldPulseThreatBanner` allows (reduced-motion off).
   private threatBanner: Container | null = null;
   private threatBannerPulsing = false;
   private threatBannerElapsedMs = 0;
@@ -70,14 +60,11 @@ export class StarMapScene extends GameScene {
   private boundMouseMove: ((e: MouseEvent) => void) | null = null;
   private boundMouseUp: ((e: MouseEvent) => void) | null = null;
   private messageTimers: ReturnType<typeof setTimeout>[] = [];
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
-  /** Faint Overmind mood-art wash behind the map (Task 18); null with no art. */
   private moodBackdrop: Sprite | null = null;
   private moodRenderGen = 0;
 
   initialize(context?: object): void {
-    // Ensure PixiJS events are active (previous scene may have disabled them)
     this.renderer.app.stage.eventMode = "static";
 
     const ctx = context as StarMapContext | undefined;
@@ -94,32 +81,24 @@ export class StarMapScene extends GameScene {
           ? resolved.id
           : this.galaxy.systems[0].id;
       } else {
-        // Fresh game: fallback to first system
         this.playerSystemId = this.galaxy.systems[0].id;
       }
-      // Reveal starting system and its neighbors (AC3)
       this.galaxy.revealSystemAndNeighbors(this.playerSystemId);
     }
 
-    // Pre-select system if routed here from the info center.
     if (ctx?.pendingSelectedSystemId) {
       this.selectedSystemId = ctx.pendingSelectedSystemId;
     }
 
-    // Set initial viewport so all explored systems are visible (US-077)
     this.initializeViewport();
 
-    // Clear layers first, then render
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    // Setup zoom/pan handlers
     this.setupViewportControls();
 
-    // Render the star map
     this.renderStarMap();
 
-    // If a system was pre-selected, show its info panel.
     if (this.selectedSystemId && this.galaxy) {
       const preSelected = this.galaxy.systems.find(
         (s) => s.id === this.selectedSystemId,
@@ -132,11 +111,6 @@ export class StarMapScene extends GameScene {
     logger.info("StarMapScene initialized");
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so it sits above the map UI and survives the
-   * scene's `renderStarMap()` rebuilds (which only touch game/UI layers).
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -191,11 +165,9 @@ export class StarMapScene extends GameScene {
   private setupViewportControls(): void {
     const canvas = this.renderer.app.canvas;
 
-    // Mouse wheel zoom
     this.boundHandleWheel = this.handleWheel.bind(this);
     canvas.addEventListener("wheel", this.boundHandleWheel, { passive: false });
 
-    // Mouse drag for pan (using DOM events for reliability)
     this.boundMouseDown = this.handleMouseDown.bind(this);
     this.boundMouseMove = this.handleMouseMove.bind(this);
     this.boundMouseUp = this.handleMouseUp.bind(this);
@@ -206,7 +178,6 @@ export class StarMapScene extends GameScene {
   }
 
   private handleMouseDown(e: MouseEvent): void {
-    // Right or middle mouse button for pan
     if (e.button === 1 || e.button === 2) {
       e.preventDefault();
       this.isDragging = true;
@@ -217,7 +188,6 @@ export class StarMapScene extends GameScene {
       this.dragStartY = e.clientY - this.viewportY;
       return;
     }
-    // Left button - only pan if not on a system
     if (e.button === 0) {
       this.isDragging = true;
       this.hasDragged = false;
@@ -234,7 +204,6 @@ export class StarMapScene extends GameScene {
     const dx = e.clientX - this.pointerStartX;
     const dy = e.clientY - this.pointerStartY;
 
-    // Threshold to distinguish click from drag
     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
       this.hasDragged = true;
     }
@@ -248,7 +217,6 @@ export class StarMapScene extends GameScene {
 
   private handleMouseUp(): void {
     this.isDragging = false;
-    // Don't reset hasDragged here - let click handlers check it
     setTimeout(() => {
       this.hasDragged = false;
     }, 10);
@@ -256,10 +224,6 @@ export class StarMapScene extends GameScene {
 
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
-    // Stop the gesture from bubbling to the dev autopilot's window-level
-    // reclaim-on-input listener — canvas is a real DOM descendant of window,
-    // so stopping propagation here (unlike the same-node case in
-    // SpaceFlightScene.onWheel) is sufficient regardless of listener order.
     e.stopPropagation();
     const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
     this.zoomLevel = Math.max(0.5, Math.min(4, this.zoomLevel * zoomDelta));
@@ -276,9 +240,6 @@ export class StarMapScene extends GameScene {
   }
 
   update(deltaTime: number): void {
-    // Pulse the critical-threat banner so an urgent warning draws the eye. Gated
-    // on the reduced-motion seam via `shouldPulseThreatBanner` at build time — a
-    // player with reduced motion set gets a static banner (alpha stays 1).
     if (this.threatBanner && this.threatBannerPulsing) {
       this.threatBannerElapsedMs += deltaTime;
       this.threatBanner.alpha = threatBannerPulseAlpha(
@@ -294,7 +255,6 @@ export class StarMapScene extends GameScene {
     for (const t of this.messageTimers) clearTimeout(t);
     this.messageTimers = [];
     const canvas = this.renderer.app.canvas;
-    // Remove DOM event listeners
     if (this.boundHandleWheel) {
       canvas.removeEventListener("wheel", this.boundHandleWheel);
       this.boundHandleWheel = null;
@@ -312,7 +272,6 @@ export class StarMapScene extends GameScene {
       canvas.removeEventListener("mouseleave", this.boundMouseUp);
       this.boundMouseUp = null;
     }
-    // Clean up map container
     if (this.mapContainer) {
       this.mapContainer.destroy({ children: true });
       this.mapContainer = null;
@@ -327,16 +286,6 @@ export class StarMapScene extends GameScene {
     this.moodBackdrop = null;
   }
 
-  /**
-   * Faint Overmind mood-art wash behind the map, keyed to the current
-   * escalation stage (Task 18) — reuses Task 5's bands (`overmindMoodStage`)
-   * so the mood matches the news feed's warning tone. `overmind_mood/` is a
-   * LAZY_PREFIXES category; with no matching key (or a `"dormant"` stage)
-   * this is a no-op and the map renders exactly as before. Re-mounted on
-   * every `renderStarMap` call (pan/select re-renders), so a stale reference
-   * is torn down first and a generation counter guards a late async load
-   * from mounting into a map that has since re-rendered or closed.
-   */
   private mountOvermindMoodBackdrop(width: number, height: number): void {
     if (this.moodBackdrop) {
       this.moodBackdrop.parent?.removeChild(this.moodBackdrop);
@@ -352,10 +301,6 @@ export class StarMapScene extends GameScene {
         total === 0 ? 0 : this.galaxy.overmindSystems.length / total,
       arcStatus: this.galaxy.overmindArc.status,
     });
-    // Bump the generation even on a no-art render: an earlier call's pending
-    // `loadTextureAsync` must not mount onto a map that has since moved to a
-    // dormant/no-art mood — otherwise a stale wash can paint in after e.g. a
-    // win/loss, since an unbumped gen still matches the stale promise's.
     const gen = ++this.moodRenderGen;
     if (!key) return;
     const mount = (t: Texture): void => {
@@ -384,7 +329,6 @@ export class StarMapScene extends GameScene {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Draw background (lowest layer)
     const background = new Graphics();
     background.fill({ color: 0x000510 });
     background.rect(0, 0, width, height);
@@ -392,7 +336,6 @@ export class StarMapScene extends GameScene {
 
     this.mountOvermindMoodBackdrop(width, height);
 
-    // Clear and recreate fixed UI container
     if (this.fixedUIContainer) {
       if (this.fixedUIContainer.parent) {
         this.renderer.uiLayer.removeChild(this.fixedUIContainer);
@@ -400,12 +343,9 @@ export class StarMapScene extends GameScene {
       this.fixedUIContainer.destroy({ children: true });
     }
     this.fixedUIContainer = new Container();
-    // The banner is rebuilt below only when a threat is active; the container it
-    // lived in was just destroyed, so drop the stale ref up front.
     this.threatBanner = null;
     this.threatBannerPulsing = false;
 
-    // Fixed UI elements
     const title = new Text({
       text: "КАРТА ГАЛАКТИКИ",
       style: {
@@ -419,7 +359,6 @@ export class StarMapScene extends GameScene {
     title.y = 20;
     this.fixedUIContainer.addChild(title);
 
-    // Fuel indicator
     const currentFuel = this.gameEngine?.player?.ship.energy ?? 0;
     const maxFuel = this.gameEngine?.player?.ship.maxEnergy ?? 100;
     const fuelPercent = Math.round((currentFuel / maxFuel) * 100);
@@ -438,7 +377,6 @@ export class StarMapScene extends GameScene {
     fuelText.y = 50;
     this.fixedUIContainer.addChild(fuelText);
 
-    // Galaxy threat indicator
     if (this.galaxy) {
       const threat = computeGalaxyThreat(
         this.galaxy.overmindSystems,
@@ -479,10 +417,6 @@ export class StarMapScene extends GameScene {
         threat.threatLevel === "warning" ||
         threat.threatLevel === "critical"
       ) {
-        // Finding #5: render the warning as a weighted, bordered banner chip
-        // (bold, larger than the routine stat lines above) instead of a stray
-        // line of red text. A subtle pulse on the most-urgent (critical) level
-        // is driven from `update()`, gated on the reduced-motion seam.
         const banner = buildThreatBanner(threat.threatLevel, 20, 108);
         this.threatBanner = banner;
         this.threatBannerPulsing = shouldPulseThreatBanner(threat.threatLevel);
@@ -539,7 +473,6 @@ export class StarMapScene extends GameScene {
       return;
     }
 
-    // Create map container for zoom/pan
     if (this.mapContainer) {
       this.renderer.gameLayer.removeChild(this.mapContainer);
       this.mapContainer.destroy({ children: true });
@@ -553,7 +486,6 @@ export class StarMapScene extends GameScene {
     graphics.eventMode = "none";
     const scale = this.MAP_SCALE;
 
-    // Draw warp lanes (only between explored systems)
     for (const system of this.galaxy.systems) {
       if (!system.explored) continue;
       for (const conn of system.connections) {
@@ -573,7 +505,6 @@ export class StarMapScene extends GameScene {
     }
     graphics.stroke({ width: 1, color: 0x1a3a5c });
 
-    // Collect star positions and warp lines for label collision detection
     const starPositions: StarPos[] = [];
     const warpLines: WarpLine[] = [];
 
@@ -597,26 +528,18 @@ export class StarMapScene extends GameScene {
       }
     }
 
-    // Determine visited systems, OVERMIND and pirate systems for rendering.
     const visitedSystemIds = this.gameEngine?.player?.visitedSystems ?? [];
     const overmindSystems = new Set(this.galaxy.overmindSystems ?? []);
     const pirateSystems = new Set(this.galaxy.pirateSystems ?? []);
-    // Charted systems (revealed by a purchased star chart) reveal their name
-    // even when never visited — so they render named, not as "?".
     const chartedSystemIds = this.galaxy.systems
       .filter((s) => s.explored)
       .map((s) => s.id);
-    // Systems holding a live fight (both hostile and friendly/Ranger ships) get
-    // a half-red/half-green marker layered above their ownership colour. Purely
-    // a render of the transient NPC population — no persistence.
     const battleSet =
       this.gameEngine?.npc?.battleSystemIds(this.galaxy) ?? new Set<string>();
 
-    // Draw only explored systems
     let systemsDrawn = 0;
     const labelBounds: LabelBound[] = [];
 
-    // Sort systems: current first, then selected, then others (for label priority)
     const sortedSystems = [...this.galaxy.systems]
       .filter((s) => s.explored)
       .sort((a, b) => {
@@ -652,22 +575,18 @@ export class StarMapScene extends GameScene {
         color = 0x00ff00;
         radius = 7;
       } else if (isOvermind) {
-        // OVERMIND systems: red
         color = isSelected ? 0xff6600 : 0xff2222;
         radius = isSelected ? 5 : 4;
       } else if (isPirate) {
-        // Pirate systems: orange (distinct from overmind red)
         color = isSelected ? 0xffcc00 : 0xff8800;
         radius = isSelected ? 5 : 4;
       } else if (isSelected) {
         color = 0xffff00;
         radius = 5;
       } else if (visibility === "neighbor" || visibility === "charted") {
-        // Known but not personally visited (neighbor or charted) — dim dot.
         color = 0x334455;
         radius = 3;
       } else if (!isVisited) {
-        // Fully unknown system (should be rare — unexplored): very dim.
         color = 0x223344;
         radius = 2;
       } else {
@@ -675,35 +594,26 @@ export class StarMapScene extends GameScene {
         radius = 4;
       }
 
-      // Draw system circle
       graphics.circle(x, y, radius);
       graphics.fill({ color });
 
-      // Live fight here: overlay a half-red (hostile) / half-green (friendly)
-      // marker above the ownership colour. Two filled semicircles split
-      // vertically — red on the left, green on the right.
       if (battleSet.has(system.id)) {
         const battleR = Math.max(radius, 5) + 1;
-        // Left half — red (hostiles): bottom → left → top.
         graphics.moveTo(x, y);
         graphics.arc(x, y, battleR, Math.PI / 2, (3 * Math.PI) / 2);
         graphics.closePath();
         graphics.fill({ color: 0xff2222 });
-        // Right half — green (friendly/Ranger): top → right → bottom.
         graphics.moveTo(x, y);
         graphics.arc(x, y, battleR, -Math.PI / 2, Math.PI / 2);
         graphics.closePath();
         graphics.fill({ color: 0x22ff44 });
-        // Thin outline so the two-tone disc reads against the star field.
         graphics.circle(x, y, battleR);
         graphics.stroke({ width: 1, color: 0xffffff });
       }
       systemsDrawn++;
 
-      // Add clickable hit area with reliable double-click → jump support.
       this.mapContainer.addChild(this.createSystemHitArea(x, y, system));
 
-      // Completely unknown systems: show "?" with no label.
       if (visibility === "unknown" && !isPlayer && !isOvermind && !isPirate) {
         const qLabel = new Text({
           text: "?",
@@ -720,9 +630,6 @@ export class StarMapScene extends GameScene {
         continue;
       }
 
-      // Smart label placement: try right, left, above, below.
-      // pickLabelPosition falls back to positions[0] so every system always
-      // gets a name label (prevents unlabelled dots in dense clusters).
       const labelW = system.name.length * 6;
       const labelH = 12;
       const offset = 12;
@@ -734,7 +641,6 @@ export class StarMapScene extends GameScene {
         { x: x - labelW / 2, y: y + offset }, // Below
       ];
 
-      // Exclude stars and warp lines that belong to this star (can't block own label).
       const otherStars = starPositions.filter(
         (s) => !(Math.abs(s.x - x) < 1 && Math.abs(s.y - y) < 1),
       );
@@ -786,9 +692,6 @@ export class StarMapScene extends GameScene {
     );
   }
 
-  /**
-   * E2E helper: trigger system click by ID
-   */
   handleSystemClickById(systemId: string): void {
     const system = this.galaxy?.systems.find((s) => s.id === systemId);
     if (system) {
@@ -796,9 +699,6 @@ export class StarMapScene extends GameScene {
     }
   }
 
-  /**
-   * E2E helper: perform warp jump to system by ID
-   */
   async performWarpJumpTo(systemId: string): Promise<void> {
     const system = this.galaxy?.systems.find((s) => s.id === systemId);
     if (system && this.playerSystemId) {
@@ -823,20 +723,6 @@ export class StarMapScene extends GameScene {
     }
   }
 
-  /**
-   * Build the transparent hit-target for a system dot.
-   *
-   * Double-click → jump is detected on `pointertap` against the scene-level
-   * `lastTapSystemId`/`lastTapAt` keyed on the STABLE `system.id` + a time
-   * window — NOT PixiJS's native `event.detail` counter. `handleSystemClick`
-   * runs `renderStarMap`, which destroys and rebuilds every hit-area Graphics,
-   * so consecutive physical clicks land on different target objects and the
-   * boundary resets its per-target count to 1 (detail never reaches 2). Keying
-   * on the id (which survives the rebuild) makes the jump dependable while a
-   * single tap still only opens the info panel. `hasDragged` suppresses a pan
-   * that ends over a system. (Replaces the old `pointerdown` timestamp scheme
-   * that raced the single-click info-panel open and dropped jumps.)
-   */
   private createSystemHitArea(
     x: number,
     y: number,
@@ -856,7 +742,6 @@ export class StarMapScene extends GameScene {
         this.lastTapSystemId === system.id &&
         now - this.lastTapAt < this.DOUBLE_CLICK_MS;
       if (isDouble) {
-        // Consume the pair so a 3rd quick tap doesn't re-trigger the jump.
         this.lastTapSystemId = null;
         this.lastTapAt = 0;
         logger.debug(`System double-clicked: ${system.name}`);
@@ -934,7 +819,6 @@ export class StarMapScene extends GameScene {
     this.infoPanel.x = width - 220;
     this.infoPanel.y = 60;
 
-    // Calculate dynamic panel height based on number of planets
     const basePanelHeight = 180;
     const planetListHeight = system.planets.length * 18; // 18px per planet
     const totalPanelHeight = basePanelHeight + planetListHeight;
@@ -983,7 +867,6 @@ export class StarMapScene extends GameScene {
     planetsText.y = 55;
     this.infoPanel.addChild(planetsText);
 
-    // List of planets with types
     let planetYOffset = 75;
     for (const planet of system.planets) {
       const planetType = this.getPlanetTypeRussian(planet.type);
@@ -1032,7 +915,6 @@ export class StarMapScene extends GameScene {
     connectionsText.y = planetYOffset + 5;
     this.infoPanel.addChild(connectionsText);
 
-    // Base Y position for interactive elements (after planet list)
     const interactiveYStart = planetYOffset + 30;
 
     if (system.id === this.playerSystemId) {
@@ -1049,7 +931,6 @@ export class StarMapScene extends GameScene {
       hereText.y = interactiveYStart;
       this.infoPanel.addChild(hereText);
 
-      // Add "Enter System" button for current system
       const enterBtn = new Text({
         text: "[Войти в систему]",
         style: {
@@ -1082,7 +963,6 @@ export class StarMapScene extends GameScene {
         (s) => s.id === this.playerSystemId,
       );
       if (!playerSystem) return;
-      // Check bidirectional: player→target OR target→player
       const hasPathFromPlayer = playerSystem.connections.some(
         (c) => c.toSystemId === system.id,
       );
@@ -1091,7 +971,6 @@ export class StarMapScene extends GameScene {
       );
       const isConnected = hasPathFromPlayer || hasPathToPlayer;
 
-      // Calculate distance and fuel cost
       const fuelCost = this.calculateFuelCost(
         playerSystem,
         system,
@@ -1100,7 +979,6 @@ export class StarMapScene extends GameScene {
       const currentFuel = this.gameEngine?.player?.ship.energy ?? 0;
       const hasEnoughFuel = currentFuel >= fuelCost;
 
-      // Show fuel cost
       const fuelText = new Text({
         text: `Топливо: ${fuelCost} (есть: ${Math.floor(currentFuel)})`,
         style: {
@@ -1134,7 +1012,6 @@ export class StarMapScene extends GameScene {
           this.showWarpConfirmation(system, fuelCost, isConnected);
         });
 
-        // Add hover effect
         warpBtn.on("pointerover", () => {
           warpBtn.alpha = 0.7;
         });
@@ -1171,10 +1048,8 @@ export class StarMapScene extends GameScene {
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (isConnected) {
-      // Connected systems: base cost of 5 fuel
       return 5;
     } else {
-      // Non-connected: 2 fuel per unit of distance, minimum 10
       return Math.max(10, Math.ceil(distance * 2));
     }
   }
@@ -1189,19 +1064,16 @@ export class StarMapScene extends GameScene {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Apply blur to game layer
     this.renderer.gameLayer.filters = [new BlurFilter({ strength: 4 })];
 
     this.confirmDialog = new Container();
 
-    // Dark overlay to block background clicks
     const overlay = new Graphics();
     overlay.fill({ color: 0x000510, alpha: 0.85 });
     overlay.rect(0, 0, width, height);
     overlay.eventMode = "static";
     this.confirmDialog.addChild(overlay);
 
-    // Dialog box
     const dialogWidth = 320;
     const dialogHeight = 160;
     const dialogX = (width - dialogWidth) / 2;
@@ -1213,7 +1085,6 @@ export class StarMapScene extends GameScene {
     dialogBg.stroke({ width: 2, color: isConnected ? 0x00ffff : 0xffaa00 });
     this.confirmDialog.addChild(dialogBg);
 
-    // Jump type text
     const jumpType = isConnected ? "Прыжок" : "Гипер-прыжок";
     const confirmText = new Text({
       text: `${jumpType} в систему ${system.name}?`,
@@ -1229,7 +1100,6 @@ export class StarMapScene extends GameScene {
     confirmText.y = dialogY + 20;
     this.confirmDialog.addChild(confirmText);
 
-    // Fuel cost text
     const fuelText = new Text({
       text: `Расход топлива: ${fuelCost}`,
       style: {
@@ -1244,7 +1114,6 @@ export class StarMapScene extends GameScene {
     fuelText.y = dialogY + 50;
     this.confirmDialog.addChild(fuelText);
 
-    // "Да" button
     const yesBtn = new Text({
       text: "Да",
       style: {
@@ -1270,7 +1139,6 @@ export class StarMapScene extends GameScene {
     });
     this.confirmDialog.addChild(yesBtn);
 
-    // "Нет" button
     const noBtn = new Text({
       text: "Нет",
       style: {
@@ -1301,7 +1169,6 @@ export class StarMapScene extends GameScene {
 
   private closeConfirmDialog(): void {
     if (this.confirmDialog) {
-      // Remove blur from game layer
       this.renderer.gameLayer.filters = [];
 
       if (this.confirmDialog.parent) {
@@ -1324,12 +1191,6 @@ export class StarMapScene extends GameScene {
     });
   }
 
-  /**
-   * Initiate a hyperjump (US-023). The jump does NOT happen instantly here:
-   * fuel and system change are deferred. We return to the *current* system in
-   * flight with a `pendingWarp` context; the ship flies to the system edge and
-   * the jump fires there (see SpaceFlightScene.performWarp).
-   */
   private async performWarpJump(
     target: StarSystem,
     fuelCost: number,
@@ -1341,16 +1202,11 @@ export class StarMapScene extends GameScene {
       return;
     }
 
-    // A downed ship (GOD mode, hull at the floor) can't hyperjump — block the
-    // map double-click jump with a clear hint. Clears once the hull is repaired
-    // above the floor (the predicate is derived from gameMode + hull).
     if (isDowned(this.gameEngine.player)) {
       this.showMessage("Корабль повреждён — нужен ремонт");
       return;
     }
 
-    // Fuel is checked here too (call sites usually gate on it) — never commit a
-    // jump the player can't afford.
     if (this.gameEngine.player.ship.energy < fuelCost) {
       this.showMessage("Недостаточно топлива");
       return;
@@ -1370,16 +1226,12 @@ export class StarMapScene extends GameScene {
       `Warp initiated to ${target.name}; ship will jump from the system edge`,
     );
     this.gameEngine.showLoadingOverlay("Прыжок...");
-    // Overlay is destroyed with the scene when transitionTo calls scene.destroy()
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       pendingWarp: { targetSystemId: target.id, fuelCost, exitVector },
     });
   }
 
-  /**
-   * Get Russian translation for planet type
-   */
   private getPlanetTypeRussian(type: string): string {
     const translations: Record<string, string> = {
       TERRESTRIAL: "Земной",
@@ -1392,7 +1244,6 @@ export class StarMapScene extends GameScene {
     return translations[type] ?? type;
   }
 
-  /** E2E helper: select system by index in galaxy.systems array */
   e2eSelectSystem(index: number): void {
     const system = this.galaxy?.systems[index];
     if (system) {
@@ -1400,7 +1251,6 @@ export class StarMapScene extends GameScene {
     }
   }
 
-  /** E2E helper: return current viewport state */
   e2eGetViewport(): {
     zoomLevel: number;
     viewportX: number;

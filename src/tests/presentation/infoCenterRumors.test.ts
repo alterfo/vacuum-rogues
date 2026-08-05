@@ -1,10 +1,3 @@
-/**
- * Task 7 (living-trade-economy-rumors): the Info Center surfaces active
- * trade-route rumors to the player. `buildRumorPanel` is the pure projection
- * the news tab's "Торговые возможности" band renders — sorted most-profitable
- * first, capped, formatted with the domain `describeRumor` one-liner, with an
- * empty-state fallback. Tested without a PixiJS renderer.
- */
 import { describe, it, expect } from "vitest";
 import {
   buildRumorPanel,
@@ -34,7 +27,6 @@ function makeGalaxy(): Galaxy {
   );
 }
 
-/** Galaxy whose systems carry per-system `explored` flags for known-ness tests. */
 function makeGalaxyWithExplored(
   systems: Array<{ id: string; name: string; explored: boolean }>,
 ): Galaxy {
@@ -46,7 +38,6 @@ function makeGalaxyWithExplored(
   );
 }
 
-/** Minimal Player stub — masking only consults hasVisited (+ galaxy.explored). */
 function makePlayer(visited: string[]): Player {
   const visitedSystems = [...visited];
   return {
@@ -55,7 +46,6 @@ function makePlayer(visited: string[]): Player {
   } as unknown as Player;
 }
 
-/** A scanner-shaped route; toPrice derived so the margin math is consistent. */
 function route(
   resource: ResourceType,
   from: string,
@@ -99,11 +89,9 @@ describe("buildRumorPanel", () => {
     const data = buildRumorPanel(galaxy);
     expect(data.emptyText).toBeNull();
     expect(data.lines).toHaveLength(2);
-    // Higher margin (70%) sorts first.
     expect(data.lines[0].text).toContain("Металлы");
     expect(data.lines[0].text).toContain("маржа ~70%");
     expect(data.lines[1].text).toContain("Топливо");
-    // System names are resolved, not raw ids.
     expect(data.lines[0].text).toContain("Вега");
     expect(data.lines[0].text).toContain("Орион");
     expect(data.lines[0].text).toContain("Везите");
@@ -119,14 +107,12 @@ describe("buildRumorPanel", () => {
 
     const data = buildRumorPanel(galaxy, 2);
     expect(data.lines).toHaveLength(2);
-    // The two highest margins survive the cap, in order.
     expect(data.lines[0].text).toContain("маржа ~60%");
     expect(data.lines[1].text).toContain("маржа ~50%");
   });
 });
 
 describe("buildRumorPanel — partial observability (margins masked for unknown systems)", () => {
-  /** Pattern of a concrete numeric margin, e.g. "маржа ~30%". */
   const NUMERIC_MARGIN = /маржа ~\d+%/;
 
   it("masks the margin when a route endpoint is unknown (neither explored nor visited)", () => {
@@ -141,7 +127,6 @@ describe("buildRumorPanel — partial observability (margins masked for unknown 
 
     const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player);
     expect(data.lines).toHaveLength(1);
-    // Margin number hidden, but the route/товар text still renders.
     expect(data.lines[0].text).not.toMatch(NUMERIC_MARGIN);
     expect(data.lines[0].text).toContain("маржа ~?%");
     expect(data.lines[0].text).toContain("Топливо");
@@ -165,8 +150,6 @@ describe("buildRumorPanel — partial observability (margins masked for unknown 
   });
 
   it("masks the margin when the SOURCE endpoint is unknown (destination known)", () => {
-    // Guards the `from` half of the both-endpoints AND: destination is explored
-    // but the source isn't, so the margin must still be hidden.
     const galaxy = makeGalaxyWithExplored([
       { id: "S1", name: "Соль", explored: false }, // source undiscovered
       { id: "S2", name: "Вега", explored: true },
@@ -223,11 +206,9 @@ describe("buildRumorPanel — partial observability (margins masked for unknown 
     const player = makePlayer([]);
 
     const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player);
-    // Sorted most-profitable first: the 70% route (unknown) is row 0.
     expect(data.lines[0].text).toContain("Металлы");
     expect(data.lines[0].text).not.toMatch(NUMERIC_MARGIN);
     expect(data.lines[0].text).toContain("маржа ~?%");
-    // The fully-known route still shows its number.
     expect(data.lines[1].text).toContain("маржа ~30%");
   });
 
@@ -247,7 +228,6 @@ describe("buildRumorPanel — partial observability (margins masked for unknown 
 
 describe("maskTradeNewsMargin — InfoCenter news feed respects partial observability", () => {
   const NUMERIC_MARGIN = /маржа ~\d+%/;
-  // Mirrors a TRADE_OPPORTUNITY description baked by describeRumor at open time.
   const DESC = "Везите Топливо из Соль в Вега: маржа ~70%";
 
   function tradeEvent(from = "S1", to = "S2") {
@@ -262,7 +242,6 @@ describe("maskTradeNewsMargin — InfoCenter news feed respects partial observab
     const out = maskTradeNewsMargin(DESC, tradeEvent(), galaxy, makePlayer([]));
     expect(out).not.toMatch(NUMERIC_MARGIN);
     expect(out).toContain("маржа ~?%");
-    // Route/товар text survives.
     expect(out).toContain("Топливо");
     expect(out).toContain("Соль");
     expect(out).toContain("Вега");

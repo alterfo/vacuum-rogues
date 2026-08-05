@@ -69,7 +69,6 @@ function makeNpc(id: string): NpcShip {
   });
 }
 
-/** Deterministic RNG cycling through a fixed sequence of [0,1) values. */
 function seqRng(values: number[]): () => number {
   let i = 0;
   return () => values[i++ % values.length];
@@ -101,13 +100,10 @@ function makeManager(opts: {
   const loadout = new ShipLoadout("hull_corvette");
   if (opts.tractorGearId) loadout.install(opts.tractorGearId);
 
-  // Hold size is the canonical loadout cargo (dual-hull: stat reads route
-  // through derivedStats, not the retired ship.cargoCapacity getter).
   const capacity = cargoCapacityOf(loadout);
 
   const inventory = new Inventory();
   if (opts.preFill) inventory.addResource(ResourceType.METALS, opts.preFill);
-  // Fill the canonical hold to capacity to simulate a full cargo.
   if (opts.fillHoldToCapacity)
     inventory.addResource(ResourceType.METALS, capacity);
 
@@ -153,7 +149,6 @@ describe("Gravity tractor — auto-pickup", () => {
     const { manager, inventory } = makeManager({
       tractorGearId: "grav_tractor_2",
     });
-    // grav_tractor_2 range = 150; loot at (100, 0) from ship at (0,0) → in range.
     manager.spawnLootForNpc(makeNpc("t"), 100, 0, seqRng([0.5]));
     expect(manager.spaceLoot.length).toBe(1);
 
@@ -171,7 +166,6 @@ describe("Gravity tractor — auto-pickup", () => {
     const { manager, inventory } = makeManager({
       tractorGearId: "grav_tractor_2",
     });
-    // loot at (500, 0) is well beyond the 150 px range.
     manager.spawnLootForNpc(makeNpc("t"), 500, 0, seqRng([0.5]));
     expect(manager.spaceLoot.length).toBe(1);
 
@@ -192,11 +186,6 @@ describe("Gravity tractor — auto-pickup", () => {
     manager.destroy();
   });
 
-  // ⚠️ FOR REVIEW (dual-hull): fullness now comes from the canonical loadout's
-  // derivedStats().cargo, not the retired player.ship.cargoCapacity injection
-  // (dual-hull Task 1 moved the auto-pickup guard onto cargoCapacityOf(loadout)).
-  // The assertion intent is preserved — a full hold leaves loot in space and
-  // adds nothing — but the hold is filled to the loadout capacity, not a fake 2.
   it("does not pick up loot when cargo is full", () => {
     const { manager, inventory, capacity } = makeManager({
       tractorGearId: "grav_tractor_2",
@@ -238,7 +227,6 @@ describe("Gravity tractor — auto-pickup", () => {
       reputation: 0,
       loadoutSummary: [],
     });
-    // count roll 0.5 → 1 item; artifact roll 0.1 < 0.4 → artifact.
     manager.spawnLootForNpc(overmind, 80, 0, seqRng([0.5, 0.1]));
     expect(manager.spaceLoot[0].artifactId).toBe("ARTIFACTS");
 

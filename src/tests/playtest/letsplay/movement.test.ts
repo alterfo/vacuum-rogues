@@ -1,15 +1,3 @@
-/**
- * Letsplay Task 1 (full-game play): the agent must actually advance galaxy days.
- * Its biggest gap was that `wait`/`move` only ticked a single frame, so a session
- * never crossed a day boundary — markets/NPC sim/quests/Overmind never moved, the
- * CI balance bands read empty, and the BC net could only clone a time-frozen
- * teacher. Now `wait` runs a real course-less wait turn (one day) and in-flight
- * `move` flies a real route across the system.
- *
- * Real-engine tier: boots the real GameEngine into a new game and drives the real
- * PlayerAgent applier with a scripted policy, asserting observable engine state
- * (gameDays up, ship moved) with zero logged errors.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
 import { PlayerAgent } from "./PlayerAgent";
@@ -22,12 +10,10 @@ import { pickWarpTarget } from "./engineQueries";
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** A scripted policy that always issues the given action kind (legal-filtered). */
 function scripted(kind: Action["kind"]): PlayerPolicy {
   return {
     name: "scripted",
     decide(obs: Observation): Action {
-      // Fall back to wait if the scripted kind isn't legal in this scene.
       const k = obs.legalActions.includes(kind) ? kind : "wait";
       return { kind: k, reason: "scripted" };
     },
@@ -94,15 +80,6 @@ describe("letsplay agent — warpInTransit safety net covers every action (Playe
     localStorage.clear();
   });
 
-  /**
-   * Drive a real two-step hyperjump (open the star map, commit the jump) so the
-   * harness lands mid-transit — SPACE_FLIGHT, `pendingWarp` set, ship not yet
-   * moving — the exact state `obs.warpInTransit` flags. Mirrors the same
-   * `performWarpJumpTo` call PlayerAgent's own "warp" case drives. Returns the
-   * (still-private) flight scene so the test can inspect `pendingWarp`/
-   * `plannedRoute` directly, the same structural-cast pattern the existing
-   * `shipPhysics` assertions above already use.
-   */
   async function startWarpInTransit(): Promise<{
     flightScene: {
       pendingWarp: unknown;
@@ -126,16 +103,6 @@ describe("letsplay agent — warpInTransit safety net covers every action (Playe
     return { flightScene };
   }
 
-  // "land"/"dock" are legal in SPACE_FLIGHT regardless of warpInTransit (the
-  // starting system has both a planet and a station), so a memoryless policy
-  // like HeuristicPolicy would routinely pick them over "wait" mid-transit.
-  // Before the dispatch-layer guard, this tore down SpaceFlightScene via a real
-  // `transitionTo` — silently dropping the in-progress hyperjump with no way
-  // back to flight (the scripted policy has nothing that returns it there).
-  // Asserting only that the scene stays SPACE_FLIGHT (rather than the warp
-  // fully completing) keeps this independent of unrelated combat timing —
-  // hostile garrisons can legitimately pause `completeWarp()`'s own drive, but
-  // that must never surface as a scene teardown.
   it.each<Action["kind"]>(["land", "dock"])(
     "a `%s` action mid-warp-transit drives the safety net instead of tearing down the scene",
     async (kind) => {
@@ -159,16 +126,6 @@ describe("letsplay agent — warpInTransit safety net covers every action (Playe
     const agent = new PlayerAgent(harness, scripted("move"));
     await agent.run(1);
 
-    // The `move` must be redirected to completeWarp() (drive the pending jump),
-    // NOT to flyForward() which would hijack the route to an arbitrary point
-    // toward/away from the star. Two outcomes prove the route was respected:
-    // the ship is still transiting to the SAME warp edge, or completeWarp()
-    // drove the jump to completion and cleared the route (null). Only a route
-    // pointing at a DIFFERENT point would signal the flyForward hijack bug —
-    // which of the two safe outcomes occurs depends on how far the
-    // seed-derived layout places the warp edge (short jumps finish within the
-    // single simulated turn), so the assertion accepts both rather than a
-    // layout-fragile "still mid-transit" precondition.
     const route = flightScene.plannedRoute;
     expect(route === null || (route.x === edge.x && route.y === edge.y)).toBe(
       true,
@@ -177,21 +134,6 @@ describe("letsplay agent — warpInTransit safety net covers every action (Playe
     expect(harness.errors()).toEqual([]);
   });
 
-  // "attack" is deliberately excluded from the blanket guard above (a genuine
-  // combat reaction must be allowed to run) — but unlike `flee` (a harmless
-  // tick), its own case handler used to call waitOneDay(), whose trailing
-  // endTurn() halts the ship in place regardless of why combat was legal.
-  // With a hostile present (the only way "attack" is legal) that halt fired
-  // on every "attack" step, silently stalling the pending warp for any
-  // memoryless policy that keeps picking "attack" while a hostile sticks
-  // around. The injected hostile is placed far outside weapon/scan range so
-  // it can never itself engage combat during this single step; the galaxy
-  // can still seed unrelated hostiles (e.g. an Overmind garrison) in the
-  // start system that legitimately engage and pause the route — that is
-  // completeWarp()'s own, already-tested, combat-pause behaviour, so the
-  // assertion below treats a genuinely active fight as an accepted outcome
-  // and only rules out the dispatch bug's specific signature: halted
-  // (isTurnRunning false) with no active combat to justify it.
   it("an `attack` action mid-warp-transit drives the warp forward instead of halting it", async () => {
     await startWarpInTransit();
     const origin = harness.engine.player!.currentSystemId;
@@ -237,16 +179,8 @@ describe("letsplay agent — warpInTransit safety net covers every action (Playe
   });
 });
 
-// CJM-G explorer's spec ("prefer systems not yet in visitedSystemIds →
-// direction of the unknown") is implemented centrally in PlayerAgent's warp
-// case via this pure helper, so it applies to every warp decision rather than
-// being re-derived per CJM.
 describe("pickWarpTarget — prefers the unvisited direction over the merely-not-last one", () => {
   it("picks a system not yet visited even when it isn't the last hop", () => {
-    // At B, having come from A, with a third neighbour C already visited on
-    // an earlier loop and a fresh D never seen — only visited-preference (not
-    // last-hop-avoidance alone) picks D here, since C already clears the
-    // "!== lastSystemId" bar.
     const connections = [
       { toSystemId: "C" },
       { toSystemId: "D" },

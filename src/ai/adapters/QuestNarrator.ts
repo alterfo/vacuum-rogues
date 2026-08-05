@@ -9,13 +9,8 @@ export interface NarratorContext {
 
 export interface QuestNarrator {
   narrate(nodeTextKey: string, context: NarratorContext): Promise<string>;
-  /** Generate a 1-2 sentence flavour intro for a quest, shown before the first location. */
   narrateQuestIntro(script: QuestScript, planetName: string): Promise<string>;
 }
-
-// ---------------------------------------------------------------------------
-// Template map — one paragraph per quest node textKey
-// ---------------------------------------------------------------------------
 
 const TEMPLATES: Record<string, (ctx: NarratorContext) => string> = {
   "secret_cargo.intro": (ctx) =>
@@ -68,10 +63,6 @@ const TEMPLATES: Record<string, (ctx: NarratorContext) => string> = {
 
 const FALLBACK_TEMPLATE = (key: string, ctx: NarratorContext): string =>
   `[${ctx.systemName}, день ${ctx.daysSinceStart}] ${key.replace(/[._]/g, " ")}.`;
-
-// ---------------------------------------------------------------------------
-// TemplateQuestNarrator — pure synchronous template substitution, no ONNX
-// ---------------------------------------------------------------------------
 
 const QUEST_INTRO_TEMPLATES: Record<string, (planet: string) => string> = {
   customs: (p) =>

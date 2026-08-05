@@ -1,34 +1,3 @@
-/**
- * Task 5 of the offline LLM oddity-judge: the `npm run letsplay:judge` runner.
- *
- * This is the engine-bound seam the pure orchestrator (`runJudge.ts`) does not own
- * — it boots the *real* `GameEngine` through the harness, plays each spec (free-play
- * or goal-biased by a generated scenario), and folds the run into a judge-ready
- * {@link buildTranscript}. The orchestrator then judges every transcript through the
- * LLM client and consolidates the verdicts.
- *
- * It lives under `tools/ai/` (beside the rest of the judge code) rather than under
- * `src/tests/` on purpose: the build `tsc` is rooted at `src/` and forbids a `src/`
- * file importing out-of-root `tools/ai/*`; keeping the runner in `tools/` preserves
- * the one-way boundary (tools may import src; src never imports tools). Vitest still
- * picks it up via its tools test-file include (the `tools` glob in vitest.config).
- *
- * Two tiers in one file, matching `letsplaySession.test.ts`:
- *  - the **always-on** check: a short *real* session is played and judged through a
- *    {@link FakeLlmClient}, proving the live play seam wires into `runJudge` with no
- *    live API call and no key;
- *  - the **env-gated deep sweep** (`LETSPLAY_JUDGE=1`, driven by `npm run
- *    letsplay:judge`): plays `K` sessions, judges them with the **real**
- *    {@link AnthropicLlmClient}, and writes `.letsplay/oddity-report.*`. With no
- *    `ANTHROPIC_API_KEY` it logs a clear message and throws → vitest exits non-zero.
- *
- * **NOT a gate.** This file's gated block is never wired into `lefthook.yml` or any
- * CI workflow — LLM calls are slow, paid, and non-deterministic. The deterministic
- * letsplay gate (`letsplay:ci`) is untouched.
- *
- * Real `GameEngine` / harness — only PixiJS is stubbed (the mock below is what lets
- * the runner boot headlessly).
- */
 import { describe, it, expect, vi } from "vitest";
 import { RealEngineHarness } from "../../src/tests/playtest/realEngineHarness";
 import { PlayerAgent } from "../../src/tests/playtest/letsplay/PlayerAgent";
@@ -52,18 +21,11 @@ vi.mock("pixi.js", async () => {
   return stub.makePixiStub();
 });
 
-/** Parse a positive-integer env var, falling back to `fallback` on absent/NaN/≤0. */
 function posIntEnv(raw: string | undefined, fallback: number): number {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
 }
 
-/**
- * The engine-bound {@link PlayFn}: boot + play each spec on a fresh real harness
- * and fold it into a judge-ready transcript. A scenario spec wraps the base policy
- * in a {@link GoalBiasedPolicy} so the agent acts out the goal; free-play uses the
- * neural-gated default policy verbatim.
- */
 function makeLivePlay(): PlayFn {
   return async (specs) => {
     const out: JudgeSessionInput[] = [];
@@ -108,21 +70,12 @@ describe("letsplay:judge — real play seam + runner (fake client)", () => {
 
     expect(report.totalSessions).toBe(1);
     expect(report.sessions[0].seed).toBe("JUDGE_FAST-0");
-    // The transcript carried the real per-step records (one per agent step).
     expect(report.sessions[0].summary.steps).toBe(8);
-    // A clean fake verdict parses (not malformed) into zero findings.
     expect(report.sessions[0].report.malformed).toBe(false);
     expect(report.totalFindings).toBe(0);
   }, 60_000);
 });
 
-/**
- * The deep sweep, opt-in via `LETSPLAY_JUDGE` so the always-on suite stays fast and
- * free. `npm run letsplay:judge` sets it: plays `K`×`N` (optionally scenario-driven
- * with `LETSPLAY_JUDGE_SCENARIOS=1`), judges live with the real Anthropic client,
- * and writes `.letsplay/oddity-report.*`. `LETSPLAY_JUDGE_SESSIONS` /
- * `LETSPLAY_JUDGE_STEPS` / `LETSPLAY_JUDGE_MODEL` override the defaults.
- */
 const JUDGE = process.env.LETSPLAY_JUDGE === "1";
 describe.runIf(JUDGE)("npm run letsplay:judge — live LLM deep sweep", () => {
   it("plays K sessions, judges them live, and writes the oddity report", async () => {
@@ -136,9 +89,6 @@ describe.runIf(JUDGE)("npm run letsplay:judge — live LLM deep sweep", () => {
       throw new GameSystemException("LLM_NO_API_KEY", msg);
     }
 
-    // A malformed env var (`=foo`/`=""`) must not silently become NaN → a
-    // zero-session run that fails with a confusing "0 sessions" instead of a
-    // clear cause; fall back to the default for any non-positive/NaN value.
     const sessions = posIntEnv(process.env.LETSPLAY_JUDGE_SESSIONS, 3);
     const steps = posIntEnv(process.env.LETSPLAY_JUDGE_STEPS, 40);
     const useScenarios = process.env.LETSPLAY_JUDGE_SCENARIOS === "1";
@@ -159,8 +109,6 @@ describe.runIf(JUDGE)("npm run letsplay:judge — live LLM deep sweep", () => {
     const written = writeJudgeReport(report);
     logger.info(`${formatJudgeReport(report)}\n  report: ${written.reportPath}`);
 
-    // The deep sweep is a REPORT, not a gate — findings are informational, so we
-    // assert only that it produced a structured report over ≥1 played session.
     expect(report.sessions.length).toBeGreaterThan(0);
     expect(report.generatedAt).toBeTruthy();
   }, 600_000);

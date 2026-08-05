@@ -13,7 +13,6 @@ describe("wrapUnit", () => {
   });
 
   it("wraps values >= 1 back into [0,1)", () => {
-    // Exactly 1.0 must land on 0, never on a value still >= 1 (seam invariant).
     expect(wrapUnit(1)).toBe(0);
     expect(wrapUnit(1.2)).toBeCloseTo(0.2);
     expect(wrapUnit(3.75)).toBeCloseTo(0.75);
@@ -80,15 +79,6 @@ describe("PlanetRotationFilter", () => {
     expect(f).toBeInstanceOf(PlanetRotationFilter);
   });
 
-  // ---------------------------------------------------------------------------
-  // Source-level shader guards (letsplay F1: planets rendered as rectangles).
-  // jsdom cannot execute GLSL, so these document and pin the invariant the
-  // pixel-level browser test (playtest-regression.spec.ts, "GLSL-filter planets
-  // clip to a circle") actually verifies: disc-local coords MUST come from the
-  // aPosition-based varying, never from vTextureCoord. PixiJS v8 filter input
-  // textures are power-of-two pooled, so vTextureCoord spans only
-  // [0, frame/pooled] (k < 1) and a disc derived from it is mis-scaled.
-  // ---------------------------------------------------------------------------
   describe("disc-coordinate invariant (F1: rectangles regression)", () => {
     const filter = () => new PlanetRotationFilter({ rotationSpeed: 0.001 });
 
@@ -101,9 +91,7 @@ describe("PlanetRotationFilter", () => {
     it("fragment shader derives disc coords from vPos, not vTextureCoord", () => {
       const fragment = filter().glProgram.fragment;
       expect(fragment).toMatch(/in\s+vec2\s+vPos\s*;/);
-      // Disc-local coords come from the position varying...
       expect(fragment).toMatch(/\(\s*vPos\s*-\s*0\.5\s*\)\s*\*\s*2\.0/);
-      // ...and never from the pool-scaled texture coordinate.
       expect(fragment).not.toMatch(/vTextureCoord\s*-\s*0\.5/);
     });
 

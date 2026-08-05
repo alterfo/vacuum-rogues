@@ -1,13 +1,3 @@
-/**
- * Task 1 (in-flight system menu): the always-available HUD menu lets a player
- * escape any dead-end (stranded, <30% hull, broke). This proves the HUD side of
- * it: the [МЕНЮ] button toggles a panel; the panel exposes the three actions
- * (Продолжить / Загрузить сохранение / В главное меню); the panel destroys
- * cleanly on close and on HUD teardown without leaking UI objects.
- *
- * Built against a REAL PixiJS scene graph (Container / Graphics / Text construct
- * in jsdom without WebGL) — mirrors fontScaleRestyle.test.ts.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import { Container, Text } from "pixi.js";
 
@@ -44,7 +34,6 @@ function build(): { hud: FlightHud; uiLayer: Container } {
   return { hud, uiLayer };
 }
 
-/** Recursively collect every PixiJS Text node under a display object. */
 function allTexts(node: Container): Text[] {
   const out: Text[] = [];
   if (node instanceof Text) out.push(node);
@@ -80,9 +69,6 @@ describe("FlightHud — in-flight system menu", () => {
 
     expect(hud.isSystemMenuOpen()).toBe(false);
 
-    // Click the real [МЕНЮ] HUD button (not toggleSystemMenu) so the button's own
-    // wiring — eventMode + pointerdown handler — is exercised, per the project's
-    // real-pointer-tests-for-hit-geometry rule.
     const menuBtn = allTexts(uiLayer).find((t) => t.text === "[МЕНЮ]");
     expect(menuBtn, "the [МЕНЮ] HUD button exists").toBeDefined();
     expect(menuBtn!.eventMode).toBe("static");
@@ -118,7 +104,6 @@ describe("FlightHud — in-flight system menu", () => {
     hud.toggleSystemMenu(); // close
     expect(hud.isSystemMenuOpen()).toBe(false);
     expect(hasLabel(uiLayer, "Загрузить сохранение")).toBe(false);
-    // The UI layer returns to exactly its pre-open child set.
     expect(uiLayer.children.length).toBe(childrenBefore);
 
     hud.destroy();
@@ -133,7 +118,6 @@ describe("FlightHud — in-flight system menu", () => {
 
     hud.closeSystemMenu();
     expect(hud.isSystemMenuOpen()).toBe(false);
-    // A second close must not throw on an already-destroyed panel.
     expect(() => hud.closeSystemMenu()).not.toThrow();
     expect(hasLabel(uiLayer, "В главное меню")).toBe(false);
 
@@ -161,9 +145,6 @@ describe("FlightHud — in-flight system menu", () => {
     hud.onLoadSave = () => loadCalls++;
     hud.onMainMenu = () => mainMenuCalls++;
 
-    // Drive the panel's buttons by clicking their containers (real pointer path).
-    // Load / main-menu don't auto-close the panel in the HUD — the scene owns
-    // that (loadGame transitions away), so both buttons stay clickable.
     hud.toggleSystemMenu();
     clickLabel(hud, "Загрузить сохранение");
     expect(loadCalls).toBe(1);
@@ -176,16 +157,10 @@ describe("FlightHud — in-flight system menu", () => {
   });
 });
 
-/**
- * Find the UiButton container whose label matches and emit a pointerdown on it,
- * exercising the real click path (UiButton's container is eventMode 'static').
- */
 function clickLabel(hud: FlightHud, label: string): void {
-  // The menu panel is mounted on the uiLayer; reach it through the HUD's layer.
   const uiLayer = (hud as unknown as { uiLayer: Container }).uiLayer;
   const labelNode = allTexts(uiLayer).find((t) => t.text === label);
   if (!labelNode) throw new Error(`No menu button labelled "${label}"`);
-  // Walk up to the UiButton container (the eventMode 'static' ancestor).
   let node: Container | null = labelNode;
   while (node && node.eventMode !== "static") node = node.parent;
   if (!node) throw new Error(`No clickable ancestor for "${label}"`);

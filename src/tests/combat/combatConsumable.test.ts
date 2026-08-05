@@ -51,8 +51,6 @@ describe("consumable catalog + i18n (Task 9)", () => {
   });
 
   it("category is disambiguated from the ARTIFACTS crafting currency", () => {
-    // The tactical-device category must NOT reuse any resource/artifact label — it is
-    // a different concept (Task 1 decision 1d).
     expect(ru[COMBAT_CONSUMABLE_CATEGORY_KEY]).toBe("Тактическое устройство");
     expect(en[COMBAT_CONSUMABLE_CATEGORY_KEY]).toBe("Tactical Device");
   });
@@ -103,8 +101,6 @@ describe("Inventory persisted consumable inventory (Task 9)", () => {
   });
 
   it("accessors tolerate an old save's absent field (setPrototypeOf load path)", () => {
-    // Loaded saves reparent via Object.setPrototypeOf, so class field initializers
-    // never run and the field is undefined — the ??= guards must not throw.
     const inv = Object.setPrototypeOf(
       { modules: [], micromodules: [], resources: [], cosmetics: [] },
       Inventory.prototype,
@@ -161,7 +157,6 @@ describe("aoeDamageTargets — AoE hits every enemy in radius (not just one)", (
     const hits = aoeDamageTargets(center, enemies, posOf, CFG);
     expect(hits.map((h) => h.enemy.id).sort()).toEqual(["near1", "near2"]);
     for (const h of hits) expect(h.damage).toBe(CFG.aoeDamage);
-    // NOT just the selected/nearest target — multiple enemies are hit at once.
     expect(hits.length).toBeGreaterThan(1);
   });
 

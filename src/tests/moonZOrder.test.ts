@@ -31,18 +31,13 @@ describe("getMoonLayer", () => {
   });
 
   it("handles negative angles correctly (mod normalised)", () => {
-    // -π/2 normalised → 3π/2 → front
     expect(getMoonLayer(-Math.PI / 2)).toBe("front");
-    // -π normalised → π → front
     expect(getMoonLayer(-Math.PI)).toBe("front");
-    // -3π/2 normalised → π/2 → back
     expect(getMoonLayer((-3 * Math.PI) / 2)).toBe("back");
   });
 
   it("handles angles > 2π (multiple laps)", () => {
-    // 5π = 2·2π + π → front
     expect(getMoonLayer(5 * Math.PI)).toBe("front");
-    // 4π = 2·2π → back
     expect(getMoonLayer(4 * Math.PI)).toBe("back");
   });
 });

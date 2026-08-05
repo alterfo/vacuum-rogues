@@ -6,14 +6,6 @@ import {
   waitForScene,
 } from '../fixtures/mockHeavySystems';
 
-/**
- * Visual parity (Task 5): the shared hangar fitting surface (`HangarPanel`) must
- * look + behave the same at the planet Верфь (EquipmentShopScene АНГАР tab) and at
- * a station hangar service (StationScene). The behavioural parity is locked by
- * shipyardParity/micromoduleParity/gearBuyParity unit tests; this spec captures the
- * two rendered screens so the visual consistency can be eyeballed (PixiJS metrics
- * are unreliable under jsdom — only a real render shows the actual board).
- */
 
 const SCREENSHOT_DIR = 'e2e/screenshots';
 
@@ -73,7 +65,6 @@ test.describe('Shipyard hangar visual parity (planet Верфь ⇄ station)', (
   test('planet Верфь АНГАР tab renders the shared hangar board', async ({ page }) => {
     await setupNewGame(page);
 
-    // Land on a planet, open its Верфь (EQUIPMENT_SHOP), switch to the АНГАР tab.
     await page.evaluate(async () => {
       const engine = (window as unknown as { __gameEngine: EngineHandle }).__gameEngine;
       await engine.currentScene?.e2eLandOnPlanet?.();
@@ -99,7 +90,6 @@ test.describe('Shipyard hangar visual parity (planet Верфь ⇄ station)', (
   test('station hangar service renders the shared hangar board', async ({ page }) => {
     await setupNewGame(page);
 
-    // Dock at a craft centre (which offers the hangar service) and open the board.
     await page.evaluate(async () => {
       const engine = (window as unknown as { __gameEngine: EngineHandle }).__gameEngine;
       await engine.transitionTo('STATION', {

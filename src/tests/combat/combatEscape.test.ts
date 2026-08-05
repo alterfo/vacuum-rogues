@@ -19,23 +19,9 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-// ---------------------------------------------------------------------------
-// Task 3: Evasion — re-route each turn, escape on a faster engine.
-//   • ShipPhysics.canOutrun is the speed-based escape predicate.
-//   • CombatModule drops a combatant the player opens beyond combatEscapeRange.
-//   • End-to-end: a faster player out-runs a slower pursuer and the fight ends;
-//     a slower/equal player can't and stays engaged; re-routing mid-fight keeps
-//     the ship moving while the fight continues.
-// ---------------------------------------------------------------------------
-
 const NPC_SPEED = GAME_BALANCE.npcSpeed; // 0.2 px/ms — the aggressor's cruise speed
 const ESCAPE = GAME_BALANCE.combatEscapeRange; // 1200 world px
 
-// ---------------------------------------------------------------------------
-// ShipPhysics.canOutrun — speed-based escape predicate
-// ---------------------------------------------------------------------------
-
-/** Accelerate a physics body to its cruise speed by flying a long straight leg. */
 function cruise(maxSpeed: number): ShipPhysics {
   const p = new ShipPhysics(0, 0, maxSpeed);
   p.setTarget(100_000, 0); // far enough never to decelerate during the run-up
@@ -68,11 +54,6 @@ describe("ShipPhysics.canOutrun (Task 3)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// CombatModule — disengage at the escape range
-// ---------------------------------------------------------------------------
-
-/** NpcShipSprite stand-in carrying only the fields CombatModule reads. */
 function fakeSprite(x: number, y: number): NpcShipSprite {
   return {
     x,
@@ -115,10 +96,6 @@ describe("CombatModule disengage at escape range (Task 3)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// End-to-end escape: NpcShipManager + CombatModule + ShipPhysics
-// ---------------------------------------------------------------------------
-
 function makeNpc(id: string, hull: number): NpcShip {
   return new NpcShip({
     id,
@@ -154,8 +131,6 @@ function spriteOf(manager: NpcShipManager): NpcShipSprite & {
   };
 }
 
-/** Arena with a parameterised player engine speed and a tanky aggressor that
- *  won't die during the run (so the fight only ends via escape, never a kill). */
 function makeArena(playerMaxSpeed: number): {
   manager: NpcShipManager;
   combat: CombatModule;
@@ -225,8 +200,6 @@ function makeArena(playerMaxSpeed: number): {
   return { manager, combat, sprite, physics };
 }
 
-/** Engage, then have the player flee along -X (away from the +X aggressor),
- *  stepping the whole world (physics → manager → combat) for `frames` ticks. */
 function flee(arena: ReturnType<typeof makeArena>, frames: number): void {
   const { manager, combat, physics } = arena;
   manager.update(16, 0); // first frame: aggressor engages at range
@@ -271,8 +244,6 @@ describe("In-flight combat escape (Task 3)", () => {
     arena.manager.update(16, 0); // engage
     expect(arena.combat.isActive).toBe(true);
 
-    // Plot a fresh course mid-fight (the evasion the player performs each turn)
-    // and confirm the ship actually flies it — combat must not pin the ship.
     arena.physics.setTarget(-5000, 1500);
     const startX = arena.physics.shipX;
     const startY = arena.physics.shipY;

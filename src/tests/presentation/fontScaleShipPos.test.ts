@@ -1,21 +1,5 @@
-/**
- * Font-scale change contract (font-scale restyle plan, Task 1).
- *
- * History: changing the font size (⚙ → S/M/L) used to re-init the whole
- * SPACE_FLIGHT scene "to re-apply the scale", which rebuilt planets/ships/
- * asteroids/NPCs + the nebula backdrop just to resize text (slow + a jarring
- * full redraw), and needed a lastFlightShipPos pin to dodge an edge-spawn race.
- *
- * That re-init is now GONE: onFontScaleChanged() restyles the text-bearing flight
- * modules in place (hud / planetManager / npcManager → refreshFontScale()). This
- * test pins the new contract — no scene transition, no ship-position pin, the
- * world is left untouched — so the heavy re-init can't silently come back.
- * (Running the full initialize() in jsdom isn't practical — PlanetSprite is
- * mocked here — so the module fields are stubbed directly.)
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Minimal pixi.js stub so SpaceFlightScene can be imported & constructed.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -161,9 +145,7 @@ describe("Font-scale change restyles in place (no scene re-init)", () => {
   beforeEach(() => {
     scene = new SpaceFlightScene(makeMockRenderer());
     s = scene as unknown as Record<string, unknown>;
-    // Park the ship in the middle of the system, far from any edge spawn.
     s.shipPhysics = new ShipPhysics(900, 410, 0.1);
-    // Stub the text-bearing modules so we can observe the restyle delegation.
     hud = { refreshFontScale: vi.fn() };
     planetManager = { refreshFontScale: vi.fn() };
     npcManager = { refreshFontScale: vi.fn() };
@@ -195,8 +177,6 @@ describe("Font-scale change restyles in place (no scene re-init)", () => {
 
     (scene as unknown as { onFontScaleChanged(): void }).onFontScaleChanged();
 
-    // No scene transition (the world is left exactly as-is) and no ship-position
-    // pin: the ship never moves, so there is nothing to preserve.
     expect(gameEngine.transitionTo).not.toHaveBeenCalled();
     expect(gameEngine.lastFlightShipPos).toBeNull();
   });

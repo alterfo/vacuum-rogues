@@ -21,12 +21,6 @@ import {
   FEATURE_LENGTH,
 } from "./NeuralPolicy";
 
-/**
- * A tiny single-layer net (`FEATURE_LENGTH → ACTION_ORDER.length`) whose weight
- * matrix is all-zero, so `forward` returns its bias vector verbatim regardless of
- * the input. A one-hot bias on `kind` therefore makes the net argmax that action
- * for *any* observation — a deterministic teacher for the loaded-net path.
- */
 function netFavouring(kind: PlayerActionKind): MlpWeights {
   const idx = ACTION_ORDER.indexOf(kind);
   const W = ACTION_ORDER.map(() =>
@@ -36,20 +30,8 @@ function netFavouring(kind: PlayerActionKind): MlpWeights {
   return { layers: [{ W, b }] };
 }
 
-/**
- * Task 5 of the dev-only letsplay engine: the **neural-policy seam (stub)**.
- *
- * The trained net is Post-Completion, so the assertions pin the seam, not a
- * model:
- *  - `featurize` is a pure, fixed-width, normalised encoder of an observation;
- *  - `mapNetOutputToAction` turns a (possibly adversarial) net output into a
- *    **legal** action — even when the net's argmax is illegal for the scene;
- *  - `NeuralPolicy` with no model is **inert** — `load()` throws "not trained
- *    yet" and `decide` falls back to the heuristic, never an illegal action.
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** A hostile NPC snapshot for synthetic observations. */
 function hostile(id = "raider-1", hullHP = 80): NpcSnapshot {
   return {
     id,
@@ -69,7 +51,6 @@ interface ObsOpts {
   landedQuests?: number | null;
 }
 
-/** Build a self-consistent observation whose `legalActions` are the real set. */
 function makeObs(scene: SceneType, opts: ObsOpts = {}): Observation {
   const hasPlayer = opts.hasPlayer ?? true;
   const planets = opts.planets ?? [];
@@ -188,7 +169,6 @@ describe("featurize (pure encoder)", () => {
 });
 
 describe("mapNetOutputToAction (net output → legal action)", () => {
-  /** A score vector that maxes out `kind` and zeroes the rest. */
   function favour(kind: PlayerActionKind): number[] {
     return ACTION_ORDER.map((k) => (k === kind ? 1 : 0));
   }
@@ -198,13 +178,11 @@ describe("mapNetOutputToAction (net output → legal action)", () => {
       planets: [planet("p1")],
       connections: 2,
     });
-    // "land" is legal here and scored highest ⇒ chosen.
     expect(obs.legalActions).toContain("land");
     expect(mapNetOutputToAction(favour("land"), obs).kind).toBe("land");
   });
 
   it("never returns an illegal action — even when the net's argmax is illegal", () => {
-    // On a planet, "attack" is NOT legal; the net argmaxes it anyway.
     const obs = makeObs(SceneType.PLANET, { landedQuests: 0 });
     expect(obs.legalActions).not.toContain("attack");
     const action = mapNetOutputToAction(favour("attack"), obs);
@@ -286,7 +264,6 @@ describe("NeuralPolicy (loaded — runs the pure-TS MLP)", () => {
   });
 
   it("decide() still never returns an illegal action when the net's argmax is illegal", async () => {
-    // The net always argmaxes "land", which is NOT legal on a planet.
     const policy = new NeuralPolicy({ weights: netFavouring("land") });
     await policy.load();
     for (const obs of SAMPLE_STATES) {
@@ -310,8 +287,6 @@ describe("NeuralPolicy (loaded — runs the pure-TS MLP)", () => {
   });
 
   it("load() rejects a net whose input width != featurize width", async () => {
-    // A 10→10 net (wrong input width) must fail loudly at load, so decide's
-    // forward can never throw on a width mismatch.
     const W = ACTION_ORDER.map(() => Array.from({ length: 10 }, () => 0));
     const b = ACTION_ORDER.map(() => 0);
     const policy = new NeuralPolicy({ weights: { layers: [{ W, b }] } });

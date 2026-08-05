@@ -1,16 +1,3 @@
-/**
- * Task 3 (in-flight system menu gating): the always-available escape menu must
- * not offer a dead «Загрузить сохранение» button. This proves the gating:
- * - no save → the action is dimmed/inert with a "Нет сохранения" hint and never
- *   fires onLoadSave;
- * - save present → the action is live and fires onLoadSave;
- * - the menu opens regardless of turn state (it is a general escape hatch, not
- *   gated on the turn/engine-stall — the low-hull dead-end must stay reachable);
- * - wired through {@link wireFlightSystemMenu}, the async `saveManager.hasSave()`
- *   probe flips the action on/off as the scene does it.
- *
- * Built against a REAL PixiJS scene graph (mirrors inFlightMenu*.test.ts).
- */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { Container, Text } from "pixi.js";
 
@@ -49,7 +36,6 @@ function build(): { hud: FlightHud; uiLayer: Container } {
   return { hud, uiLayer };
 }
 
-/** Recursively collect every PixiJS Text node under a display object. */
 function allTexts(node: Container): Text[] {
   const out: Text[] = [];
   if (node instanceof Text) out.push(node);
@@ -63,17 +49,10 @@ function hasLabel(uiLayer: Container, label: string): boolean {
   return allTexts(uiLayer).some((t) => t.text === label);
 }
 
-/** Drain the microtask + macrotask queue so a fire-and-forget probe settles. */
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/**
- * Click the menu action labelled `label`: walk up from its label Text to the
- * nearest eventMode='static' ancestor and emit a real pointerdown. A dimmed
- * (disabled) button has eventMode='none', so the walk stops at the panel and the
- * action never fires — exactly the production behaviour.
- */
 function clickLabel(uiLayer: Container, label: string): void {
   const labelNode = allTexts(uiLayer).find((t) => t.text === label);
   if (!labelNode) throw new Error(`No button labelled "${label}"`);
@@ -111,12 +90,9 @@ describe("FlightHud — in-flight system menu gating", () => {
 
     hud.toggleSystemMenu();
     expect(hud.isLoadSaveEnabled()).toBe(false);
-    // The button label is still shown (so the player sees the option), but a
-    // "no save" hint explains why it is unavailable.
     expect(hasLabel(uiLayer, "Загрузить сохранение")).toBe(true);
     expect(hasLabel(uiLayer, "Нет сохранения")).toBe(true);
 
-    // Clicking the dimmed action must not load anything.
     clickLabel(uiLayer, "Загрузить сохранение");
     expect(loadCalls).toBe(0);
 
@@ -129,12 +105,10 @@ describe("FlightHud — in-flight system menu gating", () => {
     hud.toggleSystemMenu();
     expect(hasLabel(uiLayer, "Нет сохранения")).toBe(false);
 
-    // A flip while open swaps the live button for the dimmed hint variant.
     hud.setLoadSaveEnabled(false);
     expect(hud.isSystemMenuOpen()).toBe(true);
     expect(hasLabel(uiLayer, "Нет сохранения")).toBe(true);
 
-    // …and back again.
     hud.setLoadSaveEnabled(true);
     expect(hasLabel(uiLayer, "Нет сохранения")).toBe(false);
 
@@ -143,8 +117,6 @@ describe("FlightHud — in-flight system menu gating", () => {
 
   it("opens regardless of turn state — the dead-end stays reachable", () => {
     const { hud } = build();
-    // Engines stalled / turn running (the low-hull dead-end is a scene concern;
-    // the HUD menu must never be gated on it).
     hud.setTurnRunning(true);
 
     expect(hud.isSystemMenuOpen()).toBe(false);
@@ -173,11 +145,9 @@ describe("FlightHud — in-flight system menu gating", () => {
     hud.initialize();
 
     wireFlightSystemMenu(hud, gameEngine);
-    // The seed probe resolves false → the action is gated off.
     await flush();
     expect(hud.isLoadSaveEnabled()).toBe(false);
 
-    // A save appears (take-off autosave); the next open re-probes and enables it.
     hasSave.mockResolvedValue(true);
     hud.toggleSystemMenu();
     await flush();

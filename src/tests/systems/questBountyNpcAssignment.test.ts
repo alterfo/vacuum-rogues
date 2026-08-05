@@ -169,7 +169,6 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
 
   it("falls back to a pirate in another system when target system has none", () => {
     const { engine, questService } = makeEngine();
-    // No live pirate in the target system; one alive in the issuer system.
     const elsewhere = makePirate(
       "npc_pirate_elsewhere",
       ISSUER_SYSTEM_ID,
@@ -185,7 +184,6 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
     const spy = vi.spyOn(questService, "acceptQuestFromTemplate");
     engine.acceptBoardQuest(makeBountyQuest(), "planet_issuer");
 
-    // The fallback pirate is renamed and linked; targetSystemId updated to match.
     expect(elsewhere.name).toBe(TARGET_SHIP_NAME);
     expect(deadInTarget.name).toBe("pirate_npc_pirate_dead");
     const passedTemplate = spy.mock.calls[0][0];
@@ -195,7 +193,6 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
 
   it("leaves targetObjectId null when no live unbound pirate exists anywhere", () => {
     const { engine, questService } = makeEngine();
-    // Only dead pirates — no live unbound pirate to bind.
     const deadA = makePirate("npc_dead_a", TARGET_SYSTEM_ID, NpcState.DEAD);
     const deadB = makePirate("npc_dead_b", ISSUER_SYSTEM_ID, NpcState.DEAD);
     engine.galaxy = makeGalaxy([deadA, deadB]);
@@ -218,7 +215,6 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
     );
     const free = makePirate("npc_free", TARGET_SYSTEM_ID, NpcState.IDLE);
     engine.galaxy = makeGalaxy([alreadyBound, free]);
-    // An existing active bounty already targets npc_bound.
     questService.activeQuests = [
       { targetObjectId: "npc_bound" } as unknown as Quest,
     ];
@@ -226,8 +222,6 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
     const spy = vi.spyOn(questService, "acceptQuestFromTemplate");
     engine.acceptBoardQuest(makeBountyQuest(), "planet_issuer");
 
-    // The free pirate is renamed; the already-bound one keeps its name so the
-    // first quest's named target is not clobbered and one kill can't satisfy both.
     expect(free.name).toBe(TARGET_SHIP_NAME);
     expect(alreadyBound.name).toBe("pirate_npc_bound");
     const passedTemplate = spy.mock.calls[0][0];
@@ -273,19 +267,14 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
     const pirate = makePirate("npc_pirate_1", TARGET_SYSTEM_ID, NpcState.IDLE);
     engine.galaxy = makeGalaxy([pirate]);
 
-    // Player browses the Info Center first, populating the per-day cache with
-    // the pirate's pre-rename name.
     const before = engine
       .getInfoRegistry()!
       .findShips({ name: TARGET_SHIP_NAME, originSystemId: ISSUER_SYSTEM_ID });
     expect(before).toHaveLength(0);
 
-    // Accepting the bounty renames the pirate the same game-day (no day-tick).
     engine.acceptBoardQuest(makeBountyQuest(), "planet_issuer");
     expect(pirate.name).toBe(TARGET_SHIP_NAME);
 
-    // Re-querying the Info Center the same day must surface the renamed ship —
-    // the cache has to be rebuilt rather than serving the stale snapshot.
     const after = engine
       .getInfoRegistry()!
       .findShips({ name: TARGET_SHIP_NAME, originSystemId: ISSUER_SYSTEM_ID });

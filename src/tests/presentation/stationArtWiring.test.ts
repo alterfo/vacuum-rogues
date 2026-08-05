@@ -1,17 +1,3 @@
-/**
- * Station art resolver WIRING guard (plan 20260624-off-planet-base-art, Task 1).
- *
- * `stationArt.test.ts` only ever exercises the no-art→null fallback (no
- * `station/` art is committed yet), and `planetManagerStations.test.ts` fully
- * mocks `stationSpriteKey`. So nothing else pins the one piece of glue that can
- * only fail once art lands: that `stationSpriteKey` calls `pickVariantKey` with
- * the literal category `"station"` and the correct per-type prefix, and returns
- * the resolved key. A typo in the category string or a wrong prefix would pass
- * every other test yet silently render diamonds forever after art is committed.
- *
- * Here we mock `pickVariantKey` so we can assert the exact call + return mapping
- * without any real art on disk (the "lights up when art lands" path).
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { StationType } from "@/types";
 

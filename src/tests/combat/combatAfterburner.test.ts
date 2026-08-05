@@ -46,13 +46,11 @@ describe("afterburnerMultiplier — boost tapers with wear (Task 8)", () => {
   });
 
   it("tapers linearly toward 1 as integrity drops", () => {
-    // At half integrity the *boost above 1* is half of the peak boost.
     const peakBoost = CFG.speedMultiplier - 1;
     expect(afterburnerMultiplier(0.5, CFG)).toBeCloseTo(
       1 + peakBoost * 0.5,
       10,
     );
-    // Monotonic: more worn ⇒ weaker boost.
     expect(afterburnerMultiplier(0.9, CFG)).toBeGreaterThan(
       afterburnerMultiplier(0.4, CFG),
     );
@@ -87,7 +85,6 @@ describe("engageAfterburner — boost applied + engine wears (Task 8)", () => {
       const r = engageAfterburner(state, CFG);
       expect(r.engaged).toBe(true);
       expect(r.state.integrity).toBeLessThan(prevIntegrity);
-      // The boost this burn delivered is no stronger than the previous one.
       expect(r.multiplier).toBeLessThanOrEqual(prevMultiplier + 1e-9);
       prevIntegrity = r.state.integrity;
       prevMultiplier = r.multiplier;
@@ -95,7 +92,6 @@ describe("engageAfterburner — boost applied + engine wears (Task 8)", () => {
       burns++;
       expect(burns).toBeLessThan(100); // guard against an infinite loop
     }
-    // Uses are capped per fight by the wear model.
     expect(burns).toBe(afterburnerBurnBudget(CFG));
   });
 
@@ -108,7 +104,6 @@ describe("engageAfterburner — boost applied + engine wears (Task 8)", () => {
   });
 
   it("never wears integrity below 0", () => {
-    // An engine just above the floor with a large wear step still floors at 0, never negative.
     const r = engageAfterburner(
       { integrity: 0.06 },
       { ...CFG, wearPerBurn: 1 },

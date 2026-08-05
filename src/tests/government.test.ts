@@ -6,8 +6,6 @@ import {
 } from "@/presentation/GovernmentScene";
 import type { Renderer } from "@/presentation/Renderer";
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 function makeRenderer(): Renderer {
   return {
     app: {
@@ -27,8 +25,6 @@ function makeRenderer(): Renderer {
     clearUILayer: vi.fn(),
   } as unknown as Renderer;
 }
-
-// ── Unit tests ────────────────────────────────────────────────────────────────
 
 describe("getRepTier", () => {
   it("returns 'hostile' below -30", () => {
@@ -63,8 +59,6 @@ describe("getDialogueLines", () => {
     expect(hostile[0]).not.toBe(ally[0]);
   });
 });
-
-// ── Mock PixiJS ───────────────────────────────────────────────────────────────
 
 vi.mock("pixi.js", () => ({
   Container: vi.fn().mockImplementation(() => ({

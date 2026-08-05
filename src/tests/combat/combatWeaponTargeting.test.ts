@@ -9,16 +9,12 @@ import {
 } from "@/presentation/flight/combatWeaponTargeting";
 import { CombatPlanningController } from "@/presentation/flight/combatPlanning";
 
-// Opaque target handle; a weapon carries the range the assignment flag reads.
 type Target = { id: string };
 
 function weapon(id: string, range: number): RangedWeapon {
   return { id, range };
 }
 
-// ---------------------------------------------------------------------------
-// Range-circle geometry + colour (Task 5)
-// ---------------------------------------------------------------------------
 describe("weaponRangeCircles — per-weapon range visualization (Task 5)", () => {
   it("radius matches each weapon's own catalog range, centred on the ship", () => {
     const circles = weaponRangeCircles(
@@ -47,15 +43,12 @@ describe("weaponRangeCircles — per-weapon range visualization (Task 5)", () =>
       ),
       { x: 0, y: 0 },
     );
-    // First N are the palette in order.
     for (let i = 0; i < WEAPON_RANGE_PALETTE.length; i++) {
       expect(circles[i].color).toBe(WEAPON_RANGE_PALETTE[i]);
     }
-    // The (N+1)-th wraps back to the first palette entry.
     expect(circles[WEAPON_RANGE_PALETTE.length].color).toBe(
       WEAPON_RANGE_PALETTE[0],
     );
-    // Adjacent weapons never share a colour (within one palette cycle).
     for (let i = 1; i < WEAPON_RANGE_PALETTE.length; i++) {
       expect(circles[i].color).not.toBe(circles[i - 1].color);
     }
@@ -74,9 +67,6 @@ describe("weaponRangeCircles — per-weapon range visualization (Task 5)", () =>
   });
 });
 
-// ---------------------------------------------------------------------------
-// Range test (Task 5)
-// ---------------------------------------------------------------------------
 describe("targetInRange (Task 5)", () => {
   it("is inclusive at the boundary and false beyond it", () => {
     const from = { x: 0, y: 0 };
@@ -92,12 +82,8 @@ describe("targetInRange (Task 5)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Two-step assignment interaction — writes into the planned-turn draft (Task 5)
-// ---------------------------------------------------------------------------
 describe("WeaponAssignmentController — click-weapon-then-click-target (Task 5)", () => {
   function setup() {
-    // Real planning controller as the sink so we assert the ACTUAL draft, not a fake.
     const planning = new CombatPlanningController<Target, RangedWeapon>();
     planning.beginCombat(); // enter PLANNING so draft setters are live
     const ctrl = new WeaponAssignmentController<RangedWeapon, Target>(planning);
@@ -140,7 +126,6 @@ describe("WeaponAssignmentController — click-weapon-then-click-target (Task 5)
     const e1: Target = { id: "e1" };
     const e2: Target = { id: "e2" };
 
-    // Focus fire — both guns on e1.
     ctrl.selectWeapon(w1);
     ctrl.selectTarget(e1, { x: 0, y: 0 }, { x: 10, y: 0 });
     ctrl.selectWeapon(w2);
@@ -148,7 +133,6 @@ describe("WeaponAssignmentController — click-weapon-then-click-target (Task 5)
     expect(planning.plan.weaponTargets.get(w1)).toBe(e1);
     expect(planning.plan.weaponTargets.get(w2)).toBe(e1);
 
-    // Spread — re-aim w2 at e2.
     ctrl.selectWeapon(w2);
     ctrl.selectTarget(e2, { x: 0, y: 0 }, { x: 10, y: 0 });
     expect(planning.plan.weaponTargets.get(w1)).toBe(e1);
@@ -163,7 +147,6 @@ describe("WeaponAssignmentController — click-weapon-then-click-target (Task 5)
     ctrl.selectWeapon(w);
     const res = ctrl.selectTarget(far, { x: 0, y: 0 }, { x: 500, y: 0 });
     expect(res?.inRange).toBe(false); // flagged out of range
-    // ...but still recorded (a planned lead-the-target shot is legal).
     expect(planning.plan.weaponTargets.get(w)).toBe(far);
   });
 

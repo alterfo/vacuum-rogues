@@ -1,12 +1,3 @@
-/**
- * Loadout persistence (letsplay F6 follow-up): the canonical loadout must
- * survive save → "Continue". Before this, GameEngine.loadGame always rebuilt
- * the default starter loadout, so the canonical inventory view (and derived
- * speed/shields) silently reverted after every load. NOTE: no production flow
- * installs into `playerLoadout` yet (shop purchases land in the legacy
- * inventory — F6 known gap, CLAUDE.md); these tests mutate the loadout
- * directly to pin the persistence contract ahead of shop canonicalization.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";
 import { FactionType, HullClass, SceneType } from "@/types";
@@ -22,8 +13,6 @@ import { SaveState } from "@/domain/SaveState";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 
 vi.mock("pixi.js", () => ({
-  // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
-  // module load, so the partial mock must expose a constructable Filter.
   Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
     init: vi.fn().mockResolvedValue(undefined),
@@ -136,7 +125,6 @@ describe("GameEngine loadout persistence", () => {
     (diDeps.saveService as MockSaveService).setSave("auto", save);
     vi.spyOn(engine, "transitionTo").mockResolvedValue(undefined);
 
-    // A stale in-memory loadout from a previous session must be replaced too.
     engine.playerLoadout = new ShipLoadout("hull_scout");
 
     expect(await engine.loadGame("auto")).toBe(true);
@@ -162,9 +150,6 @@ describe("GameEngine loadout persistence", () => {
 
     expect(await engine.loadGame("auto")).toBe(true);
     expect(engine.playerLoadout!.hull.id).toBe("hull_corvette");
-    // The starter loadout ships fully fitted: weapon (wpn_pulse) so a fresh
-    // game / a pre-persistence save can fight, plus the grapple/захват
-    // (grav_tractor_1) — see GameEngine.starterLoadout.
     expect(engine.playerLoadout!.installedGearIds()).toEqual([
       "eq_engine_i",
       "eq_tank",
@@ -174,8 +159,6 @@ describe("GameEngine loadout persistence", () => {
   });
 
   it("the starter loadout includes a weapon and exposes weapon damage (a fresh game can fight)", async () => {
-    // Regression: starterLoadout() previously fitted only engine + tank, so a
-    // brand-new game had nothing to shoot and CombatModule.addCombatant no-op'd.
     await makeLiveGame();
     const save = new SaveState(
       1,
@@ -215,12 +198,7 @@ describe("GameEngine loadout persistence", () => {
   });
 
   it("loadGame projects the loadout hull onto the live ship so maxHull cannot drift", async () => {
-    // The dual-hull guarantee: ShipLoadout is the single source of truth for the
-    // hull. The save's `ship.maxHull`/`hullClass` are restored verbatim from
-    // JSON and could disagree with the loadout (a migrated/rebalanced hull); the
-    // load path must reconcile them, just as both hull shops do on a hull swap.
     await makeLiveGame();
-    // Stale live ship stats that no longer match the canonical loadout hull.
     engine.player!.ship.maxHull = 50;
     engine.player!.ship.hullHP = 50;
 
@@ -246,7 +224,6 @@ describe("GameEngine loadout persistence", () => {
     );
     expect(engine.player!.ship.maxHull).toBe(220);
     expect(engine.player!.ship.hullClass).toBe(HullClass.FRIGATE);
-    // Current HP is clamped to the new cap, never silently healed past it.
     expect(engine.player!.ship.hullHP).toBeLessThanOrEqual(220);
   });
 });

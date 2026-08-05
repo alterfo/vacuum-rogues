@@ -1,14 +1,3 @@
-/**
- * Plan 20260618 Task 3 — the Infocenter "НОВОСТИ" tab was migrated off its
- * hand-rolled `slice` + masked sub-container onto the shared `ScrollableList`
- * (one scroll design across every list panel). This pins the migrated
- * behaviour:
- *   - the list renders EVERY news item (no slicing / truncation);
- *   - scrollNews advances the offset and clamps at top and bottom;
- *   - the scroll position survives the re-render a bookmark toggle triggers;
- *   - the news tab disables the list's own window wheel (the scene owns one
- *     wheel handler, also bound to ArrowUp/Down, so it must not double-bind).
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -108,9 +97,6 @@ async function makeScene(newsCount: number): Promise<SceneInternals> {
   const { InfoCenterScene } = await import("@/presentation/InfoCenterScene");
   const scene = new InfoCenterScene(mockRenderer) as unknown as SceneInternals;
   createdScenes.push(scene as unknown as { destroy: () => void });
-  // initialize() wires up mainContainer and runs the first render; with no
-  // gameEngine context buildNews is skipped, so we inject items directly and
-  // re-render the (default) news tab.
   scene.initialize();
   scene.newsItems = makeNews(newsCount);
   scene.render();
@@ -126,7 +112,6 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     const scene = await makeScene(30);
     expect(scene.newsList).not.toBeNull();
     expect(scene.newsList!.itemCount).toBe(30);
-    // A long list overflows the window, so there is something to scroll.
     expect(scene.newsList!.maxOffset).toBeGreaterThan(0);
   });
 
@@ -152,7 +137,6 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     scene.scrollNews(4);
     const before = scene.newsList!.offset;
     expect(before).toBeGreaterThan(0);
-    // A bookmark toggle calls render(); the offset must be restored, not reset.
     scene.render();
     expect(scene.newsList!.offset).toBe(before);
   });

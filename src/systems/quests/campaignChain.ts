@@ -7,63 +7,19 @@ import {
   CAMPAIGN_CHAIN_STEP_REWARDS,
 } from "@/config/balance";
 
-/**
- * Overmind campaign quest chain — the scenario spine (three-year-campaign plan,
- * Task 12).
- *
- * A 5–6 step narrative arc that escorts the player from first contact with the
- * Overmind to the assault on its core. Unlike the procedural board quests, the
- * chain is a fixed, ordered sequence gated on **player milestones, not days** —
- * so it paces itself to the adaptive-difficulty campaign (a slow, careful run
- * and a fast, aggressive one both walk the same steps, in the same order, as
- * they hit the same power/front milestones).
- *
- * Design constraints (from the plan):
- * - **No new persisted field, no migration.** Step completion is read straight
- *   from the already-persisted `questLog.completedQuests` (the step's stable id
- *   lands there when the quest is completed). The "which step is next" decision
- *   is a *pure predicate* over (completed step ids, Overmind state, ratcheted
- *   power) — nothing about the chain is stored separately.
- * - **In order and only in order.** `nextCampaignChainStep` returns the FIRST
- *   incomplete step, and only if every earlier step is complete AND its own
- *   milestone band is crossed. A later step can never appear before an earlier
- *   one.
- * - **Catalog data.** Each step is built into a `GeneratedQuest` that reuses an
- *   existing `QuestType` completion path (EXPLORATION visits + one DELIVERY),
- *   so the quests are genuinely completable in real play with no new engine
- *   wiring and no save-shape change.
- *
- * Player-facing copy is Russian (project norm for board quests — the whole job
- * board is inline RU, so the chain needs no separate EN i18n keys).
- */
-
-/** Stable chain id (all steps share it; used only for grouping/labels). */
 export const CAMPAIGN_CHAIN_ID = "campaign-overmind";
 
-/** Where a step points the player. */
-export type CampaignTargetKind =
-  /** An explored, non-hostile system on the Overmind border (the front). */
-  | "frontier"
-  /** An explored, non-hostile system in the safe rear (for the supply run). */
-  | "safe";
+export type CampaignTargetKind = "frontier" | "safe";
 
-/** The observable campaign state the step milestones are derived from. */
 export interface CampaignChainInputs {
-  /** Ids of campaign steps already completed (from `questLog.completedQuests`). */
   readonly completedStepIds: readonly string[];
-  /** Overmind share of the galaxy ∈ [0,1] (occupied / total). */
   readonly overmindShare: number;
-  /** Ratcheted campaign peak power ∈ [0,1] (never decreases within a run). */
   readonly peakPower: number;
-  /** Current Overmind endgame-arc status. */
   readonly arcStatus: OvermindStatus;
 }
 
-/** Tunable milestone bands (defaults from `balance.ts` — never tune call sites). */
 export interface CampaignChainConfig {
-  /** Ratcheted power at/above which the arm-up-dependent steps unlock. */
   readonly liberationPower: number;
-  /** Overmind share at/below which the final core-assault step unlocks. */
   readonly coreAssaultShare: number;
 }
 
@@ -74,37 +30,20 @@ function defaultConfig(): CampaignChainConfig {
   };
 }
 
-/** One step of the campaign chain. */
 export interface CampaignChainStep {
-  /** Stable, unique id — lands in `completedQuests` when the step is completed. */
   readonly id: string;
-  /** 0-based position in the chain (unlock order). */
   readonly order: number;
-  /** Board-card title (RU). */
   readonly title: string;
-  /** Where the step points the player. */
   readonly targetKind: CampaignTargetKind;
-  /** Base credit reward. */
   readonly reward: number;
-  /**
-   * Supply cargo for the requisition run (present only on the DELIVERY step);
-   * when set the built quest is a DELIVERY (buy + haul), else an EXPLORATION
-   * visit to the target.
-   */
   readonly cargo?: { readonly label: string; readonly resource: ResourceType };
-  /** Board-card description (RU); `{target}` ⇒ the resolved target system name. */
   readonly describe: (targetName: string) => string;
-  /**
-   * Milestone predicate — is this step's band crossed? Does NOT check ordering
-   * or completion (that is handled centrally by `nextCampaignChainStep`).
-   */
   readonly milestone: (
     inputs: CampaignChainInputs,
     config: CampaignChainConfig,
   ) => boolean;
 }
 
-/** True once the Overmind has visibly appeared (there is a front to react to). */
 function overmindPresent(inputs: CampaignChainInputs): boolean {
   return (
     inputs.overmindShare > 0 ||
@@ -113,15 +52,6 @@ function overmindPresent(inputs: CampaignChainInputs): boolean {
   );
 }
 
-/**
- * The chain, in order. Milestones:
- * 1. distress      — the Overmind has appeared (a front exists).
- * 2. recon         — same band (a follow-up recon of the front).
- * 3. requisition   — same band (the supply run that funds the arm-up).
- * 4. liberation    — the player is battle-ready (armed for the war).
- * 5. counteroffensive — the front has been pushed back (`contained`).
- * 6. core assault  — the Overmind is a remnant (share ≤ core-assault band).
- */
 export const CAMPAIGN_CHAIN_STEPS: readonly CampaignChainStep[] = [
   {
     id: `${CAMPAIGN_CHAIN_ID}-1-distress`,
@@ -191,17 +121,14 @@ export const CAMPAIGN_CHAIN_STEPS: readonly CampaignChainStep[] = [
   },
 ];
 
-/** Set of every campaign step id (for fast membership tests). */
 export const CAMPAIGN_CHAIN_STEP_IDS: ReadonlySet<string> = new Set(
   CAMPAIGN_CHAIN_STEPS.map((s) => s.id),
 );
 
-/** True when `id` is a campaign-chain step id. */
 export function isCampaignChainStepId(id: string): boolean {
   return CAMPAIGN_CHAIN_STEP_IDS.has(id);
 }
 
-/** The completed step ids, in chain order (from a raw completed-quest list). */
 export function completedCampaignSteps(
   completedQuestIds: readonly string[],
 ): string[] {
@@ -211,20 +138,10 @@ export function completedCampaignSteps(
   );
 }
 
-/**
- * The single campaign step the board should currently offer, or `null` when
- * none is available (chain complete, next milestone not yet reached, or the run
- * already decided). Pure: the same inputs always yield the same step.
- *
- * Guarantees **in order and only in order**: returns the first step that is not
- * yet completed, and only when every earlier step IS completed and its own
- * milestone band is crossed.
- */
 export function nextCampaignChainStep(
   inputs: CampaignChainInputs,
   config: CampaignChainConfig = defaultConfig(),
 ): CampaignChainStep | null {
-  // The run is already decided — the chain is moot (the outcome overlay owns it).
   if (inputs.arcStatus === "won" || inputs.arcStatus === "lost") return null;
 
   const completed = new Set(inputs.completedStepIds);
@@ -233,8 +150,6 @@ export function nextCampaignChainStep(
   );
   if (!firstIncomplete) return null; // whole chain done
 
-  // Safety: never skip. Every earlier step must be complete (it is, by
-  // definition of "first incomplete", but this guards a corrupted-order save).
   const priorAllDone = CAMPAIGN_CHAIN_STEPS.filter(
     (s) => s.order < firstIncomplete.order,
   ).every((s) => completed.has(s.id));
@@ -243,26 +158,13 @@ export function nextCampaignChainStep(
   return firstIncomplete.milestone(inputs, config) ? firstIncomplete : null;
 }
 
-/** A resolved target for a campaign step (the offer path picks the system). */
 export interface CampaignChainTarget {
   readonly systemId: string;
   readonly systemName: string;
-  /** A concrete planet in the system, when one is available. */
   readonly planetId: string | null;
-  /** Hyperjumps from the issuing system (0 = local; display only). */
   readonly jumps: number;
 }
 
-/**
- * Build the board quest for a campaign step against a resolved target. Reuses an
- * existing `QuestType` completion path so it needs no new engine wiring:
- * - the requisition step (has `cargo`) is a DELIVERY (COLLECT + VISIT);
- * - every other step is an EXPLORATION visit to the target system.
- *
- * The template id is the STABLE step id, so completing the quest lands that id
- * in `questLog.completedQuests` (which the gating predicate reads back) and an
- * already-active/completed step is deduped by the board's own id filter.
- */
 export function buildCampaignChainQuest(
   step: CampaignChainStep,
   target: CampaignChainTarget,
@@ -273,7 +175,6 @@ export function buildCampaignChainQuest(
   const experience = Math.round(step.reward * 0.4);
 
   if (step.cargo) {
-    // Requisition run — a DELIVERY that buys and hauls the supply cargo.
     const qty = 10;
     return {
       template: {
@@ -322,7 +223,6 @@ export function buildCampaignChainQuest(
     };
   }
 
-  // A visit to the front — completes as an EXPLORATION quest on system entry.
   return {
     template: {
       id,

@@ -1,10 +1,5 @@
 import type { TextQuest } from "@/types";
 
-// ---------------------------------------------------------------------------
-// Sample quest: "Тайный груз" — logical puzzle about a secret cargo manifest.
-// Three nodes, two fail branches, one success branch.
-// ---------------------------------------------------------------------------
-
 const secretCargoQuest: TextQuest = {
   id: "text_quest_secret_cargo",
   title: "Тайный груз",
@@ -110,11 +105,6 @@ const secretCargoQuest: TextQuest = {
     },
   ],
 };
-
-// ---------------------------------------------------------------------------
-// Sample quest: "Дрейфующий корабль" — atmospheric, branching moral choice.
-// Four nodes with a moral dilemma at its core.
-// ---------------------------------------------------------------------------
 
 const driftingShipQuest: TextQuest = {
   id: "text_quest_drifting_ship",

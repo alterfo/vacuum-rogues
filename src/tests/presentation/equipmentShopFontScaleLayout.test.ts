@@ -1,17 +1,3 @@
-/**
- * Task 3 (font-scale layout bug-fix pack,
- * `docs/plans/20260708-font-scale-and-faction-bugs.md`): regression test for
- * `EquipmentShopScene.renderRows`'s gear-listing row. `ROW_H` and the
- * name/stat/price/fit line offsets were fixed pixel constants independent of
- * `scaledFont`'s taller line height at "L" scale, so the stat line bled into
- * the name line above it (and the fit hint into the price line above it).
- *
- * PixiJS text metrics aren't reliable headless, so this mirrors the existing
- * scene-level test convention for these scenes (`gearBuyParity.test.ts`): a
- * lightweight `pixi.js` mock whose `Graphics`/`Text`/`Container` are plain
- * mutable objects, so the source's real `x`/`y` assignments and `rect(...)`
- * calls are directly inspectable after render.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { gearById } from "@/systems/equipment/GearCatalog";
@@ -94,7 +80,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scene sees the fake pixi.
 import { EquipmentShopScene } from "@/presentation/EquipmentShopScene";
 
 const renderer = {
@@ -171,15 +156,10 @@ describe("EquipmentShopScene gear rows at L font scale", () => {
       0,
     );
     const name = created[nameIdx];
-    // The stat line is the very next Text `renderRows` creates, in the same
-    // column as the name line above it.
     const stat = created[nameIdx + 1];
     expect(stat.x).toBe(name.x);
 
     const nameStep = lineStepFor(scaledFont(13));
-    // The bug: the stat line used to sit at a fixed +19 offset from the name
-    // line regardless of scale; at "L" the name line's own height exceeds
-    // that gap and the stat line bleeds into it.
     expect(stat.y).toBeGreaterThanOrEqual(name.y + nameStep);
   });
 
@@ -196,8 +176,6 @@ describe("EquipmentShopScene gear rows at L font scale", () => {
     created = [];
     (scene as unknown as { render: () => void }).render();
 
-    // The row's own price line (not the header credits readout, which also
-    // contains "₡" but renders before `renderRows` runs).
     const priceText = created.find((n) => n.text === "200₡");
     expect(priceText, "expected the row's price Text node").toBeTruthy();
     const fitText = created.find((n) => n.text.includes("Влезет"));
@@ -227,8 +205,6 @@ describe("EquipmentShopScene gear rows at L font scale", () => {
     const rowH = (scene as unknown as { ROW_H: number }).ROW_H;
     const nameStep = lineStepFor(scaledFont(13));
     const statStep = lineStepFor(scaledFont(10));
-    // Content (name top pad 6 + name step + stat step + bottom pad) must fit
-    // within the row height, not just the historical fixed 52 px.
     expect(rowH).toBeGreaterThanOrEqual(6 + nameStep + statStep);
     scene.destroy();
   });

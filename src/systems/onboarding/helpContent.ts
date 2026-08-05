@@ -1,23 +1,5 @@
-// Help-content registry for the onboarding / contextual-help layer
-// (`docs/plans/20260623-onboarding-and-contextual-help.md`).
-//
-// The instructions for every reachable gameplay screen — plus the first-flight
-// `welcome` intro (states the game's goal), the in-flight `quest-journal` panel,
-// and the one-shot `combat` hint — are **localized**: each `title`/`body`/
-// `controls` string resolves through the i18n layer (`t(...)`), so the help panel
-// renders in RU or EN and re-reads live on a language change (like other migrated
-// scenes). The Russian/English text itself lives in `src/i18n/ru.ts` / `en.ts`
-// under the `help.<key>.*` keys; this file holds only the key shapes + lookup, no
-// PixiJS/DOM deps so the registry stays trivially unit-testable.
-
 import { t } from "@/i18n/i18n";
 
-/**
- * A help topic. Scene-based keys reuse the {@link import("@/types").SceneType}
- * string values so a caller can pass the scene type directly; the three extra
- * keys (`welcome`, `quest-journal`, `combat`) cover the in-flight surfaces that
- * are not their own scene.
- */
 export type HelpKey =
   | "RACE_SELECTION"
   | "SPACE_FLIGHT"
@@ -36,23 +18,12 @@ export type HelpKey =
   | "combat"
   | "refuel";
 
-/** One screen's instructions: a heading, body paragraphs, optional controls. */
 export interface HelpEntry {
-  /** Short panel title. */
   readonly title: string;
-  /** One or more concise paragraphs (≥1). */
   readonly body: string[];
-  /** Optional list of key/control hints (rendered as a list). */
   readonly controls?: string[];
 }
 
-/**
- * How many `body` paragraphs and `controls` lines each help key has. Drives the
- * `help.<key>.body{N}` / `help.<key>.control{N}` i18n key bases — the single
- * source of truth shared by the live `HELP_CONTENT` getters and the i18n parity
- * test. A key with `controls: 0` has **no** controls section (its entry omits the
- * optional `controls` field entirely).
- */
 export const HELP_SPEC: Record<HelpKey, { body: number; controls: number }> = {
   welcome: { body: 2, controls: 0 },
   RACE_SELECTION: { body: 2, controls: 2 },
@@ -72,16 +43,10 @@ export const HELP_SPEC: Record<HelpKey, { body: number; controls: number }> = {
   refuel: { body: 2, controls: 0 },
 };
 
-/** The i18n key base for a help key, e.g. `welcome` → `help.welcome`. */
 function baseKey(key: HelpKey): string {
   return `help.${key}`;
 }
 
-/**
- * All i18n keys a help entry resolves through (title + each body/control line),
- * derived from {@link HELP_SPEC}. Exported so the i18n parity test can assert
- * every onboarding key exists in **both** catalogs.
- */
 export function helpI18nKeys(key: HelpKey): string[] {
   const base = baseKey(key);
   const spec = HELP_SPEC[key];
@@ -91,12 +56,6 @@ export function helpI18nKeys(key: HelpKey): string[] {
   return keys;
 }
 
-/**
- * Build a live {@link HelpEntry} whose `title`/`body`/`controls` resolve through
- * `t(...)` at access time — so the help panel re-reads the active language each
- * time it is opened. The `controls` getter is defined only when the key actually
- * has control lines (so a key like `welcome` reports `controls === undefined`).
- */
 function buildEntry(key: HelpKey): HelpEntry {
   const base = baseKey(key);
   const spec = HELP_SPEC[key];
@@ -125,17 +84,10 @@ function buildEntry(key: HelpKey): HelpEntry {
   return entry;
 }
 
-/**
- * Instructions for every reachable gameplay screen + the intro/hints. Each
- * entry's strings resolve live through `t(...)`, so the registry renders in the
- * active language and updates on a language change. Object identity per key is
- * stable (each entry is built once), so `helpFor(key) === HELP_CONTENT[key]`.
- */
 export const HELP_CONTENT: Record<HelpKey, HelpEntry> = Object.fromEntries(
   (Object.keys(HELP_SPEC) as HelpKey[]).map((key) => [key, buildEntry(key)]),
 ) as Record<HelpKey, HelpEntry>;
 
-/** Return the help entry for a key. */
 export function helpFor(key: HelpKey): HelpEntry {
   return HELP_CONTENT[key];
 }

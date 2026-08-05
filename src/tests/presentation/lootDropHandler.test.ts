@@ -38,7 +38,6 @@ function makeNpc(
   });
 }
 
-/** Deterministic RNG cycling through a fixed sequence of [0,1) values. */
 function seqRng(values: number[]): () => number {
   let i = 0;
   return () => values[i++ % values.length];
@@ -111,7 +110,6 @@ describe("LootDropHandler", () => {
 
     it("drops Overmind artifacts from an Overmind NPC", () => {
       const { handler } = makeHandler();
-      // count roll 0.5 → 1 item; artifact roll 0.1 < 0.4 → artifact
       handler.spawn(
         makeNpc("ov", { faction: Faction.OVERMIND }),
         0,
@@ -232,7 +230,6 @@ describe("LootDropHandler", () => {
       const metals = inventory.resources.find(
         (m) => m.type === ResourceType.METALS,
       );
-      // The hold stays at capacity — no extra unit added above what we seeded.
       const expectedCap = cargoCapacityOf(new ShipLoadout("hull_corvette"));
       expect(metals?.amount).toBe(expectedCap);
       handler.destroy();
@@ -241,7 +238,6 @@ describe("LootDropHandler", () => {
     it("collects an Overmind artifact drop as ResourceType.ARTIFACTS (not METALS)", () => {
       const { handler } = makeHandler();
       const r = GAME_BALANCE.lootPickupRadius;
-      // count roll 0.5 → 1 item; artifact roll 0.1 < 0.4 → artifact
       handler.spawn(
         makeNpc("ov", { faction: Faction.OVERMIND }),
         r - 5,

@@ -15,6 +15,11 @@
 | **AI / Infrastructure** | `src/ai/`, `src/data/` | Правиловый `FallbackEngine`, чистый-TS MLP (без ONNX-рантайма), IndexedDB, сохранения |
 | **Types / Config** | `src/types/`, `src/config/` | Единые типы, enum, константы баланса |
 
+Deeper architecture reference (contracts at the seams, shared buses, runtime
+data-flow) lives in [`architecture/README.md`](./architecture/README.md) →
+[`SEAMS.md`](./architecture/SEAMS.md), [`BUSES.md`](./architecture/BUSES.md),
+[`DATA-FLOW.md`](./architecture/DATA-FLOW.md).
+
 ---
 
 ## 2. Где искать то, что нужно

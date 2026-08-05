@@ -3,7 +3,6 @@ import { PlanetGenerator, ORBIT_ZONES } from "@/systems/PlanetGenerator";
 import { SYSTEM_GEOMETRY } from "@/config/balance";
 import { PlanetType } from "@/types";
 
-/** Map a planet's orbital radius back to its orbit index. */
 function orbitIndexFor(radius: number): number {
   return SYSTEM_GEOMETRY.orbitRadii.indexOf(radius as never);
 }
@@ -44,12 +43,10 @@ describe("PlanetGenerator frost-line zones", () => {
       for (const planet of planets) {
         const idx = orbitIndexFor(planet.orbitalRadius);
         if (idx === 0) {
-          // Hottest orbit: no gas giants, no ice worlds.
           expect(planet.type).not.toBe(PlanetType.GAS_GIANT);
           expect(planet.type).not.toBe(PlanetType.ICE);
         }
         if (idx === 4) {
-          // Coldest orbit: only gas giants and ice.
           expect([PlanetType.GAS_GIANT, PlanetType.ICE]).toContain(planet.type);
         }
       }
@@ -68,7 +65,6 @@ describe("PlanetGenerator frost-line zones", () => {
         habitableCount,
         `system hab-${seed} has no habitable planet`,
       ).toBeGreaterThanOrEqual(1);
-      // The guaranteed habitable planet is also flagged on the domain object.
       expect(planets.some((p) => p.isHabitable)).toBe(true);
     }
   });

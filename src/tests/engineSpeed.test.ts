@@ -2,12 +2,6 @@ import { describe, it, expect } from "vitest";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 
-/**
- * ⚠️ dual-hull Task 5: this file previously tested `engineSpeedBonus(ship)` over
- * the removed `ship.modules` fitting (and `ship.equipModule`). Engine speed is
- * now folded into the canonical loadout's `derivedStats().speed`, which the
- * flight scene reads directly — these are its loadout-based replacements.
- */
 describe("loadout-derived cruise speed (dual-hull Task 5)", () => {
   it("a higher-tech engine derives a faster speed than a basic one", () => {
     const basic = new ShipLoadout("hull_corvette");

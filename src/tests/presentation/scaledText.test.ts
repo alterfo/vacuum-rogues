@@ -1,12 +1,3 @@
-/**
- * Task 2 (shared scaled + readable panel-text helper). `scaledText` is the one
- * seam every dark-panel scene routes text through, so it must guarantee:
- *  - font size tracks the S/M/L setting (`scaledFont(basePx)`), and
- *  - a dim fill is lifted to a legible floor while a bright fill passes through.
- *
- * Real PixiJS `Text` constructs in jsdom (no WebGL needed for style inspection),
- * so the assertions read the produced node's `style.fontSize` / `style.fill`.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import {
   scaledText,
@@ -21,7 +12,6 @@ afterEach(() => setFontScale("M")); // never leak a scale into other tests
 
 const FLOOR_LUM = relativeLuminance(READABLE_FLOOR);
 
-// The JobBoardPanel readability offenders (the screenshot in the plan).
 const DIM_BLUE_GRAY = 0x889aaa;
 const DIMMER_BLUE_GRAY = 0x668899;
 
@@ -134,10 +124,6 @@ describe("scaledText fill", () => {
 });
 
 describe("relativeLuminance is WCAG-anchored", () => {
-  // Anchor the transfer function to concrete values: the readability floor and
-  // every "lifted" color is calibrated on these constants, so a flipped channel
-  // coefficient or wrong gamma must fail a test rather than silently shift the
-  // floor (the relative > comparisons elsewhere move both sides together).
   it("maps black to 0 and white to 1", () => {
     expect(relativeLuminance(0x000000)).toBe(0);
     expect(relativeLuminance(0xffffff)).toBeCloseTo(1, 5);

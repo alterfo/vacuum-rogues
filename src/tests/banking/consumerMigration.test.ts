@@ -30,16 +30,6 @@ import {
 } from "@/systems/banking/economy";
 import { BALANCE_EPSILON } from "@/domain/banking/Ledger";
 
-/**
- * Task 4 — the 23 consumer sites now move money through the bus instead of poking
- * `player.credits`. The contract every migrated site keeps:
- *   1. the *net* `player.credits` delta equals the old direct mutation, and
- *   2. the global double-entry invariant holds (Σ all postings == 0).
- * The same flow run **without** a bank wired must fall back to the legacy direct
- * mutation and produce the identical delta (this is what keeps the pre-existing
- * economy/quest delta tests green).
- */
-
 let pid = 0;
 function makePlayer(credits: number, id = `p${++pid}`): Player {
   return new Player(
@@ -104,7 +94,6 @@ interface Bank {
   player: Player;
 }
 
-/** A player fully wired into a fresh АБС (current account opened + projection bound). */
 function bankedPlayer(credits: number): Bank {
   const bus = new BankBus();
   const service = new BankingService(bus, { startDate: 1 });
@@ -113,7 +102,6 @@ function bankedPlayer(credits: number): Bank {
   return { bus, service, access: { bus, service }, player };
 }
 
-/** The whole-ledger double-entry invariant: every posting nets to zero. */
 function booksBalanced(service: BankingService): boolean {
   return Math.abs(service.getLedger().totalBalance()) <= BALANCE_EPSILON;
 }
@@ -126,7 +114,6 @@ describe("consumer migration — TradeSystem buy/sell", () => {
     const bankedPlanet = makePlanet();
     const trade = new TradeSystem();
 
-    // Legacy path: no bank → direct mutation.
     const legacy = trade.executeTrade(
       legacyPlayer,
       legacyPlanet,
@@ -134,7 +121,6 @@ describe("consumer migration — TradeSystem buy/sell", () => {
       10,
       true,
     );
-    // Migrated path: bus-routed via the projection.
     const migrated = trade.executeTrade(
       banked.player,
       bankedPlanet,
@@ -147,13 +133,10 @@ describe("consumer migration — TradeSystem buy/sell", () => {
 
     expect(migrated.success).toBe(true);
     expect(legacy.finalPrice).toBe(migrated.finalPrice);
-    // Same net delta on credits…
     expect(banked.player.credits).toBe(legacyPlayer.credits);
-    // …credits mirror the GL balance…
     expect(banked.player.credits).toBe(
       banked.service.balanceOf(banked.player.currentAccountId),
     );
-    // …and the ledger nets to zero.
     expect(booksBalanced(banked.service)).toBe(true);
   });
 
@@ -260,7 +243,6 @@ describe("consumer migration — QuestManager reward + fine", () => {
     expect(quest).not.toBeNull();
 
     qm.checkExpiredQuests(9999, banked.player);
-    // Old behaviour: Math.max(0, 200 - 500) === 0, books still balanced.
     expect(banked.player.credits).toBe(0);
     expect(banked.player.credits).toBe(
       banked.service.balanceOf(banked.player.currentAccountId),
@@ -336,9 +318,6 @@ describe("consumer migration — NPC pirate plunder (creditNpc)", () => {
   });
 
   it("seeds the NPC account once and accumulates across repeated loot (account-exists branch)", () => {
-    // A pirate that destroys two victims calls creditNpc twice — the production
-    // path that exercises the "account already open" branch (seed skipped, just
-    // transfer + re-read). Verify no re-seed/double-count and npc.credits == GL.
     const bus = new BankBus();
     const service = new BankingService(bus, { startDate: 1 });
     const access: BankAccess = { bus, service };
@@ -369,10 +348,6 @@ describe("consumer migration — fallback with no bank preserves the legacy delt
   });
 
   it("adjustPlayerCredits falls back to direct mutation when the bank is wired but the player account is not yet seeded", () => {
-    // A real runtime state: a scene holds gameEngine.bank but setupPlayerBanking
-    // has not opened this player's current account. The helper must NOT dispatch a
-    // Transfer from a non-existent account (that throws LEDGER_UNKNOWN_ACCOUNT) —
-    // it falls back to the legacy direct mutation.
     const bus = new BankBus();
     const service = new BankingService(bus, { startDate: 1 });
     const access: BankAccess = { bus, service };
@@ -383,7 +358,6 @@ describe("consumer migration — fallback with no bank preserves the legacy delt
       adjustPlayerCredits(access, player, -300, GL_COUNTERPARTY.MARKET, "buy"),
     ).not.toThrow();
     expect(player.credits).toBe(700);
-    // No spurious account/entry was created on the ledger for the player.
     expect(service.getLedger().hasAccount(player.currentAccountId)).toBe(false);
   });
 

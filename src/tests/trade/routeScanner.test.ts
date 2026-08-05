@@ -26,12 +26,10 @@ function makePlanet(id: string, resources: ResourceType[]): Planet {
   return new Planet(id, id, PlanetType.TERRESTRIAL, 150, market, [], []);
 }
 
-/** Minimal galaxy stub: the scanner only reads `systems[].id` + `.planets`. */
 function makeGalaxy(systems: { id: string; planets: Planet[] }[]): Galaxy {
   return { systems } as unknown as Galaxy;
 }
 
-/** A price lookup keyed by `${planetId}:${resource}`; absent keys throw. */
 function priceTable(table: Record<string, number>): ReferencePriceFn {
   return (planet, resource) => {
     const key = `${planet.id}:${resource}`;
@@ -81,10 +79,8 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
       },
     ]);
     const prices = priceTable({
-      // METALS spread: 100 → 130 (30%)
       "A:METALS": 100,
       "B:METALS": 130,
-      // FUEL spread: 50 → 100 (100%)
       "A:FUEL": 100,
       "B:FUEL": 50,
     });
@@ -99,7 +95,6 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
   });
 
   it("excludes same-system pairs even when their spread is huge", () => {
-    // The only spread for METALS is between two planets in the SAME system.
     const galaxy = makeGalaxy([
       {
         id: "S1",
@@ -119,8 +114,6 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
   });
 
   it("picks the best cross-system pair when global min and max share a system", () => {
-    // Global cheapest (A=50) and dearest (B=500) are both in S1, so the best
-    // cross-system route must fall back to a pair spanning S1↔S2.
     const galaxy = makeGalaxy([
       {
         id: "S1",
@@ -140,7 +133,6 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
     const routes = scanTradeRoutes(galaxy, prices, { maxRoutes: 10 });
 
     expect(routes).toHaveLength(1);
-    // Best option: buy A (50) → sell C (200) = +300% beats buy C (200) → sell B (500) = +150%.
     expect(routes[0]).toMatchObject({
       fromPlanetId: "A",
       toPlanetId: "C",
@@ -155,7 +147,6 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
       { id: "S1", planets: [makePlanet("A", [ResourceType.METALS])] },
       { id: "S2", planets: [makePlanet("B", [ResourceType.METALS])] },
     ]);
-    // Best cross-system direction is still a loss (prices equal → 0%).
     const prices = priceTable({ "A:METALS": 100, "B:METALS": 100 });
 
     const routes = scanTradeRoutes(galaxy, prices, { maxRoutes: 10 });
@@ -169,11 +160,9 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
     ]);
     const prices = priceTable({ "A:METALS": 100, "B:METALS": 110 });
 
-    // 10% margin is not strictly greater than a 20% floor → excluded.
     expect(
       scanTradeRoutes(galaxy, prices, { maxRoutes: 10, minMarginPct: 20 }),
     ).toHaveLength(0);
-    // ...but clears a 5% floor.
     expect(
       scanTradeRoutes(galaxy, prices, { maxRoutes: 10, minMarginPct: 5 }),
     ).toHaveLength(1);
@@ -231,7 +220,6 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
           planets: [makePlanet("B", [ResourceType.METALS, ResourceType.FUEL])],
         },
       ]);
-    // Both resources have an identical 50% spread → tie-break must be stable.
     const prices = priceTable({
       "A:METALS": 100,
       "B:METALS": 150,
@@ -245,7 +233,6 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
     const key = (r: RouteCandidate) =>
       `${r.resource}|${r.fromPlanetId}->${r.toPlanetId}|${r.marginPct}`;
     expect(run1.map(key)).toEqual(run2.map(key));
-    // FUEL sorts before METALS on the id tie-break.
     expect(run1.map((r) => r.resource)).toEqual([
       ResourceType.FUEL,
       ResourceType.METALS,
@@ -318,7 +305,6 @@ describe("TradeSystem.referenceMarketPrice — player-neutral pricing", () => {
     const trade = new TradeSystem();
     const planet = makeMarketPlanet("rank");
     const highRank = makePlayer(100);
-    // The discounted player price is below the neutral reference price.
     const discounted = trade.getMarketPrice(
       planet,
       ResourceType.ARTIFACTS,

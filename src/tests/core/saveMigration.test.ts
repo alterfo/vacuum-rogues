@@ -3,7 +3,6 @@ import { MigrationPipeline } from "@/data/MigrationPipeline";
 import { validateSaveState } from "@/validation/schemas";
 import type { SaveState } from "@/domain/SaveState";
 
-/** Minimal v0 save — only the fields that existed before any plan tasks. */
 function makeV0Save(): Record<string, unknown> {
   return {
     version: 1, // version 1 is the first "real" save (v0 lacked persistentDialogs)
@@ -74,11 +73,6 @@ function makeV0Save(): Record<string, unknown> {
   };
 }
 
-/**
- * A quest object as it appeared in a save predating the quest-polish plan:
- * no `isPendingReturn`, no `targetSystemId`/`minReputation`/`chainId` etc.
- * The migration pipeline must backfill these without dropping the quest.
- */
 function makeLegacyQuest(): Record<string, unknown> {
   return {
     id: "quest_bounty_hunt",
@@ -100,7 +94,6 @@ function makeLegacyQuest(): Record<string, unknown> {
     issuedDay: 1,
     deadline: 0,
     failurePenalty: null,
-    // NOTE: deliberately omits isPendingReturn to simulate an old save.
   };
 }
 
@@ -116,52 +109,38 @@ describe("MigrationPipeline", () => {
     const npcs = gal.npcShips as Record<string, unknown>[];
     const pl = migrated.player as unknown as Record<string, unknown>;
 
-    // Task 1: economy + political system defaults
     expect(sys.economyType).toBe("MIXED");
     expect(sys.politicalSystem).toBe("REPUBLIC");
 
-    // Task 3: contraband goods
     expect(pl.contrabandGoods).toEqual([]);
 
-    // Task 5: hull class
     expect((pl.ship as Record<string, unknown>).hullClass).toBe("CORVETTE");
 
-    // Task 7: micromodules in inventory
     expect((pl.inventory as Record<string, unknown>).micromodules).toEqual([]);
 
-    // Tasks 8/12: NPC ship fields filled by v14→v15 migration
     expect(npcs[0].cargo).toEqual([]);
     expect(npcs[0].loadoutSummary).toEqual([]);
     expect(npcs[0].shieldPower).toBe(0);
 
-    // Task 13: news feed + activeQuestTarget
     expect(gal.newsFeed).toEqual([]);
     expect(npcs[0].activeQuestTarget).toBeNull();
 
-    // Task 15: quest boards
     expect(gal.questBoards).toEqual({});
 
-    // Task 16: completed quest chains
     expect(pl.completedQuestChains).toEqual([]);
 
-    // Task 17: active text quest state (fixed in v14→v15)
     expect(pl.activeTextQuestState).toBeNull();
 
-    // Task 20: news bookmarks
     expect(pl.newsBookmarks).toEqual([]);
 
-    // Task 22: kill points + rank
     expect(pl.killPoints).toBe(0);
     expect(pl.rank).toBe(0);
 
-    // Task 23: OVERMIND systems
     expect(gal.overmindSystems).toEqual([]);
     expect(gal.overmindCoreSystemId).toBe("sys-1");
 
-    // Task 25 (overmind balance): pirate-held systems
     expect(gal.pirateSystems).toEqual([]);
 
-    // Task 24: trade boom systems (fixed in v14→v15)
     expect(gal.activeTradeBoomSystems).toEqual({});
   });
 
@@ -176,14 +155,12 @@ describe("MigrationPipeline", () => {
     const once = MigrationPipeline.migrate(raw as unknown as SaveState);
     const twice = MigrationPipeline.migrate(once);
     expect(twice.version).toBe(MigrationPipeline.CURRENT_VERSION);
-    // No fields should be corrupted by double migration
     const gal = twice.galaxy as unknown as Record<string, unknown>;
     expect((gal.systems as Record<string, unknown>[])[0].economyType).toBe(
       "MIXED",
     );
   });
 
-  // Task 8 (quest polish): quest-return persistence — v21→v22 migration.
   it("backfills isPendingReturn = false on legacy active quests", () => {
     const raw = makeV0Save();
     (raw.player as Record<string, unknown>).questLog = {
@@ -197,13 +174,11 @@ describe("MigrationPipeline", () => {
     const quests = questLog.activeQuests as Record<string, unknown>[];
     expect(quests[0].isPendingReturn).toBe(false);
 
-    // The migrated save must still satisfy the Zod schema.
     expect(() => validateSaveState(migrated)).not.toThrow();
   });
 
   it("adds empty pendingReturnQuests to questLog absent from old saves", () => {
     const raw = makeV0Save();
-    // makeV0Save's questLog has no pendingReturnQuests key at all.
     expect(
       (
         (raw.player as Record<string, unknown>).questLog as Record<
@@ -219,7 +194,6 @@ describe("MigrationPipeline", () => {
     const questLog = pl.questLog as Record<string, unknown>;
     expect(questLog.pendingReturnQuests).toEqual([]);
 
-    // After validation the field is present and empty.
     const parsed = validateSaveState(migrated) as unknown as Record<
       string,
       unknown

@@ -3,16 +3,6 @@ import { RealEngineHarness } from "./realEngineHarness";
 import { SceneType } from "@/types";
 import { SYSTEM_GEOMETRY } from "@/config/balance";
 
-/**
- * Bug: hyperjumps always seemed to originate from "one point" and no longer
- * required flying to the far system edge. Root cause: `warpEdgePoint`'s
- * near-edge escape shortcut (Task 9 iv, meant only for a genuine mid-fight
- * flee/re-plot) was gated on `lastFlightShipPos != null` — but that field is
- * set on EVERY routine trip to the star map (and inventory, and quest nav),
- * so the shortcut fired on essentially every hyperjump, not just a flee.
- * Fixed by gating on a dedicated `lastFlightWasFleeing` flag, set only when
- * `saveShipPosition` runs while `combatModule.isActive`.
- */
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
 interface FlightPrivates {
@@ -40,8 +30,6 @@ describe("Hyperjump near-edge escape fires only on a genuine flee, not every jum
     const target = galaxy.systems.find((s) => s.id !== player.currentSystemId)!;
     const exitVector = { x: 1, y: 0 }; // destination straight to the "east"
 
-    // Routine trip to the star map (never in combat) leaves lastFlightShipPos
-    // set, off to one side — this must NOT anchor the exit point.
     harness.engine.lastFlightShipPos = { x: -900, y: 0 };
     harness.engine.lastFlightWasFleeing = false;
 
@@ -51,8 +39,6 @@ describe("Hyperjump near-edge escape fires only on a genuine flee, not every jum
 
     const scene = harness.currentScene() as unknown as FlightPrivates;
     expect(scene.plannedRoute).not.toBeNull();
-    // Exit-direction edge: straight out along exitVector, boundaryRadius away
-    // from centre — independent of the stashed (-900, 0) position.
     const center = screenCenter(harness);
     expect(scene.plannedRoute!.x).toBeCloseTo(
       center.x + exitVector.x * SYSTEM_GEOMETRY.boundaryRadius,
@@ -74,7 +60,6 @@ describe("Hyperjump near-edge escape fires only on a genuine flee, not every jum
     const target = galaxy.systems.find((s) => s.id !== player.currentSystemId)!;
     const exitVector = { x: 1, y: 0 };
 
-    // Fleeing: lastFlightShipPos was captured while combat was active.
     harness.engine.lastFlightShipPos = { x: -900, y: 0 };
     harness.engine.lastFlightWasFleeing = true;
 
@@ -84,7 +69,6 @@ describe("Hyperjump near-edge escape fires only on a genuine flee, not every jum
 
     const scene = harness.currentScene() as unknown as FlightPrivates;
     expect(scene.plannedRoute).not.toBeNull();
-    // Near-edge escape: the exit point must NOT be the far (east) edge.
     const center = screenCenter(harness);
     const farEdgeX = center.x + exitVector.x * SYSTEM_GEOMETRY.boundaryRadius;
     expect(scene.plannedRoute!.x).not.toBeCloseTo(farEdgeX, -1);

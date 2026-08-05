@@ -1,17 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { applyMockHeavySystems } from './fixtures/mockHeavySystems';
 
-/**
- * E2E: Quest accept and complete flow
- *
- * Validates the critical loop:
- *   accept DELIVERY/EXPLORATION quest from job board
- *   → fly to target system
- *   → quest auto-completes
- *   → credits increase by reward amount
- *
- * All interaction driven via window.__gameEngine. No coordinate-based canvas clicks.
- */
 
 type QuestObjective = {
   type: string;
@@ -93,7 +82,6 @@ test.describe('Quest accept and complete flow', () => {
   });
 
   test('EXPLORATION quest completes when player enters target system', async ({ page }) => {
-    // Find a planet in the starting system to get the quest board
     const setupResult = await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const galaxy = engine.galaxy;
@@ -106,7 +94,6 @@ test.describe('Quest accept and complete flow', () => {
       const planet = currentSys.planets[0];
 
       const board = engine.getQuestBoard(planet.id);
-      // Prefer EXPLORATION (no cargo needed); fall back to ESCORT/DIPLOMACY
       const quest = board.find((q) =>
         ['EXPLORATION', 'ESCORT', 'DIPLOMACY'].includes(q.template.type),
       );
@@ -120,7 +107,6 @@ test.describe('Quest accept and complete flow', () => {
       return;
     }
 
-    // Accept the quest
     const acceptResult = await page.evaluate((sr) => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const accepted = engine.acceptBoardQuest(sr.quest, sr.planetId);
@@ -134,7 +120,6 @@ test.describe('Quest accept and complete flow', () => {
 
     expect(acceptResult.accepted).toBe(true);
 
-    // Confirm quest appears in active quests
     const activeCount = await page.evaluate(() => {
       return (window as unknown as { __gameEngine: GameEngine }).__gameEngine
         .questManager.getActiveQuests().length;
@@ -145,13 +130,11 @@ test.describe('Quest accept and complete flow', () => {
       return (window as unknown as { __gameEngine: GameEngine }).__gameEngine.player.credits;
     });
 
-    // Teleport player to target system (warp jump)
     await page.evaluate((targetSystemId) => {
       (window as unknown as { __gameEngine: GameEngine }).__gameEngine
         .player.currentSystemId = targetSystemId;
     }, acceptResult.targetSystemId);
 
-    // Transitioning to SPACE_FLIGHT triggers completeExplorationQuestsBySystemEntry()
     await page.evaluate(async () => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       await engine.transitionTo('SPACE_FLIGHT');
@@ -163,7 +146,6 @@ test.describe('Quest accept and complete flow', () => {
       { timeout: 8000 },
     );
 
-    // Verify credits increased by the quest reward
     const creditsAfter = await page.evaluate(() => {
       return (window as unknown as { __gameEngine: GameEngine }).__gameEngine.player.credits;
     });
@@ -171,7 +153,6 @@ test.describe('Quest accept and complete flow', () => {
   });
 
   test('DELIVERY quest completes when player lands on target planet with cargo', async ({ page }) => {
-    // Find a DELIVERY quest on the board
     const setupResult = await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const galaxy = engine.galaxy;
@@ -195,13 +176,11 @@ test.describe('Quest accept and complete flow', () => {
       return;
     }
 
-    // Accept delivery quest
     const acceptResult = await page.evaluate((sr) => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const accepted = engine.acceptBoardQuest(sr.quest, sr.planetId);
       if (!accepted) return null;
 
-      // Find the COLLECT_ITEM objective to know what cargo to load
       const collectObj = accepted.objectives.find(
         (o) => o.type === 'COLLECT_ITEM',
       );
@@ -219,7 +198,6 @@ test.describe('Quest accept and complete flow', () => {
       return;
     }
 
-    // Load the required cargo into inventory via the addResource API
     if (acceptResult.cargoType) {
       await page.evaluate((info) => {
         const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
@@ -231,13 +209,11 @@ test.describe('Quest accept and complete flow', () => {
       return (window as unknown as { __gameEngine: GameEngine }).__gameEngine.player.credits;
     });
 
-    // Travel to target system
     await page.evaluate((targetSystemId) => {
       (window as unknown as { __gameEngine: GameEngine }).__gameEngine
         .player.currentSystemId = targetSystemId;
     }, acceptResult.targetSystemId);
 
-    // Land on target planet (PlanetScene.initialize triggers checkDeliveryQuestCompletion)
     const targetPlanetId = await page.evaluate((targetSystemId) => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const galaxy = engine.galaxy;
@@ -267,7 +243,6 @@ test.describe('Quest accept and complete flow', () => {
       { timeout: 8000 },
     );
 
-    // Verify credits increased
     const creditsAfter = await page.evaluate(() => {
       return (window as unknown as { __gameEngine: GameEngine }).__gameEngine.player.credits;
     });

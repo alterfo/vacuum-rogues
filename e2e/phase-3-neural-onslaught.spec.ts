@@ -3,10 +3,6 @@ import { MainMenuPage } from './page-objects/main-menu.page';
 import { StarMapPage } from './page-objects/star-map.page';
 import { checkIndexedDB, expectNoJavaScriptErrors } from './fixtures/game-fixtures';
 
-/**
- * Phase 3: Neural Onslaught (Alpha Release)
- * Testing global AI enemy, meta-progression, events, and full UI/UX
- */
 test.describe('Phase 3: Global AI Enemy (Alpha)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;
@@ -20,17 +16,14 @@ test.describe('Phase 3: Global AI Enemy (Alpha)', () => {
   test('TC-P3-G001: Overmind threat expands over time', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Simulate time passing
     await page.waitForTimeout(5000);
 
-    // Star map should show dynamic changes
     await starMap.expectStarMapVisible();
   });
 
   test('TC-P3-G002: Enemy fleets move across galaxy', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Multiple observations
     await starMap.clickOnSystemPercent(0.3, 0.4);
     await page.waitForTimeout(2000);
 
@@ -44,17 +37,11 @@ test.describe('Phase 3: Global AI Enemy (Alpha)', () => {
     await starMap.navigateFromMainMenu();
     await page.waitForTimeout(3000);
 
-    // Galaxy stays rendered while the player navigates (combat is now real-time
-    // in-flight, no separate encounter scene to transition into).
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });
 });
 
-/**
- * Phase 3: Meta-Progression (Factions)
- * Testing reputation system and faction relationships
- */
 test.describe('Phase 3: Meta-Progression (Alpha)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;
@@ -68,7 +55,6 @@ test.describe('Phase 3: Meta-Progression (Alpha)', () => {
   test('TC-P3-M001: Faction reputation is tracked', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Visit multiple systems (different factions)
     await starMap.clickOnSystemPercent(0.3, 0.4);
     await starMap.clickOnSystemPercent(0.5, 0.5);
     await starMap.clickOnSystemPercent(0.7, 0.6);
@@ -82,7 +68,6 @@ test.describe('Phase 3: Meta-Progression (Alpha)', () => {
   }) => {
     await starMap.navigateFromMainMenu();
 
-    // Different systems should offer different content
     await starMap.openSystemDetails();
     await page.waitForTimeout(1000);
 
@@ -95,7 +80,6 @@ test.describe('Phase 3: Meta-Progression (Alpha)', () => {
   test('TC-P3-M003: Alliances unlock new content', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Multiple interactions
     for (let i = 0; i < 5; i++) {
       await starMap.clickOnSystemPercent(0.4 + i * 0.1, 0.3 + i * 0.1);
       await page.waitForTimeout(1000);
@@ -105,10 +89,6 @@ test.describe('Phase 3: Meta-Progression (Alpha)', () => {
   });
 });
 
-/**
- * Phase 3: Event Generator
- * Testing unique galactic events and quest chains
- */
 test.describe('Phase 3: Event Generator (Alpha)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;
@@ -122,7 +102,6 @@ test.describe('Phase 3: Event Generator (Alpha)', () => {
   test('TC-P3-E001: Galactic events are triggered', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Wait for potential event
     await page.waitForTimeout(5000);
 
     const canvas = page.locator('canvas');
@@ -132,7 +111,6 @@ test.describe('Phase 3: Event Generator (Alpha)', () => {
   test('TC-P3-E002: Anomalies appear in systems', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Explore multiple systems
     const systems = [
       { x: 0.2, y: 0.3 },
       { x: 0.5, y: 0.5 },
@@ -150,7 +128,6 @@ test.describe('Phase 3: Event Generator (Alpha)', () => {
   test('TC-P3-E003: Event quest chains are available', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Interact with event
     await starMap.clickOnSystemPercent(0.5, 0.5);
     await page.waitForTimeout(2000);
 
@@ -162,10 +139,6 @@ test.describe('Phase 3: Event Generator (Alpha)', () => {
   });
 });
 
-/**
- * Phase 3: UI/UX Polish
- * Testing holographic panels, animations, and tooltips
- */
 test.describe('Phase 3: UI/UX Polish (Alpha)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;
@@ -191,7 +164,6 @@ test.describe('Phase 3: UI/UX Polish (Alpha)', () => {
   }) => {
     await mainMenu.waitForGameInitialization();
 
-    // Resize browser
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.waitForTimeout(1000);
 
@@ -212,10 +184,6 @@ test.describe('Phase 3: UI/UX Polish (Alpha)', () => {
   });
 });
 
-/**
- * Phase 3: PWA and Offline Support
- * Testing Service Worker and offline functionality
- */
 test.describe('Phase 3: PWA Support (Alpha)', () => {
   test('TC-P3-P001: Service Worker is registered', async ({ page }) => {
     await page.goto('/');
@@ -243,21 +211,15 @@ test.describe('Phase 3: PWA Support (Alpha)', () => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
 
-    // Reload to test cache
     const startTime = Date.now();
     await page.reload();
     await page.waitForSelector('canvas', { timeout: 10000 });
 
     const reloadTime = Date.now() - startTime;
-    // Cached load should be fast
     expect(reloadTime).toBeLessThan(5000);
   });
 });
 
-/**
- * Phase 3: Performance Optimization
- * Testing 60 FPS and resource management
- */
 test.describe('Phase 3: Performance (Alpha)', () => {
   let mainMenu: MainMenuPage;
 
@@ -281,14 +243,11 @@ test.describe('Phase 3: Performance (Alpha)', () => {
   test('TC-P3-F002: Memory usage remains stable', async ({ page }) => {
     await mainMenu.navigateTo();
 
-    // Initial state
     await page.waitForTimeout(2000);
 
-    // Perform actions
     await mainMenu.clickNewGame();
     await page.waitForTimeout(2000);
 
-    // Should remain responsive
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });
@@ -300,7 +259,6 @@ test.describe('Phase 3: Performance (Alpha)', () => {
 
     const startTime = Date.now();
 
-    // Game should remain responsive
     await page.waitForTimeout(3000);
 
     const responseTime = Date.now() - startTime;
@@ -308,16 +266,11 @@ test.describe('Phase 3: Performance (Alpha)', () => {
   });
 });
 
-/**
- * Phase 3: Save System Enhancement
- * Testing IndexedDB persistence and migration
- */
 test.describe('Phase 3: Save System (Alpha)', () => {
   test('TC-P3-S001: Multiple save slots work', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
 
-    // Create saves in different slots
     const save1 = await checkIndexedDB(page);
     expect(save1.exists).toBeTruthy();
 
@@ -332,7 +285,6 @@ test.describe('Phase 3: Save System (Alpha)', () => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
 
-    // Game should create emergency save
     const dbStatus = await checkIndexedDB(page);
     expect(dbStatus.exists).toBeTruthy();
   });

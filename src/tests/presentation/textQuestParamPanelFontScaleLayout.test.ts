@@ -1,16 +1,3 @@
-/**
- * Task 3 (font-scale layout bug-fix pack,
- * `docs/plans/20260708-font-scale-and-faction-bugs.md`): regression test for
- * `TextQuestScene.refreshVmParamPanel`'s per-param name/value stack. `yOff`
- * advanced by fixed pixel constants (+16 after the name line, +18 after the
- * value line) independent of `scaledFont`'s taller line height at "L" scale,
- * so the value line bled into the name line above it.
- *
- * Mirrors the lightweight `pixi.js` mock convention already used by this
- * scene's own `TextQuestScene.test.ts` (plain mutable `Container`/`Text`
- * objects), extended to record every created Text instance so its final,
- * post-construction `x`/`y` is inspectable after render.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 import { setFontScale, scaledFont } from "@/utils/fontScale";
@@ -84,7 +71,6 @@ vi.mock("pixi.js", () => {
   return { Container, Graphics, Text, Sprite };
 });
 
-// Imported AFTER the mock so the scene sees the fake pixi.
 import { TextQuestScene } from "@/presentation/TextQuestScene";
 
 function makeRenderer() {
@@ -150,9 +136,6 @@ describe("TextQuestScene VM param panel at L font scale", () => {
     expect(value.text).toBe("50");
 
     const nameStep = lineStepFor(scaledFont(11));
-    // The bug: the value line used to sit at a fixed +16 offset from the name
-    // line regardless of scale; at "L" the name line's own height exceeds
-    // that gap and the value line bleeds into it.
     expect(value.y).toBeGreaterThanOrEqual(name.y + nameStep);
 
     scene.destroy();

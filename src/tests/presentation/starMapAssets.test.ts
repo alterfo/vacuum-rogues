@@ -1,13 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { textures } from "@/assets/manifest";
 
-/**
- * F4 (letsplay 2026-06-10): three star_maps had horizontal collage-seam rows
- * baked into the image itself — no addressing mode can fix that, so they were
- * deleted. The Vite glob manifest picks assets up automatically, so the only
- * guard against the band regressing is asserting the known-bad keys stay out
- * (re-generated, seam-free maps should use NEW numbers).
- */
 describe("star_maps manifest (F4 — baked collage-seam maps stay deleted)", () => {
   it.each([
     "star_maps/yellow_01",

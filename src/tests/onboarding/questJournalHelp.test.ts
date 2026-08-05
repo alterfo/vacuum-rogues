@@ -1,14 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { IQuestService } from "@/core/ports/IQuestService";
 
-/**
- * Task 4 (onboarding): the in-flight quest journal hosts a «?» help button. When
- * an `onShowHelp` hook is wired (FlightHud mounts the shared HelpPanel for the
- * `quest-journal` key), the journal renders a «?» button whose click invokes the
- * hook; with no hook (unit tests / no help wired) the button is omitted. Mocks
- * pixi.js + captures pointer handlers so the button can be "clicked".
- */
-
 interface FakeNode {
   text?: string;
   eventMode: string;
@@ -70,8 +62,6 @@ function makeQuestService(): IQuestService {
   } as unknown as IQuestService;
 }
 
-/** Depth-first find of a node that is itself a «?» button (a static node whose
- *  children include a Text === "?"). */
 function findHelpButton(root: FakeNode): FakeNode | undefined {
   for (const child of root.children) {
     if (

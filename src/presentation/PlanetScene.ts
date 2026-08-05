@@ -50,17 +50,9 @@ import { t } from "@/i18n/i18n";
 interface PlanetContext {
   gameEngine?: GameEngine;
   planet?: Planet;
-  /**
-   * `false` when this landing is the immediate return from an exited text quest
-   * (win / «Сдаться» / «Выйти» / Esc — set by `TextQuestScene.doReturn`). It
-   * suppresses the one auto-resume of the still-active TEXT_ADVENTURE quest that
-   * would otherwise bounce the player straight back in (the customs restart /
-   * can't-exit loop). Omitted on a genuine fresh landing, which resumes normally.
-   */
   resumeTextQuest?: boolean;
 }
 
-/** A planet-surface action button (governor, garage, market, …, take-off). */
 export interface PlanetServiceButton {
   label: string;
   color: number;
@@ -74,11 +66,6 @@ interface ServiceButtonDef {
   action: () => void;
 }
 
-/**
- * Which station services are offered on a planet. Uninhabited worlds have no
- * station services — only "Взлёт" (take-off); once drones exist, also "leave a
- * drone". Inhabited worlds show the full set (US-070 #12).
- */
 export function visiblePlanetServices<T extends { label: string }>(
   isHabitable: boolean,
   buttons: T[],
@@ -89,10 +76,6 @@ export function visiblePlanetServices<T extends { label: string }>(
 
 const PANORAMA_PARALLAX_MAX = 30;
 
-/**
- * Pure helper for parallax offset: maps mouse X to a target panorama X.
- * norm = -1 at left edge, +1 at right edge; result = baseX ± maxOffset.
- */
 export function computeParallaxTargetX(
   mouseX: number,
   screenWidth: number,
@@ -103,12 +86,6 @@ export function computeParallaxTargetX(
   return baseX + norm * maxOffset;
 }
 
-/**
- * Clamp the panorama's horizontal offset so its edges never reveal empty space
- * (Task 6). When the panorama is wider than the screen, x is constrained to
- * `[screenWidth - panoramaWidth, 0]`; when it is narrower (or equal) it is
- * centred and cannot be dragged.
- */
 export function clampPanoramaX(
   x: number,
   panoramaWidth: number,
@@ -119,12 +96,6 @@ export function clampPanoramaX(
   return Math.max(min, Math.min(0, x));
 }
 
-/**
- * Build a top→bottom procedural sky gradient (Task 6 fallback when no panorama
- * art exists). Returns `steps` band colours: the top band is near-black space,
- * lower bands blend up to ~45% toward the controlling faction's colour so the
- * sky reads as that faction's world instead of flat black.
- */
 export function skyGradientColors(baseColor: number, steps: number): number[] {
   const br = (baseColor >> 16) & 0xff;
   const bg = (baseColor >> 8) & 0xff;
@@ -144,19 +115,8 @@ export function skyGradientColors(baseColor: number, steps: number): number[] {
 const BRIBE_COST = 500;
 const PLANET_VISUAL_RADIUS = 196;
 
-/**
- * Alpha of the full-screen dim layer drawn over the planet backdrop art so the
- * menu/UI stays readable. Kept deliberately light (was 0.55, which buried a nice
- * planet background) — the menu's own per-row dark panels carry the contrast for
- * text legibility, so this only needs to take the edge off a bright sky.
- */
 export const PLANET_BACKDROP_OVERLAY_ALPHA = 0.28;
 
-/**
- * Star-map purchase tiers (Task 3): buying a tier reveals every system within
- * `hops` warp jumps of the current system. Pricing climbs faster than reach so
- * deep reveals stay a meaningful credit sink.
- */
 export interface StarMapTier {
   hops: number;
   cost: number;
@@ -178,23 +138,6 @@ const FACTION_PANORAMA: Record<string, string> = {
   OVERMIND: "wilderness_tundra",
 };
 
-/**
- * Vertical layout for the planet service-menu button stack. Regression (playtest2
- * ⑥, real-pointer verification): at 1280×720 the eighth button «Взлёт» overflowed
- * below the viewport, so the critical take-off action was only half-clickable.
- * Distribute `count` buttons across the space between the content above
- * (`contentBottomY`) and a bottom margin so the LAST button's bottom edge always
- * stays on-screen, and consecutive buttons never overlap (overlap steals clicks).
- */
-/**
- * Extra clearance (as a fraction of one button step) inserted *before* each
- * danger-accent row — «Взлёт» (take-off) and «Взятка» (bribe). UX review
- * finding #11: the last two rows sat only ~6px apart and read as cramped, with
- * the destructive take-off/bribe actions visually glued to the routine service
- * buttons above them. Half a step gives a clear break that scales with the
- * screen (bigger gap on tall screens, smaller on short ones) and is reserved out
- * of the available space up front so it never pushes the last button off-screen.
- */
 const DANGER_ROW_GAP_STEPS = 0.5;
 
 export function computePlanetMenuLayout(
@@ -206,36 +149,17 @@ export function computePlanetMenuLayout(
   const bottomMargin = 16;
   const btnStartY = contentBottomY + 36;
   const avail = Math.max(0, screenH - bottomMargin - btnStartY);
-  // Each danger row is treated as `1 + DANGER_ROW_GAP_STEPS` slots so the extra
-  // clearance shares the same shrink-to-fit budget as the buttons themselves —
-  // the last button's bottom edge therefore always stays on-screen regardless of
-  // how many danger rows are present (see the fit invariant tests).
   const slots =
     Math.max(0, count) + DANGER_ROW_GAP_STEPS * Math.max(0, dangerRows);
-  // Cap the step so buttons aren't enormous on tall screens; shrink to fit on
-  // short ones.
   const btnStep = slots > 0 ? Math.min(38, avail / slots) : 32;
-  // Button height sits a hair under the step so consecutive buttons never
-  // overlap; floor 20 keeps the label legible. The hard cap at `floor(btnStep)`
-  // preserves the no-overlap invariant even on very short screens (< ~700px),
-  // where the 20px floor would otherwise exceed the step and steal clicks.
   const btnH = Math.min(
     Math.max(20, Math.min(Math.floor(btnStep) - 2, 32)),
     Math.floor(btnStep),
   );
-  // The gap the caller adds before each danger row (0 when there are none).
   const dangerGap = dangerRows > 0 ? DANGER_ROW_GAP_STEPS * btnStep : 0;
   return { btnStartY, btnStep, btnH, dangerGap };
 }
 
-/**
- * Right-top anchor (the read-out's right edge) for the top-right credit-balance
- * HUD, nudged clear of the reserved «?» help-button zone so the two never
- * overlap (playtest bug — the «?» sat on top of the balance). The balance is
- * right-anchored and stays on the top line, parked just left of the reserved
- * corner square. Pure + exported so the no-overlap invariant is unit-testable
- * against `helpButtonRect` without a renderer.
- */
 export function creditsHudAnchor(screenWidth: number): {
   x: number;
   y: number;
@@ -245,29 +169,17 @@ export function creditsHudAnchor(screenWidth: number): {
   return { x: reserved.x - GAP, y: 16 };
 }
 
-/** Ultimate panorama fallback (Task 8) when no other key resolves. */
 const PANORAMA_FALLBACK = "outlanders_city";
 
-/** Wild/uninhabited backdrops keyed by terrain type (playtest5: planet
- *  backdrops were all the same because the key was faction-only). */
 const WILDERNESS_PANORAMA: Record<string, string> = {
   ICE: "wilderness_tundra",
   VOLCANIC: "wilderness_desert",
   GAS_GIANT: "wilderness_desert", // no surface — neutral barren backdrop
   TERRESTRIAL: "wilderness_jungle",
-  // Settled types under INDEPENDENT/OVERMIND (no city art) get terrain backdrops
-  // rather than falling through to the hardcoded "wilderness_jungle" default.
   HABITAT: "wilderness_jungle",
   INDUSTRIAL: "wilderness_desert",
 };
 
-/**
- * Resolve the panorama asset key for a specific planet. Settled worlds
- * (HABITAT/INDUSTRIAL) under one of the five real factions wear that faction's
- * cityscape; every other world wears a wilderness backdrop chosen by its
- * terrain type. Keying by planet type (not just faction) is what gives adjacent
- * planets distinct backdrops (playtest5 — "фон у планет одинаковый").
- */
 export function panoramaKeyForPlanet(
   planetType: string,
   faction: string,
@@ -276,13 +188,11 @@ export function panoramaKeyForPlanet(
   if (isHabitable) {
     const city = FACTION_PANORAMA[faction];
     if (city && city.endsWith("_city")) return city;
-    // Habitable but no city art (INDEPENDENT, OVERMIND) → most liveable-looking wilderness.
     return "wilderness_jungle";
   }
   return WILDERNESS_PANORAMA[planetType] ?? "wilderness_jungle";
 }
 
-/** Planet type → `surfaces/` biome prefix (per-planet generated backdrops). */
 const PLANET_BIOME: Record<string, string> = {
   ICE: "ice",
   VOLCANIC: "volcanic",
@@ -292,13 +202,6 @@ const PLANET_BIOME: Record<string, string> = {
   HABITAT: "city",
 };
 
-/**
- * Resolve the FULL manifest key for a planet's backdrop. Prefers a per-planet
- * generated surface panorama (`surfaces/<biome>_NN`, chosen deterministically
- * by planet id, so every planet gets its own), and falls back to the shared
- * type/faction panorama (`panoramas/...`) until that art is generated. Exported
- * for testing.
- */
 export function resolvePlanetBackdropKey(
   planetType: string,
   planetId: string,
@@ -324,7 +227,6 @@ const RESOURCE_RU: Record<string, string> = {
   DATA_CORES: "Ядра данных",
 };
 
-/** RU display label per planet `type` (physical world class, not economy). */
 export function planetTypeLabel(type: string): string {
   const t: Record<string, string> = {
     TERRESTRIAL: "Земной",
@@ -337,14 +239,6 @@ export function planetTypeLabel(type: string): string {
   return t[type] ?? type;
 }
 
-/**
- * The landed planet-card text lines that carry the planet-type / economy words,
- * in render order. Kept pure + exported so a unit test can assert the
- * planet-type word is shown exactly once (UX-review finding #4 dedup): before
- * this the type word appeared in both the subtitle *and* the info-panel's first
- * row. Now the subtitle owns the type word; the info-panel row shows only the
- * controlling faction. Population/economy/political stays a distinct fact line.
- */
 export function planetInfoPanelLines(input: {
   planetType: string;
   isHabitable: boolean;
@@ -373,23 +267,10 @@ export class PlanetScene extends GameScene {
   private uiContainer: Container | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
   private jobBoardPanel: JobBoardPanel | null = null;
-  /** The top-right credits readout, kept live via {@link refreshCreditsHud}. */
   private creditsHudText: Text | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
-  /** Bribe paid this landing — gates are lifted for the duration of the visit. */
   private bribed = false;
-  /** Set from `resumeTextQuest === false` in the init context: skips the one
-   *  auto-resume on the immediate return from an exited text quest. */
   private suppressTextQuestResume = false;
-  /**
-   * Open customs-inspection modal + the context needed to resolve it. Both are
-   * `null` while the modal is closed. Stored as scene state (not a plain local)
-   * so the dev autopilot's `dismissBlockingModal()` can detect and resolve it
-   * through {@link isCustomsModalOpen}/{@link applyCustomsChoice} — the same
-   * query+resolve seam the encounter prompt exposes (Task 11b). Without this a
-   * human sees the blocking modal while the autopilot keeps acting underneath it.
-   */
   private customsModal: Container | null = null;
   private customsContext: {
     illegalGoods: { type: ResourceType; amount: number }[];
@@ -398,20 +279,12 @@ export class PlanetScene extends GameScene {
     faction: string;
   } | null = null;
 
-  // Planet backdrop (F5, 2026-06-10): the flat-sprite light parallax below is
-  // the PRIMARY backdrop. The Task 8 GLSL `PanoramaViewer` projection was
-  // dropped — at FOV 100° it fisheyed the equirect map like a magnifying lens,
-  // contradicting the agreed "light parallax" look. We pan a wide flat sprite
-  // horizontally with a gentle mouse-X drift instead.
-
-  // Task 6 — panorama drag-to-look
   private panoramaSprite: Sprite | null = null;
   private panoramaWidth = 0;
   private isPanningPanorama = false;
   private lastPanoramaPointerX = 0;
   private boundPanoramaMove: ((e: FederatedPointerEvent) => void) | null = null;
   private boundPanoramaUp: (() => void) | null = null;
-  // Parallax: base X set at sprite creation; targetX tracks smooth destination.
   private panoramaBaseX = 0;
   private panoramaTargetX = 0;
 
@@ -424,7 +297,6 @@ export class PlanetScene extends GameScene {
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    // Resolve faction for panorama key (same logic as createUI)
     const initSystem = this.gameEngine?.galaxy?.systems.find((s) =>
       s.planets.some((p) => p.id === this.planet?.id),
     );
@@ -436,7 +308,6 @@ export class PlanetScene extends GameScene {
       this.planet?.isHabitable ?? false,
     );
 
-    // Show scene immediately with dark fallback, then swap in panorama when loaded.
     this.createUI();
     logger.info(`PlanetScene: ${this.planet?.name}`);
     this.gameEngine?.audio.playSfx("land").catch(() => {});
@@ -446,9 +317,6 @@ export class PlanetScene extends GameScene {
     this.checkCustoms();
     this.checkAndResumeTextQuest();
 
-    // Panorama drag-to-look (Task 6): the wide background pans horizontally as
-    // the player drags. Move/up are tracked on the stage so a drag started over
-    // the background keeps tracking even if the pointer leaves the sprite.
     this.boundPanoramaMove = (e) => this.onPanoramaMove(e);
     this.boundPanoramaUp = () => {
       this.isPanningPanorama = false;
@@ -463,8 +331,6 @@ export class PlanetScene extends GameScene {
     this.mountHelp();
 
     if (!tex(backdropKey)) {
-      // Task 8: lazy-load the per-planet backdrop behind the US-076 loading
-      // overlay, falling back to outlanders_city if the art is unavailable.
       this.gameEngine?.showLoadingOverlay("Посадка…");
       loadTextureAsync(backdropKey)
         .then((t) => t ?? loadTextureAsync(`panoramas/${PANORAMA_FALLBACK}`))
@@ -483,7 +349,6 @@ export class PlanetScene extends GameScene {
   }
 
   update(deltaTime: number): void {
-    // Parallax easing: smooth the panorama toward the mouse-driven target.
     if (
       !this.isPanningPanorama &&
       this.panoramaSprite &&
@@ -498,7 +363,6 @@ export class PlanetScene extends GameScene {
     }
   }
 
-  /** Drag-to-look: pan the panorama horizontally, clamped to its edges. */
   private onPanoramaMove(e: FederatedPointerEvent): void {
     if (!this.panoramaSprite || this.panoramaSprite.destroyed) return;
     const w = this.renderer.app.screen.width;
@@ -512,11 +376,9 @@ export class PlanetScene extends GameScene {
         w,
       );
       this.panoramaSprite.x = newX;
-      // Keep base and target in sync during drag so parallax resumes cleanly.
       this.panoramaBaseX = newX;
       this.panoramaTargetX = newX;
     } else {
-      // Subtle parallax: drift panorama toward mouse position (no button held).
       this.panoramaTargetX = clampPanoramaX(
         computeParallaxTargetX(
           e.global.x,
@@ -530,19 +392,12 @@ export class PlanetScene extends GameScene {
     }
   }
 
-  /**
-   * Auto-complete DELIVERY quests whose targetSystemId matches the current
-   * system. Checks that the player carries the required cargo, removes it from
-   * inventory, then force-completes the quest and shows a success toast.
-   */
   private checkDeliveryQuestCompletion(): void {
     if (!this.gameEngine?.player || !this.planet) return;
     const currentSystemId = this.gameEngine.player.currentSystemId;
     const player = this.gameEngine.player;
     const questManager = this.gameEngine.questManager;
 
-    // At most one shortfall toast per landing so a hold full of unfinished
-    // contracts does not spam the player.
     let shortfallShown = false;
 
     for (const quest of questManager.getActiveQuests()) {
@@ -555,9 +410,6 @@ export class PlanetScene extends GameScene {
       if (result.kind === "n/a") continue;
 
       if (result.kind === "shortfall") {
-        // The player landed in the target system but is short on cargo (e.g.
-        // bought too little). Tell them exactly what is still needed instead of
-        // silently doing nothing.
         if (!shortfallShown) {
           const cargoName = resourceLabelRu(result.cargo);
           this.showMessage(
@@ -569,7 +421,6 @@ export class PlanetScene extends GameScene {
         continue;
       }
 
-      // result.kind === "complete"
       const { collectObj, stack } = result;
       const completed = questManager.forceCompleteQuest(quest.id, player);
       if (completed) {
@@ -592,10 +443,6 @@ export class PlanetScene extends GameScene {
     }
   }
 
-  /**
-   * Mark DIPLOMACY quests as pending-return when the player lands on the target
-   * planet. The player then returns to the issuer planet to collect payment.
-   */
   private checkDiplomacyQuestCompletion(): void {
     if (!this.gameEngine?.player || !this.planet) return;
     const planetId = this.planet.id;
@@ -624,10 +471,6 @@ export class PlanetScene extends GameScene {
     }
   }
 
-  /**
-   * On landing, claim rewards for any pending-return quests whose issuer planet
-   * matches the current planet. Grants credits + XP and shows a success toast.
-   */
   private checkReturnQuestCompletion(): void {
     if (!this.gameEngine?.player || !this.planet) return;
     const player = this.gameEngine.player;
@@ -650,10 +493,6 @@ export class PlanetScene extends GameScene {
     }
   }
 
-  /**
-   * Customs check on landing: if any inventory goods are illegal at this planet,
-   * roll a 30% chance of triggering an inspection. If triggered, show the modal.
-   */
   private checkCustoms(): void {
     if (!this.gameEngine?.player || !this.planet?.isHabitable) return;
     const system = this.gameEngine.galaxy?.systems.find((s) =>
@@ -670,7 +509,6 @@ export class PlanetScene extends GameScene {
 
     if (illegalGoods.length === 0) return;
 
-    // 30% chance of customs inspection
     if (Math.random() >= 0.3) return;
 
     const penalty = illegalGoods.reduce((sum, r) => {
@@ -691,15 +529,8 @@ export class PlanetScene extends GameScene {
     );
   }
 
-  /**
-   * On landing, resume any active TEXT_ADVENTURE quest issued on this planet.
-   * This handles the case where a player accepted a text quest, flew away mid-quest
-   * (via "Сдаться" or Escape), and then returned — they need to be able to re-enter.
-   */
   private checkAndResumeTextQuest(): void {
     if (!this.gameEngine || !this.planet) return;
-    // Immediate return from an exited quest: skip the auto-resume once so a
-    // won/abandoned quest does not relaunch (the customs restart / loop bug).
     if (this.suppressTextQuestResume) return;
     const activeQuests = this.gameEngine.questManager.getActiveQuests();
     const pending = activeQuests.find(
@@ -713,7 +544,6 @@ export class PlanetScene extends GameScene {
     const scriptId = pending.targetObjectId;
     if (!scriptId) return;
 
-    // Defer slightly so PlanetScene finishes rendering before the transition.
     setTimeout(() => {
       if (!this.gameEngine || !this.planet) return;
       this.gameEngine
@@ -738,7 +568,6 @@ export class PlanetScene extends GameScene {
     const h = this.renderer.app.screen.height;
     const modal = new Container();
 
-    // Backdrop — blocks all underlying interaction
     const backdrop = new Graphics();
     backdrop.rect(0, 0, w, h);
     backdrop.fill({ color: 0x000000, alpha: 0.75 });
@@ -746,7 +575,6 @@ export class PlanetScene extends GameScene {
     backdrop.on("pointerdown", (e) => e.stopPropagation());
     modal.addChild(backdrop);
 
-    // Modal box
     const boxW = 460;
     const boxH = 280;
     const boxX = (w - boxW) / 2;
@@ -877,51 +705,29 @@ export class PlanetScene extends GameScene {
       0xaaaaaa,
     );
 
-    // Store the modal + its resolution context as scene state so the dev
-    // autopilot can resolve it through the seam below (Task 11b), then mount it.
     this.customsModal = modal;
     this.customsContext = { illegalGoods, penalty, bribeCost, faction };
     this.renderer.uiLayer.addChild(modal);
   }
 
-  /**
-   * True while the customs-inspection modal is on screen. The dev autopilot's
-   * `dismissBlockingModal()` reads this seam to resolve the blocking modal the
-   * same way it resolves an encounter prompt (Task 11b) — otherwise a human
-   * watching sees the modal while the autopilot keeps acting underneath it.
-   */
   get isCustomsModalOpen(): boolean {
     return this.customsModal != null && !this.customsModal.destroyed;
   }
 
-  /** The bribe cost (cheapest clearance) of the open customs modal, else null. */
   get customsBribeCost(): number | null {
     return this.customsContext?.bribeCost ?? null;
   }
 
-  /**
-   * Resolve an open customs modal programmatically (dev autopilot seam, mirrors
-   * the real button handlers). Returns true when the choice cleared the modal,
-   * false when it couldn't (bribe/fine unaffordable — the modal stays up exactly
-   * like clicking the button would).
-   */
   applyCustomsChoice(choice: "pay" | "bribe" | "dump"): boolean {
     return this.performCustomsChoice(choice);
   }
 
-  /** Tear down the open customs modal and clear its seam state. */
   private closeCustomsModal(): void {
     this.customsModal?.destroy({ children: true });
     this.customsModal = null;
     this.customsContext = null;
   }
 
-  /**
-   * The single implementation behind both the customs modal's buttons and the
-   * autopilot seam. Pay the fine (credit cost, no reputation hit), bribe (cheaper,
-   * no reputation hit), or dump the cargo (no cost). An unaffordable pay/bribe
-   * leaves the modal up and returns false.
-   */
   private performCustomsChoice(choice: "pay" | "bribe" | "dump"): boolean {
     const ctx = this.customsContext;
     const player = this.gameEngine?.player;
@@ -929,7 +735,6 @@ export class PlanetScene extends GameScene {
     const { illegalGoods, penalty, bribeCost, faction } = ctx;
 
     if (choice === "pay") {
-      // `false` ⇒ can't afford it, so leave the modal up.
       if (!payCustomsFine(this.gameEngine?.bank, player, penalty)) {
         this.showMessage(
           `Недостаточно кредитов (нужно ${penalty} ₡)`,
@@ -966,7 +771,6 @@ export class PlanetScene extends GameScene {
       return true;
     }
 
-    // dump — always succeeds (no cost), loses the contraband cargo.
     for (const good of illegalGoods) {
       const stack = player.inventory.resources.find(
         (r) => r.type === good.type,
@@ -982,11 +786,6 @@ export class PlanetScene extends GameScene {
     return true;
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage`, which the in-scene `clearUILayer()` rebuilds
-   * (e.g. the lazy backdrop swap-in) leave untouched, so it survives them.
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -1003,7 +802,6 @@ export class PlanetScene extends GameScene {
       clearTimeout(this.toastTimeout);
       this.toastTimeout = null;
     }
-    // Detach panorama drag handlers (Task 6).
     const stage = this.renderer?.app?.stage;
     if (stage) {
       if (this.boundPanoramaMove) {
@@ -1018,8 +816,6 @@ export class PlanetScene extends GameScene {
     this.boundPanoramaUp = null;
     this.panoramaSprite = null;
     this.isPanningPanorama = false;
-    // clearUILayer() below destroys the modal's display objects; drop our
-    // references so the seam reads closed after teardown.
     this.customsModal = null;
     this.customsContext = null;
     this.closeJobBoard();
@@ -1037,7 +833,6 @@ export class PlanetScene extends GameScene {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    // Resolve faction data needed by panorama + multiple UI elements
     const system = this.gameEngine?.galaxy?.systems.find((s) =>
       s.planets.some((p) => p.id === this.planet!.id),
     );
@@ -1045,8 +840,6 @@ export class PlanetScene extends GameScene {
     const factionName = factionDisplayLabel(faction);
     const factionColor = resolveFactionColor(faction as Faction);
 
-    // Panoramic background: per-planet generated surface (surfaces/<biome>_NN)
-    // when available, else the shared type/faction panorama. Lazy-loaded.
     const backdropKey = resolvePlanetBackdropKey(
       this.planet?.type ?? "TERRESTRIAL",
       this.planet?.id ?? "",
@@ -1057,27 +850,17 @@ export class PlanetScene extends GameScene {
     const hasPanorama = !!panTex && panTex.width > 1 && panTex.height > 0;
 
     if (hasPanorama) {
-      // F5 (primary): flat panorama sprite with drag-to-look + a gentle mouse-X
-      // parallax drift (Task 6). This is the agreed "light parallax" — NOT the
-      // dropped GLSL projection, which fisheyed the equirect map at the edges.
       const panorama = new Sprite(panTex);
       const aspect = panTex!.width / panTex!.height;
       panorama.height = h;
       panorama.width = h * aspect;
       if (panorama.width < w) {
-        // Narrower than the screen — fall back to width-fill (no pan room).
         panorama.width = w;
         panorama.height = w / aspect;
       }
       panorama.y = (h - panorama.height) / 2;
       panorama.x = clampPanoramaX((w - panorama.width) / 2, panorama.width, w);
-      // Per-instance variety: a deterministic tint keyed by planet.id so two
-      // worlds sharing the same backdrop still look distinct. Surface art ships
-      // only 4 variants per biome (heavy hash-collision), so `planetBackdropTint`
-      // widens the band for `surfaces/*` keys while keeping shared panoramas on
-      // the original subtle band. Bounded — never near-black or neon.
       panorama.tint = planetBackdropTint(this.planet?.id ?? "", backdropKey);
-      // Draggable: start a pan on press; stage move/up (initialize) do the rest.
       panorama.eventMode = "static";
       panorama.cursor = "grab";
       panorama.on("pointerdown", (e: FederatedPointerEvent) => {
@@ -1090,7 +873,6 @@ export class PlanetScene extends GameScene {
       this.panoramaTargetX = panorama.x;
       this.renderer.gameLayer.addChild(panorama);
     } else {
-      // No panorama art: procedural sky gradient tinted toward the faction colour.
       this.panoramaSprite = null;
       const bands = skyGradientColors(factionColor, 10);
       const bandH = h / bands.length;
@@ -1103,22 +885,14 @@ export class PlanetScene extends GameScene {
       this.renderer.gameLayer.addChild(bg);
     }
 
-    // Light dim overlay so UI is readable over any background image without
-    // burying the planet backdrop art (see PLANET_BACKDROP_OVERLAY_ALPHA).
     const overlay = new Graphics();
     overlay.rect(0, 0, w, h);
     overlay.fill({ color: 0x000011, alpha: PLANET_BACKDROP_OVERLAY_ALPHA });
     overlay.eventMode = "none";
     this.renderer.gameLayer.addChild(overlay);
 
-    // `planetCY` stays as a pure layout anchor for the name/info/menu flow below
-    // (`nameY = planetCY + PLANET_VISUAL_RADIUS + 16`). The floating planet orb
-    // and its concentric atmospheric-glow rings were removed — the surface
-    // backdrop already represents the planet, and the banded glow read as faint
-    // ghost planets — so nothing visible is drawn at the planet centre anymore.
     const planetCY = Math.min(h * 0.2, PLANET_VISUAL_RADIUS + 10);
 
-    // Faction banner: top-left strip with faction name
     const bannerX = 16;
     const bannerY = 16;
     const bannerW = 230;
@@ -1143,7 +917,6 @@ export class PlanetScene extends GameScene {
     factionLabel.eventMode = "none";
     ui.addChild(factionLabel);
 
-    // Reputation indicator dots (5 dots, filled left-to-right by rep level)
     const rep = this.gameEngine?.player?.reputation[faction] ?? 0;
     const repLevel =
       rep >= 50 ? 4 : rep >= 10 ? 3 : rep >= -20 ? 2 : rep >= -50 ? 1 : 0;
@@ -1156,10 +929,6 @@ export class PlanetScene extends GameScene {
       ui.addChild(dot);
     }
 
-    // Capture warning banner — capture is tracked per-*system* on the galaxy
-    // (`overmindSystems`/`pirateSystems`), never on `planet.capturedBy` (never
-    // written in production, so the old `capturedBy` check could never fire).
-    // Resolve the live occupier the same way the hover tooltip / landing gate do.
     const captureName = capturedSystemOccupierName(
       this.gameEngine?.galaxy,
       system?.id,
@@ -1186,7 +955,6 @@ export class PlanetScene extends GameScene {
       ui.addChild(captureLabel);
     }
 
-    // Credits HUD: top-right
     if (this.gameEngine?.player) {
       const creditsHud = new Text({
         text: `${this.gameEngine.player.credits.toLocaleString("ru")} ₡`,
@@ -1208,13 +976,11 @@ export class PlanetScene extends GameScene {
       this.creditsHudText = null;
     }
 
-    // Layout calculations: flow below the planet
     const nameY = planetCY + PLANET_VISUAL_RADIUS + 16;
     const subtitleY = nameY + 24;
     const infoY = nameY + 46;
     const statY = infoY + 84;
 
-    // Planet name header: larger font in the controlling faction's colour.
     const title = new Text({
       text: this.planet.name,
       style: {
@@ -1231,7 +997,6 @@ export class PlanetScene extends GameScene {
     title.eventMode = "none";
     ui.addChild(title);
 
-    // Subtitle: planet type and habitability status.
     const subtitle = new Text({
       text: planetInfoPanelLines({
         planetType: this.planet.type,
@@ -1252,14 +1017,10 @@ export class PlanetScene extends GameScene {
     subtitle.eventMode = "none";
     ui.addChild(subtitle);
 
-    // Planet info panel (US-060): faction, econ type, reputation, market goods.
     this.addInfoPanel(ui, w, infoY);
 
-    // Hangar stat bar: hull / fuel in compact line (credits shown in top-right HUD).
     if (this.gameEngine?.player) {
       const ship = this.gameEngine.player.ship;
-      // Hull % reads the canonical loadout-derived max (single source of truth),
-      // so it agrees with the Верфь repair check below (see hullStatus).
       const hullPct = hullStatus(
         ship.hullHP,
         ship.maxHull,
@@ -1351,17 +1112,11 @@ export class PlanetScene extends GameScene {
       },
     ];
 
-    // Reputation gate: hostile faction blocks all services except take-off.
     const player = this.gameEngine?.player;
     const isHostile = !this.bribed && (player?.isHostileTo(faction) ?? false);
 
-    // Which buttons are shown drives the adaptive vertical layout: the stack
-    // (plus the optional bribe button) must fit on-screen at every resolution.
     const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
     const showBribe = isHostile && this.planet.isHabitable;
-    // «Взлёт» is always a danger row; the bribe row (when shown) is the second.
-    // Both get extra clearance before them so they don't glue to the routine
-    // service buttons above (UX review finding #11).
     const dangerRows = 1 + (showBribe ? 1 : 0);
     const { btnStartY, btnStep, btnH, dangerGap } = computePlanetMenuLayout(
       h,
@@ -1419,14 +1174,12 @@ export class PlanetScene extends GameScene {
       ui.addChild(btn.container);
     };
 
-    // Captured (overmind/pirate) systems offer no star-map service.
     const systemHostile = !!(
       system && this.gameEngine?.galaxy?.isHostileSystem?.(system.id)
     );
 
     let y = btnStartY;
     for (const b of visible) {
-      // Separate the destructive «Взлёт» action from the routine services above.
       if (b.accent === "danger") y += dangerGap;
       const blocked =
         (isHostile && b.label !== "Взлёт") ||
@@ -1435,9 +1188,7 @@ export class PlanetScene extends GameScene {
       y += btnStep;
     }
 
-    // Show bribe button when hostile to the controlling faction.
     if (showBribe) {
-      // Extra clearance before the bribe row for the same reason as «Взлёт».
       y += dangerGap;
       makeServiceBtn(
         {
@@ -1450,11 +1201,6 @@ export class PlanetScene extends GameScene {
         false,
       );
       y += btnStep;
-      // Recovery hint: the bribe is one-time access, so tell the player how to
-      // durably raise standing (no dead-end). Pirate-held → the pirate-rep
-      // payoff path; otherwise → faction quests. Capture is tracked per-*system*
-      // on the galaxy (`planet.capturedBy` is never written in production), so
-      // the captor is resolved the same way the hover tooltip / landing gate do.
       const isPirateControlled = !!(
         system && this.gameEngine?.galaxy?.isPirateSystem?.(system.id)
       );
@@ -1479,10 +1225,6 @@ export class PlanetScene extends GameScene {
     this.renderer.uiLayer.addChild(ui);
   }
 
-  /**
-   * Planet information card (US-060): faction, economic type, player reputation
-   * with the controlling faction, and a short market goods summary.
-   */
   private addInfoPanel(ui: Container, w: number, topY: number): void {
     if (!this.planet || !this.gameEngine) return;
 
@@ -1503,9 +1245,6 @@ export class PlanetScene extends GameScene {
       .map((r) => RESOURCE_RU[r as string] ?? String(r))
       .join(", ");
 
-    // Single source for the card's type/economy lines — the planet-type word
-    // lives only in the subtitle above, so Line 1 here is the faction alone
-    // (UX-review finding #4: the type word previously repeated on this row).
     const lines = planetInfoPanelLines({
       planetType: this.planet.type,
       isHabitable: this.planet.isHabitable,
@@ -1516,7 +1255,6 @@ export class PlanetScene extends GameScene {
       populationSeed: this.planet.id,
     });
 
-    // Line 1: controlling faction (coloured), centred.
     const factionText = new Text({
       text: lines.faction,
       style: {
@@ -1532,7 +1270,6 @@ export class PlanetScene extends GameScene {
     factionText.y = topY;
     ui.addChild(factionText);
 
-    // Line 2: reputation status (inhabited planets only)
     const repYOffset = this.planet.isHabitable ? 20 : 0;
     if (this.planet.isHabitable) {
       const repLine = new Text({
@@ -1565,9 +1302,6 @@ export class PlanetScene extends GameScene {
       ui.addChild(repText);
     }
 
-    // Line 2b: population · economy · political system (inhabited planets only)
-    // — SOURCE-OF-TRUTH §11.1 wants all four social attributes on the card
-    // (attitude is the reputation line above).
     const profileYOffset = this.planet.isHabitable ? 20 : 0;
     if (this.planet.isHabitable && lines.profile) {
       const profileText = new Text({
@@ -1586,7 +1320,6 @@ export class PlanetScene extends GameScene {
       ui.addChild(profileText);
     }
 
-    // Line 3: market goods (or inhabitation status)
     const goodsLine = this.planet.isHabitable
       ? `Рынок: ${goods || "нет данных"}`
       : `Дроны: ${this.planet.drones}  •  Необитаемая`;
@@ -1641,7 +1374,6 @@ export class PlanetScene extends GameScene {
     });
   }
 
-  /** Open the Galactic Bank (АБС): accounts, statement, deposit/loan, bus panel. */
   private async openBank(): Promise<void> {
     if (!this.planet || !this.gameEngine) return;
     await this.gameEngine.transitionTo(SceneType.BANK, {
@@ -1650,7 +1382,6 @@ export class PlanetScene extends GameScene {
     });
   }
 
-  /** Open the planet job board (EPIC-008): the quests this planet offers now. */
   private openJobBoard(): void {
     if (!this.gameEngine || !this.planet) return;
     this.closeJobBoard();
@@ -1662,7 +1393,6 @@ export class PlanetScene extends GameScene {
     const acceptedIds = new Set<string>([
       ...activeQuests.map((q) => q.id),
       ...this.gameEngine.questManager.getCompletedQuestIds(),
-      // Pending-return quests are still "taken" — keep them off the board.
       ...this.gameEngine.questManager.getPendingReturnQuests().map((q) => q.id),
     ]);
     this.jobBoardPanel = new JobBoardPanel(
@@ -1718,27 +1448,16 @@ export class PlanetScene extends GameScene {
     }
   }
 
-  /**
-   * E2E/dev-only seam: open the real job-board panel, exactly like clicking
-   * "Задания" — used by the live dev autopilot (`installAutopilotHook.ts`) so
-   * quest-taking is watchable instead of a silent domain-only accept
-   * (live report, 2026-07-19). Quest-selection logic itself stays entirely in
-   * the dev-only letsplay layer — this seam only drives the visual open/
-   * accept/close, never decides which quests to take.
-   */
   e2eOpenJobBoard(): void {
     if (!__DEBUG__) return;
     this.openJobBoard();
   }
 
-  /** E2E/dev-only seam: accept one board quest for real — domain accept +
-   * feedback message + panel refresh, exactly like clicking its Accept button. */
   e2eAcceptBoardQuest(quest: GeneratedQuest): void {
     if (!__DEBUG__) return;
     this.acceptJob(quest);
   }
 
-  /** E2E/dev-only seam: close the job-board panel (idempotent). */
   e2eCloseJobBoard(): void {
     if (!__DEBUG__) return;
     this.closeJobBoard();
@@ -1747,9 +1466,6 @@ export class PlanetScene extends GameScene {
   private openGarage(): void {
     if (!this.gameEngine?.player) return;
     const ship = this.gameEngine.player.ship;
-    // Single source of truth: refresh the live hull projection from the canonical
-    // loadout before checking/repairing — a stale `ship.maxHull` once reported
-    // «идеальное состояние» while the display showed 71% (2026-06-27).
     const loadout = this.gameEngine.playerLoadout;
     if (loadout) applyLoadoutHullToShip(ship, loadout);
     const status = hullStatus(
@@ -1814,16 +1530,9 @@ export class PlanetScene extends GameScene {
   }
 
   private openResearch(): void {
-    // Research station is not implemented yet; give honest feedback instead of
-    // silently swallowing the click.
     this.showMessage("Исследовательская станция пока в разработке", 0xffaa00);
   }
 
-  /**
-   * Star-map purchase modal (Task 3): buy an N-hop reveal of nearby systems for
-   * credits, resolving quests that point at unexplored "?" systems. Each tier
-   * reveals everything within `hops` warp jumps of the current system.
-   */
   private openStarMap(): void {
     if (!this.gameEngine?.player || !this.planet) return;
     const galaxy = this.gameEngine.galaxy;
@@ -1838,7 +1547,6 @@ export class PlanetScene extends GameScene {
     const h = this.renderer.app.screen.height;
     const modal = new Container();
 
-    // Backdrop — blocks all underlying interaction.
     const backdrop = new Graphics();
     backdrop.rect(0, 0, w, h).fill({ color: 0x000000, alpha: 0.75 });
     backdrop.eventMode = "static";
@@ -1938,10 +1646,6 @@ export class PlanetScene extends GameScene {
       if (enabled) {
         btn.eventMode = "static";
         btn.cursor = "pointer";
-        // bg + lbl are eventMode='none', so the Container has no hit-test
-        // geometry of its own — without an explicit hitArea the button is
-        // mouse-dead in PixiJS 8 (CLAUDE.md presentation Rule 2). This left the
-        // "Закрыть" button unclickable when credits were too low to buy a tier.
         btn.hitArea = new Rectangle(0, 0, btnW, 40);
         btn.on("pointerdown", (e) => {
           e.stopPropagation();
@@ -1965,7 +1669,6 @@ export class PlanetScene extends GameScene {
 
     const cheapest = Math.min(...STAR_MAP_TIERS.map((t) => t.cost));
     if (player.credits < cheapest) {
-      // Cannot afford even the cheapest tier — show a disabled state.
       makeBtn("Нет кредитов", 90, 0x331111, false, () => {});
     } else {
       let yOff = 86;
@@ -2028,38 +1731,20 @@ export class PlanetScene extends GameScene {
       );
       return;
     }
-    // Checkpoint every take-off into the "auto" slot. This is the rollback point
-    // a player death loads (see GAME_OVER flow); a failed save must not block the
-    // launch, so log and proceed.
     await this.gameEngine.saveGame("auto").catch((e) => {
       logger.error("PlanetScene: take-off autosave failed", e);
     });
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
-      // Spawn the ship next to this planet, not at the distant system edge.
       fromPlanetId: this.planet?.id,
     });
   }
 
-  /**
-   * E2E helper: drive the real "Взлёт" take-off (F4 regression). Exercises the
-   * production path (`takeOff` → `transitionTo(SPACE_FLIGHT, { fromPlanetId })`)
-   * so the test catches a lost re-entry marker after the shop round-trip; a raw
-   * `transitionTo` would bypass the very code under test.
-   */
   e2eTakeOff(): Promise<void> {
     if (!__DEBUG__) return Promise.resolve();
     return this.takeOff();
   }
 
-  /**
-   * Show a transient feedback message near the bottom of the planet screen.
-   */
-  /**
-   * Update the top-right credits readout in place (`createUI` builds it once
-   * per scene entry, so any in-scene credit mutation — purchase, fine, bribe,
-   * repair, return-reward claim — must call this or the balance goes stale).
-   */
   private refreshCreditsHud(): void {
     if (!this.creditsHudText || !this.gameEngine?.player) return;
     this.creditsHudText.text = `${this.gameEngine.player.credits.toLocaleString("ru")} ₡`;

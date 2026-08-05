@@ -9,18 +9,8 @@ import {
   SUN_CONTACT_DAMAGE_INTERVAL_MS,
 } from "@/config/balance";
 
-// Force the equirect star-map path onto the TilingSprite fallback: the sphere
-// mesh is "unavailable", exactly as in a browser where Mesh construction fails.
-// The procedural-sun tests below never call buildSphereMesh, so they are
-// unaffected by the mock.
 vi.mock("@/presentation/sphereMesh", () => ({ buildSphereMesh: () => null }));
 
-/**
- * Build a minimal Renderer stand-in backed by a real PixiJS Container. The star
- * renderer reads `app.screen` dimensions for its centre and adds display objects
- * to the injected game layer, so a real Container exercises the actual
- * scene-graph wiring without a WebGL context.
- */
 function makeHarness(gameEngine: GameEngine | null = null): {
   star: StarRenderer;
   gameLayer: Container;
@@ -36,18 +26,10 @@ function makeHarness(gameEngine: GameEngine | null = null): {
     gameLayer,
   } as unknown as Renderer;
 
-  // Default: no player/galaxy → starMapPrefix() returns undefined, so the
-  // procedural sun path runs (no lazy star-map texture, no canvas/sphere-mesh
-  // dependency). Pass a stub gameEngine to exercise sun-contact hull burning.
   const star = new StarRenderer(renderer, gameEngine, gameLayer);
   return { star, gameLayer };
 }
 
-/**
- * A gameEngine stub exposing only the player + ship whose hull the sun burns.
- * `gameMode`/`maxHull` feed the difficulty-mode damage rule (GOD honours the
- * hull floor); omitting `gameMode` reproduces the old non-GOD clamp-to-0.
- */
 function makeBurnEngine(
   hullHP: number,
   gameMode?: GameMode,
@@ -79,7 +61,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
 
     star.initialize();
 
-    // Procedural path adds the halo container and the surface container.
     expect(gameLayer.children.length).toBeGreaterThan(0);
 
     star.destroy();
@@ -92,7 +73,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
     expect(() => star.update(1 / 60, 100)).not.toThrow();
     expect(() => star.destroy()).not.toThrow();
 
-    // destroy() removes (and destroys) its own display objects from the layer.
     expect(gameLayer.children.length).toBe(0);
   });
 
@@ -100,7 +80,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
     const { star } = makeHarness();
     star.initialize();
 
-    // Far from the star: no contact, no toast.
     const outside = star.updateSunContactDamage(
       1000,
       star.centerX + star.radius + 50,
@@ -110,7 +89,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
     );
     expect(outside).toBe(false);
 
-    // Inside the radius with the turn running: a fresh episode starts → toast.
     const inside = star.updateSunContactDamage(
       1000,
       star.centerX,
@@ -120,7 +98,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
     );
     expect(inside).toBe(true);
 
-    // Still inside on the next frame: latched, so no repeat toast.
     const stillInside = star.updateSunContactDamage(
       1000,
       star.centerX,
@@ -137,7 +114,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
     const { engine, ship } = makeBurnEngine(100);
     const { star } = makeHarness(engine);
 
-    // One full interval of game time inside the radius → exactly one chunk.
     star.updateSunContactDamage(
       SUN_CONTACT_DAMAGE_INTERVAL_MS,
       star.centerX,
@@ -147,8 +123,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
     );
     expect(ship.hullHP).toBe(100 - SUN_CONTACT_HULL_DAMAGE);
 
-    // timeScale multiplies the accrued game-time: two intervals' worth in one
-    // call → two chunks burned.
     star.updateSunContactDamage(
       SUN_CONTACT_DAMAGE_INTERVAL_MS,
       star.centerX,
@@ -160,9 +134,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
   });
 
   it("GOD mode floors the sun-contact burn at the hull floor (never 0)", () => {
-    // GOD floor = ceil(maxHull × 5%) = 5 for maxHull 100. Burning far past zero
-    // in NORMAL must stop at the floor in GOD, never reaching 0 — the same
-    // "ship is never destroyed" invariant the combat path enforces.
     const { engine, ship } = makeBurnEngine(100, "GOD", 100);
     const { star } = makeHarness(engine);
 
@@ -205,14 +176,8 @@ describe("StarRenderer (extracted FlightModule)", () => {
   });
 
   it("masks the tiling-fallback disc via a plain wrapper Container, never the TilingSprite (F4)", () => {
-    // Same bug class as the "planets render as rectangles" regression: a
-    // TilingSprite's specialised renderer drops a mask assigned to it, so the
-    // sun disc renders as its full rectangle. The circular mask must live on a
-    // plain wrapper Container instead (see PlanetSprite.buildTilingDisc).
     const { star } = makeHarness();
 
-    // jsdom has no 2D canvas: stub the limb-fade mask builder (Canvas radial
-    // gradient) with an empty sprite — the assertions target the tiling wrapper.
     (
       star as unknown as { buildStarLimbMask: (R: number) => Sprite }
     ).buildStarLimbMask = () => new Sprite();
@@ -227,10 +192,8 @@ describe("StarRenderer (extracted FlightModule)", () => {
       .starTiling;
     expect(tiling).not.toBeNull();
 
-    // The mask must NOT be on the TilingSprite itself…
     expect(tiling!.mask ?? null).toBeNull();
 
-    // …but on its plain wrapper Container, parented under that same wrapper.
     const wrapper = tiling!.parent as Container;
     const mask = wrapper.mask as unknown as Container;
     expect(mask).toBeTruthy();
@@ -241,9 +204,6 @@ describe("StarRenderer (extracted FlightModule)", () => {
   });
 
   it("varies the sun tint per systemId even within one StarType (Task 2)", () => {
-    // Two RED_DWARF systems used to render the identical tint. The per-system
-    // jitter (starAppearanceJitter) must disambiguate them while keeping the
-    // tint a believable variant of the type base.
     const engineFor = (id: string): GameEngine =>
       ({
         player: { currentSystemId: id },

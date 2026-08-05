@@ -3,10 +3,6 @@ import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
 import { GalaxySimulator } from "@/systems/GalaxySimulator";
 
-/**
- * Mock implementation of IGalaxyService for testing.
- * Uses real GalaxySimulator for generation but allows spying/stubbing.
- */
 export class MockGalaxyService implements IGalaxyService {
   private readonly simulator = new GalaxySimulator();
   private lastSeed?: string;
@@ -35,7 +31,6 @@ export class MockGalaxyService implements IGalaxyService {
     });
   }
 
-  /** Test helper: retrieve last generation parameters. */
   getLastGenerationParams(): { seed?: string; count?: number } {
     return { seed: this.lastSeed, count: this.lastCount };
   }

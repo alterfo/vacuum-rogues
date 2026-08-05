@@ -1,8 +1,5 @@
 import { FactionType } from "@/types";
 
-/**
- * Registry of all playable factions with their unique bonuses and characteristics
- */
 export interface FactionBonus {
   tradeBonus: string[];
   shipBonus: {
@@ -17,9 +14,6 @@ export interface FactionBonus {
 export class FactionRegistry {
   private static bonuses: Map<FactionType, FactionBonus> = new Map();
 
-  /**
-   * Initialize all factions with their bonuses
-   */
   static initialize(): void {
     this.bonuses.set(FactionType.OUTLANDERS, {
       tradeBonus: ["supplies", "medkits", "fuel"],
@@ -52,9 +46,6 @@ export class FactionRegistry {
     });
   }
 
-  /**
-   * Get faction bonus by faction type
-   */
   static getBonus(faction: FactionType): FactionBonus {
     const bonus = this.bonuses.get(faction);
     if (!bonus) {
@@ -63,14 +54,10 @@ export class FactionRegistry {
     return bonus;
   }
 
-  /**
-   * Get faction description in Russian for UI
-   */
   static getFactionDescription(faction: FactionType): string {
     const bonus = this.bonuses.get(faction);
     return bonus?.description ?? "Неизвестная фракция";
   }
 }
 
-// Initialize factions on module load
 FactionRegistry.initialize();

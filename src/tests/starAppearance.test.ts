@@ -6,13 +6,6 @@ import {
   GLOW_SPREAD,
 } from "@/utils/starAppearance";
 
-/**
- * Task 2 (per-instance planet/star variety): every sun must look distinct, not
- * uniform within a StarType. `starAppearanceJitter` gives a deterministic,
- * bounded per-`systemId` jitter (corona scale, glow intensity, colour
- * temperature) around the StarType base; `shiftTemperature` applies the temp
- * shift to a base tint without leaving the believable band.
- */
 describe("starAppearanceJitter (per-system sun variation)", () => {
   it("is stable for the same systemId", () => {
     expect(starAppearanceJitter("sys-7")).toEqual(
@@ -23,7 +16,6 @@ describe("starAppearanceJitter (per-system sun variation)", () => {
   it("differs across distinct systemIds", () => {
     const a = starAppearanceJitter("sys-1");
     const b = starAppearanceJitter("sys-2");
-    // At least one appearance param must differ.
     expect(
       a.coronaScale !== b.coronaScale ||
         a.glowIntensity !== b.glowIntensity ||
@@ -78,7 +70,6 @@ describe("shiftTemperature (bounded colour-temperature nudge)", () => {
         out.forEach((v, i) => {
           expect(v).toBeGreaterThanOrEqual(0);
           expect(v).toBeLessThanOrEqual(255);
-          // Bounded shift: stays within the configured amount of the base.
           expect(Math.abs(v - inBase[i])).toBeLessThanOrEqual(30);
         });
       }

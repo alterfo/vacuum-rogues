@@ -1,19 +1,3 @@
-/**
- * Task 2 (autopilot-reliability-fixes plan): a genuine flee's near-edge exit
- * point (Task 9 iv, `warpEdgePoint`'s `fromMidSystem` path) is NOT aligned
- * with the straight-line direction to the target system — but `performWarp`
- * used to always mirror the stale straight-line `exitVector` into the arrival
- * entry vector/heading, so the ship always appeared to arrive "from nowhere"
- * instead of from the side it actually departed. Fixed by deriving the entry
- * vector from the REAL exit point (captured when the route was planned)
- * relative to the origin system's centre, falling back to the straight-line
- * `exitVector` only when no such point was captured.
- *
- * Real-engine tier: drives the real `StarMapScene.performWarpJumpTo` →
- * `SpaceFlightScene` handoff, same fixture as `fleeNearEdge.test.ts`, then
- * calls the real (private, direct-cast) `performWarp()` to observe the
- * arrival heading — mirroring `warpArrivalHeading.test.ts`'s own convention.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "./realEngineHarness";
 import { SceneType } from "@/types";
@@ -77,8 +61,6 @@ describe("Flee-jump entry vector mirrors the REAL exit angle (Task 2)", () => {
     };
     const R = before.SYSTEM_BOUNDARY_RADIUS;
 
-    // Genuine flee: ship caught on the far side of the star from the
-    // destination (same fixture as fleeNearEdge.test.ts's near-edge test).
     harness.engine.lastFlightShipPos = {
       x: center.x - exit.x * R * 0.9,
       y: center.y - exit.y * R * 0.9,
@@ -94,8 +76,6 @@ describe("Flee-jump entry vector mirrors the REAL exit angle (Task 2)", () => {
 
     const departingScene = flightProbe();
     const route = departingScene.plannedRoute!;
-    // Sanity: confirm this really is the near-edge escape (not the
-    // straight-line edge) — else the fixture wouldn't exercise the bug.
     const farEdgeX = center.x + exit.x * R;
     expect(route.x).not.toBeCloseTo(farEdgeX, -1);
 
@@ -122,7 +102,6 @@ describe("Flee-jump entry vector mirrors the REAL exit angle (Task 2)", () => {
     const target = sys.connections[0].toSystemId;
     const exit = exitVectorTo(origin, target);
 
-    // No preserved position → fresh system-entry warp, the non-flee path.
     harness.engine.lastFlightShipPos = null;
     harness.engine.lastFlightWasFleeing = false;
 

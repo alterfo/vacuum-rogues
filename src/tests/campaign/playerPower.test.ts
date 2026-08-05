@@ -1,10 +1,3 @@
-/**
- * Task 2 (three-year-campaign): `playerPowerIndex` — the adaptive-difficulty
- * input. A pure, deterministic function of (maxHull, weaponDamage, credits,
- * rank) normalized into [0,1] with all levers in `src/config/balance.ts`, plus
- * the peak-power ratchet (`campaignPeakPower`) persisted as an OPTIONAL
- * additive save field (no migration, no version bump).
- */
 import { describe, it, expect } from "vitest";
 import {
   playerPowerIndex,
@@ -24,16 +17,8 @@ import {
   BATTLE_READY_WEAPON_DAMAGE,
 } from "@/tests/playtest/letsplay/MemoryHeuristicPolicy";
 
-/** Starter ship per the campaign plan: hull 130 / weapon 14 / 1000 cr / rank 1. */
 const STARTER = { maxHull: 130, weaponDamage: 14, credits: 1000, rank: 1 };
 
-/**
- * Battle-ready floor per the autopilot's own signal — read the live
- * constants rather than duplicating them, so a future hull-floor retune
- * (e.g. Task 8's 200 → 180) can't silently desync this fixture from what
- * the autopilot actually treats as battle-ready. Rank 0 is the true
- * `Player` starting rank (the worst case the threshold must still cross).
- */
 const BATTLE_READY = {
   maxHull: BATTLE_READY_MAX_HULL,
   weaponDamage: BATTLE_READY_WEAPON_DAMAGE,
@@ -57,7 +42,6 @@ describe("playerPowerIndex — bounded, anchored, monotone, pure", () => {
     });
     expect(apex).toBeGreaterThanOrEqual(0);
     expect(apex).toBeLessThanOrEqual(1);
-    // Fully maxed components saturate to exactly 1 (weights sum to 1).
     expect(apex).toBe(1);
   });
 
@@ -201,7 +185,6 @@ describe("restoredPeakPower — load semantics (absent ⇒ derive from loadout)"
   });
 });
 
-/** Minimal schema-valid pre-campaign save (mirrors banking/persistence.test.ts). */
 function makePreCampaignSave(): Record<string, unknown> {
   return {
     version: 1,

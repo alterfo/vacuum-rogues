@@ -1,12 +1,3 @@
-/**
- * Text-quest illustration WIRING guard (three-year-campaign plan, Task 18).
- *
- * `quest_art/` ships no art yet (generation happens on the GPU box,
- * Post-Completion), so nothing else exercises the "lights up when art lands"
- * path. Mirrors `stationArtWiring.test.ts`: mock `pickVariantKey`/`tex`/
- * `loadTextureAsync` so both the no-art fallback and the art-present mount
- * are pinned without any real asset on disk.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 

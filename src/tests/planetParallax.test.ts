@@ -42,7 +42,6 @@ describe("computeParallaxTargetX", () => {
       baseX,
       maxOffset,
     );
-    // norm at x=screenWidth/4 is -0.5 → result = baseX + (-0.5)*maxOffset
     expect(result).toBeCloseTo(baseX - maxOffset * 0.5);
   });
 });

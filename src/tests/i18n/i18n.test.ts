@@ -10,7 +10,6 @@ import {
   type I18nStore,
 } from "@/i18n/i18n";
 
-/** In-memory Storage subset for the language-persistence tests. */
 function fakeStore(initial: Record<string, string> = {}): I18nStore & {
   map: Map<string, string>;
 } {
@@ -24,10 +23,6 @@ function fakeStore(initial: Record<string, string> = {}): I18nStore & {
   };
 }
 
-// Several tests mutate the shared `DICTS` and the live `localStorage`-backed
-// language. A centralized reset (not just each test's `finally`) keeps the suite
-// order-independent: a leaked `__test.*` key or a stuck language can't poison a
-// later test.
 beforeEach(() => {
   try {
     localStorage.clear();
@@ -61,7 +56,6 @@ describe("translate — pure key resolver", () => {
   });
 
   it("falls back to the other language when the key is missing in the active one", () => {
-    // Inject a key only into EN, ask in RU → should resolve to the EN value.
     const key = "__test.only_en";
     DICTS.en[key] = "EN only";
     try {
@@ -146,9 +140,7 @@ describe("getLanguage / setLanguage", () => {
 describe("t — live wrapper", () => {
   it("reads the active language from localStorage and switches live", () => {
     localStorage.clear();
-    // Default (nothing stored) → ru.
     expect(t("settings.title")).toBe(DICTS.ru["settings.title"]);
-    // Switch to en via the live store and re-resolve.
     setLanguage("en");
     expect(t("settings.title")).toBe(DICTS.en["settings.title"]);
     setLanguage("ru");

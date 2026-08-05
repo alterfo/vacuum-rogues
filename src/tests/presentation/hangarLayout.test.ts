@@ -4,14 +4,6 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { Text } from "pixi.js";
 import { StationType } from "@/types";
 
-/**
- * Task 3 (ship-fitting-hangar-rework): the SR-canon categorized hangar. The
- * hangar renders the four fitting banks (weapons / engine / radar / equipment)
- * with per-category slot counts from the hull, a МАССА/СВОБОДНО/СКОРОСТЬ/ЗАЩИТА
- * stat strip, the СКЛАД warehouse, and a separate ТРЮМ cargo panel. Installing
- * from the warehouse routes through the loadout's category + mass rules.
- */
-
 vi.mock("pixi.js", () => ({
   Container: vi.fn().mockImplementation(() => ({
     addChild: vi.fn(),
@@ -49,8 +41,6 @@ vi.mock("pixi.js", () => ({
     on: vi.fn(),
     destroy: vi.fn(),
   })),
-  // HangarPanel's scrollable columns (wireScrollRegion) need a Rectangle for
-  // the tracking hitArea — this mock didn't exercise that path before.
   Rectangle: class Rectangle {
     constructor(
       public x = 0,
@@ -112,7 +102,6 @@ const station = {
 } as unknown as import("@/domain/Station").Station;
 
 function openHangar(scene: StationScene): void {
-  // Switch from the default "main" view to the hangar and re-render.
   (scene as unknown as { view: string }).view = "hangar";
   (scene as unknown as { render: () => void }).render();
 }
@@ -188,7 +177,6 @@ describe("StationScene hangar — SR-canon categorized fitting layout", () => {
     expect(all).toContain("СКЛАД");
     expect(all).toContain("Радар дальнего поля"); // warehouse gear
     expect(all).toContain("[Установить]");
-    // ТРЮМ is its own panel and lists cargo goods, not equipment.
     expect(all).toContain("ТРЮМ");
     expect(all).toContain("Металлы ×5");
 
@@ -227,11 +215,9 @@ describe("StationScene hangar — SR-canon categorized fitting layout", () => {
     const block = scene as unknown as {
       explainInstallBlock: (l: ShipLoadout, id: string) => string | null;
     };
-    // eq_shield is equipment (bank 0/2, free) but mass 8 → over the budget.
     const reason = block.explainInstallBlock(loadout, "eq_shield");
     expect(reason).not.toBeNull();
     expect(reason).toContain("Перегруз");
-    // A within-budget, free-bank install is NOT blocked.
     loadout.removeAt(2); // drop the engine → frees mass 6
     expect(block.explainInstallBlock(loadout, "eq_tank")).toBeNull();
 

@@ -1,11 +1,3 @@
-/**
- * Task 5 (Bug 5): a BOUNTY («Охота») quest has only a DEFEAT_ENEMY objective —
- * no VISIT objective — so it never got a "→ Лететь к цели" route button. It
- * must route like the local-courier case: same-system + concrete target
- * planet → the planet id (in-system approach); cross-system, or no concrete
- * target planet at all → the target system id (star-map warp). Mocks
- * pixi.js — no WebGL needed.
- */
 import { describe, it, expect, vi } from "vitest";
 import type { IQuestService } from "@/core/ports/IQuestService";
 import type { QuestDestinationGalaxyLike } from "@/systems/quests/questDestination";

@@ -4,13 +4,6 @@ import { PlayerShip } from "@/domain/PlayerShip";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { FactionType, HullClass } from "@/types";
 
-/**
- * ⚠️ dual-hull Task 5: this file previously tested the removed
- * `syncShipToHullClass` bridge (which read HULL_CLASS_SPECS and the deleted
- * `ship.cargoCapacity` getter). Its replacement, `applyLoadoutHullToShip`,
- * projects the new hull onto the live ship from the canonical loadout — so the
- * live `maxHull`/`hullClass` can no longer drift from the loadout.
- */
 function makeShip(): PlayerShip {
   return new PlayerShip(
     "ship1",

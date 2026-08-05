@@ -58,3 +58,6 @@ e2e/screenshots/task17/
 
 # Personal scratch notes, not project docs
 TALK.md
+
+# rtk local state
+.rtk/

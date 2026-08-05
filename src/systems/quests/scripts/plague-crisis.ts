@@ -1,29 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A plague-stricken colony, racing against the vaccine's viability.
-// A `time` budget drains with every choice; if it hits zero the colony is lost
-// (a `critMin` redirect to ending_too_late — the time-pressure spine).
-// Choice points:
-//   1. The route — a genuine risk decision, three distinct shapes, not a hidden
-//      coin flip:
-//        - fast_route (steady hands): the careful shortcut. 70% clean → most
-//          time; 30% a clipped hull → costly detour (time + a repair bill).
-//        - fast_route_reckless (full burn): the player deliberately doubles the
-//          stake. 50% a stunning run (the most time in the game, treat_all with
-//          margin); 50% a hard hit (safe-route time PLUS a heavy repair bill).
-//        - safe_route (long way): guaranteed, cheap, no repair bill — but never
-//          enough time for treat_all. The risk-averse floor that keeps the fast
-//          gambles honest instead of strictly dominant.
-//      Each field crossing narrates its roll through a distinct beat node
-//      (fast_clear_beat/fast_hit_beat, reckless_clear_beat/reckless_hit_beat)
-//      rather than a silent auto-jump.
-//   2. The distribution — triage the salvageable fast, treat EVERYONE (slow,
-//      only viable if you arrived early), or hold back doses to profiteer.
-// Outcomes:
-//   - ending_treat_all (everyone saved in time — big reputation)         SUCCESS
-//   - ending_triage    (most saved by triage)                            SUCCESS
-//   - ending_profiteer (saved some, but you profited — reputation hit)   SUCCESS
-//   - ending_too_late  (vaccine expired, colony devastated)              FAILURE
 export const plagueCrisisScript: QuestScript = {
   id: "plague-crisis",
   title: "Эпидемия на колонии",

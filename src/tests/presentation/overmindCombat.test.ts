@@ -16,15 +16,6 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-// ---------------------------------------------------------------------------
-// Task 2: the Overmind ("Предтечи") will attack the player. A live (hostile)
-// Overmind craft hunts the player wherever it is present — including a neutral
-// border system it is besieging *before* it falls — not only inside an already-
-// captured (hostile-flagged) system. The player's "Атаковать" engages it, and an
-// in-range Overmind trades fire with the player. (The contact-panel attack
-// affordance is covered in overmindContactPanel.test.ts.)
-// ---------------------------------------------------------------------------
-
 type NpcOpts = {
   role?: NpcRole;
   faction?: Faction;
@@ -54,7 +45,6 @@ function makeNpc(id: string, opts: NpcOpts = {}): NpcShip {
     credits: 0,
     reputation: 0,
   });
-  // A live Overmind / pirate spawns hostile; let callers opt in.
   if (opts.hostile) npc.markHostile();
   return npc;
 }
@@ -68,7 +58,6 @@ function makeRenderer(): Renderer {
   } as unknown as Renderer;
 }
 
-/** Sprites are private; expose them for white-box assertions (test-only seam). */
 function sprites(manager: NpcShipManager): Array<{
   npc: NpcShip;
   aggressive: boolean;
@@ -132,8 +121,6 @@ describe("Overmind hunts the player even in a not-yet-captured system", () => {
     });
     const manager = makeManager([ov], { hostile: false });
     manager.initialize();
-    // The system is NOT captured (isHostileSystem false), yet the besieging
-    // Overmind must still hunt the player.
     manager.checkGarrisonAggro("sys_a", false);
 
     expect(sprites(manager)[0].aggressive).toBe(true);
@@ -176,10 +163,6 @@ describe("Overmind hunts the player even in a not-yet-captured system", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// End-to-end: a besieging Overmind engages + trades fire, and the player's
-// "Атаковать" engages an Overmind — both routed through a real CombatModule.
-// ---------------------------------------------------------------------------
 function makeOvermindArena(opts: { hostileSystem: boolean }): {
   manager: NpcShipManager;
   combat: CombatModule;
@@ -275,7 +258,6 @@ describe("Overmind two-way in-flight combat", () => {
     sprite.x = 100; // within weapon range
     sprite.y = 0;
 
-    // Drive the panel's onAttack pathway (private — exercised via the test seam).
     (manager as unknown as { onAttackNpc(npc: NpcShip): void }).onAttackNpc(
       sprite.npc,
     );

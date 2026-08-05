@@ -2,9 +2,6 @@ import type { IExceptionHandler } from "@/core/ports/IExceptionHandler";
 import type { ErrorResponse } from "@/types";
 import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
 
-/**
- * Adapter: makes GlobalExceptionHandler compatible with IExceptionHandler port.
- */
 export class ExceptionHandlerAdapter implements IExceptionHandler {
   private readonly delegate = GlobalExceptionHandler.getInstance();
 

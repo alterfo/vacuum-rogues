@@ -1,14 +1,3 @@
-/**
- * Tests for the offline `letsplay:judge` runner (Task 5). Everything is
- * deterministic and free: a **fake** {@link PlayFn} returns hand-built transcripts
- * (no engine) and the {@link FakeLlmClient} returns canned judge / scenario
- * replies (no live API call, no key). So spec building, the judge glue, the
- * consolidation, the formatter, and the file write are all asserted in isolation.
- *
- * The engine-bound real play lives in the gated `judge.run.test.ts` vitest runner
- * (which `npm run letsplay:judge` drives with a real key); here we prove the
- * orchestration is correct without it.
- */
 import { describe, it, expect } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,7 +20,6 @@ import type {
   SessionTranscript,
 } from "../../src/tests/playtest/letsplay/transcript";
 
-/** A minimal valid transcript, overridable per field. */
 function mkTranscript(over: Partial<SessionTranscript> = {}): SessionTranscript {
   const summary: SessionSummary = {
     steps: 1,
@@ -57,7 +45,6 @@ function mkTranscript(over: Partial<SessionTranscript> = {}): SessionTranscript 
   };
 }
 
-/** A canned judge reply flagging one oddity. */
 const FINDING_REPLY = JSON.stringify({
   findings: [
     {
@@ -69,10 +56,8 @@ const FINDING_REPLY = JSON.stringify({
   ],
 });
 
-/** A canned judge reply with no oddities. */
 const CLEAN_REPLY = JSON.stringify({ findings: [] });
 
-/** The scenario rubric is distinguished by its "test curriculum" phrasing. */
 function isScenarioCall(system?: string): boolean {
   return !!system && system.includes("test curriculum");
 }
@@ -115,7 +100,6 @@ describe("judgeTranscripts", () => {
       { transcript: mkTranscript({ seed: "A" }) },
       { transcript: mkTranscript({ seed: "B" }) },
     ];
-    // First session flagged, second clean (responses returned in order).
     const client = new FakeLlmClient([FINDING_REPLY, CLEAN_REPLY]);
 
     const report = await judgeTranscripts(client, items, {
@@ -131,7 +115,6 @@ describe("judgeTranscripts", () => {
     expect(report.sessions[0].seed).toBe("A");
     expect(report.sessions[0].report.findings[0].title).toBe("Unrewarded kill");
     expect(report.sessions[1].report.findings).toEqual([]);
-    // Each transcript was sent once.
     expect(client.calls).toHaveLength(2);
     expect(client.calls[0].messages[0].content).toContain('"seed": "A"');
   });
@@ -168,7 +151,6 @@ describe("judgeTranscripts", () => {
 });
 
 describe("runJudge — end-to-end with a fake play + fake client", () => {
-  /** A fake play that fabricates one transcript per spec (no engine). */
   const fakePlay: PlayFn = async (specs: PlaySpec[]) =>
     specs.map((s) => ({
       transcript: mkTranscript({ seed: s.seed }),
@@ -190,7 +172,6 @@ describe("runJudge — end-to-end with a fake play + fake client", () => {
     expect(report.totalSessions).toBe(2);
     expect(report.totalFindings).toBe(1);
     expect(report.sessions.map((s) => s.seed)).toEqual(["RUN-0", "RUN-1"]);
-    // Free-play: no scenario identity.
     expect(report.sessions.every((s) => s.scenario === undefined)).toBe(true);
   });
 
@@ -201,7 +182,6 @@ describe("runJudge — end-to-end with a fake play + fake client", () => {
         { name: "roam", goal: "free-explore", maxDays: 50, seed: "ROAM" },
       ],
     });
-    // The first call (scenario rubric) yields scenarios; the rest are judge calls.
     const client = new FakeLlmClient((messages, opts) =>
       isScenarioCall(opts?.system) ? scenariosReply : CLEAN_REPLY,
     );
@@ -221,7 +201,6 @@ describe("runJudge — end-to-end with a fake play + fake client", () => {
     expect(report.sessions[0].goal).toBe("go-broke");
     expect(report.sessions[0].seed).toBe("RUN-go-broke-0");
     expect(report.sessions[1].seed).toBe("ROAM");
-    // 1 scenario call + 2 judge calls.
     expect(client.calls).toHaveLength(3);
   });
 
@@ -241,7 +220,6 @@ describe("runJudge — end-to-end with a fake play + fake client", () => {
 
     expect(report.totalSessions).toBe(1);
     expect(report.sessions[0].goal).toBe("hoard");
-    // Only the judge call — no scenario-generation call was made.
     expect(client.calls).toHaveLength(1);
   });
 });

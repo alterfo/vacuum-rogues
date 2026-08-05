@@ -17,18 +17,6 @@ import type { StarSystem } from "@/domain/StarSystem";
 import { QuestType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
 
-// Task 15 — batch 2 of new branching text-quests. Four distinct puzzle genres,
-// none repeating batch 1 (logistics / whodunit / resource-opt / negotiation):
-//   signal-decode  — cryptanalysis under a decoder-power budget
-//   orbital-escape — orbital burn-scheduling against a decaying orbit
-//   tribunal       — courtroom defense (defense vs the judge's hostility)
-//   quarantine     — containment dilemma (containment + panic vs saved)
-// The parametrised graph suite (questScriptGraph.test.ts) re-checks structural
-// invariants over the whole registry; here we drive the best / worst / mixed
-// paths per script so every branch reaches its intended terminal with the right
-// rewards, and verify board issuance + dedup.
-
-// Advance through all autoExecute transitions until a manual choice or finished.
 function advanceAuto(vm: QuestVM): void {
   const MAX = 50;
   let steps = 0;
@@ -114,8 +102,6 @@ describe("Signal-decode quest (cryptanalysis)", () => {
       expect(a.getParam("clarity")).toBe(b.getParam("clarity"));
     }
   });
-
-  // --- Task 32: method-branched endings (B), narrated overclock (D), stakes (H)
 
   const sigNode = (id: string) =>
     signalDecodeScript.locations.find((l) => l.id === id)!;
@@ -301,9 +287,6 @@ describe("Orbital-escape quest (burn scheduling)", () => {
     }
   });
 
-  // Task 27 — trim_burn was strictly dominant (always available, free, best).
-  // It is now gated on a conserved fuel reserve, so the wasteful first burn
-  // locks it out and forces the fuel-free endgame.
   it("the trim burn is gated on a conserved fuel reserve, not a free universal button (A)", () => {
     const efficient = new QuestVM(orbitalEscapeScript, 1);
     efficient.execute("burn_periapsis"); // fuel 6 — reserve intact
@@ -315,7 +298,6 @@ describe("Orbital-escape quest (burn scheduling)", () => {
     wasteful.execute("burn_now"); // fuel 4 — reserve spent
     const ids = wasteful.availableTransitions().map((t) => t.id);
     expect(ids).not.toContain("trim_burn");
-    // the fuel-starved line is never a dead end: the fuel-free options remain
     expect(ids).toEqual(
       expect.arrayContaining(["plasma_vent", "dump_ballast", "hold_coast"]),
     );
@@ -336,12 +318,10 @@ describe("Orbital-escape quest (burn scheduling)", () => {
     bad.execute("dump_bad");
     expect(bad.currentLocation().id).toBe("dump_jammed");
 
-    // the roll now has its own success/fail narrative, not a silent "..." jump
     expect(good.currentLocation().text).not.toBe(bad.currentLocation().text);
     expect(good.currentLocation().text).not.toBe("...");
     expect(bad.currentLocation().text).not.toBe("...");
 
-    // both funnel back through the escape gate to a real terminal
     advanceAuto(good);
     advanceAuto(bad);
     expect(good.isFinished()).toBe(true);
@@ -478,8 +458,6 @@ describe("Tribunal quest (courtroom defense)", () => {
     }
   });
 
-  // --- Task 34: risk-gated top reward + qualitative labels ---
-
   it("landing both rolls clears defense 12 for total vindication — a richer prize than a plain acquittal (Task 34, A)", () => {
     const vm = new QuestVM(tribunalScript, 1);
     vm.execute("plea_defiant"); // defense 3, hostility 7
@@ -498,10 +476,6 @@ describe("Tribunal quest (courtroom defense)", () => {
   });
 
   it("the safe roll-free line cannot reach vindication — deterministic defense caps at acquittal (Task 34, A)", () => {
-    // The maximally-aggressive *deterministic* line (no discredit/grandstand
-    // roll) tops out at defense 8, which is verdict_acquit, NOT vindication.
-    // So the safest strategy is no longer also the highest-reward one — the top
-    // tier demands accepting the two coin-flips.
     const vm = new QuestVM(tribunalScript, 1);
     vm.execute("plea_defiant"); // defense 3
     vm.execute("table_manifest"); // defense 6
@@ -513,8 +487,6 @@ describe("Tribunal quest (courtroom defense)", () => {
   });
 
   it("choice labels use qualitative risk language, not exact numeric deltas (Task 34, G)", () => {
-    // The three player-facing choice screens must no longer print "+3 к защите"
-    // style deltas — labels carry no digits at all.
     for (const id of ["arraignment", "cross_exam", "summation"]) {
       const loc = tribunalScript.locations.find((l) => l.id === id)!;
       for (const t of loc.transitions) {
@@ -607,10 +579,8 @@ describe("Quarantine quest (containment dilemma)", () => {
     expect(vm.isSuccess()).toBe(true);
   });
 
-  // Task 29 — (E) surface the critical thresholds in-fiction on decision screens
   it("surfaces the containment/panic fail thresholds on every decision screen", () => {
     const vm = new QuestVM(quarantineScript, 1);
-    // alert
     expect(vm.currentLocationText()).toContain("провал при 0");
     expect(vm.currentLocationText()).toContain("бунт при 10");
     vm.execute("calm_broadcast"); // -> triage_ward
@@ -621,7 +591,6 @@ describe("Quarantine quest (containment dilemma)", () => {
     expect(vm.currentLocationText()).toContain("бунт при 10");
   });
 
-  // Task 29 — (D) the med-frigate roll narrates its own arrival/silence beat
   it("a med-frigate arrival narrates its own beat before the final call", () => {
     const vm = new QuestVM(quarantineScript, 1);
     vm.execute("calm_broadcast"); // panic 1
@@ -659,14 +628,10 @@ describe("Quarantine quest (containment dilemma)", () => {
     expect(arrive).toBeDefined();
     expect(silence).toBeDefined();
     expect(arrive!.text).not.toBe(silence!.text);
-    // neither is the old mute placeholder
     expect(arrive!.text).not.toBe("...");
     expect(silence!.text).not.toBe("...");
   });
 
-  // Task 29 — (B) venting the sector routes to its own dedicated ending when
-  // many were pulled out first, instead of borrowing the clean contained/partial
-  // ending; the reputation hit for the dark choice survives into the payout.
   it("venting after saving most reaches a dedicated ending, not the clean one", () => {
     const vm = new QuestVM(quarantineScript, 1);
     vm.execute("screen_all"); // containment 6, saved 6
@@ -702,10 +667,6 @@ describe("Quarantine quest (containment dilemma)", () => {
     expect(purged!.transitions).toEqual([]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Registry + board integration
-// ---------------------------------------------------------------------------
 
 const NEW_IDS = ["signal-decode", "orbital-escape", "tribunal", "quarantine"];
 
@@ -756,9 +717,6 @@ describe("Batch 2 registry + board integration", () => {
   });
 
   it("makes every new script eligible for the TEXT_ADVENTURE board slot", () => {
-    // Mirror buildTextQuest's exact selection (uniform over ALL_QUEST_SCRIPTS);
-    // over enough draws every registered script — including the new four — is
-    // reachable, so the board can issue them.
     const seen = new Set<string>();
     const rng = new SeededRNG("board-draws-2");
     for (let i = 0; i < 3000; i++) {
@@ -784,12 +742,9 @@ describe("Batch 2 registry + board integration", () => {
         expect(getQuestScript(scriptId as string)).toBeDefined();
         issuedScriptIds.add(scriptId as string);
       }
-      // Dedup holds: a single board never repeats the same script (its questKey
-      // is TEXT|<scriptId>, so duplicates would collapse).
       const keys = textQuests.map(questKey);
       expect(new Set(keys).size).toBe(keys.length);
     }
-    // The new scripts actually surface on real boards over the horizon.
     for (const id of NEW_IDS) expect(issuedScriptIds.has(id)).toBe(true);
   });
 });

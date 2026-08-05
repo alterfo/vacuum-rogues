@@ -84,7 +84,6 @@ describe("ContactPanelManager", () => {
   it("open() while already open closes the previous panel first", () => {
     mgr.open(makeNpc("npc_1"), noopCallbacks, true, 0);
     mgr.open(makeNpc("npc_2"), noopCallbacks, true, 0);
-    // After re-open the new npc id is tracked
     expect(mgr.openNpcId).toBe("npc_2");
     expect(mgr.isOpen).toBe(true);
   });
@@ -107,9 +106,7 @@ describe("ContactPanelManager", () => {
     );
     mgr.open(makeNpc(), noopCallbacks, true, 0);
     mgr.close();
-    // destroy is deferred — must not be called synchronously
     expect(destroySpy).not.toHaveBeenCalled();
-    // flush the microtask queue
     await Promise.resolve();
     expect(destroySpy).toHaveBeenCalledTimes(1);
   });

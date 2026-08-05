@@ -22,7 +22,6 @@ export function setFontScale(size: FontSizeKey): void {
   localStorage.setItem(STORAGE_KEY, size);
 }
 
-/** Return `base` multiplied by the current font scale, rounded to integer. */
 export function scaledFont(base: number): number {
   return Math.round(base * currentFontScale());
 }

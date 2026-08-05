@@ -15,7 +15,6 @@ describe("formatStat", () => {
   });
 
   it("kills IEEE-754 subtraction noise", () => {
-    // The exact leak observed in the equipment shop: 1.4 - 0.9.
     expect(1.4 - 0.9).not.toBe(0.5); // sanity: the raw value IS noisy
     expect(formatStat(1.4 - 0.9)).toBe("0.5");
     expect(formatStat(0.30000000000000004)).toBe("0.3");

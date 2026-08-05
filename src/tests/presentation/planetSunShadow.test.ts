@@ -4,7 +4,6 @@ import { PlanetSprite } from "@/presentation/PlanetSprite";
 import { Planet } from "@/domain/Planet";
 import { PlanetType } from "@/types";
 
-// Minimal Market stub so Planet can be constructed without real infrastructure.
 const stubMarket = {
   goods: [],
   getPrice: () => 0,
@@ -27,7 +26,6 @@ function makePlanet(orbitalRadius = 800): Planet {
   );
 }
 
-/** Read the raw uLightDir uniform array off the filter's uniform group. */
 function uLightDir(f: PlanetRotationFilter): Float32Array {
   return (
     f as unknown as {
@@ -72,8 +70,6 @@ describe("PlanetRotationFilter sun-direction terminator", () => {
   });
 
   it("keeps the terminator independent of axial rotation", () => {
-    // advance() spins the surface (uOffset) but must NOT touch uLightDir, so the
-    // sun stays fixed while the planet rotates under it.
     const f = new PlanetRotationFilter({ rotationSpeed: 0.002 });
     f.setLightDirection(0, 1);
     f.advance(500);
@@ -90,8 +86,6 @@ describe("PlanetRotationFilter sun-direction terminator", () => {
     });
 
     it("derives the day/night term from dot(p, uLightDir)", () => {
-      // The sphere normal's (x, y) equals the disc point p, and the star sits in
-      // the screen plane, so the diffuse term is dot(p, uLightDir).
       expect(fragment()).toMatch(/dot\s*\(\s*p\s*,\s*uLightDir\s*\)/);
     });
   });
@@ -99,8 +93,6 @@ describe("PlanetRotationFilter sun-direction terminator", () => {
 
 describe("PlanetSprite star-light direction (feeds the terminator)", () => {
   it("points from the planet back toward the system star", () => {
-    // Star at (1000, 500); a planet at baseAngle 0 sits at +x of its orbit, so
-    // the star lies straight to its left → light direction (-1, 0).
     const sprite = new PlanetSprite(makePlanet(800), 1000, 500, 0);
     sprite.setOrbitForDay(0);
     const dir = sprite.lightDirection();
@@ -116,7 +108,6 @@ describe("PlanetSprite star-light direction (feeds the terminator)", () => {
     const sprite = new PlanetSprite(makePlanet(800), cx, cy, Math.PI / 2);
     sprite.setOrbitForDay(0);
     const dir = sprite.lightDirection();
-    // The unit direction must point back toward the star centre from the planet.
     const towardStarX = cx - sprite.screenX;
     const towardStarY = cy - sprite.screenY;
     const dot = dir.x * towardStarX + dir.y * towardStarY;

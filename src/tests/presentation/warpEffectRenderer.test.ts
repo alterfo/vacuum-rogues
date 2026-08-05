@@ -2,12 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { Container } from "pixi.js";
 import { WarpEffectRenderer } from "@/presentation/flight/WarpEffectRenderer";
 
-/**
- * Spy on (and neutralise) `destroy` for every filter attached to the effect
- * container's children. `Container.destroy({children})` does not release filter
- * GPU textures, so the renderer must dispose them itself — these spies verify it
- * does, guarding against the leak regression.
- */
 function spyOnEffectFilters(container: Container): unknown[] {
   const spies: unknown[] = [];
   for (const child of container.children) {
@@ -46,11 +40,9 @@ describe("WarpEffectRenderer (extracted from SpaceFlightScene)", () => {
     const fx = new WarpEffectRenderer(gameLayer);
     fx.play(0, 0);
 
-    // Partway through: still active.
     fx.update(500);
     expect(fx.isActive).toBe(true);
 
-    // Past the 1100ms duration: cleaned up.
     fx.update(700);
     expect(fx.isActive).toBe(false);
     expect(gameLayer.children.length).toBe(0);

@@ -3,13 +3,6 @@ import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { Sprite } from "pixi.js";
 import * as textures from "@/presentation/textures";
 
-/**
- * Main-menu visual upgrade (letsplay follow-up): the menu must use real art —
- * nebula backdrop (lazy category, async pattern with render-generation guard),
- * textured planets and ship sprites — with procedural fallbacks when textures
- * are unavailable (tests / early boot).
- */
-
 vi.mock("pixi.js", () => {
   const node = () => ({
     addChild: vi.fn(),
@@ -87,9 +80,7 @@ describe("MainMenuScene visual upgrade", () => {
     const scene = new MainMenuScene(makeRenderer());
     scene.initialize({});
 
-    // 2 planets + 3 ships + 1 nebula backdrop = 6 sprites
     expect(vi.mocked(Sprite).mock.calls.length).toBe(6);
-    // planet art comes from the planets/ category, ships from ships/
     const cats = vi.mocked(textures.pickVariant).mock.calls.map((c) => c[0]);
     expect(cats.filter((c) => c === "planets")).toHaveLength(2);
     expect(cats.filter((c) => c === "ships")).toHaveLength(3);
@@ -127,7 +118,6 @@ describe("MainMenuScene visual upgrade", () => {
     resolveLoad(fakeTexture); // texture arrives AFTER destroy
     await Promise.resolve();
 
-    // The guard must prevent mounting into the (cleared) game layer
     expect(vi.mocked(Sprite).mock.calls.length).toBe(0);
   });
 });

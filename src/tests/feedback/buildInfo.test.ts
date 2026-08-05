@@ -13,8 +13,6 @@ describe("buildInfo", () => {
   });
 
   it("reads live build globals via the guard (version defined, sha falls back to dev)", () => {
-    // The vitest config defines __BUILD_VERSION__ = 'test' but NOT __BUILD_SHA__,
-    // so this exercises both the present and the guarded-fallback paths.
     const info = buildInfo();
     expect(info.version).toBe("test");
     expect(info.sha).toBe("dev");

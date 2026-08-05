@@ -1,14 +1,3 @@
-/**
- * Tests for the offline LLM **vision** oddity-judge (Task 6). Everything is
- * deterministic and free: the {@link FakeLlmClient} returns a canned vision
- * verdict, so the prompt assembly, the frame attachment, the bug-detection oracle,
- * and the end-to-end glue are all asserted with **no live API call and no key**.
- *
- * The headline validation is the **text-vs-vision asymmetry**: fed the same
- * pre-fix fixture, the text judge (Tasks 1–3) attaches no image and so is blind to
- * the visual bug, while the vision judge attaches the frame and flags it. That is
- * exactly what the vision path exists to prove.
- */
 import { describe, it, expect } from "vitest";
 import {
   AnthropicLlmClient,
@@ -33,7 +22,6 @@ import {
   type VisualBugFixture,
 } from "../../src/tests/fixtures/oddities";
 
-/** A canned strict-JSON vision verdict that flags one finding. */
 function verdict(
   title: string,
   rationale: string,
@@ -50,7 +38,6 @@ describe("VISION_ODDITY_RUBRIC", () => {
     expect(VISION_ODDITY_RUBRIC).toContain("missing-art");
     expect(VISION_ODDITY_RUBRIC).toContain("visual-sameness");
     expect(VISION_ODDITY_RUBRIC).toContain("layout-break");
-    // The two self-test bugs are first-class members of the rubric.
     expect(VISION_ODDITY_RUBRIC).toMatch(/quest card/i);
     expect(VISION_ODDITY_RUBRIC).toMatch(/explosion/i);
   });
@@ -142,7 +129,6 @@ describe("judgeFrames (end-to-end against FakeLlmClient)", () => {
     const [det] = detectKnownBugs(report, [expected]);
     expect(det.detected).toBe(true);
 
-    // The frames actually rode along as images, and the vision rubric was used.
     expect(fake.calls).toHaveLength(1);
     expect(fake.calls[0].opts?.system).toBe(VISION_ODDITY_RUBRIC);
     expect(fake.calls[0].opts?.model).toBe(DEFAULT_VISION_MODEL);
@@ -176,9 +162,6 @@ describe("judgeFrames (end-to-end against FakeLlmClient)", () => {
 });
 
 describe("self-test: the vision judge reproduces each known shipped bug", () => {
-  // Per fixture: feed the canned verdict a correct vision pass would return and
-  // assert the fixture's ExpectedVisualBug is detected. This is the Task 6 check
-  // that the vision PATH catches visual bugs.
   const cannedFor: Record<string, string> = {
     questCardTextOverflow: verdict(
       "Quest card text overflow",
@@ -202,19 +185,14 @@ describe("self-test: the vision judge reproduces each known shipped bug", () => 
 });
 
 describe("text-vs-vision asymmetry (the reason the vision path exists)", () => {
-  // The same pre-fix fixture: the TEXT judge attaches NO image (structurally
-  // blind to the visual bug); the VISION judge attaches the frame and flags it.
   it.each<VisualBugFixture>(loadVisualBugFixtures())(
     "%s: text judge is blind, vision judge catches it",
     async (fixture) => {
-      // Text path: a realistic clean text verdict (nothing in the text reveals it).
       const textFake = new FakeLlmClient('{"findings": []}');
       const textReport = await judgeTranscript(textFake, fixture.transcript);
       expect(textReport.findings).toEqual([]);
-      // The structural proof: the text judge never attaches a frame.
       expect(textFake.calls[0].opts?.images).toBeUndefined();
 
-      // Vision path: the frame lets the judge flag the bug.
       const visionFake = new FakeLlmClient(
         verdict(fixture.title, `frame evidence for ${fixture.id}: ${fixture.expected.keywords.join(" ")}`),
       );

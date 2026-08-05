@@ -4,12 +4,6 @@ import {
   type ShopRowState,
 } from "@/presentation/equipment/shopRowAction";
 
-/**
- * Pure label/action selection for an equipment-shop listing's right-hand
- * control. The bug being fixed: owned-but-uninstalled gear rendered a dead
- * "Есть" badge with no action — these tests pin the four meaningful states
- * (buy / owned / installed / no-funds) plus the owned→installable upgrade.
- */
 describe("shopRowAction", () => {
   const base: ShopRowState = {
     isInstalled: false,
@@ -66,7 +60,6 @@ describe("shopRowAction", () => {
   });
 
   it("precedence: installed > installable > owned > affordable", () => {
-    // installed wins even if owned/affordable also set
     expect(
       shopRowAction({
         isInstalled: true,
@@ -75,7 +68,6 @@ describe("shopRowAction", () => {
         canAfford: true,
       }).label,
     ).toBe("Установлен");
-    // installable wins over a plain owned/affordable row
     expect(
       shopRowAction({
         isInstalled: false,
@@ -84,7 +76,6 @@ describe("shopRowAction", () => {
         canAfford: true,
       }).label,
     ).toBe("[Установить]");
-    // owned (but not installable) outranks affordability → never offers "[Купить]"
     expect(
       shopRowAction({
         isInstalled: false,

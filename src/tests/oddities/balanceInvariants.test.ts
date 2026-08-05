@@ -17,26 +17,9 @@ import {
   RESOURCE_BASE_PRICES,
 } from "@/config/balance";
 
-// The cadence function lives in CombatModule, which transitively pulls PixiJS
-// value-imports (CombatHud / DamageNumbers); stub PixiJS so this pure-data oracle
-// boots headlessly. We only call the pure `weaponFireIntervalMs`.
 vi.mock("pixi.js", async () =>
   (await import("../playtest/pixiStub")).makePixiStub(),
 );
-
-/**
- * Task 4 — the letsplay oracle's **balance-oddity** invariants (memory
- * `feedback-letsplay-oddity-hunting`): the oracle must catch balance/logic
- * *cringe*, not just crashes. These assert *relationships* (no strictly-dominated
- * gear, no dead stat, a reachable escape, bounded rewards) rather than exact
- * magnitudes, so deliberate tuning doesn't churn them — only an actual inversion
- * (a pricier item that's never worth buying, a knob that does nothing, an
- * impossible escape, a guaranteed-profit printer) reds the gate.
- *
- * Sister file `src/tests/balance/gearCurve.test.ts` locks the same no-dominance
- * idea on hulls from the curve angle; this is the oracle's own restatement plus
- * the dead-stat / escape-range / reward-bound invariants that live nowhere else.
- */
 
 const WEAPONS = GEAR_CATALOG.filter(
   (g): g is WeaponSpec => g.kind === GearKind.WEAPON,
@@ -50,8 +33,6 @@ const ENGINES = EQUIPMENT.filter(
 
 describe("no gear is strictly dominated by a cheaper one (price-vs-value)", () => {
   it("no weapon is dominated by a cheaper weapon of the same operating profile", () => {
-    // Same ability ⇒ same operating profile; a unique ability (EMP/homing/burst)
-    // is its own value and never "dominated" by a plain weapon.
     function dominates(a: WeaponSpec, b: WeaponSpec): boolean {
       if (a.id === b.id || a.basePrice > b.basePrice || a.ability !== b.ability)
         return false;
@@ -63,9 +44,6 @@ describe("no gear is strictly dominated by a cheaper one (price-vs-value)", () =
         a.cooldownTurns < b.cooldownTurns
       );
     }
-    // Guard against a vacuous pass: if a catalog/enum refactor ever emptied the
-    // filter the loop body would never run and the oracle would silently stop
-    // checking. (Mirrors the asset test's PRODUCTION_PREFIXES length guard.)
     expect(WEAPONS.length).toBeGreaterThan(1);
     for (const b of WEAPONS) {
       const dom = WEAPONS.find((a) => dominates(a, b));
@@ -77,8 +55,6 @@ describe("no gear is strictly dominated by a cheaper one (price-vs-value)", () =
   });
 
   it("no equipment is dominated by a cheaper item of the same family", () => {
-    // Within one EquipmentClass `potency` is the single comparable value (speed,
-    // radar range, repair/s, …). A pricier item must out-potency a cheaper one.
     function dominates(a: EquipmentSpec, b: EquipmentSpec): boolean {
       return (
         a.id !== b.id &&
@@ -102,8 +78,6 @@ describe("no gear is strictly dominated by a cheaper one (price-vs-value)", () =
 
 describe("no dead stat — cooldownTurns drives fire cadence", () => {
   it("the cadence function is strictly monotonic in cooldownTurns", () => {
-    // If cooldownTurns were a dead stat, a slow weapon would fire just as often
-    // as a quick one — the high-`damage` beam would be a free upgrade.
     expect(weaponFireIntervalMs({ cooldownTurns: 1 })).toBeLessThan(
       weaponFireIntervalMs({ cooldownTurns: 2 }),
     );
@@ -127,7 +101,6 @@ describe("no dead stat — cooldownTurns drives fire cadence", () => {
 });
 
 describe("the player can outrun a basic NPC — a reachable escape exists", () => {
-  /** Cruise speed (px/ms) the real loadout derives from installing `engineId`. */
   function cruiseSpeedWith(engineId: string): number {
     const loadout = new ShipLoadout("hull_bastion");
     expect(loadout.install(engineId)).toBe(true);
@@ -141,8 +114,6 @@ describe("the player can outrun a basic NPC — a reachable escape exists", () =
   });
 
   it("escape stays upgrade-gated — the starter engine is slower than the NPC", () => {
-    // A genuine reward for the climb: you can't simply out-cruise pursuers on the
-    // tier-1 engine (the «basic NPC» tier is the slowest one, GAME_BALANCE.npcSpeed).
     const starter = ENGINES.reduce((b, e) =>
       e.techLevel < b.techLevel ? e : b,
     );
@@ -152,10 +123,6 @@ describe("the player can outrun a basic NPC — a reachable escape exists", () =
 
 describe("rewards are bounded — not guaranteed-profit printers", () => {
   it("the local-delivery margin is tight against the worst-case market buy", () => {
-    // A delivery contract makes the player BUY first; worst-case purchase cost is
-    // base × 3.0 (market ceiling). The reward must clear that (never a hidden
-    // loss) but carry no fat structural surplus (≤10% headroom) — so it can't be
-    // farmed for free credits.
     const WORST_CASE_BUY_MARKUP = 3.0;
     expect(LOCAL_DELIVERY_REWARD_MARGIN).toBeGreaterThan(WORST_CASE_BUY_MARKUP);
     expect(LOCAL_DELIVERY_REWARD_MARGIN).toBeLessThanOrEqual(

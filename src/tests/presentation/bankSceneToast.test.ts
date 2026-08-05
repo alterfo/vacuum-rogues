@@ -1,16 +1,3 @@
-/**
- * Task 5 (quest-and-hub polish pass): pins the corrected `BankScene` toast
- * colours at their **call sites** — a contradictory outcome must never reuse a
- * sibling action's hue. The two fixed contradictions:
- *   1. "Кредит зачислен" (granted) must not share the "credit denied" colour.
- *   2. "Нет действующего кредита" (nothing to repay) must not share the
- *      "Снято со вклада" (withdrawal succeeded) colour.
- *
- * Drives the REAL `BankScene` action methods over a REAL `BankingService` +
- * `BankBus` (pure domain/systems, no PixiJS) with a lightweight `pixi.js` mock
- * so `render()` doesn't need a canvas, and spies `showToast` to capture the
- * exact colour each action passes.
- */
 import { describe, it, expect, vi } from "vitest";
 import {
   AccountType,
@@ -96,7 +83,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scene sees the fake pixi.
 import { BankScene } from "@/presentation/BankScene";
 
 const renderer = {
@@ -120,7 +106,6 @@ function makeHost(opts: { savings?: number } = {}) {
     label: "Игрок",
     ownerId: playerId,
   });
-  // Fund the current account so deposits/withdrawals have something to move.
   ledger.post(
     journalEntry({
       id: "seed",
@@ -160,14 +145,12 @@ interface ScenePrivate {
   doDeposit: () => void;
 }
 
-/** Zero a scene's player credits so hard-failure paths trigger. */
 function drainCredits(
   host: import("@/presentation/BankSceneHost").BankSceneHost,
 ): void {
   (host as unknown as { player: { credits: number } }).player.credits = 0;
 }
 
-/** Spy on `showToast` and return the captured (text, colour) call log. */
 function spyToasts(scene: BankScene): Array<{ text: string; color: number }> {
   const calls: Array<{ text: string; color: number }> = [];
   (scene as unknown as ScenePrivate).showToast = (text, color) =>
@@ -214,7 +197,6 @@ describe("BankScene toast colours (call sites)", () => {
   });
 
   it("uses BANK_TOAST.error at every hard-failure call site", () => {
-    // Withdraw with an empty savings account → "На вкладе нет средств".
     const withdrawScene = new BankScene(renderer);
     const withdrawHost = makeHost(); // no savings opened
     withdrawScene.initialize({ gameEngine: withdrawHost });
@@ -225,7 +207,6 @@ describe("BankScene toast colours (call sites)", () => {
     expect(withdrawCalls[0].color).toBe(BANK_TOAST.error);
     withdrawScene.destroy();
 
-    // Deposit with no funds → "Недостаточно средств для вклада".
     const depositScene = new BankScene(renderer);
     const depositHost = makeHost();
     depositScene.initialize({ gameEngine: depositHost });
@@ -237,7 +218,6 @@ describe("BankScene toast colours (call sites)", () => {
     expect(depositCalls[0].color).toBe(BANK_TOAST.error);
     depositScene.destroy();
 
-    // Active loan but no funds to service it → "Недостаточно средств для погашения".
     const repayScene = new BankScene(renderer);
     const repayHost = makeHost();
     repayScene.initialize({ gameEngine: repayHost });

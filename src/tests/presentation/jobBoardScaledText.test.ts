@@ -1,16 +1,3 @@
-/**
- * Task 3 (route the panels through `scaledText`). The Job Board was the
- * screenshot offender: its body description (`0x889aaa`), footer hint
- * (`0x668899`) and issuer line (`0x77aacc`) were dim blue-grays at a fixed 9–11px
- * that ignored the S/M/L setting and were hard to read on the dark panel.
- *
- * After routing through `scaledText` this pins the new contract:
- *  - neutral/dim text tracks the font-scale setting (`scaledFont(base)`), and
- *    is lifted to the readability floor (no more sub-AA blue-gray), while
- *  - semantic accent colors (type tag, reward gold) pass through verbatim.
- *
- * Real PixiJS nodes construct in jsdom (style inspection needs no renderer).
- */
 import { describe, it, expect, afterEach } from "vitest";
 import { Container, Text } from "pixi.js";
 import { JobBoardPanel } from "@/presentation/JobBoardPanel";
@@ -78,7 +65,6 @@ function findText(panel: JobBoardPanel, pred: (t: Text) => boolean): Text {
 
 describe("JobBoardPanel routes text through scaledText", () => {
   it("scales the body description with the S/M/L setting", () => {
-    // Base bumped 10 → 13 (Task 3: bigger quest fonts) — still tracks S/M/L.
     setFontScale("S");
     const small = findText(buildPanel(), (t) => t.text === DESCRIPTION).style
       .fontSize as number;
@@ -108,7 +94,6 @@ describe("JobBoardPanel routes text through scaledText", () => {
       const fill = node.style.fill as number;
       expect(relativeLuminance(fill)).toBeGreaterThanOrEqual(FLOOR_LUM);
     }
-    // The original dim values are no longer used verbatim.
     expect(desc.style.fill).not.toBe(0x889aaa);
     expect(issuer.style.fill).not.toBe(0x77aacc);
   });
@@ -138,8 +123,6 @@ describe("JobBoardPanel routes text through scaledText", () => {
 
   it("passes semantic accent colors through verbatim", () => {
     const panel = buildPanel();
-    // Reward gold and the DELIVERY type tag are deliberate accents, not dim
-    // text — they must keep their hue (rawColor), only the font scales.
     const reward = findText(panel, (t) => t.text.startsWith("💰"));
     const typeTag = findText(panel, (t) => t.text === "Доставка");
     expect(reward.style.fill).toBe(0xffe27a);

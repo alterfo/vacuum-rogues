@@ -3,12 +3,6 @@ import { RealEngineHarness } from "./realEngineHarness";
 import { SceneType, ResourceType } from "@/types";
 import type { InventoryScene } from "@/presentation/InventoryScene";
 
-/**
- * Real-engine playtest (Bug 2): jettisoning owned gear/cargo from the
- * inventory scene reduces the domain state and grants nothing — a credit
- * grant here would mean jettison silently doubled as an unpaid sale. Also
- * covers install-from-warehouse wiring into the real `ShipLoadout`.
- */
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
 describe("InventoryScene — jettison/install wiring (Bug 2)", () => {
@@ -79,8 +73,6 @@ describe("InventoryScene — jettison/install wiring (Bug 2)", () => {
   });
 
   it("a blocked install (hull id, never fits a slot) leaves the warehouse item untouched and shows feedback", async () => {
-    // Mirrors HangarPanel.installFromWarehouse's explainInstallBlock guard —
-    // InventoryScene must not silently no-op the [Установить] button.
     const player = harness.player();
     expect(player).not.toBeNull();
     player!.inventory.addOwnedGear("hull_corvette");

@@ -15,7 +15,6 @@ const CFG: RumorDirectorConfig = {
   maxActive: 4,
 };
 
-/** Real Galaxy so addNewsEvent/getActiveRumors/activeRumors behave for real. */
 function makeGalaxy(systems: { id: string; name: string }[]): Galaxy {
   return new Galaxy(
     "g1",
@@ -31,7 +30,6 @@ const SYS = [
   { id: "S3", name: "Орион" },
 ];
 
-/** A scanner-shaped candidate; toPrice derived so margin math stays consistent. */
 function candidate(
   resource: ResourceType,
   from: string,
@@ -51,7 +49,6 @@ function candidate(
   };
 }
 
-/** A scanFn returning a fixed, pre-ranked candidate list. */
 function scanOf(...candidates: RouteCandidate[]) {
   return () => candidates;
 }
@@ -138,7 +135,6 @@ describe("RumorDirector.updateRumors — re-scoring & expiry", () => {
     expect(res.opened).toHaveLength(0);
     expect(galaxy.activeRumors).toHaveLength(1);
     expect(galaxy.activeRumors[0].lastMarginPct).toBe(18);
-    // Headline `marginPct` (open value) stays put; only `lastMarginPct` drifts.
     expect(galaxy.activeRumors[0].marginPct).toBe(40);
   });
 
@@ -233,7 +229,6 @@ describe("RumorDirector.updateRumors — cap", () => {
     );
     expect(galaxy.activeRumors).toHaveLength(2);
 
-    // At capacity: a fresh high-margin route cannot open while both incumbents hold.
     const held = updateRumors(
       galaxy,
       scanOf(
@@ -247,7 +242,6 @@ describe("RumorDirector.updateRumors — cap", () => {
     expect(held.opened).toHaveLength(0);
     expect(galaxy.activeRumors).toHaveLength(2);
 
-    // CRYSTALS closes → the FUEL route now has a free slot.
     const rotated = updateRumors(
       galaxy,
       scanOf(
@@ -286,7 +280,6 @@ describe("Galaxy.getActiveRumors", () => {
       ResourceType.FUEL,
       ResourceType.METALS,
     ]);
-    // Mutating the returned array must not touch the persisted store.
     sorted.pop();
     expect(galaxy.activeRumors).toHaveLength(2);
   });

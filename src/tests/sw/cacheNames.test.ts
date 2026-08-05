@@ -1,13 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildCacheNames } from "@/systems/sw/cacheNames";
 
-/**
- * Task 1 (playtest bug pass): the Service-Worker cache name MUST change between
- * builds, otherwise `activate`'s "delete every cache that isn't the current name"
- * sweep keeps the old cache and the SW serves a **stale bundle** (the shipped
- * combat-pause fix "not taking" was this). The name is keyed on the build version
- * **and** SHA, so a new commit ⇒ a new name ⇒ the previous cache is purged.
- */
 describe("buildCacheNames — per-build cache busting", () => {
   it("derives both cache names from the build identity", () => {
     const { cache, modelCache } = buildCacheNames("1.2.3", "abc1234");

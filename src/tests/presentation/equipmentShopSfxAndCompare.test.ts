@@ -1,18 +1,3 @@
-/**
- * Task 4 (quest-and-hub polish pass,
- * `docs/plans/20260726-quest-and-hub-polish-pass.md`): EquipmentShopScene
- * cosmetic/feedback fixes.
- *
- * 1. Sound-selection logic: a sell plays the "sell" cue (was mis-wired to "buy");
- *    a gear buy and the hull buy both play the "buy" cue (the hull buy previously
- *    played nothing at all — the single largest transaction in the shop was
- *    silent).
- * 2. Weapon rows now get the "→ replaces X" comparison the other gear categories
- *    always had (`installedSameClass`/`gearComparisonSuffix`).
- *
- * Mirrors the existing scene-test convention (`equipmentShopFontScaleLayout`): a
- * lightweight `pixi.js` mock whose nodes are plain mutable objects.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { gearById } from "@/systems/equipment/GearCatalog";
@@ -92,7 +77,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scene + its pure helpers see the fake pixi.
 import {
   EquipmentShopScene,
   installedSameClass,
@@ -184,7 +168,6 @@ describe("EquipmentShopScene — purchase/sell sound cues (Task 4)", () => {
     const loadout = new ShipLoadout("hull_scout");
     const scene = new EquipmentShopScene(renderer);
     scene.initialize({ gameEngine: makeEngine(loadout, playSfx), planet });
-    // Any hull other than the currently-installed one is a real swap.
     const targetHull = gearById("hull_corvette") as HullSpec;
     expect(targetHull?.kind).toBe("HULL");
     const listing: GearListing = {
@@ -207,7 +190,6 @@ describe("EquipmentShopScene — weapon replacement comparison (Task 4)", () => 
     const beam = gearById("wpn_beam")!; // ENERGY
     const pulse = gearById("wpn_pulse")!; // ENERGY
     expect(installedSameClass(["wpn_pulse"], beam)).toBe(pulse);
-    // A different weaponClass (FRAGMENT) is not a match.
     expect(installedSameClass(["wpn_railgun"], beam)).toBeNull();
   });
 

@@ -1,8 +1,5 @@
 import { type Page, expect } from '@playwright/test';
 
-/**
- * Test fixtures and utility functions for E2E tests
- */
 
 export interface TestPlayer {
   name: string;
@@ -48,9 +45,6 @@ export const testSaves: Record<string, TestSaveGame> = {
   },
 };
 
-/**
- * Generate unique test user
- */
 export const generateUniquePlayer = (): TestPlayer => ({
   name: `Captain ${Date.now()}`,
   race: 'Human',
@@ -58,9 +52,6 @@ export const generateUniquePlayer = (): TestPlayer => ({
   ship: `Ship-${Date.now()}`,
 });
 
-/**
- * Check IndexedDB for game saves
- */
 export async function checkIndexedDB(
   page: Page,
   dbName: string = 'sr_game_saves'
@@ -93,9 +84,6 @@ export async function checkIndexedDB(
   );
 }
 
-/**
- * Save game to IndexedDB
- */
 export async function saveGameToIndexedDB(
   page: Page,
   saveData: TestSaveGame
@@ -122,9 +110,6 @@ export async function saveGameToIndexedDB(
   }, saveData);
 }
 
-/**
- * Load game from IndexedDB
- */
 export async function loadGameFromIndexedDB(
   page: Page,
   slot: number
@@ -149,9 +134,6 @@ export async function loadGameFromIndexedDB(
   }, slot);
 }
 
-/**
- * Wait for specific console message
- */
 export async function waitForConsoleMessage(
   page: Page,
   text: string,
@@ -173,9 +155,6 @@ export async function waitForConsoleMessage(
   }
 }
 
-/**
- * Collect all console messages
- */
 export async function collectAllConsoleMessages(
   page: Page,
   duration = 3000
@@ -192,9 +171,6 @@ export async function collectAllConsoleMessages(
   return messages;
 }
 
-/**
- * Check for ONNX model loading
- */
 export async function checkOnnxModelLoading(
   page: Page,
   modelName: string
@@ -203,9 +179,6 @@ export async function checkOnnxModelLoading(
   return messages.some((msg) => msg.includes(modelName) && msg.includes('loaded'));
 }
 
-/**
- * Verify no JavaScript errors
- */
 export async function expectNoJavaScriptErrors(
   page: Page,
   excludedPatterns: string[] = []

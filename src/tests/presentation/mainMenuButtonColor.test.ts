@@ -1,9 +1,3 @@
-/**
- * UX finding #12: the «Новая игра» primary button used the `createButton`
- * default green (0x00ff00), clashing with the cyan accent family every other
- * menu button uses. It must render in the cyan family (high blue channel), not
- * green (zero blue), so the menu reads as one consistent accent.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { Text } from "pixi.js";
@@ -36,7 +30,6 @@ vi.mock("pixi.js", () => {
       fill: vi.fn().mockReturnThis(),
       clear: vi.fn().mockReturnThis(),
     })),
-    // Unlike mainMenuVisuals' mock, keep the passed style so we can read `fill`.
     Text: vi
       .fn()
       .mockImplementation((opts?: { text?: string; style?: unknown }) => ({
@@ -94,8 +87,6 @@ describe("MainMenuScene — «Новая игра» button color", () => {
     const fill = opts!.style?.fill;
     expect(typeof fill).toBe("number");
 
-    // Green 0x00ff00 has a zero blue channel; a cyan-family accent has a strong
-    // blue channel. Assert the button is not green and is cyan.
     const blue = (fill as number) & 0xff;
     const green = ((fill as number) >> 8) & 0xff;
     expect(fill).not.toBe(0x00ff00);

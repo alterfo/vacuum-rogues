@@ -12,8 +12,6 @@ import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import { SaveState } from "@/domain/SaveState";
 
 vi.mock("pixi.js", () => ({
-  // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
-  // module load, so the partial mock must expose a constructable Filter.
   Filter: class {},
   Rectangle: class {
     constructor(
@@ -76,12 +74,6 @@ vi.mock("pixi.js", () => ({
   BlurFilter: vi.fn().mockImplementation(() => ({})),
 }));
 
-/**
- * Reload spawn fix (playtest 2026-06-22 #1): the in-flight ship position is now
- * persisted in the save (`flightShipPos`, system-tagged) and restored on load so
- * a reload resumes the ship where it was instead of edge-spawning. Optional +
- * additive — saves made before it lack the field and fall back to edge spawn.
- */
 describe("GameEngine flight-position persistence (reload spawn)", () => {
   let diDeps: GameEngineDIDependencies;
   let engine: GameEngine;
@@ -145,8 +137,6 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
       engine.lastFlightShipPos = { x: 200, y: 300 };
       await engine.saveGame("auto");
 
-      // A re-entry autosave consumes lastFlightShipPos → null; the persisted
-      // position must survive instead of being cleared.
       engine.lastFlightShipPos = null;
       await engine.saveGame("auto");
 
@@ -159,9 +149,6 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
     });
 
     it("persists the live free-flight position when the player never left flight", async () => {
-      // The headline reload case: warp/take-off into a system, fly around, reload.
-      // No scene exit happened (lastFlightShipPos stays null), so the position is
-      // captured into liveFlightShipPos on each turn-end and must still persist.
       await seedGame("sys-1");
       engine.currentSceneType = SceneType.SPACE_FLIGHT;
       engine.lastFlightShipPos = null;
@@ -178,28 +165,18 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
     });
 
     it("forgets the flight position on landing so a take-off autosave can't resurrect it", async () => {
-      // Regression (playtest 2026-06-22 follow-up): land → take-off → reload
-      // teleported the ship to its stale pre-landing position. The sticky
-      // flightShipPos persists from the pre-landing turn-end; landing clears it
-      // (forgetFlightPosition, called from transitionTo(PLANET)) so the take-off
-      // autosave — which runs with landedPlanetId already cleared and the scene
-      // back to SPACE_FLIGHT — cannot re-persist the stale position.
       await seedGame("sys-1");
       engine.currentSceneType = SceneType.SPACE_FLIGHT;
       engine.lastFlightShipPos = { x: 500, y: 600 };
       await engine.saveGame("auto");
-      // The pre-landing free-flight position is persisted (sticky).
       expect((await diDeps.saveService.read("auto"))!.flightShipPos).toEqual({
         x: 500,
         y: 600,
         systemId: "sys-1",
       });
 
-      // Landing invalidates the captured position.
       engine.forgetFlightPosition();
 
-      // Take-off: scene back to SPACE_FLIGHT, lastFlightShipPos consumed to null,
-      // and the stale live capture was dropped on landing.
       engine.currentSceneType = SceneType.SPACE_FLIGHT;
       engine.lastFlightShipPos = null;
       await engine.saveGame("auto");
@@ -209,9 +186,6 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
     });
 
     it("ignores the live free-flight position when not in flight", async () => {
-      // A stale liveFlightShipPos must not leak into a non-flight save (e.g. a
-      // PLANET/menu autosave) — those spawns are owned by the landed-planet /
-      // edge path, and the field is only valid while SPACE_FLIGHT is active.
       await seedGame("sys-1");
       engine.currentSceneType = SceneType.PLANET;
       engine.lastFlightShipPos = null;
@@ -250,8 +224,6 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
 
     beforeEach(async () => {
       engine.galaxy = await diDeps.galaxyService.generate("test", 5);
-      // loadGame resets an unknown currentSystemId to the first system, so the
-      // round-trip must use a real system id from the generated galaxy.
       homeSystemId = engine.galaxy.systems[0].id;
     });
 
@@ -308,10 +280,6 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
     });
 
     it("does not resume the flight position for a save made while landed", async () => {
-      // A PLANET save (ship landed) falls back to SPACE_FLIGHT on load, but the
-      // landed-planet spawn (applyReentrySpawn via landedPlanetId) must win over
-      // a possibly-stale flightShipPos — landing never refreshes it. So no
-      // preserveShipPos even though the system id matches.
       const player = diDeps.playerService.createPlayer({
         factionType: FactionType.OUTLANDERS,
       });

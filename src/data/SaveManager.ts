@@ -10,12 +10,6 @@ import { logger } from "@/utils/logger";
 
 export const MAX_SLOTS = 10;
 
-/**
- * Hidden recovery slot written on a critical error ({@link
- * GameEngine.handleCriticalError}). It is invisible to the save/load UI and must
- * NOT count against the player-facing {@link MAX_SLOTS} cap, or the user's full
- * grid (auto + the manual slots) would lose a slot to it.
- */
 export const EMERGENCY_SLOT_ID = "_emergency";
 
 export class SaveManager {
@@ -37,8 +31,6 @@ export class SaveManager {
     }
 
     const slots = await this.listSlots();
-    // The hidden emergency slot is uncapped (and never blocks the user's grid):
-    // count only player-facing slots against the cap.
     const cappedSlots = slots.filter((s) => s.slotId !== EMERGENCY_SLOT_ID);
     if (
       slotId !== EMERGENCY_SLOT_ID &&
@@ -115,13 +107,11 @@ export class SaveManager {
 
       const parsed = this.serializer.deserialize(result.payload) as SaveState;
 
-      // Validate save state with Zod before migration
       try {
         validateSaveState(parsed);
         logger.info(`Save slot ${slotId} validated successfully`);
       } catch (error) {
         if (error instanceof Error) {
-          // Map ZodError issues to Russian message
           const issuePath =
             "issues" in error
               ? (
@@ -156,7 +146,6 @@ export class SaveManager {
   }
 
   private mapZodIssueToRussian(error: Error): string {
-    // Map common Zod issues to Russian messages
     const message = error.message;
     if (message.includes("version")) return "версия сохранения некорректна";
     if (message.includes("timestamp")) return "временная метка некорректна";

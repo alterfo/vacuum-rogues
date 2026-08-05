@@ -1,16 +1,3 @@
-/**
- * Quest probe — an env-gated DIAGNOSTIC, not a gate (inert unless
- * `QUEST_PROBE=1`; asserts nothing beyond "steps happened"). Replays a seeded
- * session on the real engine and prints, per step, quest-lifecycle events:
- * take/accept, complete, and expire/fail — plus a final tally. Built for Task
- * 9 (`docs/plans/20260719-autopilot-combat-coverage-and-campaign-pacing.md`)
- * to characterize live report #11 ("autopilot frequently fails/bungles
- * quests") before attempting a fix — see `_wedgeProbe.run.test.ts` for the
- * sibling diagnostic this one is modeled on.
- *
- * Usage: `QUEST_PROBE=1 QUEST_SEED=<seed> QUEST_STEPS=<n> npx vitest --run
- * src/tests/playtest/letsplay/_questProbe.run.test.ts`
- */
 import { describe, it, expect, vi } from "vitest";
 import { FactionType, type GameMode, SceneType } from "@/types";
 import { RealEngineHarness } from "../realEngineHarness";
@@ -39,7 +26,7 @@ describe("quest probe (temp)", () => {
         if (process.env.QUEST_DUMP_TOPOLOGY) {
           const g = harness.engine.galaxy;
           for (const s of g?.systems ?? []) {
-            // eslint-disable-next-line no-console
+             
             console.log(
               `${s.id} (${s.name}) -> [${s.connections.map((c) => c.toSystemId).join(", ")}]`,
             );
@@ -109,14 +96,14 @@ describe("quest probe (temp)", () => {
       } finally {
         harness.dispose();
       }
-      // eslint-disable-next-line no-console
+       
       console.log(events.join("\n"));
-      // eslint-disable-next-line no-console
+       
       console.log(
         `\nTALLY: taken=${takenCount} completed=${lastCompletedIds.size} expired=${lastFailedIds.size}`,
       );
       if (traceId) {
-        // eslint-disable-next-line no-console
+         
         console.log(`\nTRACE ${traceId}:\n${trace.join("\n")}`);
       }
       expect(events.length).toBeGreaterThanOrEqual(0);

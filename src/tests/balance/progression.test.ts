@@ -14,15 +14,6 @@ import {
 } from "@/systems/quests/QuestGenerator";
 import type { StarSystem } from "@/domain/StarSystem";
 
-// ---------------------------------------------------------------------------
-// Task 3: reaching the rare apex tech must be a LONG, earned climb — far longer
-// than the old ~2-week trade buy of the (then cheap, ubiquitous) top hull. We
-// model the player's quest income against the now-steep apex prices and assert
-// the *relationship* (days-to-top-tech ≫ a fortnight), not an exact day count,
-// so future income/price tuning doesn't churn the test.
-// ---------------------------------------------------------------------------
-
-/** The old "I can field the most expensive hull almost immediately" buy: ~2 weeks. */
 const OLD_TOP_TECH_BUY_DAYS = 14;
 
 function sys(id: string, name: string, toIds: string[]): StarSystem {
@@ -95,16 +86,13 @@ describe("progression: top tech is a long climb (Task 3)", () => {
     expect(modelledDaysToAfford(2000, reward)).toBeLessThan(
       modelledDaysToAfford(12000, reward),
     );
-    // One quest per QUEST_INTERVAL_DAYS days at `reward`/quest ⇒ reward/day rate.
     expect(modelledDaysToAfford(reward, reward)).toBe(QUEST_INTERVAL_DAYS);
   });
 
   it("affording the apex hull takes many in-game months (≫ the old ~2-week buy)", () => {
     const reward = meanQuestReward(60);
-    // Sanity: the board's mean reward is in the documented mid band.
     expect(reward).toBeGreaterThan(400);
     const days = modelledDaysToAfford(apexHull.basePrice, reward);
-    // A long earned climb — at least several times the old fortnight buy.
     expect(days).toBeGreaterThan(OLD_TOP_TECH_BUY_DAYS * 5);
     expect(days).toBeGreaterThan(80);
   });
@@ -116,9 +104,7 @@ describe("progression: top tech is a long climb (Task 3)", () => {
       reward,
     );
     const hullDays = modelledDaysToAfford(apexHull.basePrice, reward);
-    // The pair costs strictly more time than the hull alone…
     expect(pairDays).toBeGreaterThan(hullDays);
-    // …and lands far beyond the old ~2-week top-tech buy (≥ 10× a fortnight).
     expect(pairDays).toBeGreaterThan(OLD_TOP_TECH_BUY_DAYS * 10);
   });
 });

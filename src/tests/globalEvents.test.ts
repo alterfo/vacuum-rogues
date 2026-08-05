@@ -46,7 +46,6 @@ function makeGalaxy(systemCount = 3): Galaxy {
     return sys;
   });
 
-  // Connect systems in a chain
   for (let i = 0; i < systems.length - 1; i++) {
     systems[i].connections.push(new WarpPath(`sys_${i}`, `sys_${i + 1}`, 2));
     systems[i + 1].connections.push(
@@ -82,15 +81,12 @@ describe("GalaxySimulator.tickGlobalEvents", () => {
 
   it("appends the news event to the galaxy feed when an event fires", () => {
     const galaxy = makeGalaxy();
-    // Use a seed that forces an event (rng.next() < 0.1)
-    // Brute-force: advance day until an event fires
     let found = false;
     for (let day = 0; day < 100; day++) {
       galaxy.gameDays = day;
       const rng = new SeededRNG(`galaxy_test_day_${day}`);
       const events = simulator.tickGlobalEvents(galaxy, rng);
       if (events.length > 0) {
-        // Add to news feed like GameEngine does
         for (const e of events) galaxy.addNewsEvent(e);
         expect(galaxy.newsFeed.length).toBeGreaterThan(0);
         expect(
@@ -100,7 +96,6 @@ describe("GalaxySimulator.tickGlobalEvents", () => {
         break;
       }
     }
-    // At 10% chance per day over 100 days, a fire is virtually guaranteed
     expect(found).toBe(true);
   });
 });
@@ -113,9 +108,6 @@ describe("PIRATE_SURGE effect", () => {
     const initialPrice =
       galaxy.systems[0].planets[0].market.priceMultipliers[0];
 
-    // Directly call applyGlobalEvent via tickGlobalEvents with a seeded RNG
-    // that will produce a PIRATE_SURGE. Since we can't control the random type
-    // selection directly, we test the effect indirectly via a known-seed run.
     let pSurgeFound = false;
     for (let day = 0; day < 200; day++) {
       const g = makeGalaxy(1);
@@ -135,7 +127,6 @@ describe("PIRATE_SURGE effect", () => {
     }
     expect(pSurgeFound).toBe(true);
 
-    // Sanity: no NPCs were added to the original galaxy object
     expect(galaxy.npcShips.length).toBe(initialNpcCount);
   });
 
@@ -168,15 +159,12 @@ describe("TRADE_BOOM effect", () => {
       const boom = events.find((e) => e.type === "TRADE_BOOM");
       if (boom) {
         const planet = g.systems[0].planets[0];
-        // Price multipliers should be below 1.0 (reduced by 15%)
         expect(planet.market.priceMultipliers[0]).toBeLessThan(1.0);
-        // System should be recorded as having active trade boom
         expect(g.activeTradeBoomSystems[boom.systemId]).toBeDefined();
         expect(g.activeTradeBoomSystems[boom.systemId]).toBeGreaterThan(day);
         return;
       }
     }
-    // If no boom found in 200 days, that's fine (10% × 25% = 2.5% chance per day)
   });
 
   it("expireGlobalEvents restores prices after duration", () => {
@@ -187,12 +175,10 @@ describe("TRADE_BOOM effect", () => {
       galaxy.systems[0].planets[0].market.priceMultipliers[0];
     expect(priceAfterBoom).toBeLessThan(1.0);
 
-    // Advance past expiry
     galaxy.gameDays = 11;
     galaxy.expireGlobalEvents();
     const priceRestored =
       galaxy.systems[0].planets[0].market.priceMultipliers[0];
-    // After expiry, price should be back near 1.0 (within floating-point precision)
     expect(priceRestored).toBeCloseTo(1.0, 3);
     expect(galaxy.activeTradeBoomSystems["sys_0"]).toBeUndefined();
   });
@@ -210,9 +196,7 @@ describe("PLAGUE effect", () => {
       const plague = events.find((e) => e.type === "PLAGUE");
       if (plague) {
         plagueFound = true;
-        // Population should have decreased
         const planet = g.systems[0].planets[0];
-        // Original population was 2_000_000; after plague it should be 1_400_000
         expect(planet.population).toBeLessThan(2_000_000);
         expect(planet.population).toBeGreaterThanOrEqual(0);
         break;
@@ -228,7 +212,6 @@ describe("DISCOVERY effect", () => {
     let discoveryFound = false;
     for (let day = 0; day < 500; day++) {
       const g = makeGalaxy(3);
-      // Set fog on systems 1 and 2
       g.systems[1].fogOfWar = true;
       g.systems[2].fogOfWar = true;
       g.gameDays = day;
@@ -257,7 +240,6 @@ describe("Planet.population", () => {
     planet.population = Math.max(0, planet.population - loss);
     expect(planet.population).toBe(70);
 
-    // Edge case: very small population
     planet.population = 1;
     planet.population = Math.max(0, planet.population - Math.round(1 * 0.3));
     expect(planet.population).toBeGreaterThanOrEqual(0);

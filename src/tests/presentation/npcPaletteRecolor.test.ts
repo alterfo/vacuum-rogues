@@ -1,19 +1,3 @@
-/**
- * Playtest bug pass 2, Task 4 — "the palette change does nothing".
- *
- * The accessibility ПАЛИТРА control persists a new palette mode, but the only
- * place it was reachable (the in-flight ♿ panel) never re-applied it to the
- * already-rendered scene: an NPC ship hull reads {@link factionColor} once when
- * its graphic is built, so the live ships kept their old colour until the scene
- * was rebuilt. These pin the live-recolor seam that closes that gap:
- *   • `NpcShipSprite.refreshPaletteColors()` re-reads `factionColor` (hull +
- *     minimap `mapColor`) under the *current* palette mode, and
- *   • the seam itself flows: `factionColor` returns a different hue once the
- *     mode is switched through the accessor.
- *
- * RED before the fix: `refreshPaletteColors` did not exist and `mapColor` was a
- * one-shot `readonly`, so a palette switch left the sprite's colour stale.
- */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Container } from "pixi.js";
 import { NpcShipSprite, type SystemBounds } from "@/presentation/NpcShipSprite";
@@ -77,14 +61,11 @@ describe("NpcShipSprite palette live-recolor (Task 4 — palette actually applie
 
   it("refreshPaletteColors re-reads factionColor under the current mode", () => {
     const sprite = new NpcShipSprite(makeNpc(Faction.SYNDICATE), 0, 0, bounds);
-    // Built under the default palette.
     expect(sprite.mapColor).toBe(factionColor(Faction.SYNDICATE, "default"));
 
-    // Switch the palette through the same accessor the ♿ panel writes.
     setPaletteMode("deuteranopia");
     expect(localStorage.getItem(PALETTE_MODE_KEY)).toBe("deuteranopia");
 
-    // Live re-apply: the sprite adopts the new mode's hue (no scene rebuild).
     sprite.refreshPaletteColors();
     expect(sprite.mapColor).toBe(
       factionColor(Faction.SYNDICATE, "deuteranopia"),
@@ -95,10 +76,6 @@ describe("NpcShipSprite palette live-recolor (Task 4 — palette actually applie
   });
 });
 
-// The leaf seam above is what the player reported broken IN FLIGHT, but the scene
-// reaches it through `NpcShipManager.refreshFactionColors()` (wired to the ♿/
-// settings ПАЛИТРА control via `FlightHud.onPaletteChange`). Pin that loop so an
-// unwiring of the manager fan-out — not just the leaf — is caught.
 describe("NpcShipManager.refreshFactionColors fans the live recolor to every ship", () => {
   beforeEach(() => {
     localStorage.clear();

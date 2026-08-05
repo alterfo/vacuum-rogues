@@ -1,14 +1,3 @@
-/**
- * Space visual cleanup (2026-07-08) — Tasks 2/3.
- *
- * `createTwinkleStars()`/`createNebulae()` mount tinted `Sprite`s of the baked
- * `starPointTexture()`/`nebulaCloudTexture()` when a 2D canvas context is
- * available, falling back to `Graphics` only in jsdom (no canvas). The default
- * `spaceBackgroundLayer.test.ts` harness runs under plain jsdom, so it only ever
- * exercises the `Graphics` fallback branch — this file mocks a real 2D context
- * (mirroring `cometHeadSprite.test.ts`) so the actual Sprite-mounting code (the
- * one production runs) gets asserted too.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Container, Graphics, Sprite } from "pixi.js";
 
@@ -23,7 +12,6 @@ vi.mock("@/presentation/textures", async (importOriginal) => {
   };
 });
 
-/** A throwaway Canvas2D context covering only the calls the bakers make. */
 function mockCtx(): Record<string, unknown> {
   const grad = { addColorStop: vi.fn() };
   return {

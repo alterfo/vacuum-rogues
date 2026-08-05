@@ -1,4 +1,3 @@
-/** FNV-1a hash of a string → stable 32-bit unsigned integer. */
 export function hashStr(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {

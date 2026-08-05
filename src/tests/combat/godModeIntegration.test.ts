@@ -1,18 +1,3 @@
-/**
- * God-mode wired into the live combat + jump paths (plan
- * `20260620-game-difficulty-modes-god-normal-hard.md`, Task 4).
- *
- * Three behaviours are locked here:
- *   1. CombatModule routes incoming NPC fire through `applyDamageWithMode`, so a
- *      lethal hit in GOD floors the player's hull above 0 and "downs" the ship
- *      instead of killing it — `onPlayerDestroyed` (→ GAME_OVER) never fires.
- *      NORMAL/HARD are unchanged: the hull reaches 0 and death is reported.
- *   2. A downed ship cannot fire — neither the real-time auto-fire
- *      (`advancePlayerTimer`) nor a deliberate confirmed shot (`confirmAttack`)
- *      lands — until the hull is repaired above the floor.
- *   3. The hyperjump gate both warp paths call is the derived `isDowned`
- *      predicate: true at the floor, cleared by a repair above it.
- */
 import { describe, it, expect } from "vitest";
 import {
   CombatModule,
@@ -62,7 +47,6 @@ function makeSprite(
   } as unknown as NpcShipSprite;
 }
 
-/** Build a CombatModule in the given mode, counting deaths + capturing toasts. */
 function makeModule(
   ship: { hullHP: number; maxHull: number },
   mode: GameMode,
@@ -92,8 +76,6 @@ describe("CombatModule god-mode damage routing (Task 4)", () => {
   it("GOD: a lethal hit leaves the ship alive + downed, no death", () => {
     const ship = { hullHP: 15, maxHull: MAX_HULL };
     const { module, deaths, messages } = makeModule(ship, "GOD");
-    // Tanky NPC survives the player's first shot, then hits for far more than the
-    // remaining hull — NORMAL would die here.
     module.addCombatant(
       makeSprite("a", 50, 0, { hullHP: 100000, damage: 9999 }),
     );
@@ -161,13 +143,6 @@ describe("CombatModule downed ship cannot fire (Task 4)", () => {
   });
 
   it("repairing above the floor re-enables auto-fire", () => {
-    // Rewritten under the three-year-campaign test license (Task 7), meaning
-    // preserved: repair restores fight capability. A downed ship now REFUSES
-    // engagement outright (same class as the weaponless no-op — it can
-    // neither fire nor die, and an active fight would pin the galaxy
-    // calendar forever), so the resume happens through the garrison-aggro
-    // path, which re-calls addCombatant every frame and re-engages naturally
-    // once the ship is repaired above the floor.
     const ship = { hullHP: FLOOR, maxHull: MAX_HULL }; // downed
     const { module } = makeModule(ship, "GOD");
     const npc = makeSprite("a", 50, 0, { hullHP: 1000, damage: 1 });

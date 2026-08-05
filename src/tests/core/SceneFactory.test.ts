@@ -2,10 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SceneFactory } from "@/core/services/SceneFactory";
 import { SceneType } from "@/types";
 
-// Mock PixiJS Container for Renderer constructor
 vi.mock("pixi.js", () => ({
-  // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
-  // module load, so the partial mock must expose a constructable Filter.
   Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
     init: vi.fn().mockResolvedValue(undefined),
@@ -23,7 +20,6 @@ vi.mock("pixi.js", () => ({
 describe("SceneFactory", () => {
   const factory = new SceneFactory();
 
-  // Minimal mock renderer
   const mockRenderer = {
     app: { screen: { width: 800, height: 600 } },
     gameLayer: { addChild: vi.fn(), children: [] },
@@ -49,8 +45,6 @@ describe("SceneFactory", () => {
     expect(scene).toBeDefined();
   });
 
-  // The hex CombatScene was removed (real-time in-flight combat only). The
-  // SceneType.COMBAT value is gone and the factory no longer resolves it.
   it("no longer exposes a COMBAT scene type", () => {
     expect(
       (SceneType as unknown as Record<string, string | undefined>).COMBAT,

@@ -7,7 +7,6 @@ import {
   type OnboardingStore,
 } from "@/systems/onboarding/onboardingState";
 
-/** In-memory Storage subset for the persistence tests. */
 function fakeStore(initial: Record<string, string> = {}): OnboardingStore & {
   map: Map<string, string>;
 } {
@@ -33,7 +32,6 @@ describe("onboardingState — 'seen' help-key persistence", () => {
     const store = fakeStore();
     markSeen("welcome", store);
     expect(hasSeen("welcome", store)).toBe(true);
-    // Persisted as a JSON string-set under the documented key.
     expect(JSON.parse(store.map.get(HELP_SEEN_KEY) as string)).toEqual([
       "welcome",
     ]);

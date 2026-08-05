@@ -1,15 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { applyMockHeavySystems } from './fixtures/mockHeavySystems';
 
-/**
- * E2E: Shop and equip flow
- *
- * Validates the critical loop:
- *   start game → buy engine module from shop → equip it → derived speed increases
- *
- * All interaction driven via window.__gameEngine to avoid coordinate-based clicks.
- * Assertions use waitForFunction or game-state reads.
- */
 
 type GameEngine = {
   player: {
@@ -39,7 +30,6 @@ test.describe('Shop and Equip flow', () => {
       () => !!(window as unknown as { __gameEngine?: unknown }).__gameEngine,
       { timeout: 15000 },
     );
-    // Navigate to gameplay scene (creates player + starter loadout with eq_engine_i)
     await page.evaluate(async () => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       await engine.transitionTo('SPACE_FLIGHT');
@@ -53,7 +43,6 @@ test.describe('Shop and Equip flow', () => {
   });
 
   test('buying and installing a higher-tier engine increases derived speed', async ({ page }) => {
-    // Verify the starter loadout already has an engine → canTakeOff is true
     const initialStats = await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       return engine.playerLoadout?.derivedStats() ?? null;
@@ -62,16 +51,11 @@ test.describe('Shop and Equip flow', () => {
     expect(initialStats!.speed).toBeGreaterThan(0);
     const initialSpeed = initialStats!.speed;
 
-    // Fund player for purchase
     await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       engine.player.credits = 10000;
     });
 
-    // Simulate buying eq_engine_iii (price 9000) and installing it in the loadout.
-    // This mirrors exactly what EquipmentShopScene.buyItem() + StationScene hangar do:
-    //   - deduct credits
-    //   - call loadout.install(gearId)
     const purchaseResult = await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const player = engine.player;
@@ -86,7 +70,6 @@ test.describe('Shop and Equip flow', () => {
 
     expect(purchaseResult.ok).toBe(true);
 
-    // Verify derived speed increased (eq_engine_iii tech level 5 > eq_engine_i tech level 2)
     const newStats = await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       return engine.playerLoadout?.derivedStats() ?? null;
@@ -95,7 +78,6 @@ test.describe('Shop and Equip flow', () => {
     expect(newStats!.speed).toBeGreaterThan(initialSpeed);
     expect(newStats!.canTakeOff).toBe(true);
 
-    // Verify the gear appears in installed list
     const installedGears = await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       return engine.playerLoadout?.installedGearIds() ?? [];
@@ -104,7 +86,6 @@ test.describe('Shop and Equip flow', () => {
   });
 
   test('player cannot take off without an engine', async ({ page }) => {
-    // Uninstall the engine
     const removed = await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const loadout = engine.playerLoadout as unknown as {

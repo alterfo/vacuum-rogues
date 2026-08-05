@@ -2,22 +2,16 @@ import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { t } from "@/i18n/i18n";
 import { logger } from "@/utils/logger";
 
-/**
- * Minimal engine seam the capture needs — declared structurally (not as a
- * GameEngine import) to keep this flight helper free of an import cycle.
- */
 export interface FlightPositionSink {
   liveFlightShipPos: { x: number; y: number } | null;
   saveGame?: (slotId?: string) => Promise<void>;
 }
 
-/** Engine seam for the per-frame live capture + periodic in-flight autosave. */
 export interface FlightAutosaveSink {
   recordLiveFlightPos(x: number, y: number): void;
   flushFlightAutosave(): Promise<void>;
 }
 
-/** Scene-owned throttle state for {@link recordAndMaybeAutosaveFlight}. */
 export interface FlightAutosaveState {
   accumMs: number;
   lastPos: { x: number; y: number } | null;
@@ -25,15 +19,6 @@ export interface FlightAutosaveState {
 
 const FLIGHT_AUTOSAVE_INTERVAL_MS = 5000;
 
-/**
- * Track the live ship position into the engine every frame (so a page-hide
- * flush / next save persists where the ship IS, not the system-entry edge) and
- * throttle a periodic autosave (~5 s) when the ship has actually moved — so a
- * crash/close that never fires `visibilitychange` still resumes near the live
- * position. Turn-end already saves the settled position; this fills the gap
- * mid-turn and during a combat orbit (which moves the ship with no turn-end).
- * Mutates `state` in place.
- */
 export function recordAndMaybeAutosaveFlight(
   engine: FlightAutosaveSink,
   physics: ShipPhysics,
@@ -55,17 +40,6 @@ export function recordAndMaybeAutosaveFlight(
     .catch((e) => logger.error("Periodic flight autosave failed:", e));
 }
 
-/**
- * Finalize the ship at the end of a flight turn: settle it in place, then
- * persist its position so a browser reload resumes the ship where it stopped.
- *
- * Free flight has no other autosave trigger — scene transitions run after
- * `lastFlightShipPos` is consumed, and the warp save fires before it is set — so
- * this discrete turn-end is where the live position is captured. The engine
- * folds `liveFlightShipPos` into the saved, system-tagged `flightShipPos`
- * (`performWarp` clears it when the ship leaves the system). A null engine
- * (bare-scene unit tests) still settles the ship but skips the save.
- */
 export function endFlightTurn(
   physics: ShipPhysics,
   engine: FlightPositionSink | null,
@@ -80,30 +54,13 @@ export function endFlightTurn(
     ?.catch((e) => logger.error("Auto-save on turn end failed:", e));
 }
 
-/** The scene members the Play/Pause turn control reads (extracted verbatim from
- *  `SpaceFlightScene.onPlayPause` for the line guard, 14.5c — lazy closures). */
 export interface PlayPauseHost {
   isCombatPaused(): boolean;
   isPlanning(): boolean;
-  /**
-   * True while a confirmed execute window is running. Optional so callers/tests
-   * that don't model the pause-and-plan loop can omit it. While executing, the
-   * button is a no-op — the round timer is the single terminator (Task 1b);
-   * the legacy combat-abort `endTurn()` here froze `CombatModule` (its
-   * `isPaused` includes `!isTurnRunning`) while `tickExecute` kept cycling,
-   * wedging the fight into a permanent zero-fire planning loop.
-   */
   isExecutingPlan?(): boolean;
-  /**
-   * A blocking panel (contact / journal / planet-info / settings / system menu)
-   * is open. Optional so bare callers/tests can omit it. Guards the PLANNING
-   * confirm exactly like Space's `hasOpenModal` guard in `flightKeyHandler` —
-   * the HUD «Ход» button must never start an enemy volley behind an open panel.
-   */
   hasOpenModal?(): boolean;
   confirmPlan(): void;
   isTurnRunning(): boolean;
-  /** A combat auto-follow / active fight — the pause aborts the turn NOW. */
   combatAbortActive(): boolean;
   endTurn(): void;
   pauseLatched(): boolean;
@@ -112,19 +69,10 @@ export interface PlayPauseHost {
   followActive(): boolean;
   followTarget(): { x: number; y: number } | null;
   executeRouteTo(x: number, y: number): void;
-  /** Course-less wait turn: time passes, the ship holds position (US-070 #5). */
   beginWaitTurn(): void;
   showMessage(text: string, color?: number): void;
 }
 
-/**
- * Play/Pause turn control. Paused: Play executes the planned route. Running:
- * Pause defers the stop to the next whole-day boundary (F1, playtest3) — except
- * a combat auto-follow, which aborts immediately (combat freezes the calendar,
- * so the day-boundary latch would never fire). During PLANNING the button is
- * the mouse equivalent of Space's confirm (14.5a). Suppressed while the active-
- * pause overlay is open — else a stray click desyncs `isTurnRunning`.
- */
 export function handleFlightPlayPause(host: PlayPauseHost): void {
   if (host.isCombatPaused()) return;
   if (host.isPlanning()) {
@@ -141,8 +89,6 @@ export function handleFlightPlayPause(host: PlayPauseHost): void {
     }
     return;
   }
-  // Play: run the planned route (or close on an attack target). With no course
-  // at all, run a "wait" turn — time passes, the ship holds position.
   host.setPauseLatch(false); // fresh turn — clear any stale latch
   const route = host.plannedRoute();
   if (route) {

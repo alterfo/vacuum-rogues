@@ -1,21 +1,3 @@
-/**
- * Task 6 regression: the bank loan executors (`executeTakeLoan`/
- * `executeRepayLoan`) now drive a docked `BankScene`'s real «Взять кредит» /
- * «Погасить» button handlers via the `e2eTakeLoan`/`e2eRepayLoan` seams when the
- * current scene exposes them — the same "drive the real button, not a silent
- * bank-bus bypass" shape as `TradeScene.e2eBuyItem` — falling back to the
- * unchanged direct `takeLoan`/`repayLoan` bank-bus calls on a headless double
- * without the seams (docs/plans/20260727-autopilot-ui-parity-fixes.md).
- *
- * Axes per action:
- *  - seam present  ⇒  it is invoked AND the real loan effect still lands.
- *  - a no-op       ⇒  the seam is NOT fired (no spurious button drive).
- *  - seam absent   ⇒  the domain effect lands with the seam never touched
- *                      (backward compatibility for every headless caller/test).
- *
- * Plus one end-to-end pass against a REAL `BankScene` (docked via `goTo`) to
- * prove the take-loan then repay-loan buttons run without throwing.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { GameScene } from "@/presentation/GameScene";
 import { RealEngineHarness } from "../realEngineHarness";
@@ -34,7 +16,6 @@ import {
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** A minimal scene double exposing the two bank loan seams as spies. */
 function seamScene() {
   const takeLoan = vi.fn();
   const repayLoan = vi.fn();
@@ -63,8 +44,6 @@ describe("bank-scene loan seam wiring (Task 6)", () => {
     localStorage.clear();
   });
 
-  // ── seam present: watchable real-button drive ─────────────────────────────
-
   it("executeTakeLoan drives the real e2eTakeLoan button seam", () => {
     const engine = harness.engine;
     const { scene, takeLoan, repayLoan } = seamScene();
@@ -80,11 +59,9 @@ describe("bank-scene loan seam wiring (Task 6)", () => {
   it("executeRepayLoan drives the real e2eRepayLoan button seam", () => {
     const engine = harness.engine;
     const player = engine.player!;
-    // Establish a real outstanding loan (bank-bus path, no scene) first.
     engine.currentScene = null;
     executeTakeLoan(engine);
     expect(playerLoanBalance(engine)).toBeGreaterThan(0);
-    // Give the player funds so the letsplay pre-guard (amount > 0) passes.
     adjustPlayerCredits(
       engine.bank,
       player,
@@ -102,8 +79,6 @@ describe("bank-scene loan seam wiring (Task 6)", () => {
     expect(takeLoan).not.toHaveBeenCalled();
     expect(harness.errors()).toHaveLength(0);
   });
-
-  // ── seam present but nothing to do: no spurious button drive ───────────────
 
   it("does NOT fire e2eTakeLoan when a loan is already outstanding", () => {
     const engine = harness.engine;
@@ -133,8 +108,6 @@ describe("bank-scene loan seam wiring (Task 6)", () => {
     expect(harness.errors()).toHaveLength(0);
   });
 
-  // ── seam absent: unchanged bank-bus path (headless doubles) ────────────────
-
   it("falls back to the bank-bus takeLoan when the scene has no seam", () => {
     const engine = harness.engine;
     const player = engine.player!;
@@ -161,8 +134,6 @@ describe("bank-scene loan seam wiring (Task 6)", () => {
     expect(engine.player!.credits).toBeLessThan(creditsBefore);
     expect(harness.errors()).toHaveLength(0);
   });
-
-  // ── end-to-end against a REAL BankScene ───────────────────────────────────
 
   it("routes take-loan then repay-loan through a docked BankScene", async () => {
     const engine = harness.engine;

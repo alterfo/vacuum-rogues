@@ -1,14 +1,3 @@
-/**
- * Beta-feedback (Main Menu path): the «Сообщить отзыв» button captures the
- * menu-side context (scene = MAIN_MENU, plus the loaded run's day/seed when one
- * exists) and opens the prefilled GitHub Issue Form via the *default* opener.
- *
- * The in-flight path has its own URL assertion (inFlightMenuFeedback.test.ts);
- * this pins the Main-Menu branch, which reads `gameEngine.galaxy` directly and so
- * would otherwise drift silently (e.g. a `galaxy.id`/`gameDays` rename). Using the
- * default opener also exercises the real `openInNewTab` `typeof window` guard +
- * `window.open(url, "_blank", "noopener")` call that the unit opener tests stub.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { buildFeedbackUrl } from "@/systems/feedback/feedbackLink";
@@ -20,7 +9,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Construct a bare scene (the feedback path never touches the renderer). */
 function makeScene(galaxy: { gameDays: number; id: string } | null) {
   const scene = new MainMenuScene({} as never);
   (scene as unknown as { gameEngine: GameEngine | null }).gameEngine = galaxy

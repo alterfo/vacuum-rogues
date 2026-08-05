@@ -61,13 +61,11 @@ import {
   type EntrySpawnDeps,
 } from "./flight/flightEntrySpawn";
 
-/** Planet spiral-in hint: where to curve the approach when landing. */
 type LandingHint = { planetX: number; planetY: number; planetRadius: number };
 
 export class SpaceFlightScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private playerShip!: PlayerShipRenderer;
-  // Screen-fixed, behind the world on renderer.stage; SpaceBackgroundLayer populates it.
   private skyContainer: Container | null = null;
   private asteroidBelt!: AsteroidBelt;
   private background: SpaceBackgroundLayer | null = null;
@@ -75,22 +73,16 @@ export class SpaceFlightScene extends GameScene {
   private questCompletion!: QuestCompletion;
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
-  // In-flight HUD (buttons, day counter, mini-map, toasts); presses fan back via initialize() callbacks.
   private hud!: FlightHud;
 
-  // Owns planet sprites/markers + info panel and route-target state; scene reads it for route/landing/re-entry.
   private planetManager!: PlanetManager;
-  // Owns the central sun + star geometry (centre/radius/avoidRadius) the scene reads for collision/orbit/route math.
   private starRenderer!: StarRenderer;
-  // Draws the static orbit circles and the system-boundary ring (a FlightModule).
   private orbitRenderer!: OrbitRenderer;
 
   private npcManager!: NpcShipManager;
   private combatModule!: CombatModule;
   private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
-  // Pause-and-plan loop (Tasks 2/3, 14.5a/b): toasts/UI in combatPlanningUi.ts.
   private combatPlanningUi: CombatPlanningUi | null = null;
-  // Execute-window orchestrator (14.5c): mechanics + VFX, ticked while unfrozen.
   private combatExecution: CombatExecutionController | null = null;
   private combatPlanning = createCombatPlanningController({
     getShipPhysics: () => this.shipPhysics,
@@ -105,76 +97,51 @@ export class SpaceFlightScene extends GameScene {
       else this.routeRenderer.clearRoute(); // restored the pre-combat course line above, else drop the last combat course preview
     },
   });
-  // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
   private destroyed = false;
 
   private flightHelp: FlightSceneHelp | null = null; // see flight/flightSceneHelp.ts
 
-  // Turn control: the turn "runs" (ship flies, NPCs/planets move, combat) while true.
   private isTurnRunning = false;
-  // F1 (playtest3): Pause defers stop+endTurn to the next whole-day boundary (latch cleared by endTurn()/turn start; low-HP halts now).
   private pauseAtDayBoundary = false;
-  // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
-  // True only while the combat pursuit re-plots its own course (Task 3 break-off).
   private pursuitReplot = false;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
   private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
 
-  // Clicks within this window of scene init are residual events from the prior scene's button — ignored.
   private sceneReadyAt = 0;
   private readonly INPUT_GRACE_MS = 350;
 
   private distanceTraveled: number = 0;
-  // Throttle state for the per-frame live capture + periodic in-flight autosave
-  // (recordAndMaybeAutosaveFlight); the headline reload-resume persistence.
   private flightAutosave: FlightAutosaveState = { accumMs: 0, lastPos: null };
   private readonly DISTANCE_PER_DAY: number = GAME_BALANCE.pixelsPerDay;
-  // Fractional day accrued while holding position — a wait turn (US-070 #5) OR a
-  // stationary real-time fight (combat advances orbits but not the calendar; see updateShip).
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070); must equal MS_PER_ORBITAL_DAY
   private visualOrbitBoost: number = 0; // orbit-visual day top-up while moving (additive, NOT a floor) — flight/CLAUDE.md
   private orbitTopUp = (dt: number): number =>
     orbitBump(this.combatPause.paused, dt, this.shipPhysics?.timeScale ?? 1);
-  // The day the planets render from: currentDay plus the presentation-only
-  // moving top-up. The single production source behind getOrbitalDay —
-  // orbitVisualFloorDuringFlight.test.ts asserts against THIS getter.
   private get orbitalVisualDay(): number {
     return this.currentDay + this.visualOrbitBoost;
   }
-  // Fractional "day of turn" (gameDays + sub-day move/wait/combat); feeds orbits + the HUD date read-out.
   private get currentDay(): number {
     const days = this.gameEngine?.galaxy?.gameDays ?? 0;
     const frac = this.distanceTraveled / this.DISTANCE_PER_DAY;
     return days + frac + this.waitDayAccum;
   }
-  // Two-step movement: plan route, then execute. plannedRoute carries the spiral hint behind it so a
-  // re-execute that drops it (Ход / onPlayPause) re-derives from the ship's CURRENT position, not a stale path (US-070).
   private plannedRoute: { x: number; y: number; landing?: LandingHint } | null =
     null;
-  // Full curved path (around the star) for drawing the route line; ship flows through it via ShipPhysics.setPath.
   private routePath: { x: number; y: number }[] = [];
-  // Draws the planned-course overlay (dashed line + end marker); route planning stays here, renderer owns the Graphics.
   private routeRenderer!: RouteRenderer;
 
-  // Pending hyperjump (US-023): set when the player chose a warp target on the
-  // star map. The ship auto-routes to the system edge in `exitVector` direction
-  // and the jump fires only on reaching the boundary (see performWarp).
   private pendingWarp: {
     targetSystemId: string;
     fuelCost: number;
     exitVector: { x: number; y: number };
   } | null = null;
-  // The real boundary point the ship was routed to for the pending warp —
-  // may diverge from `exitVector` on a genuine flee (near-edge escape).
   private pendingWarpExitPoint: { x: number; y: number } | null = null;
-  // Guards against firing the jump more than once mid-transition.
   private warpInProgress = false;
 
-  // Continuous input tracking
   private boundPointerDown: ((event: FederatedPointerEvent) => void) | null =
     null;
   private boundPointerMove: ((event: FederatedPointerEvent) => void) | null =
@@ -183,24 +150,14 @@ export class SpaceFlightScene extends GameScene {
   private boundPointerLeave: (() => void) | null = null;
   private boundKeyDown: ((event: KeyboardEvent) => void) | null = null;
 
-  // World camera: zoom, pan, smoothed follow/look-ahead, edge clamp and
-  // screen↔world conversion (its own controller). Pan/zoom *gestures* are still
-  // recognised here via PanZoomController and forwarded as deltas / wheel events.
   private camera!: CameraController;
   private readonly panZoom = new PanZoomController();
   private touchControls!: FlightTouchController; // touch pinch-zoom seam (mobile Task 3)
   private boundWheel: ((event: WheelEvent) => void) | null = null;
-  // Suppresses Chrome's middle-button "auto-scroll" (which otherwise fires
-  // wheel/scroll events and zooms the camera while the player pans).
   private boundCanvasMouseDown: ((event: MouseEvent) => void) | null = null;
-  // Reposition the screen-edge-anchored HUD when the window/canvas resizes,
-  // otherwise the minimap and star-map button drift off-screen (bug: canvas
-  // exceeded the window, right/bottom UI hidden).
   private boundResize: (() => void) | null = null;
   private boundContextMenu: ((e: Event) => void) | null = null;
 
-  // Playwright/e2e driver methods live in e2eTestHooks.ts (dev-only, __DEBUG__-gated);
-  // this scene keeps 1-line forwarders so the public e2e* surface is unchanged.
   private readonly e2eHooks = new E2ETestHooks({
     returnToStarMap: () => this.returnToStarMap(),
     onPlayPause: () => this.onPlayPause(),
@@ -228,22 +185,14 @@ export class SpaceFlightScene extends GameScene {
             exitVector: { x: number; y: number };
           };
           warpArrival?: boolean;
-          // Set when arriving from a planet take-off: the ship spawns next to
-          // that planet instead of at the system edge (see below).
           fromPlanetId?: string;
-          // Set when undocking from a space station: the ship spawns next to
-          // that station instead of being flung to the system edge (Task 9).
           fromStationId?: string;
-          // Pure HUD re-init (font-scale change): keep the ship where it was
-          // instead of edge-spawning (playtest4 A). See applyEntrySpawn().
           preserveShipPos?: { x: number; y: number };
         }
       | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
     this.pendingWarp = ctx?.pendingWarp ?? null;
-    // Quest auto-completion driven by flight events (system entry / NPC kill).
     this.questCompletion = new QuestCompletion(this.gameEngine);
-    // HUD module: buttons, day counter, mini-map, mini-log, toasts, tooltips. Built first so the NPC/planet deps (toast + tooltip) reach it; buttons fan back via the callbacks below.
     this.hud = new FlightHud(
       this.renderer,
       this.gameEngine,
@@ -289,7 +238,6 @@ export class SpaceFlightScene extends GameScene {
       () => this.shipPhysics?.stop(),
     );
     this.gameEngine?.setCombatStateProvider(() => this.combatModule.isActive); // adaptive combat music signal
-    // Planning-phase surface (14.5b): range rings + weapon-assignment bar.
     this.combatPlanningUi = new CombatPlanningUi({
       getUiLayer: () => this.renderer.uiLayer,
       getGameLayer: () => this.renderer.gameLayer,
@@ -308,7 +256,6 @@ export class SpaceFlightScene extends GameScene {
         canAfterburn: () => this.combatExecution?.canAfterburn() ?? true,
       },
     });
-    // NPC module: living-galaxy ships, contact panel, auto-follow combat, OVERMIND prompt.
     this.npcManager = new NpcShipManager(
       this.renderer,
       this.gameEngine,
@@ -367,12 +314,10 @@ export class SpaceFlightScene extends GameScene {
         showMessage: (text, color) => this.hud.showMessage(text, color),
       }),
     );
-    // Auto-complete system-entry quests: EXPLORATION, DEFENSE (OVERMIND liberation), ESCORT.
     this.questCompletion.explorationBySystemEntry();
     this.questCompletion.defenseBySystemEntry();
     this.questCompletion.escortBySystemEntry();
 
-    // Update lastVisitedDay for data-fog tracking (Task 21) and mark system visited (Task 29).
     if (this.gameEngine?.galaxy && this.gameEngine.player) {
       const _galaxy = this.gameEngine.galaxy;
       const _sys = _galaxy.systems.find(
@@ -384,7 +329,6 @@ export class SpaceFlightScene extends GameScene {
       );
     }
 
-    // OVERMIND core system: show the final encounter prompt on system entry.
     if (this.gameEngine?.galaxy && this.gameEngine.player) {
       const coreId = this.gameEngine.galaxy.overmindCoreSystemId;
       if (
@@ -399,7 +343,6 @@ export class SpaceFlightScene extends GameScene {
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
 
-    // Normal entry is the boundary edge; a pending hyperjump starts at lastFlightShipPos.
     const lastPos = this.gameEngine?.lastFlightShipPos ?? null;
     const wasFleeing = this.gameEngine?.lastFlightWasFleeing ?? false;
     if (this.gameEngine) this.gameEngine.lastFlightShipPos = null; // consume
@@ -413,46 +356,30 @@ export class SpaceFlightScene extends GameScene {
       ? (lastPos?.y ??
         centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
       : (lastPos?.y ?? centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS);
-    // Cruise speed (px/ms): derivedStats().speed already folds in the best
-    // engine; the ship.speed branch only covers the transient pre-loadout window.
     const loadoutStats = this.gameEngine?.playerLoadout?.derivedStats();
     const ship = this.gameEngine?.player?.ship;
     const cruise = loadoutStats
       ? loadoutStats.speed
       : (this.DISTANCE_PER_DAY / 1000) *
         Math.min(1.4, Math.max(0.8, ship?.speed ?? 1));
-    // Context-less entry (fresh game / re-entry) hard-resets the heading to 0.
-    // A sun-facing default was tried (#19) but reverted: ShipPhysics uses
-    // arc-only steering, so the initial heading changes the *flight path*, not
-    // just the visual facing — the sun-facing default perturbed the seeded
-    // campaign trajectory and slipped `sessionCompetence.test.ts`'s pinned
-    // first-liberation proxy (d185→d196), reding the letsplay:ci gate. A warp
-    // arrival still passes its own sun-facing departure heading via ctx.
     this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1, ctx?.arrivalHeading ?? 0); // prettier-ignore
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    // Explicit z-ordering so interactive ships hit-test above the big planet discs
-    // (US-070 #6). Tiers: bg 0, star/planets default, NPCs Z_NPC, ship Z_SHIP.
     this.renderer.gameLayer.sortableChildren = true;
 
-    // Star module: owns the sun and the star geometry (centre/radius/avoid-radius)
-    // the rest of the scene reads. Constructed here so createPlanets can read centre.
     this.starRenderer = new StarRenderer(
       this.renderer,
       this.gameEngine,
       this.renderer.gameLayer,
     );
 
-    // Asteroid module: foreground asteroid/comet field (US-070 #1); owns its objects.
     this.asteroidBelt = new AsteroidBelt(
       this.renderer,
       this.renderer.gameLayer,
     );
 
-    // Orbit module: static orbit circles + system-boundary ring. Owns its display
-    // objects on the game layer; nothing animates per frame.
     this.orbitRenderer = new OrbitRenderer(
       this.renderer,
       this.renderer.gameLayer,
@@ -460,13 +387,8 @@ export class SpaceFlightScene extends GameScene {
       this.gameEngine?.player?.currentSystemId ?? "default",
     );
 
-    // Route module: draws the planned-course overlay (dashed line + landing/
-    // navigation marker) on the game layer. Stateless — fed the finished polyline.
     this.routeRenderer = new RouteRenderer(this.renderer.gameLayer);
 
-    // Planet module: owns planet sprites, station markers, the info panel and the
-    // route-target state. Clicking a body delegates route/landing/docking back via
-    // callbacks (route data stays here — Information Expert). Built via initialize().
     this.planetManager = new PlanetManager(
       this.renderer,
       this.gameEngine,
@@ -495,8 +417,6 @@ export class SpaceFlightScene extends GameScene {
     this.planetManager.onStationDock = (stationId) =>
       this.handleStationDock(stationId);
 
-    // Player-ship module: owns the ship hull/sprite, glow, heading crosshair and
-    // take-off arc. Reads position from ShipPhysics; flight/turn logic stays here.
     this.playerShip = new PlayerShipRenderer(
       this.renderer,
       this.renderer.gameLayer,
@@ -504,8 +424,6 @@ export class SpaceFlightScene extends GameScene {
       this.gameEngine?.player?.ship.hullClass ?? "",
     );
 
-    // World camera: owns zoom/pan/follow/clamp. Reads ship physics + star centre;
-    // fans each transform out to the NPC hit-area rescale.
     this.camera = new CameraController(this.renderer, {
       getShipPhysics: () => this.shipPhysics,
       getStarCenter: () => ({
@@ -516,7 +434,6 @@ export class SpaceFlightScene extends GameScene {
       isInCombat: () => this.combatModule?.isActive ?? false,
     });
     this.camera.onTransform = (zoom) => {
-      // Keep NPC hit areas a fixed screen size regardless of zoom level.
       this.npcManager?.updateHitAreas(zoom);
     };
 
@@ -525,16 +442,12 @@ export class SpaceFlightScene extends GameScene {
       isTouchLayoutActive, // touch pinch → camera zoom (mobile Task 3); inert off-touch
     );
 
-    // Warp-exit flourish (flash/rings) shown when dropping out of hyperspace.
     this.warpFx = new WarpEffectRenderer(this.renderer.gameLayer);
 
-    // Screen-fixed deep-space backdrop behind the world so panning never reveals an edge.
     this.skyContainer = new Container();
     this.skyContainer.eventMode = "none";
     this.renderer.stage.addChildAt(this.skyContainer, 0);
 
-    // Background module: nebulae + star fields + twinkle (skyContainer), mid-ground
-    // parallax above the sky, foreground dust + edge vignette on the UI layer.
     this.background = new SpaceBackgroundLayer(
       this.renderer,
       this.skyContainer,
@@ -563,17 +476,10 @@ export class SpaceFlightScene extends GameScene {
     this.asteroidBelt.initialize(); // Foreground asteroids/comets (US-070 #1)
     this.hud.initialize(); // Turn/speed buttons, day counter, mini-map, mini-log
 
-    // Position the ship for this entry — resolved after createPlanets() because
-    // take-off/re-entry read the freshly-placed planet sprites.
     this.applyEntrySpawn(ctx);
 
-    // Center the camera on the ship at spawn (the camera follows the ship).
     this.camera.centerOnShip();
 
-    // Pending hyperjump: auto-route to the system edge — the near-edge escape
-    // on a genuine flee (Task 9 iv), else the exit-direction edge. Pre-planned
-    // but not started — press "Ход" to fly it (US-070 #11); the jump fires on
-    // reaching the boundary (updateShip → performWarp).
     if (this.pendingWarp) {
       const { edge, routePath } = planWarpEdgeRoute(
         { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
@@ -590,7 +496,6 @@ export class SpaceFlightScene extends GameScene {
       this.plotRoute();
     }
 
-    // Just dropped out of hyperspace → play the warp-exit flourish at the ship.
     if (ctx?.warpArrival && !this.pendingWarp) {
       this.warpFx.play(this.shipPhysics.shipX, this.shipPhysics.shipY);
     }
@@ -600,7 +505,6 @@ export class SpaceFlightScene extends GameScene {
         (s) => s.id === this.gameEngine?.player?.currentSystemId,
       )?.name,
     );
-    // Enable interactivity on stage for continuous pointer tracking.
     this.boundPointerDown = this.onPointerDown.bind(this);
     this.boundPointerMove = this.onPointerMove.bind(this);
     this.boundPointerUp = this.onPointerUp.bind(this);
@@ -617,7 +521,6 @@ export class SpaceFlightScene extends GameScene {
       this.boundPointerLeave,
     );
 
-    // Keyboard (Quest Journal) + wheel (zoom, on window to capture all events).
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
     this.boundWheel = this.onWheel.bind(this); // capture: true — see onWheel()'s comment
@@ -626,20 +529,15 @@ export class SpaceFlightScene extends GameScene {
       capture: true,
     });
 
-    // Reposition edge-anchored HUD on window resize (PixiJS resizes the canvas
-    // via resizeTo, but UI placed at screen.width/height does not move).
     this.boundResize = this.handleResize.bind(this);
     window.addEventListener("resize", this.boundResize);
 
-    // Prevent context menu on right click (used for panning).
     this.boundContextMenu = (e: Event) => e.preventDefault();
     this.renderer.app.canvas.addEventListener(
       "contextmenu",
       this.boundContextMenu,
     );
 
-    // Suppress middle-button auto-scroll so panning with the wheel button does
-    // not also zoom the camera.
     this.boundCanvasMouseDown = (e: MouseEvent) => {
       if (e.button === 1) e.preventDefault();
     };
@@ -648,15 +546,10 @@ export class SpaceFlightScene extends GameScene {
       this.boundCanvasMouseDown,
     );
 
-    // Context-sensitive game cursors (US-070 #5): default in space, reticle over
-    // hostiles, landing marker over planets.
     installGameCursors(this.renderer.app);
 
     this.sceneReadyAt = performance.now();
 
-    // E2E fixtures set `window.__hideFlightBackground` (see applyMockHeavySystems)
-    // so every test gets a clean black background for lightweight, diff-friendly
-    // screenshots. Re-read on every entry so re-entry honours it too.
     if (
       __DEBUG__ &&
       typeof window !== "undefined" &&
@@ -679,22 +572,15 @@ export class SpaceFlightScene extends GameScene {
     this.warpFx.update(deltaTime);
     this.updateShip(deltaTime);
     this.combatPlanning.tickExecute(deltaTime); // no-op outside EXECUTING (14.5a)
-    // Freeze ship-sync + camera too (2026-06-27 #1), also during PLANNING (14.5a).
     const frozen = this.combatPause.paused || this.combatPlanning.isPlanning;
     if (!frozen) this.playerShip.update(deltaTime, this.bgElapsed);
     if (!frozen) this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);
     if (!frozen && !this.destroyed) this.combatExecution?.update(deltaTime);
-    // The freeze halts the whole execute loop, but the player still needs to
-    // read their own hull/shield while planning a turn — draw just their bar.
     else if (this.combatPlanning.isPlanning && !this.destroyed)
       this.combatExecution?.drawPlanningStatusBars();
-    // A lethal hit fires GAME_OVER synchronously mid-frame — bail before driving destroyed modules.
     if (this.destroyed) return;
     this.flightHelp?.maybeShowCombatHint(this.combatModule.isActive); // 1st-fight hint
-    // Skip the live capture mid-hyperjump: performWarp already cleared the capture
-    // + set the new systemId, but the ship still sits at the old edge coords until
-    // the transition completes — re-capturing here would persist a stale position.
     if (this.gameEngine && this.shipPhysics && !this.warpInProgress)
       recordAndMaybeAutosaveFlight(
         this.gameEngine,
@@ -718,7 +604,6 @@ export class SpaceFlightScene extends GameScene {
     this.destroyed = true;
     this.flightHelp?.destroy(); // contextual help (first-time hint + «?» + combat hint)
     this.flightHelp = null;
-    // Remove all pointer event listeners
     if (this.boundPointerDown) {
       this.renderer.app.stage.off("pointerdown", this.boundPointerDown);
       this.boundPointerDown = null;
@@ -740,19 +625,16 @@ export class SpaceFlightScene extends GameScene {
       this.boundPointerLeave = null;
     }
 
-    // Remove keyboard listener
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
     }
 
-    // Remove wheel listener
     if (this.boundWheel) {
       window.removeEventListener("wheel", this.boundWheel, { capture: true });
       this.boundWheel = null;
     }
 
-    // Remove the contextmenu suppressor.
     if (this.boundContextMenu) {
       this.renderer.app.canvas.removeEventListener(
         "contextmenu",
@@ -761,7 +643,6 @@ export class SpaceFlightScene extends GameScene {
       this.boundContextMenu = null;
     }
 
-    // Remove the middle-button auto-scroll suppressor.
     if (this.boundCanvasMouseDown) {
       this.renderer.app.canvas.removeEventListener(
         "mousedown",
@@ -770,7 +651,6 @@ export class SpaceFlightScene extends GameScene {
       this.boundCanvasMouseDown = null;
     }
 
-    // Remove the resize listener.
     if (this.boundResize) {
       window.removeEventListener("resize", this.boundResize);
       this.boundResize = null;
@@ -781,56 +661,35 @@ export class SpaceFlightScene extends GameScene {
     this.warpInProgress = false;
     this.waitDayAccum = 0;
 
-    // Tear down the warp-exit flourish if one is mid-animation.
     this.warpFx?.destroy();
 
-    // Tear down the HUD (buttons, mini-map, mini-log, toast/tooltip + their
-    // timers) before clearUILayer destroys the UI layer underneath it.
     this.hud?.destroy();
 
-    // Tear down planet sprites, station markers and the planet info panel.
     this.planetManager?.destroy();
 
-    // Tear down NPC ship sprites, contact panel and the OVERMIND-core overlay.
     this.npcManager?.destroy();
     this.combatModule?.destroy(); // Clear in-flight combat target + active flag.
     this.combatExecution?.destroy(); // Execute-window entities + overlays (14.5c).
     this.combatPlanningUi?.destroy(); // Planning bar + range rings (14.5b).
     this.combatPlanning.endCombat(); // Reset the pause-and-plan loop too (Task 14.5a).
 
-    // Tear down the star module (disposes its halo/sun filters and removes its
-    // display objects from the game layer) before the layer-wide cleanup below.
     this.starRenderer?.destroy();
-    // Tear down the asteroid field (removes + destroys its container).
     this.asteroidBelt?.destroy();
-    // Tear down the orbit circles + boundary ring (removes + destroys them).
     this.orbitRenderer?.destroy();
-    // Tear down the ship renderer (disposes its glow filter, removes the ship
-    // container + heading crosshair from the game layer).
     this.playerShip?.destroy();
-    // The planned-course overlay is torn down by clearPlannedRoute() below.
 
-    // Release GPU filter textures before the layer is cleared — clearGameLayer
-    // destroys the display objects but not their BlurFilters (ship glow, etc.),
-    // which would otherwise leak each teardown.
     if (this.renderer.gameLayer) disposeFiltersDeep(this.renderer.gameLayer);
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    // Reset the camera transform on gameLayer: clearGameLayer removes children,
-    // not the scale/offset, so the next scene would inherit this zoom/pan.
     if (this.renderer.gameLayer) {
       this.renderer.gameLayer.scale.set(1);
       this.renderer.gameLayer.x = 0;
       this.renderer.gameLayer.y = 0;
     }
 
-    // The screen-fixed sky lives on renderer.stage, which clearGameLayer/
-    // clearUILayer do NOT touch — remove and destroy it explicitly.
     if (this.skyContainer) {
       this.renderer.stage.removeChild(this.skyContainer);
-      // Dispose the nebula-cloud, pillar and swarm-mote BlurFilters before the
-      // subtree is destroyed — destroy({children}) leaves their GPU textures.
       disposeFiltersDeep(this.skyContainer);
       this.skyContainer.destroy({ children: true });
       this.skyContainer = null;
@@ -841,8 +700,6 @@ export class SpaceFlightScene extends GameScene {
       this.background = null;
     }
 
-    // Layers are torn down by clearGameLayer/clearUILayer on the next scene
-    // init; just drop our references (the HUD dropped its own above).
     this.bgElapsed = 0;
     this.shipPhysics = null;
     this.distanceTraveled = 0;
@@ -858,8 +715,6 @@ export class SpaceFlightScene extends GameScene {
     logger.info(`Docking at station: ${station.name}`);
     this.clearPlannedRoute();
     this.planetManager.routeTargetStationId = null;
-    // Mirrors onLandOnPlanet's free refuel-to-max — docking and landing are
-    // both "arrive and park" actions, so both refuel (Task 7 game oddity fix).
     if (this.gameEngine.player?.ship) {
       this.gameEngine.player.ship.energy =
         this.gameEngine.player.ship.maxEnergy;
@@ -870,12 +725,6 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /**
-   * Plan or execute a route to a clicked planet (delegated by PlanetManager).
-   * Two-step movement: first click plans the preview, a second click on the same
-   * planet executes it. Route planning + targets are the scene's concern
-   * (Information Expert); the manager owns the body sprites + info panel.
-   */
   private handlePlanetRouteRequested(
     planetId: string,
     x: number,
@@ -886,15 +735,12 @@ export class SpaceFlightScene extends GameScene {
     );
     if (!sprite) return;
 
-    // Curve the approach into a spiral-in around the planet's orbit edge (Task 5).
     const landing = {
       planetX: sprite.screenX,
       planetY: sprite.screenY,
       planetRadius: sprite.displayRadius,
     };
 
-    // Detect second click via planet ID (stable even as the planet orbits),
-    // not position proximity (which broke when the planet moved between clicks).
     const isSamePlanet = this.planetManager.routeTargetPlanetId === planetId;
     this.planetManager.routeTargetPlanetId = planetId;
 
@@ -909,7 +755,6 @@ export class SpaceFlightScene extends GameScene {
     }
   }
 
-  /** Land on a planet (delegated by PlanetManager's info-panel land button). */
   private handlePlanetLanding(planetId: string): void {
     const sprite = this.planetManager.planetSprites.find(
       (s) => s.planet.id === planetId,
@@ -917,10 +762,6 @@ export class SpaceFlightScene extends GameScene {
     if (sprite) void this.onLandOnPlanet(sprite.planet);
   }
 
-  /**
-   * Plan or execute a route to a clicked station (delegated by PlanetManager).
-   * The actual docking is proactive — see updateShip when within DOCKING_RANGE.
-   */
   private handleStationDock(stationId: string): void {
     const marker = this.planetManager.stationMarkers.find(
       (m) => m.station.id === stationId,
@@ -939,8 +780,6 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private async onLandOnPlanet(planet: Planet): Promise<void> {
-    // Captured-system gate (single choke point, no bypass). Blocked → message +
-    // clear route + endTurn() (else the arrival-land path leaves the ship in a wait-turn burn).
     const denial = this.planetManager.landingDenial(planet);
     if (denial) {
       this.hud.showMessage(landingDenialMessage(denial), 0xff4444);
@@ -948,8 +787,6 @@ export class SpaceFlightScene extends GameScene {
       this.endTurn();
       return;
     }
-    // Only land once the ship has actually reached the planet (days accrue in
-    // updateShip; simulating flightDays here would teleport the player for free).
     if (
       this.shipPhysics &&
       !this.planetManager.shipReachedPlanet(planet, this.shipPhysics)
@@ -979,13 +816,9 @@ export class SpaceFlightScene extends GameScene {
       `🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}, global=(${event.global.x.toFixed(0)}, ${event.global.y.toFixed(0)})`,
     );
 
-    // Right button (2) or Shift+Left for panning. The wheel (middle) button no
-    // longer pans (auto-scroll/zoom conflict; the right button suffices).
     const isPanButton =
       event.button === 2 || (event.button === 0 && event.shiftKey);
 
-    // Swallow the residual click carried over from the previous scene's button
-    // (US-070 #1: confirming race selection also built a route here).
     if (
       !isPanButton &&
       performance.now() - this.sceneReadyAt < this.INPUT_GRACE_MS
@@ -996,15 +829,11 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // Modal panels dismiss on an outside click (their children stopPropagation()).
     if (!isPanButton && this.isBlockingModalOpen()) {
       this.closeBlockingModals();
       return;
     }
 
-    // Tactical planning-phase click → this round's destination + arc preview.
-    // Checked BEFORE the turn-running guard: engagement holds the turn open,
-    // but PLANNING freezes the sim (routePlanningClick gates on isPlanning).
     const planningCtx = {
       planning: this.combatPlanning,
       ship: this.shipPhysics,
@@ -1014,7 +843,6 @@ export class SpaceFlightScene extends GameScene {
     };
     if (routePlanningClick(event, planningCtx)) return;
 
-    // While a turn is running, block route building (panning stays allowed).
     if (this.isTurnRunning && !isPanButton) {
       if (!this.turnHintShown) {
         this.turnHintShown = true;
@@ -1026,11 +854,6 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // In-flight combat no longer freezes navigation (Task 3): a route committed
-    // mid-fight breaks off the auto-pursuit (executeRouteTo) so the ship can flee;
-    // combat keeps resolving. Enemy retargeting is via the enemy sprite click.
-
-    // Lock navigation while en route to the warp edge (replanning OK when stopped).
     if (this.pendingWarp && !isPanButton && this.shipPhysics?.isMoving) {
       logger.info("Navigation locked: en route to warp edge");
       return;
@@ -1044,35 +867,23 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // Left button (0) for ship navigation (only if not holding Shift)
-    // Two-step movement: first click plans route, second click executes
     if (event.button === 0 && !event.shiftKey) {
-      // Begin tracking drag distance so a drag gesture won't be mistaken for a
-      // navigation click (cleared in onPointerUp via panZoom.reset).
       this.panZoom.startDragTracking(event.global.x, event.global.y);
 
-      // Convert the click to world coords, clamped outside the sun's exclusion
-      // ring: a click on/behind the sun can't be a destination, and clamping
-      // keeps route, marker and second-click-execute consistent (playtest 2 ③).
       const pt = this.camera.screenToWorld(event.global.x, event.global.y);
       const { centerX: sx, centerY: sy, avoidRadius } = this.starRenderer;
       const world = clampOutsideRadius(pt.x, pt.y, sx, sy, avoidRadius);
-      // Check if we already have a planned route
       if (this.plannedRoute) {
-        // Check if clicking near the same point (within 50px) - execute the route
         const dx = world.x - this.plannedRoute.x;
         const dy = world.y - this.plannedRoute.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < 50) {
-          // Execute planned route (curving around the star if needed)
           this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
           logger.info(
             `▶️ Executing planned route to (${this.plannedRoute.x.toFixed(0)}, ${this.plannedRoute.y.toFixed(0)})`,
           );
-          // Keep the route line visible during movement
         } else {
-          // Clicked on different location - update planned route (empty space)
           this.planetManager.routeTargetPlanetId = null;
           this.planetManager.routeTargetStationId = null;
           this.npcManager.followNpcId = null;
@@ -1083,7 +894,6 @@ export class SpaceFlightScene extends GameScene {
           );
         }
       } else {
-        // First click - plan the route (don't start moving yet)
         this.planetManager.routeTargetPlanetId = null;
         this.planetManager.routeTargetStationId = null;
         this.npcManager.followNpcId = null;
@@ -1108,8 +918,6 @@ export class SpaceFlightScene extends GameScene {
       logger.info("❌ Pan mode deactivated");
       setCanvasCursor(this.renderer.app, "default"); // release pan cursor
     }
-    // If the LMB was dragged further than the threshold, cancel any route that
-    // was planned in onPointerDown — the gesture was a drag, not a click.
     if (this.panZoom.shouldSwallowClick()) {
       this.clearPlannedRoute();
       logger.info("🖱️ LMB drag exceeded threshold — route planning swallowed");
@@ -1117,48 +925,28 @@ export class SpaceFlightScene extends GameScene {
     this.panZoom.reset();
   }
 
-  /**
-   * Handle mouse wheel for zoom (toward the cursor). The anchor math lives in
-   * {@link CameraController.zoomAtClient}; the scene only guards against zooming
-   * mid-pan and forwards the event.
-   */
   private onWheel(event: WheelEvent): void {
     event.preventDefault();
 
-    // Do not zoom while a blocking modal is open: the journal's scrollable list
-    // owns the wheel, else a wheel notch both scrolls it AND zooms underneath.
     if (this.isBlockingModalOpen() && !this.planetManager.hasInfoPanel) return;
 
-    // Do not zoom during a pan drag: middle-button auto-scroll / trackpad momentum
-    // emit wheel events mid-pan, which would also zoom (bug: pan + unwanted zoom).
     if (this.panZoom.isPanning) return;
 
     event.stopImmediatePropagation(); // keeps a handled zoom off the autopilot's same-node reclaim listener
     this.camera.zoomAtClient(event.deltaY, event.clientX, event.clientY);
   }
 
-  /**
-   * Re-anchor the screen-edge HUD after the window/canvas resizes. PixiJS keeps
-   * the canvas sized to the container (resizeTo), but elements positioned at
-   * screen.width/height were placed once at init and otherwise drift off-screen.
-   */
   private handleResize(): void {
-    // Force the renderer to match the container *now* so app.screen is current.
-    // PixiJS's own resizeTo listener may run after ours; without this, growing
-    // the window back left the HUD anchored to the old (smaller) size.
     this.renderer.resize();
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    // Re-anchor all screen-edge HUD elements (buttons, mini-map, mini-log, …).
     this.hud.reposition(w, h);
     this.combatPlanningUi?.reposition(w, h); // else drifts onto «Ход» — prettier-ignore
 
-    // Keep the ship framed after the viewport changed.
     if (this.shipPhysics) this.camera.centerOnShip();
   }
 
-  /** Builds the deps bundle for the entry-spawn helpers (flightEntrySpawn.ts). */
   private entrySpawnDeps(): EntrySpawnDeps {
     return {
       shipPhysics: this.shipPhysics,
@@ -1186,10 +974,6 @@ export class SpaceFlightScene extends GameScene {
     };
   }
 
-  /**
-   * Decide where the ship sits on this SPACE_FLIGHT entry (Task 9); the pure
-   * decision tree lives in `flight/flightEntrySpawn.ts` (line-count guard).
-   */
   private applyEntrySpawn(ctx?: {
     preserveShipPos?: { x: number; y: number };
     fromPlanetId?: string;
@@ -1198,29 +982,16 @@ export class SpaceFlightScene extends GameScene {
     computeEntrySpawn(this.entrySpawnDeps(), ctx);
   }
 
-  /**
-   * Font size changed in ⚙: restyle the text-bearing flight modules in place
-   * rather than re-initialising the whole scene (the old path rebuilt planets/
-   * ships/asteroids/NPCs + the nebula backdrop just to resize text). Each module
-   * reads `scaledFont` at text-creation time, so refreshing only their labels
-   * picks up the new size — world geometry and the ship position stay as-is. (T1)
-   */
   private onFontScaleChanged(): void {
     this.hud?.refreshFontScale();
     this.planetManager?.refreshFontScale();
     this.npcManager?.refreshFontScale();
   }
 
-  // Not called internally (SpaceFlightScene.applyEntrySpawn delegates the whole
-  // decision tree to flightEntrySpawn.ts in one call) — kept as a thin public
-  // wrapper because spaceFlightSpawn.test.ts exercises it directly, same as the
-  // e2e* methods below.
-  /** Re-entry spawn beside the station left / last-landed planet (flightEntrySpawn.ts). */
   applyReentrySpawn(fromStationId?: string): void {
     computeReentrySpawn(this.entrySpawnDeps(), fromStationId);
   }
 
-  /** Parks the ship just outside a body along the star radial (flightEntrySpawn.ts). */
   spawnShipBeside(
     bodyX: number,
     bodyY: number,
@@ -1241,22 +1012,16 @@ export class SpaceFlightScene extends GameScene {
     if (this.combatPause.paused) return; // active-pause: freeze movement + calendar
     if (this.combatPlanning.isPlanning) return; // tactical planning: freeze movement + calendar (Task 14.5a)
 
-    // Take-off arc in progress (Task 5): the ship renderer walks the cosmetic
-    // outward curve (see PlayerShipRenderer.update) — skip the day-counting
-    // flight physics until it finishes.
     if (this.playerShip.isArcActive()) {
       return;
     }
 
-    // Track position before update (for distance calculation)
     const prevX = this.shipPhysics.shipX;
     const prevY = this.shipPhysics.shipY;
     const wasMoving = this.shipPhysics.isMoving;
 
-    // Update physics
     this.shipPhysics.update(deltaTime);
 
-    // Proactive docking: station is a small marker, dock when within DOCKING_RANGE.
     if (this.planetManager.routeTargetStationId && this.shipPhysics.isMoving) {
       const marker = this.planetManager.stationMarkers.find(
         (m) => m.station.id === this.planetManager.routeTargetStationId,
@@ -1273,8 +1038,6 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // Proactive landing + mid-flight re-aim toward the (orbiting) planet target;
-    // PlanetManager owns the landing-range/lead/threshold math (Information Expert).
     if (this.planetManager.routeTargetPlanetId && this.shipPhysics.isMoving) {
       const act = this.planetManager.updateRouteToTarget(
         this.shipPhysics.shipX,
@@ -1289,22 +1052,17 @@ export class SpaceFlightScene extends GameScene {
       if (act?.kind === "reaim") this.executeRouteTo(act.x, act.y);
     }
 
-    // Check if ship just arrived (was moving, now stopped). Physics flows through
-    // the curved path itself, so reaching a stop here means the final waypoint.
     if (wasMoving && !this.shipPhysics.isMoving) {
       logger.info("🎯 Ship arrived at destination.");
 
-      // Reached the system edge with a pending hyperjump → execute the warp.
       if (this.pendingWarp && !this.warpInProgress) {
         this.clearPlannedRoute();
         void this.performWarp();
         return;
       }
 
-      // Pre-combat chase is owned by updateCombat: on arrival let it re-route/engage.
       if (this.npcManager.followNpcId) return;
 
-      // If the route targeted a planet, land on arrival (the expected outcome).
       if (this.planetManager.routeTargetPlanetId) {
         const sprite = this.planetManager.planetSprites.find(
           (s) => s.planet.id === this.planetManager.routeTargetPlanetId,
@@ -1320,16 +1078,13 @@ export class SpaceFlightScene extends GameScene {
             void this.onLandOnPlanet(planet);
             return;
           }
-          // Not in range on a hard stop (rare): just end the turn below.
         }
       }
 
-      // Arrived at open space → endTurn() resets ALL turn state (incl. the F1 latch).
       this.clearPlannedRoute();
       this.endTurn();
     }
 
-    // Star-touch damage: StarRenderer burns the hull in rate-limited chunks; true on fresh contact.
     const startedBurning = this.starRenderer.updateSunContactDamage(
       deltaTime,
       this.shipPhysics.shipX,
@@ -1339,9 +1094,6 @@ export class SpaceFlightScene extends GameScene {
     );
     if (startedBurning) this.hud.showMessage("☀ Корпус горит!", 0xff8800);
 
-    // Safety auto-stop: halt engines below 30% hull (latched) — EXCEPT a
-    // committed hyperjump escape (`pendingWarp`) or a route to a planet
-    // (`routeTargetPlanetId`, per the warning below).
     const ship = this.gameEngine?.player?.ship;
     if (ship && ship.maxHull > 0) {
       const hullFraction = ship.hullHP / ship.maxHull;
@@ -1366,27 +1118,16 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // Turn-based time: only advance days when ship is moving (every DISTANCE_PER_DAY px = 1 day).
     if (this.shipPhysics.isMoving && this.shipPhysics.currentSpeed > 0.01) {
       const dx = this.shipPhysics.shipX - prevX;
       const dy = this.shipPhysics.shipY - prevY;
       const stepPx = Math.sqrt(dx * dx + dy * dy);
-      // ADDITIVE top-up (deliberately NOT a floor): a shortfall-only top-up
-      // reroutes the letsplay campaign gate (longGameCompetence (c)) via the
-      // planets' live geometry — see flight/CLAUDE.md before changing this.
       this.visualOrbitBoost += this.orbitTopUp(deltaTime);
       this.distanceTraveled += stepPx;
       while (this.distanceTraveled >= this.DISTANCE_PER_DAY) {
         this.distanceTraveled -= this.DISTANCE_PER_DAY;
-        // Combat freezes the REAL calendar (NPC sim/markets) — see orbitsDuringCombat.
-        // The orbit moves the ship continuously, so route the moving fight's day into
-        // the orbital sub-day, not advanceGalaxyDay (which refresh()'s the sim and can
-        // despawn the live target — cf. the OVERMIND-core push-into-galaxy workaround).
         if (this.combatModule?.isActive) {
           this.waitDayAccum += 1;
-          // Deferred-pause requested while flying during combat: stop at this
-          // day boundary (same mechanic as normal Space pause, but combat-safe —
-          // endTurn sets isTurnRunning=false which also freezes the combat module).
           if (this.pauseAtDayBoundary) {
             this.endTurn();
             break;
@@ -1397,7 +1138,6 @@ export class SpaceFlightScene extends GameScene {
           this.gameEngine.advanceGalaxyDay();
           this.npcManager.refresh(); // NPCs may have arrived/departed this day
         }
-        // F1 (playtest3): a deferred Pause ends the turn at the day boundary.
         if (this.pauseAtDayBoundary) {
           this.endTurn();
           break;
@@ -1405,7 +1145,6 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // Stationary turn (US-070 #5): a wait turn advances the calendar; a fight only the orbital day.
     if (
       this.isTurnRunning &&
       !this.shipPhysics.isMoving &&
@@ -1418,10 +1157,7 @@ export class SpaceFlightScene extends GameScene {
     }
   }
 
-  /** Advance the calendar while the ship waits in place (a course-less turn). */
   private advanceWaitTime(deltaTime: number): void {
-    // Clamp dt to one wait-day so a backgrounded tab's huge resume-frame can't
-    // flush hundreds of days at once and outrun the deferred Pause (cf. ShipPhysics).
     const clampedDt = Math.min(deltaTime, this.MS_PER_WAIT_DAY);
     const scaledDt = clampedDt * (this.shipPhysics?.timeScale ?? 1);
     this.waitDayAccum += scaledDt / this.MS_PER_WAIT_DAY;
@@ -1438,11 +1174,6 @@ export class SpaceFlightScene extends GameScene {
     }
   }
 
-  /**
-   * Execute the committed hyperjump on reaching the system edge (US-023):
-   * deducts fuel, reveals the target system + neighbours, auto-saves, then
-   * transitions in with entry mirroring the REAL departure point (Task 2).
-   */
   private async performWarp(): Promise<void> {
     if (
       !this.pendingWarp ||
@@ -1454,10 +1185,6 @@ export class SpaceFlightScene extends GameScene {
     }
     const exitPoint = this.pendingWarpExitPoint;
     this.pendingWarpExitPoint = null;
-    // Deliberately NO isDowned() cancel here — a jump COMMITTED while healthy
-    // must complete even if a GOD-floor volley downs the ship mid-transit
-    // (else GOD-mode soft-locks at a garrison every repair→jump escape can't
-    // outrun; NORMAL/HARD never derive `downed` so are unaffected).
     this.warpInProgress = true;
     this.gameEngine.audio.playSfx("warp").catch(() => {});
 
@@ -1480,9 +1207,6 @@ export class SpaceFlightScene extends GameScene {
     );
     this.gameEngine.player.currentSystemId = targetSystemId;
     this.gameEngine.galaxy.revealSystemAndNeighbors(targetSystemId);
-    // ESCORT (the only VISIT_SYSTEM-objective quest) completes via
-    // QuestCompletion.escortBySystemEntry() through the return-to-issuer gate; a
-    // VISIT_SYSTEM progress event here would pre-complete and strand it.
     logger.info(
       `Hyperjump to ${target.name} complete. Fuel left: ${this.gameEngine.player.ship.energy}`,
     );
@@ -1491,7 +1215,6 @@ export class SpaceFlightScene extends GameScene {
       logger.error("Auto-save after hyperjump failed:", e);
     });
 
-    // Mirror the REAL departure angle (Task 2), not the straight-line exitVector.
     const departureVector = departureVectorFromExitPoint(
       exitPoint,
       { x: this.starRenderer.centerX, y: this.starRenderer.centerY },
@@ -1506,7 +1229,6 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /** Plot the planned-course overlay via {@link plotPlannedRoute} (extracted for the line guard). */
   private plotRoute(): void {
     plotPlannedRoute(this.routeRenderer, {
       shipPos: this.shipPhysics
@@ -1520,13 +1242,6 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /**
-   * Set the planned-route point and draw its preview, bowing the preview around
-   * the star so the dashed line never appears to cut through the sun before the
-   * player commits (US-070 #6: the route was drawn straight through the star on
-   * the first click, only curving once executed). A planet destination previews
-   * the curved spiral-in approach (Task 5).
-   */
   private planRouteTo(x: number, y: number, landing?: LandingHint): void {
     if (!this.shipPhysics) return;
     this.plannedRoute = { x, y, landing };
@@ -1534,8 +1249,6 @@ export class SpaceFlightScene extends GameScene {
     this.plotRoute();
   }
 
-  /** Star-avoiding (planet target: spiral-in) path from the ship's CURRENT position —
-   * the single marshalling point behind BOTH planning and executing (drawn == flown). */
   private flightPathTo(x: number, y: number, landing?: LandingHint): Point[] {
     if (!this.shipPhysics) return [];
     return computeFlightPath(
@@ -1549,22 +1262,14 @@ export class SpaceFlightScene extends GameScene {
     );
   }
 
-  /**
-   * Start flying to (x,y) along a star-avoiding (and, for planets, spiral) path.
-   * A player course committed mid-fight breaks off the combat auto-pursuit (Task
-   * 3) so the ship flies there; the pursuit's own re-plots (`pursuitReplot`) opt out.
-   */
   private executeRouteTo(x: number, y: number, landing?: LandingHint): void {
     if (!this.shipPhysics) return;
     if (!this.pursuitReplot && this.combatModule?.isActive)
       this.npcManager.breakOffCombatPursuit();
     this.playerShip.finishTakeoff(); // a fresh course cancels any in-progress take-off arc
-    // Single source: re-derive from the ship's CURRENT position (drawn == flown),
-    // recovering the spiral hint callers (Ход) drop (recompute, don't replay).
     const same = this.plannedRoute?.x === x && this.plannedRoute?.y === y;
     const hint = landing ?? (same ? this.plannedRoute?.landing : undefined);
     this.routePath = this.flightPathTo(x, y, hint);
-    // Physics flows through the waypoints without stopping (US-070 #5).
     this.shipPhysics.setPath(this.routePath);
     this.plannedRoute = { x, y, landing: hint };
     this.isTurnRunning = true; // executing a route runs the turn (Play)
@@ -1574,8 +1279,6 @@ export class SpaceFlightScene extends GameScene {
 
   private clearPlannedRoute(): void {
     this.plannedRoute = null;
-    // Guard: clearPlannedRoute runs from destroy(), which may fire before the
-    // scene finished initializing (and constructing the planet/NPC modules).
     if (this.planetManager) {
       this.planetManager.routeTargetPlanetId = null;
       this.planetManager.routeTargetStationId = null;
@@ -1585,9 +1288,7 @@ export class SpaceFlightScene extends GameScene {
     this.routeRenderer?.clearRoute();
   }
 
-  /** Refresh mini-map each frame; PlanetManager.update() owns the orbital motion. */
   private updateSystemMiniMap(): void {
-    // Always update even when paused — visual feedback during a pause overlay.
     updateFlightMiniMap({
       miniMap: this.hud.miniMap,
       ship: this.shipPhysics,
@@ -1604,8 +1305,6 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /** Play/Pause turn control — the pure decision tree lives in
-   *  `flight/flightTurnEnd.ts` (`handleFlightPlayPause`, extracted 14.5c). */
   private onPlayPause(): void {
     handleFlightPlayPause({
       isCombatPaused: () => this.combatPause.paused,
@@ -1633,7 +1332,6 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /** End the running turn: stop the ship and freeze the world (pause). */
   private endTurn(): void {
     this.isTurnRunning = false;
     this.pauseAtDayBoundary = false; // deferred pause consumed (or turn ended)
@@ -1642,19 +1340,14 @@ export class SpaceFlightScene extends GameScene {
     this.visualOrbitBoost = 0;
     this.turnHintShown = false;
     this.updateInteractiveCursors(false);
-    // Settle the ship in place and persist where it stopped (reload-resume).
     if (this.shipPhysics) endFlightTurn(this.shipPhysics, this.gameEngine);
   }
 
-  /** Switch planet and NPC cursors so hovering shows intent only when not mid-turn. */
   private updateInteractiveCursors(turnRunning: boolean): void {
-    // Cursor management is owned by the modules that own the sprites (Information
-    // Expert) — the scene only routes the turn state, never touches Graphics.
     this.planetManager?.setCursors(turnRunning);
     this.npcManager?.setCursors(turnRunning);
   }
 
-  /** True while a panel that should swallow outside-clicks is open. */
   private isBlockingModalOpen(): boolean {
     return (
       this.npcManager.hasOpenModal() ||
@@ -1665,14 +1358,12 @@ export class SpaceFlightScene extends GameScene {
     );
   }
 
-  /** Close any open blocking modal (NPC contact / quest journal / planet panel). */
   private closeBlockingModals(): void {
     this.npcManager.closeModals();
     this.hud.closeModals(); // quest journal + ♿ accessibility panel (deferred destroy)
     this.planetManager.closeInfoPanel();
   }
 
-  // Remember the ship's position so a later return starts here, not the edge.
   private saveShipPosition(): void {
     if (this.gameEngine && this.shipPhysics) {
       this.gameEngine.lastFlightShipPos = {
@@ -1691,7 +1382,6 @@ export class SpaceFlightScene extends GameScene {
     }
   }
 
-  /** Handle keyboard input via the pure `handleFlightKey` helper. */
   private onKeyDown(event: KeyboardEvent): void {
     handleFlightKey(event, {
       combatPause: {
@@ -1723,7 +1413,6 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /** Navigate ship to a quest objective (`navigateToQuestTarget`, routePlot.ts). */
   private navigateToQuestObjective(locationId: string): void {
     navigateToQuestTarget(
       {
@@ -1746,70 +1435,54 @@ export class SpaceFlightScene extends GameScene {
     );
   }
 
-  /** E2E helper: click back to star map */
   async e2eClickBackToMap(): Promise<void> {
     return this.e2eHooks.clickBackToMap();
   }
 
-  /** E2E helper: set ship target position */
   e2eSetTarget(x: number, y: number): void {
     this.e2eHooks.setTarget(x, y);
   }
 
-  /** E2E helper: get camera state */
   e2eGetCameraState(): { zoom: number; panX: number; panY: number } {
     return this.e2eHooks.getCameraState();
   }
 
-  /** E2E helper: set camera zoom */
   e2eSetCameraZoom(zoom: number): void {
     this.e2eHooks.setCameraZoom(zoom);
   }
 
-  /** E2E helper: set camera pan */
   e2eSetCameraPan(x: number, y: number): void {
     this.e2eHooks.setCameraPan(x, y);
   }
 
-  /** E2E helper: check if minimap exists */
   e2eHasMinimap(): boolean {
     return this.e2eHooks.hasMinimap();
   }
 
-  /** E2E helper: get ship position */
   e2eGetShipPosition(): { x: number; y: number } {
     return this.e2eHooks.getShipPosition();
   }
 
-  /** E2E helper: check if quest journal is open */
   e2eIsQuestJournalOpen(): boolean {
     return this.e2eHooks.isQuestJournalOpen();
   }
 
-  /** E2E helper: return current system planets for test assertions */
   e2eGetPlanets(): { id: string; name: string }[] {
     return this.e2eHooks.getPlanets();
   }
 
-  /** E2E helper: transition directly to PLANET scene bypassing distance check */
   async e2eLandOnPlanet(): Promise<void> {
     return this.e2eHooks.landOnPlanet();
   }
 
-  /** E2E helper: count of NPC ship sprites currently in the scene */
   e2eGetNpcCount(): number {
     return this.e2eHooks.getNpcCount();
   }
 
-  /** E2E helper: true once a planet renders via the GLSL rotation filter (F1). */
   e2eHasFilterPlanet(): boolean {
     return this.e2eHooks.hasFilterPlanet();
   }
 
-  /**
-   * E2E helper (F1 pixel assertion): hide everything on the game layer except
-   * one GLSL-filtered planet body and return its on-screen geometry.
-   */
   e2eIsolateFilterPlanet(): {
     screenX: number;
     screenY: number;
@@ -1822,16 +1495,10 @@ export class SpaceFlightScene extends GameScene {
     this.e2eHooks.playPause();
   }
 
-  /**
-   * E2E helper: hide/show the heavy nebula background (sky + mid-ground parallax
-   * + dust + vignette) so screenshots are lightweight and diff-friendly. The
-   * applyMockHeavySystems fixture flips this off for every E2E test.
-   */
   e2eSetBackgroundVisible(visible: boolean): void {
     this.e2eHooks.setBackgroundVisible(visible);
   }
 
-  /** E2E helper: snapshot of the scene's high-level state for assertions. */
   e2eGetSceneState(): {
     planetsCount: number;
     npcsCount: number;
@@ -1841,22 +1508,18 @@ export class SpaceFlightScene extends GameScene {
     return this.e2eHooks.getSceneState();
   }
 
-  /** E2E helper: trigger the planet-click handler for the planet at `index`. */
   e2eClickPlanet(index: number): void {
     this.e2eHooks.clickPlanet(index);
   }
 
-  /** E2E helper: trigger the NPC-contact click for the ship at `index`. */
   e2eClickNpc(index: number): void {
     this.e2eHooks.clickNpc(index);
   }
 
-  /** E2E helper: press Pause — defers the stop to the day boundary (F1). */
   e2ePressPause(): void {
     this.e2eHooks.pressPause();
   }
 
-  /** E2E helper: start a turn (Ход) — runs the planned route or a wait turn. */
   e2eStartTurn(): void {
     this.e2eHooks.startTurn();
   }

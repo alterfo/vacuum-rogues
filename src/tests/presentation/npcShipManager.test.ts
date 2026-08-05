@@ -34,12 +34,6 @@ function makeNpc(id: string, role: NpcRole = NpcRole.TRADER): NpcShip {
   });
 }
 
-/**
- * Build a minimal harness: a real PixiJS game/UI layer, a galaxy stub carrying
- * NPC ships, and inert deps accessors. The manager spawns sprites onto the game
- * layer and reads live state through the injected accessors, so real Containers
- * exercise the scene-graph wiring without a WebGL context.
- */
 function makeHarness(npcs: NpcShip[]): {
   manager: NpcShipManager;
   gameLayer: Container;
@@ -98,7 +92,6 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     manager.initialize();
 
     expect(manager.npcCount).toBe(2);
-    // Each NPC sprite mounts its container on the game layer.
     expect(gameLayer.children.length).toBe(2);
 
     manager.destroy();
@@ -107,10 +100,6 @@ describe("NpcShipManager (extracted FlightModule)", () => {
   it("sizes newly spawned sprites' hit areas for the current camera zoom", () => {
     const { manager } = makeHarness([makeNpc("npc_zoom")]);
 
-    // Player is zoomed out BEFORE the ship spawns (system entry / hyperjump
-    // arrival). Without spawn-time compensation the sprite keeps its default
-    // 40-world-px circle (~10 screen px at MIN_ZOOM) until the next camera
-    // transform — near-unhoverable (playtest2 ②).
     manager.updateHitAreas(0.25);
     manager.initialize();
 
@@ -119,7 +108,6 @@ describe("NpcShipManager (extracted FlightModule)", () => {
         npcSprites: Array<{ container: { hitArea: { radius: number } } }>;
       }
     ).npcSprites[0];
-    // max(28, 40 / 0.25) = 160 world px ≈ 40 screen px at zoom 0.25.
     expect(sprite.container.hitArea.radius).toBeCloseTo(160);
 
     manager.destroy();
@@ -146,16 +134,13 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     expect(typeof dots[0].x).toBe("number");
     expect(typeof dots[0].color).toBe("number");
 
-    // No follow target by default.
     expect(manager.followNpcId).toBeNull();
     expect(manager.getFollowTarget()).toBeNull();
 
-    // Turn not running → update() is a no-op (and never throws).
     expect(() => manager.update(1 / 60, 100)).not.toThrow();
     expect(() => manager.updateCombat(1 / 60)).not.toThrow();
 
     manager.destroy();
-    // destroy() removes (and destroys) the NPC containers from the layer.
     expect(gameLayer.children.length).toBe(0);
     expect(manager.npcCount).toBe(0);
   });
@@ -164,9 +149,6 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     const { manager } = makeHarness([makeNpc("npc_1")]);
     manager.initialize();
 
-    // Out-of-range and negative indices must not throw (npcSprites[i] is
-    // undefined → the `if (sprite)` guard skips onNpcClick). This pins the guard
-    // a browser test cannot reach (the scene mocks the manager).
     expect(() => manager.e2eClickNpc(99)).not.toThrow();
     expect(() => manager.e2eClickNpc(-1)).not.toThrow();
     expect(manager.isContactPanelOpen).toBe(false);
@@ -179,16 +161,12 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     expect(manager.hasOpenModal()).toBe(false);
     expect(manager.isContactPanelOpen).toBe(false);
 
-    // initialize() with no present NPCs leaves the manager empty.
     manager.initialize();
     expect(manager.npcCount).toBe(0);
     manager.destroy();
   });
 
   it("a chase course leads ahead of a moving NPC's current position (playtest4 C)", () => {
-    // Ship at origin closing faster (0.3) than the NPC drifts (npcSpeed 0.2),
-    // NPC far to the right (> weapon range) heading straight +y. The chase must
-    // aim AHEAD of the NPC along its heading, not at its current position.
     const physics = new ShipPhysics(0, 0, 0.3);
     const routeCalls: Array<{ x: number; y: number }> = [];
 
@@ -246,7 +224,6 @@ describe("NpcShipManager (extracted FlightModule)", () => {
 
     expect(routeCalls.length).toBe(1);
     const lead = routeCalls[0];
-    // Lead is ahead of the NPC along its heading (+y), not at its current y=0.
     expect(lead.y).toBeGreaterThan(sprite.y);
     expect(lead.x).toBeCloseTo(sprite.x, 5);
 
@@ -254,9 +231,6 @@ describe("NpcShipManager (extracted FlightModule)", () => {
   });
 
   it("re-aims the chase MID-FLIGHT when the target drifts (continuous course-correction)", () => {
-    // The chase used to re-plot only on arrival (when stopped), so the ship flew
-    // to where the target WAS. It must now re-correct while still moving once the
-    // target drifts beyond the threshold.
     const physics = new ShipPhysics(0, 0, 0.3);
     physics.isMoving = true; // already en route — the mid-flight case
     const routeCalls: Array<{ x: number; y: number }> = [];
@@ -311,16 +285,13 @@ describe("NpcShipManager (extracted FlightModule)", () => {
 
     manager.followNpcId = "npc_chase";
 
-    // First tick mid-flight: re-aims (lead is far from the initial endpoint).
     manager.updateCombat(1 / 60);
     expect(routeCalls.length).toBe(1);
 
-    // Target drifts well beyond the threshold → another mid-flight correction.
     sprite.y += 120;
     manager.updateCombat(1 / 60);
     expect(routeCalls.length).toBe(2);
 
-    // Target barely moves (< threshold) → NO re-plot (throttled).
     sprite.y += 4;
     manager.updateCombat(1 / 60);
     expect(routeCalls.length).toBe(2);
@@ -431,16 +402,13 @@ describe("NpcShipManager (extracted FlightModule)", () => {
       }
     ).npcSprites[0];
 
-    // Provider must be set (not null) so pickNewTarget uses role-driven logic.
     expect(sprite.targetProvider).not.toBeNull();
 
-    // Provider is deterministic: same seq → same position.
     const pos0a = sprite.targetProvider!(0);
     const pos0b = sprite.targetProvider!(0);
     expect(pos0a.x).toBe(pos0b.x);
     expect(pos0a.y).toBe(pos0b.y);
 
-    // Different seq values produce different positions.
     const pos1 = sprite.targetProvider!(1);
     expect(pos0a.x === pos1.x && pos0a.y === pos1.y).toBe(false);
 
@@ -492,8 +460,6 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     );
     manager.initialize();
 
-    // Patrol also has orbit anchor set to a planet (orbit behavior takes priority
-    // over the target provider for patrols, same as traders).
     const sprite = (
       manager as unknown as {
         npcSprites: Array<{
@@ -504,7 +470,6 @@ describe("NpcShipManager (extracted FlightModule)", () => {
       }
     ).npcSprites[0];
 
-    // Anchor is set to one of the planets.
     const anchorIsAPlanet =
       (sprite.anchorX === fakePlanet1.screenX &&
         sprite.anchorY === fakePlanet1.screenY) ||
@@ -512,18 +477,12 @@ describe("NpcShipManager (extracted FlightModule)", () => {
         sprite.anchorY === fakePlanet2.screenY);
     expect(anchorIsAPlanet).toBe(true);
 
-    // Provider is also set as a deterministic fallback.
     expect(sprite.targetProvider).not.toBeNull();
 
     manager.destroy();
   });
 });
 
-// ---------------------------------------------------------------------------
-// rememberFlightPos: stashes ship coordinates on GameEngine so that a
-// SPACE_FLIGHT re-entry after CombatScene resumes near the battle, not at the
-// system edge (combat edge-throw fix).
-// ---------------------------------------------------------------------------
 describe("NpcShipManager.rememberFlightPos", () => {
   it("writes ship position to gameEngine.lastFlightShipPos before combat transition", () => {
     const stage = new Container();
@@ -577,9 +536,6 @@ describe("NpcShipManager.rememberFlightPos", () => {
   });
 
   it("launchCombatWithNpc engages in-flight combat without a scene transition", () => {
-    // The player-attack path used to hop to the hex CombatScene. It must now
-    // route into the real-time CombatModule (startInFlightCombat) and select the
-    // clicked NPC as the auto-fire target — and never transition scenes.
     const engaged: Array<{ npc: { id: string } }> = [];
     const targeted: Array<{ npc: { id: string } }> = [];
     const transitions: unknown[] = [];
@@ -628,7 +584,6 @@ describe("NpcShipManager.rememberFlightPos", () => {
       deps,
     );
     manager.initialize();
-    // Pre-arm a chase so we can confirm engaging clears the auto-follow intent.
     manager.followNpcId = "npc_target";
 
     const npc = galaxy.npcShips[0];
@@ -640,7 +595,6 @@ describe("NpcShipManager.rememberFlightPos", () => {
     expect(engaged[0].npc.id).toBe("npc_target");
     expect(targeted.length).toBe(1);
     expect(targeted[0].npc.id).toBe("npc_target");
-    // No hex CombatScene hop, and the chase intent is cleared once engaged.
     expect(transitions.length).toBe(0);
     expect(manager.followNpcId).toBeNull();
 
@@ -648,12 +602,6 @@ describe("NpcShipManager.rememberFlightPos", () => {
   });
 
   it("a caught shakedown flee engages combat AND resumes the frozen turn (regression)", () => {
-    // Regression: openShakedownHail freezes the turn (endTurn → isTurnRunning=false)
-    // so the «Кошелёк или жизнь!» hail can't be flown past. CombatModule.update is
-    // gated on isTurnRunning, so a failed flee that only called startInFlightCombat
-    // left the fight DORMANT — no NPC fire, no active-pause overlay — until the player
-    // manually pressed Play. The caught branch must now re-arm the turn (executeRouteTo)
-    // as well as engage combat.
     const engaged: Array<{ npc: { id: string } }> = [];
     const targeted: Array<{ npc: { id: string } }> = [];
     const routes: Array<{ x: number; y: number }> = [];
@@ -705,11 +653,9 @@ describe("NpcShipManager.rememberFlightPos", () => {
       manager as unknown as { onFleeShakedown(n: typeof npc): void }
     ).onFleeShakedown(npc);
 
-    // Combat engaged on the caught pirate…
     expect(engaged.length).toBe(1);
     expect(engaged[0].npc.id).toBe("npc_pirate");
     expect(targeted.length).toBe(1);
-    // …AND the frozen turn was resumed (the fix) so the fight actually runs.
     expect(routes.length).toBe(1);
     expect(manager.followNpcId).toBe("npc_pirate");
 
@@ -717,10 +663,6 @@ describe("NpcShipManager.rememberFlightPos", () => {
   });
 
   it("a garrison aggressor inside weapon range engages via startInFlightCombat, not a scene hop (Task 4)", () => {
-    // The auto-engage path: an aggressive NPC closing inside WEAPON_RANGE used to
-    // freeze the ship and hop to the hex CombatScene. It must now route into the
-    // real-time CombatModule (startInFlightCombat) on the next update() tick, with
-    // no transitionTo call — the ship keeps moving.
     const engaged: Array<{ npc: { id: string } }> = [];
     const transitions: unknown[] = [];
 
@@ -734,7 +676,6 @@ describe("NpcShipManager.rememberFlightPos", () => {
       gameLayer,
     } as unknown as Renderer;
 
-    // Ship parked at the origin; the aggressor will be placed right on top of it.
     const physics = new ShipPhysics(0, 0, 0.2);
     const galaxy = { npcShips: [makeNpc("aggressor", NpcRole.PIRATE)] };
     const gameEngine = {
@@ -786,7 +727,6 @@ describe("NpcShipManager.rememberFlightPos", () => {
 
     expect(engaged.length).toBeGreaterThanOrEqual(1);
     expect(engaged[0].npc.id).toBe("aggressor");
-    // The freeze-and-hop path is gone: no scene transition.
     expect(transitions.length).toBe(0);
 
     manager.destroy();
@@ -862,11 +802,9 @@ describe("NpcShipManager.rememberFlightPos", () => {
     expect(messages[0].text).toContain("npc_threat");
     expect(messages[0].color).toBe(0xff4444);
 
-    // Still aggressive next frame — no repeat toast.
     manager.update(1 / 60, 100);
     expect(messages.length).toBe(1);
 
-    // Drops aggression, then re-aggros — warns again.
     sprite.setAggressive(false);
     manager.update(1 / 60, 100);
     sprite.setAggressive(true);

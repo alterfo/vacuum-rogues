@@ -20,13 +20,6 @@ import { FactionType, NpcState, NpcRole, NpcGoalKind } from "@/types";
 import { Faction } from "@/types/faction";
 import type { Player } from "@/domain/Player";
 
-/**
- * Task 4 — player hire / ally offers. Pure decision (does an NPC accept being
- * paid to attack a target?) plus the ABS contract for the hire payment: a
- * balanced player → NPC bus transfer that moves `player.credits` by exactly
- * `-fee` and keeps the ledger balanced.
- */
-
 function makeNpc(
   opts: {
     id?: string;
@@ -61,10 +54,6 @@ function makeNpc(
   });
 }
 
-// ---------------------------------------------------------------------------
-// hireFee — pure asking price
-// ---------------------------------------------------------------------------
-
 describe("hireFee", () => {
   it("is the flat base fee plus a risk premium on the target's strength", () => {
     const target = makeNpc({ hullHP: 100, shields: 50, damage: 20 });
@@ -86,10 +75,6 @@ describe("hireFee", () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// acceptsHire — pure accept/decline
-// ---------------------------------------------------------------------------
 
 describe("acceptsHire", () => {
   it("accepts an offer at or above the asking fee", () => {
@@ -128,10 +113,6 @@ describe("acceptsHire", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// hireGoal — accepted NPC retargets to hunt the mark
-// ---------------------------------------------------------------------------
-
 describe("hireGoal", () => {
   it("retargets the hired ship to HUNT the target's system", () => {
     const target = makeNpc({ id: "mark", systemId: "sys_z" });
@@ -141,10 +122,6 @@ describe("hireGoal", () => {
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// payHire — ABS contract (balanced player → NPC transfer)
-// ---------------------------------------------------------------------------
 
 interface Harness {
   bus: BankBus;

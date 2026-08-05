@@ -1,11 +1,3 @@
-/**
- * Tests for the offline LLM scenario-generator (Task 4). Deterministic and free:
- * the {@link FakeLlmClient} returns canned model replies, so the prompt assembly,
- * the scenario parser, and the end-to-end glue are all asserted with **no live
- * API call and no key**. The parser's robustness (drop an unknown goal, degrade a
- * malformed reply to `[]`, never throw) is the load-bearing behaviour the agent
- * relies on — exercised directly here.
- */
 import { describe, it, expect } from "vitest";
 import { FakeLlmClient } from "./llmClient";
 import {
@@ -151,7 +143,6 @@ describe("generateScenarios (end-to-end against FakeLlmClient)", () => {
       "max-rep",
       "ignore-overmind",
     ]);
-    // The prompt actually carried the rubric + the requested count to the client.
     expect(fake.calls).toHaveLength(1);
     expect(fake.calls[0].opts?.system).toBe(SCENARIO_RUBRIC);
     expect(fake.calls[0].messages[0].content).toContain("3");

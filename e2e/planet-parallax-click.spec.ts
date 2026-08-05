@@ -46,19 +46,15 @@ test.describe('Planet parallax and click regression', () => {
     await setupToSpaceFlight(page);
     const errorCollector = new ErrorCollector(page);
 
-    // Land on planet (SPACE_FLIGHT → PLANET)
     await landOnPlanet(page);
 
-    // Go to TRADE scene from PlanetScene (PLANET → TRADE)
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as { openMarket?: () => Promise<void> } | null;
-      // openMarket is private, access via bracket notation
       await (scene as Record<string, unknown>)['openMarket']?.();
     });
     await waitForScene(page, 'TradeScene', 15_000);
 
-    // Return from TRADE back to PLANET
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as { close?: () => Promise<void> } | null;
@@ -66,7 +62,6 @@ test.describe('Planet parallax and click regression', () => {
     });
     await waitForScene(page, 'PlanetScene', 15_000);
 
-    // Invoke job board handler — proves interactive objects are not swallowed
     const jobBoardOpened = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as Record<string, unknown> | null;
@@ -85,7 +80,6 @@ test.describe('Planet parallax and click regression', () => {
 
     await landOnPlanet(page);
 
-    // Read current panorama x baseline
     const baselineX = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as Record<string, unknown> | null;
@@ -93,7 +87,6 @@ test.describe('Planet parallax and click regression', () => {
       return panorama?.x ?? null;
     });
 
-    // Panorama must be loaded — fail explicitly instead of silently skipping
     expect(baselineX, 'panorama sprite must exist on PlanetScene for parallax test').not.toBeNull();
 
     const bounds = await page.evaluate(() => {
@@ -101,10 +94,8 @@ test.describe('Planet parallax and click regression', () => {
       return canvas ? { w: canvas.width, h: canvas.height } : { w: 800, h: 600 };
     });
 
-    // Move mouse toward the left edge to trigger parallax drift
     await page.mouse.move(10, bounds.h / 2, { steps: 5 });
 
-    // Wait for panorama.x to change (parallax easing takes a few frames)
     await page.waitForFunction(
       (baseline) => {
         const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
@@ -125,7 +116,6 @@ test.describe('Planet parallax and click regression', () => {
     });
 
     expect(updatedX).not.toBeNull();
-    // Moving to left edge should decrease x (drift left)
     expect(updatedX as number).toBeLessThan(baselineX);
 
     errorCollector.assertAndDetach();
@@ -137,14 +127,12 @@ test.describe('Planet parallax and click regression', () => {
 
     await landOnPlanet(page);
 
-    // Open job board
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as Record<string, unknown> | null;
       (scene?.['openJobBoard'] as (() => void) | undefined)?.();
     });
 
-    // Verify it opened
     const panelAfterOpen = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as Record<string, unknown> | null;
@@ -152,14 +140,12 @@ test.describe('Planet parallax and click regression', () => {
     });
     expect(panelAfterOpen).toBe(true);
 
-    // Close job board
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as Record<string, unknown> | null;
       (scene?.['closeJobBoard'] as (() => void) | undefined)?.();
     });
 
-    // Verify it closed
     const panelAfterClose = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as Record<string, unknown> | null;
@@ -167,8 +153,6 @@ test.describe('Planet parallax and click regression', () => {
     });
     expect(panelAfterClose).toBe(false);
 
-    // Invoke garage service handler to prove interactive objects still respond
-    // (openGarage shows a message if hull is full, which is fine)
     const serviceHandlerFired = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as Record<string, unknown> | null;

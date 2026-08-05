@@ -10,15 +10,6 @@ import { NpcShip } from "@/domain/NpcShip";
 import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 
-// ---------------------------------------------------------------------------
-// Task 1: the fresh starter ship must be able to out-run a *basic* NPC, while
-// rare *interceptor*-class ships (OVERMIND/PIRATE) stay a deliberate exception
-// (still faster than the starter, so escaping an elite remains upgrade-gated).
-// Assert the *relationships*, not magnitudes, so future tuning doesn't churn.
-// ---------------------------------------------------------------------------
-
-/** Build the fresh-game starter loadout the way GameEngine.starterLoadout does
- *  — only the engine (`eq_engine_i`) matters for cruise speed. */
 function starterLoadout(): ShipLoadout {
   const l = new ShipLoadout("hull_corvette");
   l.install("eq_engine_i");
@@ -28,7 +19,6 @@ function starterLoadout(): ShipLoadout {
   return l;
 }
 
-/** Accelerate a physics body to its cruise speed over a long straight leg. */
 function cruise(maxSpeed: number): ShipPhysics {
   const p = new ShipPhysics(0, 0, maxSpeed);
   p.setTarget(100_000, 0);
@@ -95,15 +85,11 @@ describe("ship speed: starter vs NPC classes (Task 1)", () => {
   it("a cruising starter out-runs a basic NPC but NOT an interceptor", () => {
     const starterSpeed = starterLoadout().derivedStats().speed;
     const ship = cruise(starterSpeed);
-    // basic threat → escapable from the start
     expect(ship.canOutrun(GAME_BALANCE.npcBasicSpeed)).toBe(true);
-    // interceptor → the deliberate exception (escape stays upgrade-gated)
     expect(ship.canOutrun(GAME_BALANCE.npcSpeed)).toBe(false);
   });
 
   it("the apex engine finally out-runs the interceptor tier (long-climb payoff)", () => {
-    // The reward for the long climb to top tech: the rare apex engine
-    // (`eq_engine_v`) is the only one fast enough to escape an interceptor.
     const apex = new ShipLoadout("hull_bastion");
     apex.install("eq_engine_v");
     const ship = cruise(apex.derivedStats().speed);
@@ -111,8 +97,6 @@ describe("ship speed: starter vs NPC classes (Task 1)", () => {
   });
 
   it("the mid-tier engine still cannot out-run the interceptor tier", () => {
-    // A pre-apex engine (`eq_engine_iii`) at best ties the interceptor speed, so
-    // escaping an elite stays gated behind the apex engine, not the mid tier.
     const mid = new ShipLoadout("hull_corvette");
     mid.install("eq_engine_iii");
     const ship = cruise(mid.derivedStats().speed);

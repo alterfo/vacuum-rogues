@@ -7,20 +7,8 @@ import type { AgentRunResult, AgentStep, StepVitals } from "./PlayerAgent";
 import type { Action } from "./PlayerPolicy";
 import { buildTranscript, serializeTranscript } from "./transcript";
 
-/**
- * Task 1 of the offline LLM oddity-judge plan: the judge-ready session transcript.
- *
- * Two layers:
- *  - the **pure** `buildTranscript` is unit-tested over synthetic
- *    {@link AgentRunResult}s — deterministic step records + summary + stable JSON,
- *    no engine needed;
- *  - the `PlayerAgent` richer-record emission is tested over the **real** booted
- *    harness — a short session yields steps carrying the day/vitals the transcript
- *    is built from.
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** A vitals snapshot with sane defaults, overridable per field. */
 function mkVitals(over: Partial<StepVitals> = {}): StepVitals {
   return {
     credits: 1000,
@@ -36,7 +24,6 @@ function mkVitals(over: Partial<StepVitals> = {}): StepVitals {
   };
 }
 
-/** A recorded step with the given action + vitals snapshot. */
 function mkStep(
   index: number,
   action: Action,
@@ -77,16 +64,13 @@ describe("buildTranscript (pure)", () => {
     expect(t.policy).toBe("heuristic");
     expect(t.steps).toHaveLength(2);
 
-    // step 0: 1000 → 1200 credits, fuel 50 → 40.
     expect(t.steps[0].vitalsDelta.credits).toBe(200);
     expect(t.steps[0].vitalsDelta.fuel).toBe(-10);
     expect(t.steps[0].day).toBe(0);
     expect(t.steps[0].action).toEqual({ kind: "move" });
 
-    // step 1: 1200 → 1500 (the final resting snapshot), killPoints 0 → 4.
     expect(t.steps[1].vitalsDelta.credits).toBe(300);
     expect(t.steps[1].vitalsDelta.killPoints).toBe(4);
-    // The action is flattened to a reference-free record carrying its hints.
     expect(t.steps[1].action).toEqual({
       kind: "trade",
       targetId: "p1",
@@ -138,7 +122,6 @@ describe("buildTranscript (pure)", () => {
     expect(t.summary.daysElapsed).toBe(8); // finalDay 8 − firstDay 0
     expect(t.summary.survived).toBe(true);
     expect(t.summary.deaths).toBe(0);
-    // Curve = each step's before-credits, then the final resting credits.
     expect(t.summary.creditsCurve).toEqual([1000, 900, 1400, 1600]);
     expect(t.summary.reputationCurve).toEqual([0, -10, -10, -20]);
     expect(t.summary.netCredits).toBe(600); // 1600 − 1000
@@ -211,7 +194,6 @@ describe("buildTranscript (pure)", () => {
     const a = serializeTranscript(buildTranscript({ seed: "S", result }));
     const b = serializeTranscript(buildTranscript({ seed: "S", result }));
     expect(a).toBe(b);
-    // Round-trips losslessly.
     expect(JSON.parse(a)).toEqual(buildTranscript({ seed: "S", result }));
   });
 });
@@ -232,7 +214,6 @@ describe("PlayerAgent emits the richer record (real harness)", () => {
 
     expect(result.errors).toEqual([]);
     expect(result.steps).toHaveLength(12);
-    // Every step carries the egocentric richer record the transcript is built from.
     for (const s of result.steps) {
       expect(typeof s.day).toBe("number");
       expect(s.vitals).toBeDefined();
@@ -247,9 +228,7 @@ describe("PlayerAgent emits the richer record (real harness)", () => {
     });
     expect(t.summary.steps).toBe(12);
     expect(t.steps).toHaveLength(12);
-    // The credits curve has one checkpoint per step plus the resting final.
     expect(t.summary.creditsCurve).toHaveLength(13);
-    // Serialises cleanly.
     expect(() => serializeTranscript(t)).not.toThrow();
   });
 });

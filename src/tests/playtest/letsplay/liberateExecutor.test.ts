@@ -1,13 +1,3 @@
-/**
- * Task 1 of the Overmind-slayer plan: the `liberate` action's engine seam.
- *
- * `legalActionsForScene` gating is covered in `observe.test.ts`; this file
- * covers the **executor** — `PlayerAgent.apply("liberate")` must call the real
- * `GameEngine.liberateCurrentSystem()` (→ `Galaxy.tryLiberate`), not degrade to
- * a silent tick. Real-engine tier: boots the real `GameEngine` (pixi.js
- * stubbed only), so it exercises actual wiring, mirroring
- * `src/tests/playtest/playerLiberate.test.ts`'s setup for the plain engine API.
- */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
 import { PlayerAgent } from "./PlayerAgent";
@@ -19,7 +9,6 @@ import { FactionType, NpcRole, NpcState } from "@/types";
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** A scripted policy that always issues the given action kind (legal-filtered). */
 function scripted(kind: Action["kind"]): PlayerPolicy {
   return {
     name: "scripted",
@@ -30,8 +19,6 @@ function scripted(kind: Action["kind"]): PlayerPolicy {
   };
 }
 
-/** A freshly generated galaxy may already place a few hostiles in-system —
- *  clear them first so only a deliberately staged garrison controls a test. */
 function clearHostiles(
   galaxy: { npcShips: NpcShip[] },
   systemId: string,
@@ -103,8 +90,6 @@ describe("letsplay liberate executor (Task 1)", () => {
     galaxy.npcShips.push(overmindGarrison(sys));
     expect(engine.canLiberateCurrentSystem()).toBe(false);
 
-    // "liberate" isn't in legalActions here, so the scripted policy falls back
-    // to "wait" — asserting the whole loop stays legal-only and side-effect-free.
     const agent = new PlayerAgent(harness, scripted("liberate"));
     await agent.run(1);
 

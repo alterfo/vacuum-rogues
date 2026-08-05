@@ -17,17 +17,9 @@ import { BALANCE_EPSILON } from "@/domain/banking/Ledger";
 import { GAME_BALANCE } from "@/config/balance";
 import { PlayerSchema } from "@/validation/schemas";
 
-/**
- * Task 5: killing a credit-carrying NPC pays a salvage payout — routed through
- * the ledger (`adjustPlayerCredits`, whole credits, never `player.credits +=`),
- * a *fraction* of the wreck's cash, with a per-day anti-farm cap so respawning
- * pirates can't be an infinite credit faucet.
- */
-
 describe("pirateSalvageAmount — pure salvage math + anti-farm cap", () => {
   it("awards a whole-credit fraction of the wreck's cash (floored)", () => {
     expect(pirateSalvageAmount(1000, 0.5, 0, 10_000)).toBe(500);
-    // 999 × 0.5 = 499.5 → floored to a whole credit (never fractional).
     expect(pirateSalvageAmount(999, 0.5, 0, 10_000)).toBe(499);
     expect(Number.isInteger(pirateSalvageAmount(777, 0.5, 0, 10_000))).toBe(
       true,
@@ -40,9 +32,7 @@ describe("pirateSalvageAmount — pure salvage math + anti-farm cap", () => {
   });
 
   it("clamps to the remaining daily budget (anti-farm cap)", () => {
-    // Cap 1000, already 800 paid today → only 200 of a 500 payout fits.
     expect(pirateSalvageAmount(1000, 0.5, 800, 1000)).toBe(200);
-    // At/over the cap → nothing more this day.
     expect(pirateSalvageAmount(1000, 0.5, 1000, 1000)).toBe(0);
     expect(pirateSalvageAmount(1000, 0.5, 1200, 1000)).toBe(0);
   });
@@ -115,8 +105,6 @@ function makeHarness(startingMoney = 1000): {
   return { manager, engine, player, service, galaxy, messages, renderer, deps };
 }
 
-/** Spawn a real in-flight sprite, then re-tag it as an ordinary credit-carrying
- *  pirate (not the win-condition core) with the given wreck cash. */
 function spawnPirateSprite(
   manager: NpcShipManager,
   id: string,
@@ -144,27 +132,20 @@ describe("salvage through handleInFlightDeath — ledger payout, not direct muta
     const expected = Math.floor(1000 * GAME_BALANCE.pirateSalvageFraction);
     expect(expected).toBeGreaterThan(0);
     expect(player.credits).toBe(before + expected);
-    // Whole credits — a fractional projected balance would throw on reload.
     expect(Number.isInteger(player.credits)).toBe(true);
     expect(PlayerSchema.shape.credits.safeParse(player.credits).success).toBe(
       true,
     );
-    // The money came through a balanced double-entry transfer, not a += : the
-    // global ledger invariant still holds, and the projection mirrors the GL.
     expect(Math.abs(service.getLedger().totalBalance())).toBeLessThanOrEqual(
       BALANCE_EPSILON,
     );
     expect(player.credits).toBe(service.balanceOf(player.currentAccountId));
-    // The «Трофей» toast fired.
     expect(messages.some((m) => m.includes(String(expected)))).toBe(true);
 
     manager.destroy();
   });
 
   it("pays NO salvage for an NPC-vs-NPC crossfire kill (killedByPlayer=false)", () => {
-    // An Overmind fleet farming strayed pirates beside a parked player routes
-    // each kill through the same death path (loot drop + removal), but must not
-    // hand the spectating player free credits — only the player's own shots pay.
     const { manager, player, messages } = makeHarness(1000);
     const before = player.credits;
     const sprite = spawnPirateSprite(manager, "pirate_crossfire", 1000);
@@ -188,14 +169,12 @@ describe("salvage through handleInFlightDeath — ledger payout, not direct muta
     const cap = GAME_BALANCE.pirateSalvageDailyCap;
     const fraction = GAME_BALANCE.pirateSalvageFraction;
 
-    // Farm many rich wrecks on day 0 — total salvage must not exceed the cap.
     for (let i = 0; i < 30; i++) {
       const sprite = spawnPirateSprite(manager, `pirate_d0_${i}`, 1000);
       manager.handleInFlightDeath(sprite, () => 0.99);
     }
     expect(player.credits).toBe(cap);
 
-    // A new galaxy day re-arms the budget.
     galaxy.gameDays = 1;
     const sprite = spawnPirateSprite(manager, "pirate_d1", 1000);
     manager.handleInFlightDeath(sprite, () => 0.99);
@@ -206,14 +185,9 @@ describe("salvage through handleInFlightDeath — ledger payout, not direct muta
   });
 
   it("cap survives a scene rebuild (warp / land→take-off) — not a per-system faucet", () => {
-    // The per-day cap bookkeeping must live on the long-lived engine, not the
-    // per-scene manager: warping or landing destroys the manager and builds a
-    // fresh one. If the cap reset with it, a farmer would cap out, warp/land, and
-    // farm the full budget again the same galaxy day.
     const { manager, engine, player, galaxy, renderer, deps } = makeHarness(0);
     const cap = GAME_BALANCE.pirateSalvageDailyCap;
 
-    // Fill the day's budget on the first scene's manager.
     for (let i = 0; i < 30; i++) {
       const sprite = spawnPirateSprite(manager, `pirate_a_${i}`, 1000);
       manager.handleInFlightDeath(sprite, () => 0.99);
@@ -221,8 +195,6 @@ describe("salvage through handleInFlightDeath — ledger payout, not direct muta
     expect(player.credits).toBe(cap);
     manager.destroy();
 
-    // Simulate a warp / land→take-off: a brand-new manager on the SAME engine,
-    // same galaxy day. The cap is already met, so this scene pays nothing more.
     const manager2 = new NpcShipManager(
       renderer,
       engine,
@@ -236,7 +208,6 @@ describe("salvage through handleInFlightDeath — ledger payout, not direct muta
     manager2.handleInFlightDeath(sprite, () => 0.99);
     expect(player.credits).toBe(after); // still capped — no per-system reset
 
-    // A new galaxy day re-arms the budget even on the rebuilt manager.
     galaxy.gameDays = 1;
     const sprite2 = spawnPirateSprite(manager2, "pirate_b_d1", 1000);
     manager2.handleInFlightDeath(sprite2, () => 0.99);

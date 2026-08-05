@@ -1,15 +1,3 @@
-/**
- * Pure unit tests for the quest-card layout math (plan
- * 20260627-quest-card-scroll-and-ship-death-explosion, Task 1).
- *
- * A quest card used to be a fixed 130 px box whose title/objective text carried
- * no wrap, so long/many objectives overflowed it and bled into the next card.
- * `layoutQuestCard` now sizes the card to its wrapped content. These tests pin
- * the pure math (PixiJS text metrics are unavailable here — the real renderer is
- * checked by the E2E screenshot): long content is taller than short content, the
- * rows never overlap, and short cards stay under the historical 130 px floor so
- * the existing scroll layout (FIT_COUNT = 2) is unchanged.
- */
 import { describe, it, expect } from "vitest";
 import {
   estimateWrappedLines,
@@ -19,7 +7,6 @@ import {
   type QuestCardMetrics,
 } from "@/presentation/ui/questCardLayout";
 
-// Mirrors QuestJournalUI.cardMetrics() at panelWidth 600, font base 13 (M scale).
 const METRICS: QuestCardMetrics = {
   fontSizePx: 13,
   titleWrapWidth: 600 - 160,
@@ -66,8 +53,6 @@ describe("estimateWrappedLines", () => {
 describe("layoutQuestCard", () => {
   it("keeps a short, single-objective card under the historical 130 px floor", () => {
     const layout = layoutQuestCard(SHORT, METRICS);
-    // The bare content is short; the caller clamps the drawn box to MIN_CARD_HEIGHT,
-    // so the existing scroll FIT_COUNT (= 2 at step 140) is unchanged.
     expect(layout.contentHeight).toBeLessThan(MIN_CARD_HEIGHT);
   });
 
@@ -82,7 +67,6 @@ describe("layoutQuestCard", () => {
     );
     const short = layoutQuestCard(SHORT, METRICS);
     expect(tallTitle.contentHeight).toBeGreaterThan(short.contentHeight);
-    // A wrapped title pushes the first objective further down.
     expect(tallTitle.objectiveYs[0]).toBeGreaterThan(short.objectiveYs[0]);
   });
 
@@ -103,11 +87,9 @@ describe("layoutQuestCard", () => {
     const one = layoutQuestCard(SHORT, METRICS);
     expect(many.contentHeight).toBeGreaterThan(one.contentHeight);
 
-    // Objective Ys strictly increase (no two objectives share a row).
     for (let i = 1; i < many.objectiveYs.length; i++) {
       expect(many.objectiveYs[i]).toBeGreaterThan(many.objectiveYs[i - 1]);
     }
-    // Reward sits below the last objective, and everything fits in the box.
     const lastObjY = many.objectiveYs[many.objectiveYs.length - 1];
     expect(many.rewardY).toBeGreaterThan(lastObjY);
     expect(many.rewardY).toBeLessThan(many.contentHeight);
@@ -125,8 +107,6 @@ describe("layoutQuestCard", () => {
     );
     const short = layoutQuestCard(SHORT, METRICS);
     expect(wrapped.contentHeight).toBeGreaterThan(short.contentHeight);
-    // The single wrapped objective takes more than one line of vertical room
-    // before the reward line.
     expect(wrapped.rewardY - wrapped.objectiveYs[0]).toBeGreaterThan(
       lineStepFor(METRICS.fontSizePx),
     );

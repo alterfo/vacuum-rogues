@@ -88,8 +88,6 @@ test.describe('Visual Regression Tests', () => {
     await page.screenshot({ path: `${SCREENSHOT_DIR}/inventory.png` });
   });
 
-  // Combat is real-time in-flight only — the hex CombatScene (SceneType.COMBAT)
-  // was removed, so there is no standalone combat scene to screenshot.
 
   test('station scene renders correctly', async ({ page }) => {
     await page.goto('/');
@@ -104,7 +102,6 @@ test.describe('Visual Regression Tests', () => {
       const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
         transitionTo: (scene: string) => Promise<void>;
       };
-      // No station context — renders fallback/empty state as a known baseline
       await engine.transitionTo('STATION');
     });
     await page.waitForFunction(

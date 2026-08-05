@@ -8,13 +8,6 @@ import {
   type EquipmentSpec,
 } from "@/systems/equipment/GearCatalog";
 
-/**
- * Gear variety expansion (Task 2): the catalog must fill out every equipment
- * family with ≥3 real (non-clone) tiers before the hangar ring rework lands.
- * These invariants pin the shape of the catalog, not exact numbers, so later
- * tuning doesn't churn this file.
- */
-
 const EQUIPMENT = GEAR_CATALOG.filter(
   (g): g is EquipmentSpec => g.kind === GearKind.EQUIPMENT,
 );

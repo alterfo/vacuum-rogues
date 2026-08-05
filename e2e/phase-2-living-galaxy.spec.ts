@@ -4,10 +4,6 @@ import { StarMapPage } from './page-objects/star-map.page';
 import { InventoryPage } from './page-objects/inventory.page';
 import { TradePage } from './page-objects/trade.page';
 
-/**
- * Phase 2: Living Galaxy (MVP2)
- * Testing AI-powered features: dialogue, tactical AI, economic model
- */
 test.describe('Phase 2: Dialogue System (MVP2)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;
@@ -21,11 +17,9 @@ test.describe('Phase 2: Dialogue System (MVP2)', () => {
   test('TC-P2-D001: NPC dialogue options are displayed', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Click on NPC/station
     await starMap.clickOnSystemPercent(0.5, 0.5);
     await page.waitForTimeout(1000);
 
-    // Dialogue should be accessible
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });
@@ -33,7 +27,6 @@ test.describe('Phase 2: Dialogue System (MVP2)', () => {
   test('TC-P2-D002: Dialogue generates unique responses', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Multiple dialogue interactions
     await starMap.clickOnSystemPercent(0.5, 0.5);
     await page.waitForTimeout(1000);
 
@@ -62,7 +55,6 @@ test.describe('Phase 2: Dialogue System (MVP2)', () => {
   }) => {
     await starMap.navigateFromMainMenu();
 
-    // Multiple dialogue attempts
     for (let i = 0; i < 3; i++) {
       await starMap.clickOnSystemPercent(0.5 + i * 0.1, 0.5);
       await page.waitForTimeout(1000);
@@ -73,15 +65,7 @@ test.describe('Phase 2: Dialogue System (MVP2)', () => {
   });
 });
 
-// Phase 2: Tactical AI — combat is real-time in-flight only now (the hex
-// CombatScene / SceneType.COMBAT was removed,
-// docs/plans/20260623-space-combat-realtime-fix-remove-hex.md), so the former
-// scene-transition tactical-AI tests no longer apply.
 
-/**
- * Phase 2: Economic Model
- * Testing dynamic pricing and trade
- */
 test.describe('Phase 2: Economic Model (MVP2)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;
@@ -106,14 +90,12 @@ test.describe('Phase 2: Economic Model (MVP2)', () => {
   test('TC-P2-E002: Prices change based on supply/demand', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Visit multiple markets
     await trade.navigateFromStarMap();
     await trade.viewMarketPrices();
     const firstPrices = await trade.expectPricesVisible();
 
     await page.waitForTimeout(2000);
 
-    // Prices should be dynamic (visual check)
     await trade.expectPricesVisible();
   });
 
@@ -137,10 +119,6 @@ test.describe('Phase 2: Economic Model (MVP2)', () => {
   });
 });
 
-/**
- * Phase 2: Content Generation
- * Testing VAE-powered planet generation
- */
 test.describe('Phase 2: Content Generation (MVP2)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;
@@ -154,7 +132,6 @@ test.describe('Phase 2: Content Generation (MVP2)', () => {
   test('TC-P2-C001: Planets have unique appearances', async ({ page }) => {
     await starMap.navigateFromMainMenu();
 
-    // Click on multiple systems
     await starMap.clickOnSystemPercent(0.3, 0.4);
     await starMap.expectPlanetDetailsVisible();
 
@@ -182,10 +159,6 @@ test.describe('Phase 2: Content Generation (MVP2)', () => {
   });
 });
 
-/**
- * Phase 2: Adaptive Quality
- * Testing quality adaptation for different devices
- */
 test.describe('Phase 2: Adaptive Quality (MVP2)', () => {
   let mainMenu: MainMenuPage;
 
@@ -201,7 +174,6 @@ test.describe('Phase 2: Adaptive Quality (MVP2)', () => {
     await page.waitForTimeout(5000);
     const elapsedTime = Date.now() - startTime;
 
-    // Should complete without hanging
     expect(elapsedTime).toBeGreaterThan(4500);
     expect(elapsedTime).toBeLessThan(6000);
   });
@@ -211,17 +183,12 @@ test.describe('Phase 2: Adaptive Quality (MVP2)', () => {
   }) => {
     await mainMenu.navigateTo();
 
-    // Game should remain responsive
     await mainMenu.expectMainMenuVisible();
     await page.waitForTimeout(3000);
     await mainMenu.expectMainMenuVisible();
   });
 });
 
-/**
- * Phase 2: Inventory and Progression
- * Testing ship upgrades and skill tree
- */
 test.describe('Phase 2: Inventory System (MVP2)', () => {
   let mainMenu: MainMenuPage;
   let starMap: StarMapPage;

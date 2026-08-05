@@ -11,22 +11,10 @@ import {
 import { HeuristicPolicy, LOW_HULL_FRACTION } from "./HeuristicPolicy";
 import { PlayerAgent } from "./PlayerAgent";
 
-/**
- * Task 2 of the dev-only letsplay engine: the pluggable policy + agent loop.
- *
- * Two layers, mirroring the plan's TDD split:
- *  - the **pure** `HeuristicPolicy.decide` is unit-tested over synthetic
- *    observations — it must return a *legal*, *non-degenerate* action for every
- *    sampled state and never throw / never pick an illegal action;
- *  - the `PlayerAgent` observe→decide→apply→tick loop is tested over the **real**
- *    booted harness — a short session runs to completion with zero logged/thrown
- *    errors and visibly moves the game (more than one scene visited).
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
 const policy = new HeuristicPolicy();
 
-/** A hostile NPC snapshot for synthetic observations. */
 function hostile(id = "raider-1", hullHP = 80): NpcSnapshot {
   return {
     id,
@@ -44,16 +32,9 @@ interface ObsOpts {
   stations?: { id: string; name: string; type: StationType }[];
   connections?: number;
   hostiles?: NpcSnapshot[];
-  /** Offered work on the *landed* planet (PLANET scene). */
   landedQuests?: number | null;
 }
 
-/**
- * Build a self-consistent {@link Observation} whose `legalActions` are computed
- * by the same pure `legalActionsForScene` the real `observe` uses — so a policy
- * decision over a synthetic obs is filtered against the exact same legal set the
- * engine would produce.
- */
 function makeObs(scene: SceneType, opts: ObsOpts = {}): Observation {
   const hasPlayer = opts.hasPlayer ?? true;
   const planets = opts.planets ?? [];
@@ -130,7 +111,6 @@ const station = (id: string) => ({
   type: StationType.REPAIR_DOCK,
 });
 
-/** A representative battery of game states the agent will face. */
 const SAMPLE_STATES: Observation[] = [
   makeObs(SceneType.MAIN_MENU, { hasPlayer: false }),
   makeObs(SceneType.SPACE_FLIGHT, {}), // empty space
@@ -296,12 +276,9 @@ describe("PlayerAgent loop over the real harness", () => {
 
     const result = await agent.run(24);
 
-    // The whole budget ran, every step is a legal decision, and nothing errored.
     expect(result.steps).toHaveLength(24);
     expect(result.errors).toEqual([]);
 
-    // Non-degenerate: the agent actually moved the game — it neither sat on
-    // «wait» the whole time nor stayed in a single scene.
     const nonWait = result.steps.filter((s) => s.action.kind !== "wait");
     expect(nonWait.length).toBeGreaterThan(0);
     const scenesVisited = new Set(result.steps.map((s) => s.scene));
@@ -313,8 +290,6 @@ describe("PlayerAgent loop over the real harness", () => {
     const agent = new PlayerAgent(harness, policy);
     const result = await agent.run(16);
 
-    // Re-derive the legal set per visited scene from the transcript: a flight
-    // decision is never a market action, a planet decision never an attack, etc.
     for (const step of result.steps) {
       const inSpace = step.scene === SceneType.SPACE_FLIGHT;
       if (inSpace) expect(step.action.kind).not.toBe("trade");

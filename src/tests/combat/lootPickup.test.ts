@@ -16,13 +16,6 @@ import { NpcRole, NpcState, FactionType, ResourceType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Task 6: floating loot ("the yellow dot") must be collectible by flying near
- * it — not only by a gravity tractor. The tractor still *extends* the reach.
- * These tests pin the proximity pickup, the no-double-collect / no-leak /
- * full-hold guards, and that the TTL despawn is unaffected.
- */
-
 function makeNpc(id: string, loadout: string[] = ["laser_mk1"]): NpcShip {
   return new NpcShip({
     id,
@@ -46,7 +39,6 @@ function makeNpc(id: string, loadout: string[] = ["laser_mk1"]): NpcShip {
   });
 }
 
-/** Deterministic RNG cycling through a fixed sequence of [0,1) values. */
 function seqRng(values: number[]): () => number {
   let i = 0;
   return () => values[i++ % values.length];
@@ -132,7 +124,6 @@ describe("Loot proximity pickup (Task 6)", () => {
       tractorGearId: "eq_engine_i", // no tractor
     });
     const r = GAME_BALANCE.lootPickupRadius;
-    // Loot just inside the hands-on radius (no tractor equipped).
     manager.spawnLootForNpc(makeNpc("t"), r - 5, 0, seqRng([0.5]));
     expect(manager.spaceLoot.length).toBe(1);
 
@@ -143,7 +134,6 @@ describe("Loot proximity pickup (Task 6)", () => {
       (m) => m.type === ResourceType.METALS,
     );
     expect(metals?.amount).toBe(1);
-    // Hands-on pickup uses the «Подобрано: …» flavour.
     expect(messages.some((m) => m.includes("Подобрано"))).toBe(true);
     manager.destroy();
   });
@@ -167,7 +157,6 @@ describe("Loot proximity pickup (Task 6)", () => {
       tractorGearId: "grav_tractor_2", // range 150
     });
     const r = GAME_BALANCE.lootPickupRadius;
-    // Beyond hands-on reach but inside the tractor range → still collected.
     expect(r).toBeLessThan(120);
     manager.spawnLootForNpc(makeNpc("t"), 120, 0, seqRng([0.5]));
     expect(manager.spaceLoot.length).toBe(1);
@@ -180,7 +169,6 @@ describe("Loot proximity pickup (Task 6)", () => {
       (m) => m.type === ResourceType.METALS,
     );
     expect(metals?.amount).toBe(1); // collected exactly once
-    // The far pickup is the tractor pull, not the hands-on grab.
     expect(messages.some((m) => m.includes("Гравитяга"))).toBe(true);
     manager.destroy();
   });
@@ -207,7 +195,6 @@ describe("Loot proximity pickup (Task 6)", () => {
 
     manager.update(16, 0);
 
-    // Loot stays in space; the over-capacity hold is unchanged (no extra unit).
     expect(manager.spaceLoot.length).toBe(1);
     const metals = inventory.resources.find(
       (m) => m.type === ResourceType.METALS,
@@ -219,7 +206,6 @@ describe("Loot proximity pickup (Task 6)", () => {
   it("still despawns an abandoned (out-of-reach) drop after the TTL", () => {
     const { manager } = makeManager({});
     const r = GAME_BALANCE.lootPickupRadius;
-    // Out of pickup reach so it's never collected — must still TTL-despawn.
     manager.spawnLootForNpc(makeNpc("t"), r + 500, 0, seqRng([0.9]));
     expect(manager.spaceLoot.length).toBe(2);
 
@@ -232,8 +218,6 @@ describe("Loot proximity pickup (Task 6)", () => {
 });
 
 describe("Loot day-gate default when the calendar is unavailable (regression 7583e75)", () => {
-  /** No gameEngine at all — spawnLootForNpc must fall back to `?? Infinity`,
-   *  not `?? 0`, when it can't read `gameEngine.galaxy.gameDays`. */
   function makeManagerWithoutGameEngine(): NpcShipManager {
     const stage = new Container();
     const uiLayer = new Container();
@@ -267,19 +251,11 @@ describe("Loot day-gate default when the calendar is unavailable (regression 758
   }
 
   it("does not gate a minDay-restricted loot token to 'never drop' with no galaxy to read a day from", () => {
-    // "eq_engine_v" (the apex engine) carries a real minDay gate
-    // (APEX_ENGINE_MIN_DAY = 1050); "laser_mk1" resolves to no catalog gear
-    // id and so is never gated, giving a stable control token.
     const manager = makeManagerWithoutGameEngine();
     const npc = makeNpc("gated", ["eq_engine_v", "laser_mk1"]);
-    // First roll picks the loot count (0.5 -> exactly 1 item); second picks
-    // the module — index 0 of whichever pool the day-gate left eligible.
     manager.spawnLootForNpc(npc, 0, 0, seqRng([0.5, 0.1]));
 
     expect(manager.spaceLoot.length).toBe(1);
-    // Day must resolve to Infinity (not 0), so the gated engine stays
-    // eligible and is the one picked at index 0 — a day-0 fallback would
-    // have excluded it, leaving only "laser_mk1" in the pool.
     expect(manager.spaceLoot[0].moduleId).toBe("eq_engine_v");
     manager.destroy();
   });

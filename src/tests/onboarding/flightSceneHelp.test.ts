@@ -1,17 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-/**
- * Task 4 (onboarding): the flight scene's contextual-help layer
- * (`flightSceneHelp.ts`) + the pure auto-show decision it relies on. Drives the
- * real helper against a fake pixi + the real (jsdom) `localStorage` seen-store,
- * reset between tests, asserting:
- *  - `pickAutoShowKey` favours the welcome intro, then the screen key, then none,
- *  - a brand-new player's first flight auto-shows the `welcome`/goal panel,
- *  - the next flight (welcome seen) auto-shows the `SPACE_FLIGHT` controls hint,
- *  - the first in-flight engagement shows the one-shot `combat` hint (once ever),
- *  - `showHelpOnce` is a true one-shot.
- */
-
 interface FakeNode {
   text?: string;
   children: FakeNode[];
@@ -97,7 +85,6 @@ import { helpFor, type HelpKey } from "@/systems/onboarding/helpContent";
 import { resetSeen } from "@/systems/onboarding/onboardingState";
 import type { Renderer } from "@/presentation/Renderer";
 
-/** Depth-first: is any descendant a Text node whose `text` equals `value`? */
 function hasText(root: FakeNode, value: string): boolean {
   for (const child of root.children) {
     if (child.text === value) return true;
@@ -161,17 +148,14 @@ describe("mountFlightSceneHelp — first-flight welcome, then flight hint, then 
     const help = mountFlightSceneHelp(makeRenderer(stage));
     const root = stage as unknown as FakeNode;
 
-    // The welcome intro auto-shows on the very first flight (not the flight hint).
     expect(hasText(root, WELCOME)).toBe(true);
     expect(hasText(root, FLIGHT)).toBe(false);
     help.destroy();
   });
 
   it("auto-shows the flight-controls hint on the next flight (welcome seen)", () => {
-    // First flight consumes the welcome intro.
     mountFlightSceneHelp(makeRenderer(new Container())).destroy();
 
-    // Second flight: welcome is seen, so the SPACE_FLIGHT controls hint shows.
     const stage = new Container();
     const help = mountFlightSceneHelp(makeRenderer(stage));
     const root = stage as unknown as FakeNode;
@@ -198,11 +182,6 @@ describe("mountFlightSceneHelp — first-flight welcome, then flight hint, then 
   });
 
   it("tears down a still-open combat hint even after a second engagement", () => {
-    // Regression: if the player leaves the one-shot combat panel open through the
-    // end of fight #1 and into fight #2, the second engagement's `showHelpOnce`
-    // returns a no-op (key already seen). Overwriting the live teardown with that
-    // no-op would orphan the open panel, leaking a full-screen modal past
-    // `destroy()`. The panel must be gone after teardown.
     const stage = new Container();
     const help = mountFlightSceneHelp(makeRenderer(stage));
     const root = stage as unknown as FakeNode;
@@ -234,7 +213,6 @@ describe("showHelpOnce — a true one-shot hint", () => {
   });
 });
 
-/** Count Text descendants whose `text` equals `value`. */
 function countText(root: FakeNode, value: string): number {
   let n = 0;
   for (const child of root.children) {

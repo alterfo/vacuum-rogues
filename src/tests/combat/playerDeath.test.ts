@@ -1,14 +1,3 @@
-/**
- * Player-death detection → game-over trigger (plan 20260619, Task 2).
- *
- * Two layers are locked here:
- *   1. CombatModule — when incoming NPC fire drops the player hull to 0 it
- *      surfaces `onPlayerDestroyed` exactly once per fight (a stray later shot,
- *      or a second NPC firing the same frame, must NOT re-fire it).
- *   2. GameEngine.triggerPlayerDeath — idempotent guard (mirrors `_gameOverShown`)
- *      that fires the death flow once, and crucially does NOT overwrite the
- *      `"auto"` takeoff autosave (death must be non-destructive to the checkpoint).
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   CombatModule,
@@ -61,7 +50,6 @@ function makeSprite(
   } as unknown as NpcShipSprite;
 }
 
-/** Build a CombatModule wired to count player-death notifications. */
 function setup(ship: { hullHP: number; maxHull: number }): {
   module: CombatModule;
   ship: { hullHP: number; maxHull: number };
@@ -99,7 +87,6 @@ describe("CombatModule player-death detection (Task 2)", () => {
 
   it("a stray later shot does not re-fire the death (idempotent per fight)", () => {
     const { module, deathCount } = setup({ hullHP: 15, maxHull: 100 });
-    // Tanky NPC survives the player's return fire, so it keeps shooting after the kill.
     module.addCombatant(makeSprite("a", 50, 0, { hullHP: 100000, damage: 20 }));
     module.update(FIRE); // player dies here
     module.update(FIRE); // further fire lands on a 0-hull ship
@@ -177,8 +164,6 @@ describe("CombatModule.lastDeathCause (win-rate-100pct plan, Task 6 escalation t
     module.addCombatant(hostile); // fresh engagement: isActive false → true
     module.update(FIRE); // 100 - 10 = 90, non-lethal
     expect(ship.hullHP).toBe(90);
-    // The SAME ongoing fight escalates (isActive stays true — engagementStartHullFraction
-    // must NOT re-capture here, only at the original open above).
     (hostile.npc as { damage: number }).damage = 200;
     module.update(FIRE); // now lethal
     expect(ship.hullHP).toBe(0);
@@ -216,22 +201,17 @@ describe("CombatModule.lastDeathCause (win-rate-100pct plan, Task 6 escalation t
     const hostile = makeSprite("a", 50, 0, { hullHP: 100000, damage: 1 });
     module.addCombatant(hostile);
     expect(module.lastDeathCause).toBeNull(); // not dead yet
-    // Mirrors PlayerAgent.waitOneDay's own per-step call — a real fight
-    // survives several of these before the fatal one.
     module.beginCombatRound();
     module.beginCombatRound();
     expect(ship.hullHP).toBe(100); // sanity: still alive, no update() ticked yet
     (hostile.npc as { damage: number }).damage = 200;
     module.update(FIRE); // now lethal
     expect(ship.hullHP).toBe(0);
-    // 1 (fresh-engagement open) + 2 explicit calls above = 3.
     expect(module.lastDeathCause?.roundsSurvived).toBe(3);
   });
 
   it("a beginCombatRound call outside any fight does not inflate the NEXT fight's round count", () => {
     const { module, ship } = setup({ hullHP: 100, maxHull: 100 });
-    // Peaceful steps before any engagement (e.g. PlayerAgent.waitOneDay's
-    // unconditional per-step call while just flying around).
     module.beginCombatRound();
     module.beginCombatRound();
     module.beginCombatRound();
@@ -300,7 +280,6 @@ describe("GameEngine.triggerPlayerDeath (Task 2)", () => {
     engine.triggerPlayerDeath();
     expect(cb).toHaveBeenCalledTimes(1);
 
-    // Loading the checkpoint resets the guard; a subsequent death fires anew.
     vi.spyOn(engine, "transitionTo").mockResolvedValue(undefined);
     await engine.loadGame("auto");
     engine.triggerPlayerDeath();
@@ -323,8 +302,6 @@ describe("GameEngine.triggerPlayerDeath → GAME_OVER transition (Task 4)", () =
       questService: new MockQuestService(),
     };
     engine = new GameEngine(diDeps);
-    // A truthy renderer lets the production death path drive the GAME_OVER
-    // transition (transitionTo is stubbed so no real scene graph is needed).
     engine.renderer = {} as Renderer;
   });
 
@@ -361,7 +338,6 @@ describe("GameEngine.triggerPlayerDeath → GAME_OVER transition (Task 4)", () =
       factionType: FactionType.OUTLANDERS,
     });
     const deadGalaxy = engine.galaxy;
-    // Player died → death guard latched.
     const transitionTo = vi
       .spyOn(engine, "transitionTo")
       .mockResolvedValue(undefined);
@@ -369,8 +345,6 @@ describe("GameEngine.triggerPlayerDeath → GAME_OVER transition (Task 4)", () =
 
     await engine.restartNewGame();
 
-    // A bare transitionTo(RACE_SELECTION) would leave the dead player in place;
-    // restartNewGame must reset state so the SPACE_FLIGHT new-game guard fires.
     expect(engine.player).toBeNull();
     expect(engine.galaxy).not.toBe(deadGalaxy);
     expect(transitionTo).toHaveBeenCalledWith(
@@ -378,7 +352,6 @@ describe("GameEngine.triggerPlayerDeath → GAME_OVER transition (Task 4)", () =
       expect.objectContaining({ gameEngine: engine }),
     );
 
-    // Death guard re-armed: a fresh game can die again.
     const cb = vi.fn();
     engine.playerDeathCallback = cb;
     engine.triggerPlayerDeath();

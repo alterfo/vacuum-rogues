@@ -23,185 +23,72 @@ import { t } from "@/i18n/i18n";
 import type { FlightModule } from "./FlightModule";
 import { starMapButtonRect } from "./starMapButton";
 
-/** Touch «✕» cancel button width (px) and the gap to the left of Play. */
 const CANCEL_BTN_W = 56;
 const CANCEL_BTN_GAP = 8;
 const PLAY_BTN_W = 140;
 const PLAY_BTN_H = 36;
-// Bottom-left corner lane: [МЕНЮ] sits at x=20 with ~65px of bold text at the
-// largest font scale, ♿ stacks above it. On a narrow touch screen the
-// centred ✕/ХОД cluster must never slide left into this lane — the ✕ is added
-// to uiContainer after [МЕНЮ], so an overlap renders above the text and
-// steals its taps.
 const BOTTOM_LEFT_LANE_W = 104;
 
-/**
- * Owns the in-flight HUD: the static instruction/date text, the quest-journal and
- * star-map buttons, the Play/Pause + speed buttons, the ♿ accessibility button,
- * the system mini-map, the bottom-left mini-log, transient toasts and hover
- * tooltips. Extracted from {@link SpaceFlightScene} as a {@link FlightModule}.
- * (The former ⚙ settings panel — speed/font/language/neural — moved to the main
- * menu in Task 8; only the ♿ a11y quick-toggle remains a bottom-left HUD panel.)
- *
- * The scene stays the Controller / Information Expert: button presses fan out
- * through the public callbacks ({@link onPlayPause}, {@link onSpeedCycle},
- * {@link onStarMap}, {@link onMiniMapPan}, {@link onMiniMapReturn},
- * {@link onQuestNavigate}) so the HUD never reaches back into the scene class
- * (Low Coupling / DIP). State the button labels need is pushed in via
- * {@link setTurnRunning}; the day counter reads straight from the injected
- * {@link GameEngine}, so no `setDayCount` push is needed, and game speed is the
- * HUD's own concern (it owns the index + label) pushed *out* via
- * {@link onSpeedCycle}.
- *
- * The mini-map *object* lives here (created/destroyed with the rest of the HUD),
- * but its per-frame refresh stays in the scene — it reads route + camera + world
- * state — and reaches the radar via {@link miniMap} (matches the Task 9
- * `updateSystemMiniMap` decision).
- */
 export class FlightHud implements FlightModule {
   private readonly renderer: Renderer;
   private readonly gameEngine: GameEngine | null;
   private readonly uiLayer: Container;
 
   private uiContainer: Container | null = null;
-  // Current date display (top-left).
   private dayCounterText: Text | null = null;
-  // Optional fractional "day of turn" source pushed by the scene so the date
-  // read-out shows sub-day progress within a turn (gameDays + distance/wait
-  // fraction); without it the counter falls back to the whole-day `gameDays`.
   private dayProvider: (() => number) | null = null;
-  // Star-map button (top-right, left of the «?» help corner) — repositioned on resize.
   private backButton: UiButton | null = null;
-  // Hover tooltip label for the icon-only star-map button (no visible text on the
-  // button itself now, so the name is surfaced on hover instead).
   private starMapTooltip: Text | null = null;
 
-  // Play / Pause turn control (bottom-centre).
   private playPauseButton: UiButton | null = null;
-  // Touch-only cancel/«✕» button (left of Play) — the on-screen equivalent of the
-  // Esc key, only built on a touch layout (`docs/plans/20260625-mobile-adaptation.md`
-  // Task 3). Null on desktop, so the desktop HUD is byte-for-byte unchanged.
   private cancelButton: UiButton | null = null;
-  // Latest turn state pushed by the scene; drives the Play/Pause label.
   private turnRunning = false;
 
-  // Speed button: cycles through GAME_BALANCE.gameSpeedMultipliers (1×/2×/4×).
   private speedButton: UiButton | null = null;
   private speedIndex = 0;
 
-  // Accessibility button (♿) + toggled accessibility panel (palette /
-  // reduced-motion / key remap; bottom-left HUD). The former ⚙ settings panel
-  // (speed/font/language/neural) moved to the main menu — see MainMenuScene —
-  // so this in-the-moment a11y aid is the only bottom-left HUD panel now
-  // (`docs/plans/20260625-accessibility-pass.md`, Task 4;
-  // `docs/plans/20260626-playtest-bugs-pause-help-infocenter-i18n.md`, Task 8).
   private accessibilityButton: UiButton | null = null;
   private accessibilityPanel: Container | null = null;
   private accessibilityPanelComp: AccessibilityPanel | null = null;
 
-  // In-flight system menu (bottom-left [МЕНЮ] button) + its toggled panel. Always
-  // reachable so the player can load a save or quit from any dead-end — a
-  // general escape hatch, not a fragile "stuck" auto-detect.
   private menuButtonText: Text | null = null;
   private systemMenuPanel: Container | null = null;
-  // Confirm sub-panel raised by «Загрузить сохранение» (guards against losing the
-  // current run). Torn down together with the menu by {@link closeSystemMenu}.
   private systemMenuConfirmPanel: Container | null = null;
-  // Whether «Загрузить сохранение» is offered. Pushed by the scene from
-  // `saveManager.hasSave()` via {@link setLoadSaveEnabled}; the menu reads it at
-  // build time. Default true — a take-off autosave almost always exists in
-  // flight — so the action only goes dim when there is genuinely no save.
   private loadSaveEnabled = true;
 
-  // [?] help overlay (toggled by the [?] Text button in uiContainer).
   private helpOverlay: Container | null = null;
 
-  // System mini-map / radar (bottom-right). The scene drives its per-frame
-  // refresh via {@link miniMap}.
   private systemMiniMap: SystemMiniMap | null = null;
 
-  // Quest Journal UI (toggled by the [КВЕСТЫ] button / J key).
   private questJournalUI: QuestJournalUI | null = null;
-  // The journal's contextual-help panel (opened by its «?» button). One at a time.
   private questHelpPanel: HelpPanel | null = null;
 
-  // Transient on-screen feedback (toast) and its auto-clear timer.
   private toast: Text | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Hover tooltip: planets (immediate) and NPC ships (300 ms delay).
   private tooltipText: Text | null = null;
   private tooltipContainer: Container | null = null;
   private tooltipTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Mini-log (B5): last 5 game events in the bottom-left corner.
   private miniLogContainer: Container | null = null;
   private miniLogEntries: Array<{ textObj: Text; elapsed: number }> = [];
   private readonly MINI_LOG_DURATION = 5000;
   private readonly MINI_LOG_FADE_MS = 1000;
 
-  // --- Callbacks the scene wires in its initialize() (DIP: the HUD fans button
-  // presses out to the scene without depending on the concrete scene class). ---
-  /** Play/Pause turn control pressed. */
   onPlayPause: (() => void) | null = null;
-  /** Speed cycled; the HUD owns the index + label, the scene applies `scale` to physics. */
   onSpeedCycle: ((scale: number) => void) | null = null;
-  /** Star-map button pressed (the scene persists ship pos + transitions). */
   onStarMap: (() => void) | null = null;
-  /** A quest objective was chosen in the journal (the scene plots the route). */
   onQuestNavigate: ((locationId: string) => void) | null = null;
-  /** Radar drag-to-pan: focus the main view on a world point. */
   onMiniMapPan: ((worldX: number, worldY: number) => void) | null = null;
-  /** Radar centre button: smoothly return the camera to the ship. */
   onMiniMapReturn: (() => void) | null = null;
-  /**
-   * Font size (S/M/L) was changed in the ⚙ panel. The scene restyles the
-   * text-bearing flight modules in place (no SPACE_FLIGHT re-init) — the HUD must
-   * NOT transition the scene itself (playtest4 A, DIP).
-   */
   onFontScaleChange: (() => void) | null = null;
-  /**
-   * The colourblind ПАЛИТРА was changed in the ♿ panel. The scene re-applies the
-   * active palette to the live world (NPC ship hulls + radar dots) in place — the
-   * "palette does nothing" fix (playtest bug pass 2, Task 4) — without a scene
-   * rebuild, mirroring {@link onFontScaleChange} (DIP: the HUD never reaches into
-   * the world modules itself).
-   */
   onPaletteChange: (() => void) | null = null;
-  /** [I] inventory shortcut button was pressed. */
   onInventory: (() => void) | null = null;
-  /**
-   * Touch «✕» cancel button pressed — the on-screen equivalent of the Esc key.
-   * The scene wires it to the *same* action Escape runs (close the top open
-   * surface, else cancel a planned route). Only built on a touch layout.
-   */
   onCancel: (() => void) | null = null;
-  /**
-   * «Загрузить сохранение» pressed in the in-flight system menu. The scene
-   * confirms then loads the `"auto"` slot (the dead-end recovery path).
-   */
   onLoadSave: (() => void) | null = null;
-  /**
-   * «Сохранения» pressed in the in-flight system menu — opens the full
-   * save/load screen (named manual slots: save / overwrite / delete / load).
-   * The scene transitions to {@link SceneType.SAVE_LOAD} with `returnTo`
-   * SPACE_FLIGHT so closing the screen drops the player back into flight.
-   */
   onOpenSaveLoad: (() => void) | null = null;
-  /** «В главное меню» pressed in the in-flight system menu. */
   onMainMenu: (() => void) | null = null;
-  /**
-   * «Сообщить отзыв» pressed in the in-flight system menu. The scene captures
-   * live context (scene, in-game day, galaxy seed) and opens the prefilled
-   * GitHub Issue Form — the high-value in-session feedback path.
-   */
   onFeedback: (() => void) | null = null;
-  /**
-   * Fired when the in-flight system menu panel opens. The scene uses it to
-   * refresh save availability (`saveManager.hasSave()`) → {@link setLoadSaveEnabled},
-   * so «Загрузить сохранение» reflects a save that may have landed after init
-   * (the take-off autosave runs after `transitionTo` initialises the scene).
-   */
   onSystemMenuOpen: (() => void) | null = null;
 
   constructor(
@@ -214,11 +101,6 @@ export class FlightHud implements FlightModule {
     this.uiLayer = uiLayer;
   }
 
-  // ---------------------------------------------------------------------------
-  // FlightModule lifecycle
-  // ---------------------------------------------------------------------------
-
-  /** Build the whole HUD. Call after the UI layer has been cleared. */
   initialize(): void {
     this.createUI();
     if (this.gameEngine) {
@@ -229,7 +111,6 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  /** Refresh the per-frame HUD read-outs (button label, date, mini-log fade). */
   update(deltaTime: number, _bgElapsed: number): void {
     this.updatePlayPauseButton();
     this.updateDayCounter();
@@ -241,7 +122,6 @@ export class FlightHud implements FlightModule {
       this.gameEngine.questExpiryCallback = undefined;
       this.gameEngine.questPendingReturnCallback = undefined;
     }
-    // Buttons live on uiContainer (torn down by clearUILayer); drop the refs.
     this.backButton = null;
     this.starMapTooltip = null;
     this.playPauseButton = null;
@@ -255,7 +135,6 @@ export class FlightHud implements FlightModule {
       this.helpOverlay.destroy({ children: true });
       this.helpOverlay = null;
     }
-    // Transient toast + its timer.
     if (this.toastTimer) {
       clearTimeout(this.toastTimer);
       this.toastTimer = null;
@@ -264,19 +143,15 @@ export class FlightHud implements FlightModule {
       this.toast.destroy();
       this.toast = null;
     }
-    // Tooltip.
     this.hideTooltip();
-    // Mini-log.
     for (const e of this.miniLogEntries) e.textObj.destroy();
     this.miniLogEntries = [];
     this.miniLogContainer = null;
-    // Quest journal (+ its help panel).
     this.closeQuestJournalHelp();
     if (this.questJournalUI) {
       this.questJournalUI.destroy();
       this.questJournalUI = null;
     }
-    // Mini-map.
     if (this.systemMiniMap) {
       this.systemMiniMap.destroy();
       this.systemMiniMap = null;
@@ -288,36 +163,16 @@ export class FlightHud implements FlightModule {
     this.turnRunning = false;
   }
 
-  /**
-   * Restyle the HUD's text at the current font scale WITHOUT a scene re-init
-   * (Task 1): tear down the HUD's own display objects and rebuild them via
-   * {@link createUI}, which reads {@link scaledFont} at text-creation time. The
-   * world (planets/ships/asteroids/backdrop) is untouched — only the HUD's text
-   * (day counter, buttons, mini-log, radar) is recreated at the new size. The
-   * live turn state survives the rebuild; the game speed is re-seeded by
-   * {@link createUI} via {@link restoreGameSpeed}.
-   */
   refreshFontScale(): void {
     const wasTurnRunning = this.turnRunning;
     this.teardownUI();
     this.createUI();
-    // createUI seeds a fresh Play/Pause button → re-apply the live turn state so
-    // the label/colour matches (createUI defaults it to the paused look).
     this.setTurnRunning(wasTurnRunning);
   }
 
-  /**
-   * Destroy the HUD's own display objects (everything {@link createUI} builds) so
-   * {@link refreshFontScale} can rebuild them at a new scale. Unlike
-   * {@link destroy} this keeps the engine callbacks + persistent state and leaves
-   * any transient overlays the player has open (toast, tooltip, quest journal,
-   * help overlay) alone — they read {@link scaledFont} when next opened.
-   */
   private teardownUI(): void {
     this.closeAccessibilityPanel();
     this.closeSystemMenu();
-    // Speed + a11y buttons mount on the UI layer directly (not uiContainer), so
-    // destroy their containers explicitly. UiButton has no destroy() of its own.
     if (this.speedButton) {
       this.speedButton.container.destroy({ children: true });
       this.speedButton = null;
@@ -326,7 +181,6 @@ export class FlightHud implements FlightModule {
       this.accessibilityButton.container.destroy({ children: true });
       this.accessibilityButton = null;
     }
-    // Mini-log entries are children of miniLogContainer → destroyed with it.
     this.miniLogEntries = [];
     if (this.miniLogContainer) {
       this.miniLogContainer.destroy({ children: true });
@@ -340,7 +194,6 @@ export class FlightHud implements FlightModule {
       this.uiContainer.destroy({ children: true });
       this.uiContainer = null;
     }
-    // These live on the now-destroyed uiContainer — drop the dangling refs.
     this.backButton = null;
     this.starMapTooltip = null;
     this.playPauseButton = null;
@@ -349,22 +202,15 @@ export class FlightHud implements FlightModule {
     this.menuButtonText = null;
   }
 
-  // ---------------------------------------------------------------------------
-  // State the scene pushes / reads
-  // ---------------------------------------------------------------------------
-
-  /** Push the turn state so the Play/Pause button shows the right label/colour. */
   setTurnRunning(running: boolean): void {
     this.turnRunning = running;
     this.updatePlayPauseButton();
   }
 
-  /** The system mini-map (radar) — the scene drives its per-frame refresh. */
   get miniMap(): SystemMiniMap | null {
     return this.systemMiniMap;
   }
 
-  /** Re-anchor the screen-edge HUD after the window/canvas resizes. */
   reposition(w: number, h: number): void {
     if (this.backButton) {
       const starMapRect = starMapButtonRect(w);
@@ -403,11 +249,6 @@ export class FlightHud implements FlightModule {
       this.dayCounterText.y = 20;
     }
     if (this.menuButtonText) {
-      // The true bottom-left corner element (♿ stacks tight above it, the
-      // mini-log reserves its space further up) — when the mini-log sat
-      // between МЕНЮ and the screen edge, an empty (no recent events) log
-      // read as a dead gap under the button, so nothing here can render
-      // below МЕНЮ.
       this.menuButtonText.y = h - 40;
     }
     if (this.systemMenuPanel) {
@@ -417,22 +258,10 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  /**
-   * Bottom-centre turn cluster (▶ ХОД + the touch-only ✕ riding just left of
-   * it). Normally centred; when the ✕ exists (touch layout) the pair shifts
-   * right as needed so the ✕ never enters the bottom-left [МЕНЮ]/♿ lane on a
-   * narrow screen (regression: [МЕНЮ] at h-40 put the two in the same band,
-   * and the later-added ✕ stole [МЕНЮ]'s taps under ~430px width). Desktop
-   * (no ✕) keeps the exact centred position.
-   */
   private layoutTurnControls(w: number, h: number): void {
     if (!this.playPauseButton) return;
     let playX = w / 2 - PLAY_BTN_W / 2;
     if (this.cancelButton) {
-      // NOTE: the lane is a constant, not a live `menuButtonText.width` read —
-      // PixiJS Text measurement throws in the jsdom unit harness (no canvas),
-      // so a measured lane would be permanently untested. If [МЕНЮ]'s label or
-      // font scaling ever changes, re-derive BOTTOM_LEFT_LANE_W.
       playX = Math.max(
         playX,
         BOTTOM_LEFT_LANE_W + CANCEL_BTN_W + CANCEL_BTN_GAP,
@@ -446,48 +275,24 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Modal / journal queries the scene mediates outside-clicks through
-  // ---------------------------------------------------------------------------
-
-  /**
-   * True while the bottom-left ♿ accessibility panel is open. The former ⚙
-   * settings panel moved to the main menu (see MainMenuScene), so this now
-   * tracks only the accessibility panel — the query name is retained because
-   * the flight key router + locked tests key on it. Esc closes it (via
-   * {@link closeModals}) and Space is suppressed behind it.
-   */
   isSettingsPanelOpen(): boolean {
     return this.accessibilityPanel !== null;
   }
 
-  /** True while the in-flight system menu is open. */
   isSystemMenuOpen(): boolean {
     return this.systemMenuPanel !== null;
   }
 
-  /**
-   * True while the system menu OR its load-confirm sub-panel is open. The scene's
-   * outside-click / wheel / Space-launch guards treat both as one blocking modal
-   * (the confirm replaces the menu, so only ever one is up at a time).
-   */
   isSystemModalOpen(): boolean {
     return (
       this.systemMenuPanel !== null || this.systemMenuConfirmPanel !== null
     );
   }
 
-  /** True while «Загрузить сохранение» is offered (a save exists to load). */
   isLoadSaveEnabled(): boolean {
     return this.loadSaveEnabled;
   }
 
-  /**
-   * Push save availability into the menu (the scene computes it from the async
-   * `saveManager.hasSave()`). When it flips while the menu is open, rebuild the
-   * panel so «Загрузить сохранение» switches between the live action and the
-   * dimmed "no save" hint — a no-op when the value is unchanged.
-   */
   setLoadSaveEnabled(enabled: boolean): void {
     if (this.loadSaveEnabled === enabled) return;
     this.loadSaveEnabled = enabled;
@@ -497,24 +302,20 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  /** True while the quest journal is open. */
   isQuestJournalOpen(): boolean {
     return this.questJournalUI !== null;
   }
 
-  /** True while the quest journal is open *and* visible (E2E helper). */
   isQuestJournalVisible(): boolean {
     return (
       this.questJournalUI !== null && this.questJournalUI.container.visible
     );
   }
 
-  /** True while the [?] help overlay is open. */
   isHelpOverlayOpen(): boolean {
     return this.helpOverlay !== null;
   }
 
-  /** Toggle the semi-transparent [?] help overlay listing all flight controls. */
   toggleHelpOverlay(): void {
     if (this.helpOverlay) {
       this.helpOverlay.destroy({ children: true });
@@ -574,7 +375,6 @@ export class FlightHud implements FlightModule {
     this.helpOverlay = overlay;
   }
 
-  /** Close the quest journal immediately (Escape key handling). */
   closeQuestJournal(): void {
     this.closeQuestJournalHelp();
     if (this.questJournalUI) {
@@ -584,11 +384,6 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  /**
-   * Close any open HUD modal (quest journal, settings panel) on an outside
-   * click. Destruction is deferred to a microtask because this runs from the
-   * stage pointerdown handler that is mid-dispatch over the panel's children.
-   */
   closeModals(): void {
     this.closeQuestJournalHelp();
     const journal = this.questJournalUI;
@@ -599,8 +394,6 @@ export class FlightHud implements FlightModule {
       const comp = this.accessibilityPanelComp;
       this.accessibilityPanel = null;
       this.accessibilityPanelComp = null;
-      // Same deferred-destroy guard as the settings panel; the component
-      // teardown also disposes any in-progress rebind key capture.
       queueMicrotask(() => {
         if (!ap.destroyed) {
           if (comp) comp.destroy();
@@ -624,19 +417,6 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Construction
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Mount a hover tooltip to the right of a top-left cluster icon button
-   * ([I]/[?]), mirroring the star-map button's `starMapTooltip` pattern: an
-   * `eventMode="none"` label, hidden until the button is hovered, that surfaces
-   * the icon's meaning so the glyph isn't a mystery on first sight. The button
-   * keeps its own alpha/hover-audio handlers — this only adds the label's
-   * visibility toggle (PixiJS allows multiple listeners per event). Lives on
-   * `uiContainer` so it's torn down wholesale with the rest of the HUD.
-   */
   private mountIconTooltip(btn: Text, label: string, color: number): Text {
     const tip = new Text({
       text: label,
@@ -649,11 +429,6 @@ export class FlightHud implements FlightModule {
     tip.anchor.set(0, 0.5);
     tip.eventMode = "none";
     tip.visible = false;
-    // Position from the button's own (numeric) x/y plus a font-scaled glyph
-    // budget — NOT `btn.width`/`btn.height`, whose PixiJS Text measurement
-    // throws in the jsdom unit harness (same trap as `BOTTOM_LEFT_LANE_W`).
-    // The cluster buttons are 3-char "[X]" glyphs; ~3 mono chars at the base
-    // 14px font clears them and scales with the S/M/L font setting.
     const glyph14 = scaledFont(14);
     tip.x = btn.x + glyph14 * 3 * 0.6 + 8;
     tip.y = btn.y + glyph14 * 0.6;
@@ -669,10 +444,7 @@ export class FlightHud implements FlightModule {
 
   private createUI(): void {
     this.uiContainer = new Container();
-    // Container uses default eventMode ('auto') - it won't block clicks since it has no handlers
-    // Child elements with eventMode='static' will receive events
 
-    // Current date display
     this.dayCounterText = new Text({
       text: formatGameDate(this.gameEngine?.galaxy?.gameDays ?? 0),
       style: {
@@ -685,7 +457,6 @@ export class FlightHud implements FlightModule {
     this.dayCounterText.y = 20;
     this.uiContainer.addChild(this.dayCounterText);
 
-    // Quest Journal button
     const questBtn = new Text({
       text: "[КВЕСТЫ]",
       style: {
@@ -714,7 +485,6 @@ export class FlightHud implements FlightModule {
     });
     this.uiContainer.addChild(questBtn);
 
-    // Inventory shortcut button [I]
     const invBtn = new Text({
       text: "[I]",
       style: {
@@ -743,7 +513,6 @@ export class FlightHud implements FlightModule {
     this.uiContainer.addChild(invBtn);
     this.mountIconTooltip(invBtn, t("flight.inventoryTooltip"), 0xffaa00);
 
-    // Help toggle button [?]
     const helpBtn = new Text({
       text: "[?]",
       style: {
@@ -772,11 +541,6 @@ export class FlightHud implements FlightModule {
     this.uiContainer.addChild(helpBtn);
     this.mountIconTooltip(helpBtn, t("flight.helpTooltip"), 0x88ccff);
 
-    // System menu button [МЕНЮ] — the true bottom-left corner element (♿
-    // accessibility stacks above it, clear of the top-left journal/inventory/
-    // help stack), opens the always-available in-flight system menu
-    // (Продолжить / Загрузить сохранение / В главное меню) so the player can
-    // recover from any dead-end (e.g. stranded, <30% hull, broke).
     const menuBtn = new Text({
       text: "[МЕНЮ]",
       style: {
@@ -805,12 +569,6 @@ export class FlightHud implements FlightModule {
     this.uiContainer.addChild(menuBtn);
     this.menuButtonText = menuBtn;
 
-    // Star map button — compact icon button (Bug 1), left of the top-right «?»
-    // help corner (`helpButtonRect`, the single source of truth for that zone) so
-    // it can never overlap it at any screen width. A hover tooltip surfaces the
-    // label the old wide text button used to show permanently. A plain Unicode
-    // glyph (not a color emoji) so `fill` actually themes it, matching the "?"
-    // help button instead of clashing with its own native emoji palette.
     const starMapRect = starMapButtonRect(this.renderer.app.screen.width);
     const starMapLabel = t("flight.starMap");
     const backBtn = new UiButton(
@@ -856,8 +614,6 @@ export class FlightHud implements FlightModule {
     this.backButton = backBtn;
     this.starMapTooltip = starMapTooltip;
 
-    // Play / Pause turn control (bottom-centre). Play runs the planned turn;
-    // while moving it becomes Pause, which ends the turn at the next day segment.
     const playBtn = new UiButton(
       "",
       "▶ ХОД",
@@ -873,22 +629,14 @@ export class FlightHud implements FlightModule {
     playBtn.on("pointerover", () => {
       this.gameEngine?.audio?.playUiHover();
     });
-    // Pin the pointer cursor explicitly so scene-level cursor updates
-    // (updateInteractiveCursors) can never reset the Ход button to "default"
-    // — it only ever touches planet/NPC sprites, but this is belt-and-suspenders.
     playBtn.container.cursor = "pointer";
     this.uiContainer.addChild(playBtn.container);
     this.playPauseButton = playBtn;
-    // Single source of truth for the cluster position — the same layout the
-    // resize path runs, so the create-time placement can never drift from it.
     this.layoutTurnControls(
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
     );
 
-    // Touch «✕» cancel button — only on a touch layout (the Esc key's on-screen
-    // twin). Placed just left of Play; the scene fans it through onCancel to the
-    // same action Escape runs. Lives on uiContainer so teardown destroys it too.
     if (isTouchLayoutActive()) {
       const cancelBtn = new UiButton(
         "",
@@ -905,8 +653,6 @@ export class FlightHud implements FlightModule {
       cancelBtn.container.cursor = "pointer";
       this.uiContainer.addChild(cancelBtn.container);
       this.cancelButton = cancelBtn;
-      // Re-run the cluster layout now the ✕ exists: on a narrow screen it
-      // shifts the pair right, clear of the bottom-left [МЕНЮ]/♿ lane.
       this.layoutTurnControls(
         this.renderer.app.screen.width,
         this.renderer.app.screen.height,
@@ -915,15 +661,12 @@ export class FlightHud implements FlightModule {
 
     this.uiLayer.addChild(this.uiContainer);
 
-    // Mini-log (B5): bottom-left panel showing the last 5 game events.
     this.miniLogContainer = new Container();
     this.miniLogContainer.eventMode = "none";
     this.miniLogContainer.x = 20;
     this.miniLogContainer.y = this.renderer.app.screen.height - 180;
     this.uiLayer.addChild(this.miniLogContainer);
 
-    // Create mini-map. Dragging on it pans the main view (it no longer falls
-    // through as a navigation click).
     this.systemMiniMap = new SystemMiniMap(
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
@@ -934,7 +677,6 @@ export class FlightHud implements FlightModule {
     this.systemMiniMap.setReturnCameraHandler(() => this.onMiniMapReturn?.());
     this.uiLayer.addChild(this.systemMiniMap.container);
 
-    // Speed button: cycles 1×/2×/4× — placed above the minimap (bottom-right).
     const SPEED_BTN_W = 52;
     const SPEED_BTN_H = 28;
     const speedBtn = new UiButton(
@@ -953,10 +695,6 @@ export class FlightHud implements FlightModule {
     this.uiLayer.addChild(speedBtn.container);
     this.speedButton = speedBtn;
 
-    // Accessibility button (♿) — bottom-left, above the mini-log — opens the
-    // palette / reduced-motion / key-remap panel (accessibility pass, Task 4).
-    // The former ⚙ settings panel moved to the main menu (Task 8), so the ♿
-    // button now sits where the ⚙ gear used to be.
     const ACC_BTN_W = 36;
     const ACC_BTN_H = 32;
     const accBtn = new UiButton(
@@ -975,21 +713,9 @@ export class FlightHud implements FlightModule {
     this.uiLayer.addChild(accBtn.container);
     this.accessibilityButton = accBtn;
 
-    // Adopt the game-speed the player chose before this (re)build so it survives
-    // a land/take-off or star-map round-trip instead of resetting to 1× (F3).
     this.restoreGameSpeed();
   }
 
-  /**
-   * Toggle the Accessibility panel (palette / reduced-motion / key remap,
-   * accessibility pass Task 4). Tracked as {@link accessibilityPanel} so the
-   * Esc-close / outside-click wiring (via {@link isSettingsPanelOpen}/
-   * {@link closeModals}) covers it. Every control writes through its own
-   * browser-level pref (palette/reduced-motion/keymap `localStorage`) — no new
-   * save field. (The former ⚙ settings panel that shared this bottom-left
-   * anchor moved to the main menu — see MainMenuScene — so this is now the only
-   * bottom-left HUD panel.)
-   */
   private toggleAccessibilityPanel(): void {
     if (this.accessibilityPanel) {
       this.closeAccessibilityPanel();
@@ -998,9 +724,6 @@ export class FlightHud implements FlightModule {
     if (!this.accessibilityButton) return;
 
     const panel = new AccessibilityPanel({
-      // Re-apply the new palette to the live world at once (NPC hulls + radar) —
-      // the scene wires this; without it a palette change in flight "does
-      // nothing" until the next scene rebuild (playtest bug pass 2, Task 4).
       onPaletteChange: () => this.onPaletteChange?.(),
       onRequestClose: () => this.closeAccessibilityPanel(),
     });
@@ -1015,7 +738,6 @@ export class FlightHud implements FlightModule {
     this.accessibilityPanel = c;
   }
 
-  /** Tear down the accessibility panel if open (idempotent). */
   private closeAccessibilityPanel(): void {
     if (this.accessibilityPanelComp) {
       this.accessibilityPanelComp.destroy();
@@ -1029,16 +751,7 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  /**
-   * Toggle the in-flight system menu — a centred modal panel with «Продолжить»
-   * (close), «Загрузить сохранение» (→ {@link onLoadSave}) and «В главное меню»
-   * (→ {@link onMainMenu}). Always reachable so the player can escape any
-   * dead-end; the scene wires the load/quit callbacks (DIP).
-   */
   toggleSystemMenu(): void {
-    // The confirm sub-panel is a child state of the open menu; if either surface
-    // is up, [МЕНЮ] closes the whole modal rather than stacking a second menu
-    // panel over an open confirm (closeSystemMenu tears down both).
     if (this.systemMenuPanel || this.systemMenuConfirmPanel) {
       this.closeSystemMenu();
       return;
@@ -1052,9 +765,6 @@ export class FlightHud implements FlightModule {
     const GAP = 10;
     const HINT_H = 18;
     const panelW = 300;
-    // Продолжить · Сохранения · Загрузить · Сообщить отзыв · В главное меню
-    // (5 buttons, 4 gaps). The disabled «Загрузить» variant adds a one-line
-    // "no save" hint beneath it.
     const panelH =
       PAD +
       TITLE_H +
@@ -1066,8 +776,6 @@ export class FlightHud implements FlightModule {
 
     const panel = new Container();
     panel.eventMode = "static";
-    // Swallow clicks on the panel so the scene's outside-click handler doesn't
-    // close it from under the player (mirrors the settings panel).
     panel.on("pointerdown", (e) => e.stopPropagation());
 
     const bg = new Graphics();
@@ -1112,9 +820,6 @@ export class FlightHud implements FlightModule {
     panel.addChild(resumeBtn.container);
     btnY += BTN_H + GAP;
 
-    // «Сохранения» — open the full save/load screen (named manual slots:
-    // save / overwrite / delete / load). Always available (you can always save
-    // a live game), unlike the autosave-only «Загрузить сохранение» below.
     const savesBtn = new UiButton(
       "",
       "Сохранения",
@@ -1150,8 +855,6 @@ export class FlightHud implements FlightModule {
       panel.addChild(loadBtn.container);
       btnY += BTN_H + GAP;
     } else {
-      // No save to load: render an inert, dimmed button + a hint so the action
-      // reads as unavailable rather than a dead click (dead-end gating, Task 3).
       const loadBtn = new UiButton(
         "",
         "Загрузить сохранение",
@@ -1221,18 +924,9 @@ export class FlightHud implements FlightModule {
     panel.y = Math.round((screenH - panelH) / 2);
     this.uiLayer.addChild(panel);
     this.systemMenuPanel = panel;
-    // Let the scene re-check save availability now the menu is up (the autosave
-    // may have landed since init). A flip rebuilds the panel via setLoadSaveEnabled.
     this.onSystemMenuOpen?.();
   }
 
-  /**
-   * Raise a confirm sub-panel over «Загрузить сохранение» — loading the autosave
-   * discards the current run, so guard it. «Да» closes the panel and runs
-   * `onConfirm` (the scene's `loadGame("auto")`); «Отмена» just dismisses. The
-   * menu panel is closed first so the two never overlap; the confirm is torn
-   * down with the menu by {@link closeSystemMenu}.
-   */
   showSystemMenuConfirm(onConfirm: () => void): void {
     this.closeSystemMenu(); // drop the menu (and any stale confirm) underneath
 
@@ -1316,7 +1010,6 @@ export class FlightHud implements FlightModule {
     this.systemMenuConfirmPanel = panel;
   }
 
-  /** Close + destroy the load confirm sub-panel (idempotent). */
   closeSystemMenuConfirm(): void {
     if (this.systemMenuConfirmPanel) {
       this.systemMenuConfirmPanel.destroy({ children: true });
@@ -1324,12 +1017,10 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  /** True while the load confirm sub-panel is open (test/lifecycle hook). */
   isSystemMenuConfirmOpen(): boolean {
     return this.systemMenuConfirmPanel !== null;
   }
 
-  /** Close + destroy the in-flight system menu panel + confirm (idempotent). */
   closeSystemMenu(): void {
     if (this.systemMenuPanel) {
       this.systemMenuPanel.destroy({ children: true });
@@ -1338,20 +1029,12 @@ export class FlightHud implements FlightModule {
     this.closeSystemMenuConfirm();
   }
 
-  /** Cycle game speed through 1×/2×/4× and update the button label + physics. */
   private cycleGameSpeed(): void {
     const steps = GAME_BALANCE.gameSpeedMultipliers;
     this.speedIndex = (this.speedIndex + 1) % steps.length;
     this.applyGameSpeed(steps[this.speedIndex]);
   }
 
-  /**
-   * Restore the persisted game-speed when the HUD is (re)built: every
-   * SPACE_FLIGHT re-init (land/take-off, star map) makes a fresh HUD, which used
-   * to drop back to 1×. We seed {@link speedIndex} + the button label from the
-   * scene-surviving {@link GameEngine.gameSpeedMultiplier} and re-apply it to
-   * physics so the choice sticks (playtest3 F3). Unknown multiplier → 1×.
-   */
   private restoreGameSpeed(): void {
     const steps = GAME_BALANCE.gameSpeedMultipliers;
     const persisted = this.gameEngine?.gameSpeedMultiplier ?? 1;
@@ -1360,28 +1043,12 @@ export class FlightHud implements FlightModule {
     this.applyGameSpeed(steps[this.speedIndex]);
   }
 
-  /**
-   * Apply a multiplier everywhere it matters: the button label, the durable
-   * store on the GameEngine (so it outlives this HUD), and the physics via
-   * {@link onSpeedCycle}. Shared by the user cycle and the on-rebuild restore.
-   */
   private applyGameSpeed(scale: number): void {
     if (this.speedButton) this.speedButton.setLabel(`${scale}×`);
     if (this.gameEngine) this.gameEngine.gameSpeedMultiplier = scale;
     this.onSpeedCycle?.(scale);
   }
 
-  /**
-   * Set an explicit game-speed step from outside the HUD (the dev-only live
-   * autopilot uses this to jump straight to the fastest tier on engage and
-   * restore the player's prior speed on disengage — see
-   * `installAutopilotHook.ts`). Unlike {@link applyGameSpeed} this also keeps
-   * {@link speedIndex} in sync, so a manual cycle click right afterward
-   * continues from the right step instead of jumping back to whatever the
-   * index was before the external set. An unknown multiplier is a no-op
-   * (mirrors {@link restoreGameSpeed}'s "unknown ⇒ ignore" contract, not
-   * `setSpeed`'s "unknown ⇒ default" — a caller here always names a real step).
-   */
   setGameSpeed(scale: number): void {
     const steps = GAME_BALANCE.gameSpeedMultipliers;
     const idx = steps.findIndex((s) => s === scale);
@@ -1390,16 +1057,13 @@ export class FlightHud implements FlightModule {
     this.applyGameSpeed(steps[this.speedIndex]);
   }
 
-  /** Toggle quest journal UI. */
   toggleQuestJournal(): void {
     if (this.questJournalUI) {
-      // Close journal (+ its help panel)
       this.closeQuestJournalHelp();
       this.questJournalUI.destroy();
       this.questJournalUI = null;
       logger.info("Quest journal closed");
     } else {
-      // Open journal
       if (this.gameEngine?.questManager) {
         this.questJournalUI = new QuestJournalUI(
           this.gameEngine.questManager,
@@ -1428,11 +1092,6 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  /**
-   * Open the quest journal's contextual-help panel (its «?» button). Mounts the
-   * shared {@link HelpPanel} above the journal on the UI layer; «Понятно»/«✕»
-   * close it. Idempotent — a second click while open is ignored.
-   */
   private openQuestJournalHelp(): void {
     if (this.questHelpPanel) return;
     const panel = new HelpPanel(this.renderer, helpFor("quest-journal"), () =>
@@ -1442,7 +1101,6 @@ export class FlightHud implements FlightModule {
     this.uiLayer.addChild(panel.container);
   }
 
-  /** Tear down the journal help panel if open. */
   private closeQuestJournalHelp(): void {
     if (!this.questHelpPanel) return;
     this.uiLayer.removeChild(this.questHelpPanel.container);
@@ -1450,11 +1108,6 @@ export class FlightHud implements FlightModule {
     this.questHelpPanel = null;
   }
 
-  /**
-   * Resolve a quest's system or planet id to a human-readable name so the
-   * journal shows "Альдебаран" rather than raw ids like "sys_3" /
-   * "planet_Альдебаран_0". Falls back to the id when nothing matches.
-   */
   private resolveQuestLocationName(id: string): string {
     const galaxy = this.gameEngine?.galaxy;
     if (!galaxy) return id;
@@ -1466,21 +1119,10 @@ export class FlightHud implements FlightModule {
     return id;
   }
 
-  // ---------------------------------------------------------------------------
-  // Per-frame read-outs
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Push the scene's fractional "day of turn" so a whole-day boundary crossed
-   * mid-turn via distance/wait accrual shows up immediately (the date is
-   * still floored to the whole day for display — no HH:MM clock). Pass `null`
-   * to fall back to the whole-day `galaxy.gameDays`.
-   */
   setDayProvider(provider: (() => number) | null): void {
     this.dayProvider = provider;
   }
 
-  /** Update day counter UI text (clock-free calendar date). */
   private updateDayCounter(): void {
     if (!this.dayCounterText) return;
     const day = this.dayProvider
@@ -1490,28 +1132,17 @@ export class FlightHud implements FlightModule {
     this.dayCounterText.text = formatGameDate(day);
   }
 
-  /** Refresh the Play/Pause button label/colour to match the turn state. */
   private updatePlayPauseButton(): void {
     if (!this.playPauseButton) return;
     if (this.turnRunning) {
       this.playPauseButton.setLabel("⏸ ПАУЗА");
       this.playPauseButton.setAccentColor(0xffcc00);
     } else {
-      // ХОД is always available — with a course it flies it, without one it runs
-      // a wait turn (US-070 #5), so the button is always shown active.
       this.playPauseButton.setLabel("▶ ХОД");
       this.playPauseButton.setAccentColor(0x00ff88);
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Toast / tooltip / mini-log
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Transient on-screen feedback near the top-centre of the view (button
-   * actions, warnings). Replaces any current toast.
-   */
   showMessage(text: string, color = 0x00ffff): void {
     this.addMiniLogEntry(text);
     this.gameEngine?.audio?.playToast();
@@ -1549,7 +1180,6 @@ export class FlightHud implements FlightModule {
     }, 3200);
   }
 
-  /** Show a delayed hover tooltip near the cursor (B1). 300 ms delay before it appears. */
   showTooltip(text: string, screenX: number, screenY: number): void {
     this.hideTooltip();
     this.tooltipTimer = setTimeout(() => {
@@ -1574,11 +1204,6 @@ export class FlightHud implements FlightModule {
     }, 300);
   }
 
-  /**
-   * Show an immediate rich planet tooltip (name, habitability, faction, capture,
-   * and — when supplied — the land-access denial so an un-landable planet reads
-   * as occupied on hover, before any landing attempt).
-   */
   showPlanetTooltip(
     planet: Planet,
     systemFaction: Faction,
@@ -1595,7 +1220,6 @@ export class FlightHud implements FlightModule {
       landingDenial,
     );
 
-    // Build container
     const padding = 8;
     const lineHeight = 18;
     const fontSize = scaledFont(13);
@@ -1618,7 +1242,6 @@ export class FlightHud implements FlightModule {
       return t;
     });
 
-    // Measure content area after creating texts
     const maxWidth = Math.max(...textNodes.map((t) => t.width));
     const totalHeight = padding * 2 + lines.length * lineHeight;
 
@@ -1642,7 +1265,6 @@ export class FlightHud implements FlightModule {
     this.uiLayer.addChild(container);
   }
 
-  /** Cancel any pending tooltip and destroy the visible one. */
   hideTooltip(): void {
     if (this.tooltipTimer !== null) {
       clearTimeout(this.tooltipTimer);
@@ -1658,11 +1280,9 @@ export class FlightHud implements FlightModule {
     }
   }
 
-  /** Push a line to the mini-log (B5); keeps only the last 5 entries. */
   private addMiniLogEntry(text: string): void {
     if (!this.miniLogContainer) return;
     const lineH = 18;
-    // Remove oldest if full.
     if (this.miniLogEntries.length >= 5) {
       const oldest = this.miniLogEntries.shift()!;
       oldest.textObj.destroy();
@@ -1682,7 +1302,6 @@ export class FlightHud implements FlightModule {
     this.miniLogEntries.push({ textObj, elapsed: 0 });
   }
 
-  /** Advance mini-log timers; fade out and remove expired entries each frame. */
   private updateMiniLog(deltaTime: number): void {
     const lineH = 18;
     for (const entry of this.miniLogEntries) {
@@ -1694,7 +1313,6 @@ export class FlightHud implements FlightModule {
         entry.textObj.alpha = Math.max(0, 1 - t);
       }
     }
-    // Remove expired entries (oldest first).
     while (
       this.miniLogEntries.length > 0 &&
       this.miniLogEntries[0].elapsed >= this.MINI_LOG_DURATION

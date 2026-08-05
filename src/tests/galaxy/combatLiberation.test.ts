@@ -38,8 +38,6 @@ function makeGalaxy(
   return g;
 }
 
-// ── Liberation mechanic ─────────────────────────────────────────────────────
-
 describe("Galaxy.tryLiberate", () => {
   it("removes an overmind system and returns true", () => {
     const g = makeGalaxy(["s_a", "s_b"], ["s_a"], []);
@@ -80,8 +78,6 @@ describe("Galaxy.tryLiberate", () => {
   });
 });
 
-// ── Difficulty scaling ──────────────────────────────────────────────────────
-
 describe("GAME_BALANCE — overmind combat multipliers", () => {
   it("OVERMIND_COMBAT_HP_MULT is greater than 1.0", () => {
     expect(GAME_BALANCE.OVERMIND_COMBAT_HP_MULT).toBeGreaterThan(1.0);
@@ -92,26 +88,7 @@ describe("GAME_BALANCE — overmind combat multipliers", () => {
   });
 });
 
-/**
- * REWRITTEN under the three-year-campaign test-modification license (Task 4).
- *
- * The old section pinned the raw OVERMIND_COMBAT_*_MULT levers as a flat 1.5×
- * on every garrison fight. The multipliers are now the STRONG endpoint of the
- * adaptive `hostileScaling(peakPower, mode)` lerp (weak player ≈ 0.9×), so the
- * simulation evaluates the endpoints the player actually faces. The MEANING is
- * preserved: an early loadout cannot liberate a hostile system (the standing
- * garrison overwhelms the scout even at its gentle scaling), while a top
- * loadout beats a full-strength garrison ship. New intentional behaviour also
- * locked: at the weak endpoint a LONE garrison patrol is survivable 1v1 —
- * gentle early, hard late.
- */
 describe("combatLiberation — adaptive difficulty simulation (Task 4)", () => {
-  /**
-   * Inline combat simulation vs a garrison of identical enemies: the player
-   * focuses one enemy at a time (shields absorb first, hull takes overflow);
-   * every living enemy returns fire each round. Returns "player_won" /
-   * "player_lost".
-   */
   function simulateGarrison(
     playerHp: number,
     playerShields: number,
@@ -130,7 +107,6 @@ describe("combatLiberation — adaptive difficulty simulation (Task 4)", () => {
     }));
 
     for (let r = 0; r < maxRounds; r++) {
-      // Player attacks the first living enemy
       const target = enemies.find((e) => e.hp > 0);
       if (!target) return "player_won";
       if (target.sh > 0) {
@@ -142,7 +118,6 @@ describe("combatLiberation — adaptive difficulty simulation (Task 4)", () => {
       }
       if (!enemies.some((e) => e.hp > 0)) return "player_won";
 
-      // Every living enemy retaliates
       for (const e of enemies) {
         if (e.hp <= 0) continue;
         if (pSh > 0) {
@@ -158,23 +133,15 @@ describe("combatLiberation — adaptive difficulty simulation (Task 4)", () => {
     return "player_lost";
   }
 
-  // Hostile-system enemy baseline (60 HP / 20 sh / 15 dmg), scaled by the
-  // adaptive endpoints the player actually faces on NORMAL.
   const baseEnemyHp = 60;
   const baseEnemyShields = 20;
   const baseEnemyDmg = 15;
   const weak = hostileScaling(0, "NORMAL"); // fresh scout's ratcheted power ≈ 0
   const strong = hostileScaling(1, "NORMAL"); // maxed veteran
 
-  // Scout (90/20 + wpn_pulse 14) and top loadout (bastion 360/100 + plasma 55).
   const scout = { hp: 90, sh: 20, dmg: 14 };
   const top = { hp: 360, sh: 100, dmg: 55 };
 
-  // Pre-discount NpcGarrisonCombat.GARRISON_MIN — the worst-case baseline
-  // this hand-rolled simulateGarrison helper assumes. Overmind systems can
-  // now hold fewer (down to GARRISON_MIN - OVERMIND_GARRISON_POWER_MAX_DISCOUNT)
-  // for a low-power player; this constant is local to this simulated
-  // scenario, not a currently-guaranteed system-wide floor.
   const GARRISON_MIN = 5;
 
   it("strong endpoint equals the OVERMIND_COMBAT_*_MULT levers (still > 1)", () => {

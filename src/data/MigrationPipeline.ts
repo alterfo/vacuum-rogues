@@ -13,17 +13,14 @@ import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { initialOvermindSpreadState } from "@/systems/overmind/overmindSpread";
 import { logger } from "@/utils/logger";
 
-/** A legacy ShipModule as it appears in an un-rehydrated save (plain JSON). */
 interface LegacyModuleJSON {
   id: string;
   micromoduleId?: string;
 }
 
-/** Default fitting that keeps a migrated ship flyable (mirrors starterLoadout). */
 const MIGRATION_ENGINE_ID = "eq_engine_i";
 const MIGRATION_TANK_ID = "eq_tank";
 
-/** Resolve a legacy `hullClass` label to its GearCatalog hull id. */
 function hullIdForHullClass(hullClass: string | undefined): string {
   const match = GEAR_CATALOG.find(
     (g): g is HullSpec => g.kind === GearKind.HULL && g.hullClass === hullClass,
@@ -64,24 +61,17 @@ export class MigrationPipeline {
   }
 
   private static migrations: Record<number, (state: SaveState) => void> = {
-    // Example migration from 0 -> 1
     0: (state: SaveState) => {
-      // Initialize any missing fields for v1 schema
       if (!state.persistentDialogs) {
         state.persistentDialogs = [];
       }
     },
-    // 1 -> 2: living-galaxy NPC ships (Feature 8). Old saves predate the NPC
-    // population; start them empty so the simulation can repopulate going
-    // forward without breaking the loaded galaxy.
     1: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as { npcShips?: unknown[] };
       if (galaxy && !Array.isArray(galaxy.npcShips)) {
         galaxy.npcShips = [];
       }
     },
-    // 2 -> 3: economy type and political system (Task 1). Old saves don't have
-    // these fields; default to MIXED/REPUBLIC so every system is functional.
     2: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as {
         systems?: Array<{ economyType?: string; politicalSystem?: string }>;
@@ -93,14 +83,12 @@ export class MigrationPipeline {
         }
       }
     },
-    // 3 -> 4: smuggling (Task 3). Old saves lack contrabandGoods on player.
     3: (state: SaveState) => {
       const player = state.player as unknown as { contrabandGoods?: string[] };
       if (player && !Array.isArray(player.contrabandGoods)) {
         player.contrabandGoods = [];
       }
     },
-    // 4 -> 5: hull classes (Task 5). Old saves lack hullClass on player.ship.
     4: (state: SaveState) => {
       const ship = (
         state.player as unknown as { ship?: { hullClass?: string } }
@@ -109,7 +97,6 @@ export class MigrationPipeline {
         ship.hullClass = "CORVETTE";
       }
     },
-    // 5 -> 6: micromodule inventory (Task 7). Old saves lack micromodules in player inventory.
     5: (state: SaveState) => {
       const inventory = (
         state.player as unknown as { inventory?: { micromodules?: unknown[] } }
@@ -118,8 +105,6 @@ export class MigrationPipeline {
         inventory.micromodules = [];
       }
     },
-    // 6 -> 7: NPC questing and news feed (Task 13). Old saves lack activeQuestTarget
-    // on NPC ships and the galaxy newsFeed array.
     6: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as {
         npcShips?: Array<{ activeQuestTarget?: unknown }>;
@@ -138,8 +123,6 @@ export class MigrationPipeline {
         }
       }
     },
-    // 7 -> 8: Galaxy-spanning quest objectives (Task 14). Old saves lack
-    // targetSystemId and targetObjectId on persisted active quests.
     7: (state: SaveState) => {
       const quests = (
         state.player as unknown as {
@@ -153,16 +136,12 @@ export class MigrationPipeline {
         }
       }
     },
-    // 8 -> 9: Quest board persistence (Task 15). Old saves lack questBoards on
-    // galaxy; initialize to empty record so board tracking starts fresh.
     8: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as { questBoards?: unknown };
       if (galaxy && !galaxy.questBoards) {
         galaxy.questBoards = {};
       }
     },
-    // 9 -> 10: Reputation gates and quest chains (Task 16). Old saves lack
-    // minReputation/chainId/chainPart on quests and completedQuestChains on player.
     9: (state: SaveState) => {
       const player = state.player as unknown as {
         completedQuestChains?: string[];
@@ -182,8 +161,6 @@ export class MigrationPipeline {
         }
       }
     },
-    // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;
-    // backfill description on legacy news events that lack it.
     10: (state: SaveState) => {
       const player = state.player as unknown as { newsBookmarks?: number[] };
       if (player && !Array.isArray(player.newsBookmarks)) {
@@ -198,12 +175,9 @@ export class MigrationPipeline {
         }
       }
     },
-    // 11 -> 12: Data fog (Task 21). lastVisitedDay on StarSystem is optional;
-    // undefined means "never visited" which is the correct default for old saves.
     11: (_state: SaveState) => {
       // No migration needed — field is optional with no required default value.
     },
-    // 12 -> 13: Rank system (Task 22). Old saves lack killPoints and rank on player.
     12: (state: SaveState) => {
       const player = state.player as unknown as {
         killPoints?: number;
@@ -214,8 +188,6 @@ export class MigrationPipeline {
         if (player.rank === undefined) player.rank = 0;
       }
     },
-    // 13 -> 14: OVERMIND threat arc (Task 23). Old saves lack overmindSystems and
-    // overmindCoreSystemId on galaxy; default to empty set, core = last system by ID.
     13: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as {
         systems?: Array<{ id: string }>;
@@ -234,12 +206,7 @@ export class MigrationPipeline {
         }
       }
     },
-    // 14 -> 15: Comprehensive gap-fill for fields that were added in Tasks
-    // 8/12/17/24 but never got their own migration steps. Old saves upgraded
-    // through v14 may still be missing these — this step ensures they are
-    // present so runtime code never sees undefined for expected fields.
     14: (state: SaveState) => {
-      // Task 24: activeTradeBoomSystems on galaxy
       const galaxy = state.galaxy as unknown as {
         activeTradeBoomSystems?: Record<string, number>;
         npcShips?: Array<{
@@ -252,7 +219,6 @@ export class MigrationPipeline {
         if (!galaxy.activeTradeBoomSystems) {
           galaxy.activeTradeBoomSystems = {};
         }
-        // Tasks 8/12: cargo, loadoutSummary, shieldPower on NPC ships
         if (Array.isArray(galaxy.npcShips)) {
           for (const npc of galaxy.npcShips) {
             if (!Array.isArray(npc.cargo)) npc.cargo = [];
@@ -261,7 +227,6 @@ export class MigrationPipeline {
           }
         }
       }
-      // Task 17: activeTextQuestState on player
       const player = state.player as unknown as {
         activeTextQuestState?: unknown;
       };
@@ -269,17 +234,12 @@ export class MigrationPipeline {
         player.activeTextQuestState = null;
       }
     },
-    // 15 -> 16: Visited systems (Task 29). Add visitedSystems to player;
-    // old saves start with an empty list (player must re-visit to populate).
     15: (state: SaveState) => {
       const player = state.player as unknown as { visitedSystems?: string[] };
       if (player && !Array.isArray(player.visitedSystems)) {
         player.visitedSystems = [];
       }
     },
-    // 16 -> 17: Faction home systems (Task 29). Add isFactionHome and
-    // homeFactionId to each StarSystem; defaults to false/null for old saves
-    // (the generator assigns them for new galaxies).
     16: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as {
         systems?: Array<{ isFactionHome?: boolean; homeFactionId?: unknown }>;
@@ -291,16 +251,12 @@ export class MigrationPipeline {
         }
       }
     },
-    // 17 -> 18: Pirate-held systems (Task 2, overmind balance). Add pirateSystems
-    // to galaxy; old saves start with empty list (no pirate-held systems).
     17: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as { pirateSystems?: string[] };
       if (galaxy && !Array.isArray(galaxy.pirateSystems)) {
         galaxy.pirateSystems = [];
       }
     },
-    // 18 -> 19: Galaxy tech level (Task 1, living-galaxy economy). Old saves
-    // lack techLevel on StarSystem; default every system to 1.
     18: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as {
         systems?: Array<{ techLevel?: number }>;
@@ -311,8 +267,6 @@ export class MigrationPipeline {
         }
       }
     },
-    // 19 -> 20: Artifact upgrade counts per loadout slot (Task 5). Old saves
-    // lack upgrades on each slotted item; default to 0 (no upgrades applied).
     19: (state: SaveState) => {
       const loadout = (
         state as unknown as {
@@ -325,13 +279,9 @@ export class MigrationPipeline {
         }
       }
     },
-    // 20 -> 21: NPC convoy IDs (Task 6, living-galaxy economy). convoyId is
-    // optional so old NPC ships load fine without it — no data backfill needed.
     20: (_state: SaveState) => {
       // No-op: convoyId is optional and absent by default on old ships.
     },
-    // 21 -> 22: Quest isPendingReturn + pendingReturnQuests (Task 5, quest polish).
-    // Old saves lack isPendingReturn on quests and pendingReturnQuests in questLog.
     21: (state: SaveState) => {
       const questLog = (
         state.player as unknown as {
@@ -352,13 +302,6 @@ export class MigrationPipeline {
         }
       }
     },
-    // 22 -> 23: Dual-hull unification (Task 4). Synthesize the canonical
-    // ShipLoadoutSnapshot from the legacy `ship.modules` + `inventory.modules`
-    // so the fitting carries forward once the legacy arrays are retired
-    // (Task 5). One-way and idempotent: saves that already carry a `loadout`
-    // (made after loadout persistence) keep their authoritative snapshot and
-    // are never rebuilt. Unknown/hull gear ids are skipped item-by-item
-    // (mirrors ShipLoadout.fromJSON) so one stale id never voids the loadout.
     22: (state: SaveState) => {
       const s = state as unknown as {
         loadout?: ShipLoadoutSnapshot;
@@ -372,8 +315,6 @@ export class MigrationPipeline {
       };
       const ship = s.player?.ship;
 
-      // Installed fitting first (priority), then the loose inventory bag; the
-      // canonical model has no bag, so spares are installed into free slots.
       const candidates = [
         ...(ship?.modules ?? []),
         ...(s.player?.inventory?.modules ?? []),
@@ -389,41 +330,19 @@ export class MigrationPipeline {
           ? { gearId: m.id, micromoduleId: m.micromoduleId }
           : { gearId: m.id };
 
-      // Track exactly which legacy modules are folded into the loadout (by
-      // object reference) so they can be dropped from the rendered inventory
-      // bag below. Otherwise the same physical item lives in BOTH the loadout
-      // and `inventory.modules`, and the hangar's [надеть] would install a
-      // second copy — a permanent item dupe on every migrated save.
       const folded = new Set<LegacyModuleJSON>();
       const dropFoldedFromBag = (): void => {
         const bag = s.player?.inventory?.modules;
         if (!bag || folded.size === 0) return;
-        // Keep overflow/un-fitted spares + unknown ids (no data loss); only the
-        // exact objects now carried by the loadout leave the bag. `ship.modules`
-        // is left as-is — it is no longer read in production and PlayerShip
-        // drops the field, so it evaporates on the next save.
         s.player!.inventory!.modules = bag.filter((m) => !m || !folded.has(m));
       };
 
-      // A pre-v23 save can already carry a persisted `loadout`, but between
-      // loadout-persistence (v19) and this migration NO shop flow fed the
-      // loadout's *fitting* — only hull purchases reached it (via setHull), so
-      // its hull + starter engine/tank are authoritative while the player's
-      // bought and looted weapons/equipment still live in the legacy
-      // `ship.modules` / `inventory.modules`. Fold that legacy fitting into the
-      // loadout's free slots so it carries forward without data loss; we only
-      // append (never drop existing loadout gear), so a genuinely authoritative
-      // snapshot is preserved unchanged when there is nothing legacy to add.
       if (s.loadout) {
         const existing = s.loadout;
         const existingHull = gearById(existing.hullId) as HullSpec | undefined;
         const cap = existingHull?.slots ?? existing.slotted.length;
         const slotKey = (gearId: string, micromoduleId?: string): string =>
           micromoduleId ? `${gearId}#${micromoduleId}` : gearId;
-        // Multiset of fittings already in the loadout, so a legacy module that is
-        // already reflected there is consumed rather than duplicated — this keeps
-        // the merge idempotent — while genuine duplicate copies (e.g. an installed
-        // weapon plus a spare of the same id) still each land in their own slot.
         const present = new Map<string, number>();
         for (const slot of existing.slotted) {
           const key = slotKey(slot.gearId, slot.micromoduleId);
@@ -448,13 +367,6 @@ export class MigrationPipeline {
       const hull = gearById(hullId) as HullSpec | undefined;
       const slots = hull?.slots ?? 0;
 
-      // Reserve an engine + fuel tank FIRST so the migrated ship can always take
-      // off (legacy ships flew on a flat speed stat with no engine module; the
-      // canonical model gates takeoff on an installed engine + tank). Prefer a
-      // real migrated copy if the legacy fitting/bag carries one, else synthesize
-      // the starter equivalent. Reserving *before* the slot-cap fill is what
-      // guarantees both survive — otherwise a full set of installed weapons could
-      // push a bagged engine/tank past the hull's slot count and ground the ship.
       const engineIdx = candidates.findIndex((m) =>
         isEquipmentClass(m.id, EquipmentClass.ENGINE),
       );
@@ -476,28 +388,17 @@ export class MigrationPipeline {
         slotted.push({ gearId: MIGRATION_TANK_ID });
       }
 
-      // Fill the remaining slots with the rest of the fitting — installed gear
-      // first (it precedes the bag in `candidates`), then loose spares — skipping
-      // the engine/tank already reserved above.
       for (let i = 0; i < candidates.length; i++) {
         if (i === engineIdx || i === tankIdx) continue;
         if (slotted.length >= slots) break;
         slotted.push(toSlot(candidates[i]));
         folded.add(candidates[i]);
       }
-      // A hull with fewer slots than the reserved engine+tank can't carry both;
-      // never exceed the hull's slot count.
       if (slotted.length > slots) slotted.length = slots;
 
       s.loadout = { hullId, slotted };
       dropFoldedFromBag();
     },
-    // 23 -> 24: Persistent NPC world positions (NPC persistence Task 1). Old
-    // saves lack worldX/worldY on NPC ships, so re-entering a system used to
-    // re-scatter them with Math.random(). Seed a deterministic interior offset
-    // (keyed by galaxy id + ship id) so the placement is reproducible, not
-    // random; the simulation owns it thereafter. Ships already carrying a
-    // position keep it (idempotent).
     23: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as {
         id?: string;
@@ -523,15 +424,6 @@ export class MigrationPipeline {
         }
       }
     },
-    // 24 -> 25: Convert legacy `inventory.modules` bag artifacts (dual-hull
-    // residual) into installable owned gear. The starter trio "Лазер МК-1" /
-    // "Базовый щит" / "Быстрый двигатель" (ids weapon_laser_1 / shield_basic_1 /
-    // engine_fast_1) are NOT catalog gear ids, so the hangar's install button —
-    // gated on a `gearById` lookup — never appeared and they sat stranded in the
-    // hold. Each bag entry that maps to a catalog gear (legacyModuleToGearId:
-    // explicit starter map, else the module's category) is moved into
-    // `ownedGearIds` and dropped from the bag; catalog-id spares and unmappable
-    // entries stay in the bag (no data loss). Idempotent.
     24: (state: SaveState) => {
       const inventory = (
         state.player as unknown as {
@@ -554,11 +446,6 @@ export class MigrationPipeline {
       }
       inventory.modules = remaining;
     },
-    // 25 -> 26: Multi-slot hull micromodules. The loadout used to carry a single
-    // `hullMicromoduleId`; hulls now expose 1–4 micromodule slots and the loadout
-    // holds an array `hullMicromoduleIds`. Convert the legacy single id into a
-    // one-element array and drop the old field. Idempotent: skip when the array
-    // is already present or there is no loadout / no legacy id.
     25: (state: SaveState) => {
       const loadout = (
         state as unknown as {
@@ -576,21 +463,12 @@ export class MigrationPipeline {
       }
       delete loadout.hullMicromoduleId;
     },
-    // 26 -> 27: Per-run difficulty mode (Game Difficulty Modes Task 1). Old saves
-    // predate the mode selector — default every existing playthrough to NORMAL so
-    // it reproduces today's behaviour exactly. Idempotent (skips when present).
     26: (state: SaveState) => {
       const player = state.player as unknown as { gameMode?: string };
       if (player && player.gameMode === undefined) {
         player.gameMode = "NORMAL";
       }
     },
-    // 27 -> 28: Overmind endgame-arc state. Old saves predate the spread
-    // machine's persisted clock/threat snapshot (`galaxy.overmindArc`); default
-    // it to the dormant initial state so the arc starts fresh from the next EOD.
-    // The already-persisted captured set (`galaxy.overmindSystems`) is untouched,
-    // so a progressed save keeps its Overmind front. Idempotent (skips when
-    // present). See `initialOvermindSpreadState`.
     27: (state: SaveState) => {
       const galaxy = state.galaxy as unknown as {
         overmindArc?: unknown;

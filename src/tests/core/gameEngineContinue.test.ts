@@ -1,20 +1,5 @@
-/**
- * `GameEngine.continueGame()` is the "Continue" entry point (Task 3, save-slots
- * UI). It must resume the latest **meaningful** save across *all* slots — the
- * most recent non-terminal save, auto or manual — not just the `"auto"`
- * autosave. These tests drive the method in isolation over a fake save manager
- * + a spied `loadGame`, so they assert exactly which slot Continue picks without
- * standing up the whole engine.
- *
- * `continueGame` only touches `this.saveManager.listSlots()` (through the pure
- * `latestMeaningfulSlot` resolver) and `this.loadGame(slotId)`, so an
- * `Object.create(GameEngine.prototype)` instance with those two members wired is
- * a faithful, minimal harness.
- */
 import { describe, it, expect, vi } from "vitest";
 
-// GameEngine's import graph pulls in PixiJS-extending scene classes at module
-// load; a partial mock keeps the constructable bases available (we never render).
 vi.mock("pixi.js", () => ({
   Filter: class {},
   Rectangle: class {

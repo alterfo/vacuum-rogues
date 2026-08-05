@@ -1,18 +1,5 @@
-/**
- * Playtest 3 — F4: take-off after the equipment shop must park the ship beside
- * the planet, not at the system edge. The re-entry marker is the `fromPlanetId`
- * the PLANET take-off passes to SPACE_FLIGHT; `SpaceFlightScene.initialize`
- * parks the ship beside that planet (and the shop round-trip must not lose it).
- *
- * This locks the take-off CONTEXT PAYLOAD at the unit level: `takeOff()` always
- * passes the current planet's id, independent of the one-shot `landedPlanetId`.
- * The end-to-end parking (real shop round-trip) is covered by the real-pointer
- * smoke `playtest3 F4` in `e2e/playtest-regression.spec.ts`.
- */
 import { describe, it, expect, vi } from "vitest";
 
-// PlanetScene imports pixi.js at module load; mock it so the scene can be
-// imported without a real renderer (takeOff() never constructs display objects).
 vi.mock("pixi.js", () => ({
   Container: vi.fn(),
   Graphics: vi.fn(),
@@ -23,7 +10,6 @@ vi.mock("pixi.js", () => ({
 import { PlanetScene } from "@/presentation/PlanetScene";
 import { SceneType } from "@/types";
 
-/** Build a takeOff-ready PlanetScene without running its constructor/initialize. */
 function makeScene(opts: { planetId?: string; canTakeOff?: boolean }): {
   takeOff: () => Promise<void>;
   transitionTo: ReturnType<typeof vi.fn>;
@@ -33,8 +19,6 @@ function makeScene(opts: { planetId?: string; canTakeOff?: boolean }): {
   const fields = scene as unknown as Record<string, unknown>;
   fields.gameEngine = {
     transitionTo,
-    // take-off now checkpoints to the "auto" slot before the flight transition
-    // (death-rollback); provide the collaborator so the scene can run.
     saveGame: vi.fn().mockResolvedValue(undefined),
     playerLoadout: {
       derivedStats: () => ({ canTakeOff: opts.canTakeOff ?? true }),

@@ -1,23 +1,3 @@
-/**
- * Task 1 regression (20260703 plan): trade executor executes real market
- * trades without full-wallet speculation.
- *
- * Verifies that {@link executeMemoryAwareTrade} (and its thin wrapper
- * {@link executeTradeOnPlanet}) interact with the real {@link TradeSystem}
- * (no mocked seam, no direct field mutation) — credits and/or cargo change
- * through the canonical `executeTrade` path.
- *
- * Key contract: when a `preferredGood` is supplied and stocked at this planet,
- * the executor buys it (capped by a credit reserve — never the whole wallet);
- * when `null` is supplied (no known cross-planet margin) it is sell-only and
- * never buys — blindly buying whatever is locally cheapest regardless of
- * resale value was the destructive speculation this task removed. Both paths
- * must be safe no-ops when credits or hold are exhausted.
- *
- * Real-engine tier: boots the real GameEngine into a new game and drives the
- * real `executeMemoryAwareTrade` helper, asserting observable engine state
- * (no harness errors, credits within expected range).
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
 import { SceneType } from "@/types";
@@ -55,10 +35,7 @@ describe("letsplay trade executor (Task 2)", () => {
     const creditsBefore = engine.player!.credits;
     executeTradeOnPlanet(engine, planet!);
 
-    // With a fresh game and no cargo, credits may change (bought something)
-    // or stay the same — either way it must not crash and produce no errors.
     expect(engine.player!.credits).toBeGreaterThanOrEqual(0);
-    // Credits cannot exceed the starting amount since no cargo was sold.
     expect(engine.player!.credits).toBeLessThanOrEqual(creditsBefore);
     expect(harness.errors()).toHaveLength(0);
   });
@@ -74,9 +51,6 @@ describe("letsplay trade executor (Task 2)", () => {
     const player = engine.player!;
     const creditsBefore = player.credits;
 
-    // With no preferred good, credits must never go DOWN — the executor no
-    // longer blind-buys the locally cheapest good (they can only go up, from
-    // selling any starting cargo, which a fresh game has none of).
     executeTradeOnPlanet(engine, planet!);
     expect(player.credits).toBeGreaterThanOrEqual(creditsBefore);
     expect(harness.errors()).toHaveLength(0);
@@ -88,7 +62,6 @@ describe("letsplay trade executor (Task 2)", () => {
     const planet = sys?.planets[0];
     expect(planet).toBeTruthy();
 
-    // Navigate to the trade scene (same planet the executor will use)
     await harness.goTo(SceneType.TRADE, { planet });
 
     executeTradeOnPlanet(engine, planet!);
@@ -97,7 +70,6 @@ describe("letsplay trade executor (Task 2)", () => {
   });
 
   it("executeMemoryAwareTrade(preferredGood=null) behaves identically to executeTradeOnPlanet", async () => {
-    // The `null` path means "no known cross-planet margin" — sell-only, never buy.
     const engine = harness.engine;
     const sys = currentSystem(engine);
     const planet = sys?.planets[0];
@@ -121,7 +93,6 @@ describe("letsplay trade executor (Task 2)", () => {
 
     await harness.goTo(SceneType.PLANET, { planet });
 
-    // Pick the SECOND cheapest resource so the preferred ≠ the cheapest fallback.
     const { TradeSystem } = await import("@/systems/TradeSystem");
     const ts = new TradeSystem();
     const resources = planet.market.availableResources;

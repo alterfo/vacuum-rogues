@@ -10,7 +10,6 @@ import {
 } from "@/utils/planetTooltip";
 import { landingDenialMessage } from "@/systems/galaxy/landingAccess";
 
-/** True when no tooltip line carries either landing-denial message. */
 const hasNoDenialLine = (lines: { text: string }[]): boolean =>
   !lines.some(
     (l) =>
@@ -18,7 +17,6 @@ const hasNoDenialLine = (lines: { text: string }[]): boolean =>
       l.text === landingDenialMessage("pirate-rep"),
   );
 
-// Minimal Market stub so Planet can be constructed without real infrastructure.
 const stubMarket = {
   goods: [],
   getPrice: () => 0,
@@ -47,7 +45,6 @@ function makePlanet(
   );
 }
 
-/** Constant-reputation lookup helper for tests. */
 const repAlways = (rep: number) => () => rep;
 
 describe("buildPlanetTooltipLines", () => {
@@ -194,8 +191,6 @@ describe("buildPlanetTooltipLines", () => {
       repAlways(0),
       null,
     );
-    // Same shape with the arg omitted vs. an explicit null, and neither carries
-    // a denial line (content check — not just a length proxy).
     const baseline = buildPlanetTooltipLines(
       planet,
       Faction.OUTLANDERS,
@@ -205,7 +200,6 @@ describe("buildPlanetTooltipLines", () => {
     expect(explicitNull).toHaveLength(baseline);
     expect(hasNoDenialLine(omitted)).toBe(true);
     expect(hasNoDenialLine(explicitNull)).toBe(true);
-    // Controller line still the system owner when landing is allowed.
     expect(omitted[2].text).toBe(FACTION_DISPLAY_NAME[Faction.OUTLANDERS]);
   });
 
@@ -235,10 +229,6 @@ describe("buildPlanetTooltipLines", () => {
     expect(denial.color).toBe(0xff4444);
   });
 
-  // Production scenario: capture is tracked per-system on the galaxy, so the
-  // planet's own `capturedBy` stays null while `landingDenial` says "overmind".
-  // The controller/relation lines must name the Overmind, not the benign system
-  // owner — otherwise the tooltip contradicts its own denial line.
   it("names the Overmind as controller (not the system owner) when overmind-denied", () => {
     const planet = makePlanet({ capturedBy: null });
     const lines = buildPlanetTooltipLines(
@@ -278,7 +268,6 @@ describe("buildPlanetTooltipLines", () => {
     );
     expect(lines[2].text).toBe("Пираты");
     expect(lines[2].text).not.toBe(FACTION_DISPLAY_NAME[Faction.OUTLANDERS]);
-    // Denial line is still appended last.
     expect(lines[lines.length - 1].text).toBe(
       landingDenialMessage("pirate-rep"),
     );
@@ -286,9 +275,6 @@ describe("buildPlanetTooltipLines", () => {
 });
 
 describe("capturedSystemOccupierName (PlanetScene capture banner, Task 12)", () => {
-  // The banner previously keyed off `planet.capturedBy` (never written in
-  // production), so it never fired. This resolver keys off the per-system galaxy
-  // capture state instead, matching the hover-tooltip occupier naming.
   const overmindGalaxy = {
     isOvermindSystem: (id: string) => id === "sys-overmind",
     isPirateSystem: () => false,
@@ -332,7 +318,6 @@ describe("capturedSystemOccupierName (PlanetScene capture banner, Task 12)", () 
     expect(capturedSystemOccupierName(undefined, "sys-overmind")).toBeNull();
     expect(capturedSystemOccupierName(overmindGalaxy, null)).toBeNull();
     expect(capturedSystemOccupierName(overmindGalaxy, undefined)).toBeNull();
-    // A partial unit-harness galaxy without the capture API must not crash.
     expect(capturedSystemOccupierName({}, "sys-overmind")).toBeNull();
   });
 });

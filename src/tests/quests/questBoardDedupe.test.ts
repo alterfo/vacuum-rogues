@@ -8,16 +8,6 @@ import {
   type BoardOptions,
 } from "@/systems/quests/QuestGenerator";
 
-/**
- * Task 2 — quest board dedupe ("задания не должны повторяться").
- *
- * `generateQuestBoard` gains an opt-in `excludeKeys` input: when present, no
- * candidate whose {@link questKey} is excluded (the player's active/pending
- * quests) — or already placed on the board being built — is emitted, and later
- * slots back-fill so the board still reaches `count`. When `excludeKeys` is
- * absent the legacy output is preserved (covered by `QuestGenerator.test.ts`).
- */
-
 function sys(
   id: string,
   name: string,
@@ -38,7 +28,6 @@ function sys(
   } as unknown as StarSystem;
 }
 
-/** A wider galaxy (origin A, five reachable targets) so the dedupe pool is large. */
 function wideGalaxy(): StarSystem[] {
   return [
     sys("A", "Альфа", ["B", "C"]),
@@ -50,14 +39,6 @@ function wideGalaxy(): StarSystem[] {
   ];
 }
 
-/**
- * A narrow galaxy: origin A with a *single* reachable target B. With only one
- * destination, the legacy board provably re-rolls the same (type, target,
- * cargo) combination across slots — i.e. it carries duplicate {@link questKey}s.
- * This is the fixture that actually exercises within-board dedupe (the wide
- * galaxy yields all-distinct keys even in the legacy path, so it cannot tell
- * the dedupe code apart from a no-op).
- */
 function narrowGalaxy(): StarSystem[] {
   return [sys("A", "Альфа", ["B"]), sys("B", "Бета", ["A"])];
 }
@@ -101,16 +82,10 @@ describe("quest board dedupe (Task 2)", () => {
   });
 
   it("dedupes within the board itself when excludeKeys is present (even empty)", () => {
-    // The wide galaxy yields all-distinct keys even legacy, so it cannot prove
-    // anything about within-board dedupe. Use the single-target narrow galaxy:
-    // the legacy board provably *repeats* a key (same type+target+cargo across
-    // slots), and the `excludeKeys: []` board must collapse those to distinct.
     const legacy = generateQuestBoard(
       baseOpts({ systems: narrowGalaxy(), count: 8 }),
     );
     const legacyKeys = legacy.map(questKey);
-    // Guard the fixture: this test is only meaningful if the legacy path
-    // genuinely carries duplicates (otherwise the assertion below is a no-op).
     expect(new Set(legacyKeys).size).toBeLessThan(legacyKeys.length);
 
     const deduped = generateQuestBoard(
@@ -121,11 +96,6 @@ describe("quest board dedupe (Task 2)", () => {
   });
 
   it("never leaves an orphaned chain part on the board when an earlier part is excluded", () => {
-    // Regression: `buildForSlot` advances the chain-part counter as it builds.
-    // If dedupe skips an excluded chain part without rolling the counter back,
-    // the next chain slot emits a *later* part (e.g. «часть 2/3») with no
-    // earlier part on the board — and the dropped quest is wrongly counted
-    // against the per-board chain cap.
     const legacy = generateQuestBoard(baseOpts({ count: 8 }));
     const part0 = legacy.find(
       (q) => q.template.chainId && q.template.chainPart === 0,
@@ -136,8 +106,6 @@ describe("quest board dedupe (Task 2)", () => {
       baseOpts({ count: 8, excludeKeys: [questKey(part0!)] }),
     );
 
-    // Every chain part present must have all earlier parts of the same chain
-    // present too (the part set forms a gap-free prefix {0,1,…} per chainId).
     const partsByChain = new Map<string, Set<number>>();
     for (const q of board) {
       if (!q.template.chainId) continue;
@@ -163,8 +131,6 @@ describe("quest board dedupe (Task 2)", () => {
   });
 
   it("excluding everything reachable terminates and returns fewer (best effort)", () => {
-    // Exclude the keys of a large board: the pool can't refill to count, so the
-    // generator returns the best-effort remainder without spinning forever.
     const big = generateQuestBoard(baseOpts({ count: 200 }));
     const allKeys = [...new Set(big.map(questKey))];
     const board = generateQuestBoard(
@@ -182,8 +148,6 @@ describe("quest board dedupe (Task 2)", () => {
     expect(delivery).toBeDefined();
     const t = delivery!.template;
 
-    // What the quest looks like once accepted into a Quest (different slot id +
-    // reward, same destination signature) — its key must still match.
     const acceptedLike = {
       type: t.type,
       targetSystemId: t.targetSystemId ?? null,

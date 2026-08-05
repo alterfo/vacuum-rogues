@@ -12,10 +12,7 @@ import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import { SaveState } from "@/domain/SaveState";
 
 vi.mock("pixi.js", () => ({
-  // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
-  // module load, so the partial mock must expose a constructable Filter.
   Filter: class {},
-  // UiButton sets container.hitArea = new Rectangle(...) (real-pointer fix)
   Rectangle: class {
     constructor(
       public x = 0,
@@ -278,10 +275,6 @@ describe("GameEngine persist location (US-021)", () => {
         factionType: FactionType.OUTLANDERS,
       });
 
-      // An old autosave taken inside the deleted hex CombatScene persisted
-      // currentSceneType: "COMBAT" (transitionTo autosaved every gameplay scene).
-      // The enum value is gone, so loading must NOT reach transitionTo("COMBAT")
-      // (→ SceneFactory null → INVALID_SCENE crash) — it falls back to flight.
       const save = new SaveState(
         1,
         engine.galaxy,

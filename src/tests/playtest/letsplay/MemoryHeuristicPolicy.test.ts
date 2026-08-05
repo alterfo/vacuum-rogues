@@ -22,19 +22,6 @@ import {
   MAX_FOLDS_WITHOUT_DAY_ADVANCE,
 } from "./MemoryHeuristicPolicy";
 
-/**
- * Task 4 of the partial-observability plan: the memory-using heuristic teacher.
- *
- * The decision core {@link decideWithMemory} is **pure** — it reads an
- * {@link Observation} + an {@link AgentMemory} belief state and returns one legal
- * action — so the human-like, multi-step behaviours (buy-low@A, sell-for-profit@B,
- * route around a remembered-dangerous system, defer an unaffordable upgrade) are
- * tested in isolation over hand-built fixtures, exactly the scripted A/B/C
- * scenario the plan calls for. A second block exercises the stateful
- * {@link MemoryHeuristicPolicy} adapter: belief accumulates step over step and a
- * `reset()` starts the per-run notebook fresh.
- */
-
 const M = ResourceType.METALS;
 
 function playerFixture(over: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
@@ -85,11 +72,6 @@ interface ObsOpts {
   quests?: QuestSnapshot[];
 }
 
-/**
- * Build a self-consistent observation whose `legalActions` come from the same
- * pure `legalActionsForScene` the real `observe` uses — so a policy decision over
- * a synthetic obs is filtered against the exact legal set the engine would emit.
- */
 function obs(opts: ObsOpts = {}): Observation {
   const scene = opts.scene ?? SceneType.SPACE_FLIGHT;
   const planets = opts.planets ?? [];
@@ -138,7 +120,6 @@ const rec = (buy: number, sell: number): PriceRecord => ({
   seenAt: 1,
 });
 
-/** Belief that knows METALS is cheap@A (buy 100) and dear@B (sell 160). */
 function abBook(): AgentMemory {
   const mem = createMemory();
   mem.priceBook.set("A", new Map([[M, rec(100, 80)]]));
@@ -334,14 +315,6 @@ describe("decideWithMemory (pure)", () => {
       expect(action.reason).not.toBe("mem:earn");
     });
 
-    // Live report 2026-07-19/20: the _autopilotDiag harness measured 3244 of
-    // 3519 barren "mem:earn" landings (land -> immediate take-off, nothing
-    // gained) happening while the ship was ALREADY carrying sellable cargo —
-    // this fallback had no cargo check at all, unlike its sibling tiers
-    // above it (`discover-prices`/`early-explore`, both gated on
-    // `!holdsNonQuestCargo`). Fixture blocks every other candidate that would
-    // otherwise act on the held cargo (already-visited here, warp cadence
-    // tripped so `find-sell-destination` can't fire) to isolate this one gap.
     it("holding sellable cargo it can't act on right here ⇒ does not land to earn", () => {
       const mem = createMemory();
       mem.priceBook.set("A", new Map([[M, rec(100, 100)]]));
@@ -375,8 +348,6 @@ describe("decideWithMemory (pure)", () => {
     });
 
     it("an over-HP'd hostile (capture fleet) ⇒ flee even at full hull", () => {
-      // Enemy hull HP (300) exceeds the player's current hull (100): the agent
-      // must disengage rather than trade blows and die in ~2 combat days.
       const action = decideWithMemory(
         obs({
           hostiles: [hostile("capture_1", 300)],
@@ -467,7 +438,6 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
   it("accumulates belief across steps, then trades on it (scripted A/B/C)", () => {
     const policy = new MemoryHeuristicPolicy();
 
-    // 1) Visit A, see its market — recorded into the price book.
     policy.decide(
       obs({
         scene: SceneType.PLANET,
@@ -477,7 +447,6 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
     );
     expect(policy.belief.priceBook.has("A")).toBe(true);
 
-    // 2) Visit B, see its (higher) market — now a cross-planet margin is known.
     policy.decide(
       obs({
         scene: SceneType.PLANET,
@@ -486,9 +455,6 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
     );
     expect(policy.belief.priceBook.has("B")).toBe(true);
 
-    // 3) Back in flight with both planets reachable and an empty hold, the agent
-    //    now heads to the remembered cheap source A to buy — a decision the
-    //    memoryless baseline can't make.
     const action = policy.decide(
       obs({
         planets: [
@@ -504,7 +470,6 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
   });
 
   it("warps to find a sell destination when holding cargo for another system", () => {
-    // abBook: buy@A, sell@B; current system is sysA (no B planet) → must warp
     const mem = abBook();
     mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
     const action = decideWithMemory(
@@ -515,15 +480,6 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
     expect(action.reason).toContain("find-sell-destination");
   });
 
-  // Rewritten under the three-year-campaign test license (Task 7), meaning
-  // preserved: a hurt ship doesn't fly a sell route through live danger. The
-  // old pin — a mere threatMap ENTRY for the current system suppressing every
-  // exploratory warp — is exactly the behavior Task 7 removed: threatMap
-  // never decays, so one old scrape permanently pinned any scratched ship in
-  // a depleted system (measured: 126 consecutive earn/take-off steps,
-  // 1207→167cr). Warping AWAY is how a hurt ship gets safer; the sell warp
-  // holds back only while this system's hostiles are PRESENT (they can
-  // intercept mid-transit — `dangerHereLive` in `avoidDangerAhead`).
   it("does NOT fly the sell route while hostiles are live here and the ship is hurt", () => {
     const mem = abBook();
     mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
@@ -567,7 +523,6 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
     );
     expect(action.kind).toBe("land");
     expect(action.targetId).toBe("B"); // go sell where the margin pays
-    // The supplied memory was not mutated and the owned notebook stays empty.
     expect(policy.belief.priceBook.size).toBe(0);
   });
 
@@ -601,18 +556,7 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
   });
 });
 
-/**
- * Task 6 (three-year-campaign plan) — the campaign calendar wedge: a ship whose
- * survive tier chose `flee` lands on STAR_MAP, where `avoid-danger-back`
- * (tripped by the CURRENT system's own remembered threat) used to outrank the
- * escape jump, handing the ship straight back to the hostile it was fleeing —
- * an infinite two-scene ping-pong that froze the galaxy day (measured live:
- * 8000 straight steps stuck at day 94 on seed CAMPAIGN-0). While the flee
- * condition holds, the escape jump must win; every other avoid-danger-back
- * behaviour is preserved.
- */
 describe("flee escape jump (campaign wedge regression)", () => {
-  /** STAR_MAP, damaged ship, one outmatching live hostile in-system. */
   function fleeMapObs(over: ObsOpts = {}): Observation {
     return obs({
       scene: SceneType.STAR_MAP,
@@ -623,7 +567,6 @@ describe("flee escape jump (campaign wedge regression)", () => {
     });
   }
 
-  /** A notebook that remembers the CURRENT system (sysA) as dangerous. */
   function dangerHere(): AgentMemory {
     const mem = createMemory();
     mem.threatMap.set("sysA", 3);
@@ -651,8 +594,6 @@ describe("flee escape jump (campaign wedge regression)", () => {
   });
 
   it("a live hostile the ship OUTGUNS at healthy hull does not escape-jump", () => {
-    // Not hurt (full hull) and not outmatched (hostile hull below ours) —
-    // the survive tier would fight here, so the map tier must not flee either.
     const action = decideWithMemory(
       fleeMapObs({
         hostiles: [hostile("weak-1", 20)],
@@ -681,10 +622,6 @@ describe("flee escape jump (campaign wedge regression)", () => {
   });
 
   it("fires even with a poisoned warpRejectFolds (the conflated counter must not veto the only exit)", () => {
-    // `warpRejectFolds` counts DELIBERATE map back-outs as well as genuine
-    // engine rejections and only resets on a landing / system change — a ship
-    // cornered after a long no-landing stretch arrives with it sky-high
-    // (measured live: a 460-step GOD-mode wedge with zero escape attempts).
     const mem = dangerHere();
     mem.warpRejectFolds = 99;
     const action = decideWithMemory(fleeMapObs(), mem);
@@ -707,16 +644,6 @@ describe("flee escape jump (campaign wedge regression)", () => {
 });
 
 describe("SPACE_FLIGHT flee stagnation escalation (live-observed deadlock)", () => {
-  /**
-   * Live-browser repro (2026-07-12): `flee`'s live executor (installAutopilotHook.ts)
-   * routes the ship to a boundary-adjacent point and stops — it never actually
-   * leaves the system. A hostile that lingers in scanner range without closing
-   * distance (e.g. PATROLLING, not pursuing) makes SPACE_FLIGHT's survive tier
-   * re-push `flee` every fold forever: confirmed live with `foldsSinceDayAdvance`
-   * past 300 and the ship permanently parked at the system edge. Unlike
-   * STAR_MAP's `flee-escape-jump` (tested above), SPACE_FLIGHT's survive tier had
-   * no path to an actual hyperjump at all.
-   */
   function outmatchedFlightObs(connections = 2): Observation {
     return obs({
       connections,
@@ -750,27 +677,8 @@ describe("SPACE_FLIGHT flee stagnation escalation (live-observed deadlock)", () 
   });
 });
 
-/**
- * Campaign win-rate finding (2026-07-13): every trigger in the tactical
- * (hurt/outmatched/outgunned) branch above is about THIS fight — nothing in
- * the survive tier ever asked "am I nowhere near battle-ready and stuck in a
- * no-progress standoff." `NpcShipManager.checkGarrisonAggro` shields a
- * low-power ship from a neutral wanderer's aggro but leaves it
- * `hostile===true`, so it keeps populating `obs.hostiles` without ever
- * closing or firing — `attack` won the "still fight" else-branch every time
- * and the agent parked on it forever (a fresh 3-session campaign run died
- * 0/3, all before day 310, power never exceeding 0.15, campaign telemetry
- * showing `repeat=N@SPACE_FLIGHT|attack`/`dayFrozen=N`). This mirrors the
- * tactical branch's `flee-stagnant-jump` escalation above — gated the same
- * way so it only fires once a standoff is PROVEN (folds exhausted), never
- * against a fresh/winnable fight.
- */
 describe("SPACE_FLIGHT strategic disengage (weak ship stuck in an inert standoff)", () => {
   function weakStandoffObs(connections = 2): Observation {
-    // Same shape as "a weaker hostile ⇒ still fight" (line ~335): full hull,
-    // a hostile that neither out-hulls nor out-guns the player, so hurt/
-    // outmatched/outgunned are all false and the else-branch fires. The
-    // default player fixture (100 hull, no weaponDamage) is not battle-ready.
     return obs({
       connections,
       hostiles: [hostile("wanderer-1", 60)],
@@ -801,13 +709,6 @@ describe("SPACE_FLIGHT strategic disengage (weak ship stuck in an inert standoff
   });
 });
 
-/**
- * Task 6 — kill-time calculus: the hull-compare (`flee-outmatched`) fires one
- * volley too late against an equal-hull ship that simply hits harder. Compare
- * kill-times BEFORE contact (their hull × their damage vs ours × ours) so the
- * flee happens while a clean escape still exists. Hostile `damage` is a new
- * OPTIONAL snapshot field — fixtures without it keep pre-Task-6 decisions.
- */
 describe("kill-time calculus (flee-outgunned, Task 6)", () => {
   it("flees pre-contact when losing the damage trade at full hull (130hp/14dmg vs 130hp/27dmg)", () => {
     const action = decideWithMemory(
@@ -892,11 +793,6 @@ describe("kill-time calculus (flee-outgunned, Task 6)", () => {
   });
 });
 
-/**
- * Task 6 — pirate dens are star-map-visible (orange systems) and as lethal as
- * the Overmind front; warp targeting must weigh `pirateHeld` like
- * `overmindHeld` instead of walking blind into a standing garrison.
- */
 describe("pirate-den warp avoidance (Task 6)", () => {
   it("the warp picker avoids a pirateHeld neighbour when a clean one exists", () => {
     const o = obs({ scene: SceneType.STAR_MAP, connections: 2 });
@@ -915,12 +811,6 @@ describe("pirate-den warp avoidance (Task 6)", () => {
   });
 });
 
-/**
- * Task 6 — a DOWNED ship (GOD hull floor) can neither fire nor hyperjump (the
- * engine blocks both), so the policy must not emit fight/flee for it: retrying
- * the blocked jump forever was the day-182 capacity wedge. `downed` is
- * GOD-only by construction — NORMAL/HARD behaviour is untouched.
- */
 describe("downed ship (GOD floor, Task 6)", () => {
   it("does not fight or flee while downed even with hostiles present", () => {
     const action = decideWithMemory(

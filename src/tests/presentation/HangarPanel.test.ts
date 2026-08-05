@@ -11,14 +11,6 @@ import type { Player } from "@/domain/Player";
 import type { EquipmentSystem } from "@/systems/EquipmentSystem";
 import type { LoadoutPreset } from "@/types";
 
-/**
- * Task 3 (shared hangar): the slot-fitting hangar extracted out of StationScene
- * into a reusable component. These tests drive the panel directly (no scene),
- * asserting it renders the four categorized banks and that fit / unfit / sell
- * route through the canonical ShipLoadout + the shared gear helpers — so the
- * station and the equipment shop get identical behaviour from one source.
- */
-
 interface FakeNode {
   text: string;
   handlers: Record<string, (e: unknown) => void>;
@@ -98,7 +90,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the panel + scaledText see the fake pixi.
 import { Container } from "pixi.js";
 
 const renderer = {
@@ -142,11 +133,6 @@ function makePlayer(ownedGearIds: string[] = []) {
       if (stack) stack.amount -= amount;
     },
   };
-  // Effectively-infinite hull pool so `applyLoadoutHullToShip` always syncs
-  // it down to exactly the loadout's max — a healthy/perfect status for every
-  // existing test regardless of which hull it fits, so the new СЕРВИСНЫЙ
-  // ЦЕНТР block never renders a repair button unless a test deliberately
-  // damages `player.ship.hullHP` below `maxHull`.
   const ship = {
     hullHP: 1_000_000_000,
     maxHull: 1_000_000_000,
@@ -218,7 +204,6 @@ describe("HangarPanel — shared slot-fitting component", () => {
     expect(
       all.some((t) => t.includes("ОБОРУДОВАНИЕ") && t.includes("0/2")),
     ).toBe(true);
-    // Hull is a banner, not a slot.
     expect(all.some((t) => t.includes("Корпус:"))).toBe(true);
   });
 
@@ -274,10 +259,6 @@ describe("HangarPanel — shared slot-fitting component", () => {
   });
 
   it("spaces «Установить» / «Продать» so the stacked actions never overlap", () => {
-    // Regression (Task 3): the two warehouse actions sat 13 px apart in the same
-    // right-hand column — inside the text height — so their hit boxes overlapped
-    // and got mis-tapped. They must keep a clear vertical gap exceeding the
-    // button height.
     const loadout = new ShipLoadout("hull_scout");
     const player = makePlayer(["eq_radar"]); // owned → both actions render
     const ctx = makeCtx(loadout, player);
@@ -293,17 +274,12 @@ describe("HangarPanel — shared slot-fitting component", () => {
     expect(installBtn).toBeDefined();
     expect(sellBtn).toBeDefined();
 
-    // Same column (anchor 1,0.5), so non-overlap is purely a vertical-gap test:
-    // centres must be at least one button height apart (the old 13 px gap < 14 px
-    // height overlapped). Require a comfortable minimum beyond that.
     const gap = Math.abs(sellBtn!.y - installBtn!.y);
     expect(gap).toBeGreaterThan(installBtn!.height); // boxes don't overlap
     expect(gap).toBeGreaterThanOrEqual(16); // clear, un-mis-tappable spacing
   });
 
   it("blocks an over-mass warehouse install — toasts the reason, no mutation", () => {
-    // hull_scout: massCapacity 30. Fill it to capacity, then try to install a
-    // gear that fits a free bank but blows the mass budget.
     const loadout = new ShipLoadout("hull_scout");
     loadout.install("wpn_torpedo"); // mass 12 → weapon 1/2
     loadout.install("wpn_torpedo"); // mass 12 → weapon 2/2, used 24
@@ -318,7 +294,6 @@ describe("HangarPanel — shared slot-fitting component", () => {
     expect(installBtn).toBeDefined();
     installBtn!.handlers.pointerdown(fakeEvent);
 
-    // No-op: gear stays in the warehouse, loadout unchanged, reason toasted red.
     expect(player.inventory.ownedGearIds).toContain("eq_shield");
     expect(loadout.installedGearIds()).toEqual(before);
     expect(loadout.installedGearIds()).not.toContain("eq_shield");
@@ -340,12 +315,6 @@ describe("HangarPanel scrolling — overflowing content stays reachable (bug rep
     created.length = 0;
   });
 
-  // A deliberately tiny screen collapses the visible content band
-  // (contentBottom - contentTop) to well under a single row's height, so even
-  // one installed slot / one warehouse row overflows deterministically —
-  // regardless of how many real hull slots exist — without needing a huge
-  // fixture. Mirrors the reported bug: content the panel computed correctly
-  // still ends up below the visible fold.
   const tinyRenderer = {
     app: {
       screen: { width: 1280, height: 260 },
@@ -362,10 +331,6 @@ describe("HangarPanel scrolling — overflowing content stays reachable (bug rep
 
     new HangarPanel(tinyRenderer).render(makeCtx(loadout, player));
 
-    // Pre-fix: renderFittingBanks stopped drawing once `y` passed
-    // `contentBottom`, so an overflowing slot's [снять] control was never
-    // created at all — clipped, not just visually scrolled off. Post-fix the
-    // full column renders (scroll reveals it), so both controls exist.
     const unfitButtons = created.filter((n) => n.text === "[снять]");
     expect(unfitButtons.length).toBe(2);
   });
@@ -373,8 +338,6 @@ describe("HangarPanel scrolling — overflowing content stays reachable (bug rep
   it("still renders every warehouse row when the СКЛАД column overflows the visible height", () => {
     const loadout = new ShipLoadout("hull_scout");
     const player = makePlayer();
-    // Legacy bag items need no catalog entry to render a row — cheap way to
-    // force many rows without depending on real gear ids.
     player.inventory.modules = Array.from({ length: 6 }, (_, i) => ({
       id: `fake_item_${i}`,
       name: `Дроид-ремонтник ${i}`,
@@ -427,12 +390,10 @@ describe("HangarPanel scrolling — overflowing content stays reachable (bug rep
 
       panel.render(makeCtx(loadout, player));
 
-      // Two overflowing columns → two window-level wheel listeners.
       expect(wheelHandlers.length).toBeGreaterThanOrEqual(1);
       const before = panel.getScrollInfo();
       expect(before.left.offset).toBe(0);
 
-      // Scroll down: offset should advance, clamped at the column's max.
       for (const wheel of wheelHandlers) {
         wheel({
           deltaY: 100,
@@ -443,7 +404,6 @@ describe("HangarPanel scrolling — overflowing content stays reachable (bug rep
       expect(scrolled.left.offset).toBeGreaterThan(0);
       expect(scrolled.left.offset).toBeLessThanOrEqual(scrolled.left.max);
 
-      // Scrolling far past the end clamps to max, never past it.
       for (const wheel of wheelHandlers) {
         for (let i = 0; i < 50; i++) {
           wheel({
@@ -455,9 +415,6 @@ describe("HangarPanel scrolling — overflowing content stays reachable (bug rep
       const clamped = panel.getScrollInfo();
       expect(clamped.left.offset).toBe(clamped.left.max);
 
-      // A second render() re-arms fresh listeners rather than stacking old
-      // ones (host scenes fully rebuild + re-call render() on every
-      // install/sell — a stale window listener would leak and double-scroll).
       const priorRemoveCalls = removeSpy.mock.calls.length;
       panel.render(makeCtx(loadout, player));
       expect(removeSpy.mock.calls.length).toBeGreaterThan(priorRemoveCalls);
@@ -509,16 +466,12 @@ describe("HangarPanel ring (Task 4) — SR2-style zone grouping over the unchang
     expect(all).toContain("СИСТЕМА ДВИЖЕНИЯ");
     expect(all).toContain("СИСТЕМА ОТСЛЕЖИВАНИЯ");
     expect(all).toContain("ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ");
-    // The domain bank headers still render — the ring is a visual regrouping,
-    // not a change to the underlying 4-category model.
     expect(all.some((t) => t.includes("ОРУЖИЕ") && t.includes("0/2"))).toBe(
       true,
     );
   });
 
   it("shows a fitted fuel tank in the movement zone (above the bottom equipment zone), not the misc equipment row", () => {
-    // hull_scout: 2 equipment slots. Fit a fuel tank (movement zone) and a
-    // shield (bottom misc zone) — same shared bank, different ring group.
     const loadout = new ShipLoadout("hull_scout");
     loadout.install("eq_tank");
     loadout.install("eq_shield");
@@ -536,9 +489,6 @@ describe("HangarPanel ring (Task 4) — SR2-style zone grouping over the unchang
       | undefined;
     expect(tankNode).toBeDefined();
     expect(shieldNode).toBeDefined();
-    // The movement zone shares the hull-view row (rendered before the bottom
-    // ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ zone), so the fuel tank sits strictly above
-    // the shield.
     expect(tankNode!.y).toBeLessThan(shieldNode!.y);
   });
 
@@ -549,8 +499,6 @@ describe("HangarPanel ring (Task 4) — SR2-style zone grouping over the unchang
     new HangarPanel(renderer).render(makeCtx(loadout, player));
 
     const all = texts();
-    // The banner keeps its "Корпус:" prefix (pinned contract); the central
-    // hull-view box additionally shows the bare hull name.
     expect(all.some((t) => t === `Корпус: ${loadout.hull.name}`)).toBe(true);
     expect(all.some((t) => t === loadout.hull.name)).toBe(true);
   });
@@ -588,7 +536,6 @@ describe("HangarPanel — ВЫБРОСИТЬ/ШЛЮЗ jettison (Task 5)", () => 
     expect(jettisonBtn).toBeDefined();
     jettisonBtn!.handlers.pointerdown(fakeEvent);
 
-    // Armed, not yet discarded — the mutation only happens on the confirm click.
     expect(player.inventory.ownedGearIds).toContain("eq_radar");
     expect(ctx.rerender).toHaveBeenCalled();
   });
@@ -650,9 +597,6 @@ describe("HangarPanel — ВЫБРОСИТЬ/ШЛЮЗ jettison (Task 5)", () => 
     panel.render(ctx);
     findButton("[Выбросить]")!.handlers.pointerdown(fakeEvent);
 
-    // Mirrors the real `Inventory.removeResource`: the stack's amount drops
-    // to 0 (not spliced out) — the `.filter((r) => r.amount > 0)` in
-    // `renderWarehouseAndCargo` is what actually stops showing it.
     expect(player.inventory.resources).toEqual([{ type: "METALS", amount: 0 }]);
   });
 });
@@ -664,8 +608,6 @@ describe("HangarPanel — СЕРВИСНЫЙ ЦЕНТР repair block (Task 5)", 
 
   it("shows «не требуется» and no repair button when the hull is already at max", () => {
     const loadout = new ShipLoadout("hull_scout");
-    // makePlayer's default ship pool is effectively infinite, so it always
-    // syncs down to a perfect hull for any real hull's derived max.
     const player = makePlayer();
 
     new HangarPanel(renderer).render(makeCtx(loadout, player));
@@ -835,7 +777,6 @@ describe("HangarPanel — КОМПЛЕКТАЦИЯ 1/2/3 preset tabs (Task 6)", 
     const ctx = makeCtx(loadout, player, [preset]);
 
     new HangarPanel(renderer).render(ctx);
-    // Unfit first so applying has to re-install it from the bag.
     findButton("[снять]")!.handlers.pointerdown(fakeEvent);
     expect(loadout.installedGearIds()).not.toContain("wpn_pulse");
 

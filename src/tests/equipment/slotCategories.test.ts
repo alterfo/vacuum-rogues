@@ -6,13 +6,6 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 
-/**
- * Category-aware slot model (ship-fitting rework Task 1). In SR-canon the hull
- * dictates how many slots exist **per category**: a weapon bank, a single engine
- * ("Система движения"), a single radar ("Система отслеживания") and a shared
- * additional-equipment bank — not one flat slot total.
- */
-
 const gear = (id: string): Gear => gearById(id)!;
 
 describe("slotCategoryFor — gear → slot bank", () => {
@@ -49,19 +42,16 @@ describe("slotCategoryFor — gear → slot bank", () => {
 
 describe("ShipLoadout — per-category capacity from the hull", () => {
   it("reports each hull's category totals via derivedStats", () => {
-    // hull_scout: weaponSlots 2 / equipmentSlots 2; engine + radar always 1.
     const scout = new ShipLoadout("hull_scout").derivedStats().categories;
     expect(scout.weapon.total).toBe(2);
     expect(scout.equipment.total).toBe(2);
     expect(scout.engine.total).toBe(1);
     expect(scout.radar.total).toBe(1);
 
-    // hull_courier: weaponSlots 1 / equipmentSlots 4.
     const courier = new ShipLoadout("hull_courier").derivedStats().categories;
     expect(courier.weapon.total).toBe(1);
     expect(courier.equipment.total).toBe(4);
 
-    // hull_bastion: weaponSlots 4 / equipmentSlots 5.
     const bastion = new ShipLoadout("hull_bastion").derivedStats().categories;
     expect(bastion.weapon.total).toBe(4);
     expect(bastion.equipment.total).toBe(5);
@@ -93,10 +83,8 @@ describe("ShipLoadout — per-category capacity from the hull", () => {
     const lo = new ShipLoadout("hull_scout"); // equipmentSlots 2
     expect(lo.install("eq_tank")).toBe(true);
     expect(lo.install("eq_scanner")).toBe(true);
-    // Equipment bank full → refuse a third.
     expect(lo.canInstall("eq_droid")).toBe(false);
     expect(lo.install("eq_droid")).toBe(false);
-    // …but a weapon still fits its own bank.
     expect(lo.canInstall("wpn_pulse")).toBe(true);
     expect(lo.install("wpn_pulse")).toBe(true);
   });
@@ -106,7 +94,6 @@ describe("ShipLoadout — single dedicated engine / radar slots", () => {
   it("a second engine replaces the first (one engine slot, no stacking)", () => {
     const lo = new ShipLoadout("hull_bastion");
     expect(lo.install("eq_engine_i")).toBe(true);
-    // Engine slot is never 'full' — a new engine swaps in.
     expect(lo.canInstall("eq_engine_iii")).toBe(true);
     expect(lo.install("eq_engine_iii")).toBe(true);
     expect(

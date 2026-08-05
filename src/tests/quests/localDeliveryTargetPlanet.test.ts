@@ -30,13 +30,6 @@ vi.mock("pixi.js", () => ({
   BlurFilter: vi.fn(),
 }));
 
-/**
- * Task 2: the accepted Quest must carry the concrete target planet (the «Местный
- * подряд» neighbour) so completion (Task 3) can require landing there. The field
- * is optional + nullable, so a quest/save made before it existed validates and
- * defaults to null (system-level completion preserved — no save-version bump).
- */
-
 const NEIGHBOUR_ID = "ISO_p3";
 const ISSUER_PLANET_ID = "ISO_p1";
 
@@ -65,8 +58,6 @@ function localDeliveryTemplate(targetPlanetId: string | null): QuestTemplate {
 }
 
 function localDeliveryGenerated(targetPlanetId: string | null): GeneratedQuest {
-  // The GeneratedQuest carries targetPlanetId at the top level (QuestGenerator
-  // sets it); the template does NOT — GameEngine.acceptBoardQuest threads it on.
   const template = localDeliveryTemplate(null);
   return {
     template,
@@ -124,8 +115,6 @@ describe("Quest carries targetPlanetId (Task 2)", () => {
       localDeliveryGenerated(NEIGHBOUR_ID),
       ISSUER_PLANET_ID,
     );
-    // The accepted Quest names the neighbour, even though its source template did
-    // not carry it — acceptBoardQuest copies it from the GeneratedQuest.
     expect(accepted?.targetPlanetId).toBe(NEIGHBOUR_ID);
   });
 
@@ -150,7 +139,6 @@ describe("Quest carries targetPlanetId (Task 2)", () => {
       issuedDay: 0,
       deadline: 0,
       failurePenalty: null,
-      // no targetPlanetId — a save made before the field existed
     };
     const parsed = QuestSchema.parse(legacyQuest);
     expect(parsed.targetPlanetId).toBeNull();

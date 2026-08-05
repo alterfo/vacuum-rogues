@@ -1,20 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { waitForEngine, waitForScene } from './fixtures/mockHeavySystems';
 
-/**
- * Letsplay discovery session — full game loop with REAL visuals.
- *
- * Unlike the regular E2E suite this spec does NOT hide the flight background:
- * the point is to see the game exactly as the player sees it and capture a
- * screenshot of every scene/state for visual inspection. ONNX/audio are still
- * mocked (headless stability), but rendering is untouched.
- *
- * This is an exploration harness, not an assertion suite. Each segment is a
- * "soft step": failures are recorded and logged, but the run continues so one
- * broken scene doesn't hide bugs in the rest. The final report (STEP_RESULTS,
- * JS_ERRORS lines in stdout) plus the PNGs in e2e/screenshots/letsplay/ are
- * the deliverable.
- */
 
 const SHOT_DIR = 'e2e/screenshots/letsplay';
 
@@ -30,15 +16,8 @@ type EngineHandle = {
   currentScene: Record<string, unknown> | null;
 };
 
-/**
- * NOTE: page.evaluate callbacks are serialized — they cannot close over module
- * scope. This declaration exists only for TypeScript; the real implementation
- * is installed on `window` (global scope) by the addInitScript below, which is
- * what the free identifier `getEngine` resolves to inside the browser.
- */
 declare function getEngine(): EngineHandle;
 
-/** Wait a few rAF frames so the WebGL canvas has a fresh composited frame. */
 async function settle(page: Page, frames = 5): Promise<void> {
   await page.evaluate(
     (n) =>
@@ -60,18 +39,14 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
   test.setTimeout(240_000);
 
   test('walk every scene and screenshot it', async ({ page }) => {
-    // Mock heavy subsystems but KEEP the real background (no __hideFlightBackground).
     await page.addInitScript(() => {
       (window as Record<string, unknown>).__mockONNX = true;
       (window as Record<string, unknown>).__skipAudio = true;
       (window as Record<string, unknown>).__fastAnimations = true;
-      // Browser-side implementation of the `getEngine` free identifier used in
-      // every page.evaluate callback below (see declare at module top).
       (window as Record<string, unknown>).getEngine = () =>
         (window as Record<string, unknown>).__gameEngine;
     });
 
-    // Collect JS errors for the whole session without aborting the run.
     const jsErrors: string[] = [];
     page.on('pageerror', (err) => jsErrors.push(`pageerror: ${err.message}`));
     page.on('console', (msg) => {
@@ -88,7 +63,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       }
     };
 
-    // ── 01 Main menu ──
     await page.goto('/');
     await waitForEngine(page);
     await step('01-main-menu', async () => {
@@ -96,7 +70,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-01-main-menu');
     });
 
-    // ── 02 Faction select ──
     await step('02-faction-select', async () => {
       await page.evaluate(async () => {
         const engine = getEngine();
@@ -106,7 +79,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-02-faction-select');
     });
 
-    // ── 03 New game → SpaceFlight with real background ──
     await step('03-flight-initial', async () => {
       await page.evaluate(() => {
         const scene = getEngine().currentScene as {
@@ -121,7 +93,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-03-flight-initial');
     });
 
-    // Scene diagnostics for the write-up.
     const diag = await page.evaluate(() => {
       const scene = getEngine().currentScene as Record<string, unknown>;
       const star = scene['starRenderer'] as { centerX: number; centerY: number };
@@ -159,8 +130,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
           } | null;
           if (!scene) return;
           scene.e2eSetCameraZoom?.(zoom);
-          // The camera clamps zoom to MAX_ZOOM — compute the pan from the zoom
-          // that actually applied, or a far-out target misses the frame.
           const z = scene.e2eGetCameraState?.().zoom ?? zoom;
           scene.e2eSetCameraPan?.(
             window.innerWidth / 2 - wx * z,
@@ -171,7 +140,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       );
     };
 
-    // ── 04 Planet close-ups (real textures — masking check) ──
     for (let i = 0; i < diag.planets.length; i++) {
       const p = diag.planets[i];
       await step(`04-planet-${i}`, async () => {
@@ -181,26 +149,21 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       });
     }
 
-    // ── 05 Sun close-up ──
     await step('05-sun', async () => {
       await focus(diag.star.x, diag.star.y, 1.6);
       await shot(page, 'lp-05-sun');
     });
 
-    // ── 06 Ship close-up ──
     await step('06-ship', async () => {
       await focus(diag.ship.x, diag.ship.y, 3.5);
       await shot(page, 'lp-06-ship');
     });
 
-    // ── 06b Free route across the sun (playtest 2 ③: bypass arc + dashes) ──
     await step('06b-sun-route', async () => {
       const info = await page.evaluate(() => {
         const scene = getEngine().currentScene as Record<string, unknown>;
         const star = scene['starRenderer'] as { centerX: number; centerY: number };
         const sp = scene['shipPhysics'] as { shipX: number; shipY: number };
-        // Target diametrically opposite the ship across the star — the straight
-        // shot pierces the sun, so the planner must produce the bypass arc.
         const dx = star.centerX - sp.shipX;
         const dy = star.centerY - sp.shipY;
         const d = Math.hypot(dx, dy) || 1;
@@ -214,16 +177,12 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
         }
         return { points: path.length, minR: Math.round(minR), span: d * 2 };
       });
-      // Frame the bypass arc (rides just outside the exclusion ring around the
-      // star — playtest3 F2) rather than the whole ship→target span — the arc
-      // is the evidence.
       const fit = Math.max(0.55, 720 / (info.span * 1.3));
       await focus(diag.star.x, diag.star.y, fit);
       await shot(page, 'lp-06b-sun-route');
       return `bypass points=${info.points} minR=${info.minR}px`;
     });
 
-    // ── 07 Route to a planet ──
     await step('07-route', async () => {
       await page.evaluate(() => {
         const scene = getEngine().currentScene as Record<string, unknown>;
@@ -248,7 +207,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-07-route');
     });
 
-    // ── 08 Mid-flight + 09 pause-finishes-the-day check (F1) ──
     await step('08-mid-flight', async () => {
       await page.evaluate(() => {
         const scene = getEngine().currentScene as { e2eStartTurn?: () => void } | null;
@@ -259,9 +217,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
     });
 
     await step('09-pause-finishes-day', async () => {
-      // F1 (playtest3): Pause defers the stop to the next day boundary, so the
-      // ship is EXPECTED to keep drifting briefly (finishing its day) before it
-      // halts — this is a soft diagnostic, inspected by a human in lp-09.
       const before = await page.evaluate(() => {
         const scene = getEngine().currentScene as Record<string, unknown>;
         const sp = scene['shipPhysics'] as { shipX: number; shipY: number } | null;
@@ -281,9 +236,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       }
     });
 
-    // ── 10 Land on EVERY planet → PlanetScene (per-instance backdrop variety) ──
-    // Each landed backdrop is tinted per planet.id (Task 1): inspect lp-10-planet-*
-    // and confirm two same-type/faction worlds look distinct, none over-tinted.
     const planetList = await page.evaluate(() => {
       const engine = getEngine();
       const sysId = engine.player?.currentSystemId;
@@ -316,7 +268,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       });
     }
 
-    // Fallback: if the system somehow had no planets, still land via the helper.
     if (planetList.length === 0) {
       await step('10-planet-scene', async () => {
         await page.evaluate(async () => {
@@ -344,7 +295,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await waitForScene(page, sceneName, 15_000);
     };
 
-    // ── 11-14 Planet sub-scenes ──
     await step('11-trade', async () => {
       await gotoPlanetSub('TRADE', 'TradeScene');
       await shot(page, 'lp-11-trade');
@@ -362,7 +312,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-14-info-center');
     });
 
-    // ── 15 Take off → re-entry spawn check ──
     await step('15-reentry', async () => {
       await page.evaluate(async () => {
         const engine = getEngine();
@@ -379,7 +328,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       return pos ? `ship at (${pos.x.toFixed(0)}, ${pos.y.toFixed(0)})` : 'no shipPhysics';
     });
 
-    // ── 16 Star map ──
     await step('16-star-map', async () => {
       await page.evaluate(async () => {
         const engine = getEngine();
@@ -389,7 +337,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-16-star-map');
     });
 
-    // ── 17 Station (if the system has one) ──
     await step('17-station', async () => {
       const hasStation = await page.evaluate(async () => {
         const engine = getEngine();
@@ -403,7 +350,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-17-station');
     });
 
-    // ── 18 Back to flight → NPC click panel ──
     await step('18-npc-panel', async () => {
       await page.evaluate(async () => {
         const engine = getEngine();
@@ -425,9 +371,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-18-npc-panel');
     });
 
-    // ── 18b Second system's sun (per-system variety — compare with lp-05-sun) ──
-    // Warp to another system (preferring the SAME StarType) and shoot its sun so
-    // the per-systemId jitter (Task 2) is visually inspectable against lp-05-sun.
     await step('18b-sun-other-system', async () => {
       const info = await page.evaluate(async () => {
         const engine = getEngine();
@@ -464,7 +407,6 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       return `${info.curType}→${info.otherType} (sameType=${info.sameType})`;
     });
 
-    // ── 19 Inventory ──
     await step('19-inventory', async () => {
       await page.evaluate(async () => {
         const engine = getEngine();
@@ -474,11 +416,7 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-19-inventory');
     });
 
-    // ── 20 Combat ──
-    // Combat is real-time in-flight only now (the hex CombatScene / SceneType.COMBAT
-    // was removed), so there is no standalone combat scene to drive here.
 
-    // ── 21 Return to main menu ──
     await step('21-back-to-menu', async () => {
       await page.evaluate(async () => {
         const engine = getEngine();
@@ -488,13 +426,11 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-21-back-to-menu');
     });
 
-    // ── Report ──
     // eslint-disable-next-line no-console
     console.log('STEP_RESULTS', JSON.stringify(results, null, 2));
     // eslint-disable-next-line no-console
     console.log('JS_ERRORS', JSON.stringify(jsErrors.slice(0, 50), null, 2));
 
-    // The harness itself only requires that the game booted at all.
     expect(results.find((r) => r.step === '03-flight-initial')?.ok).toBe(true);
   });
 });

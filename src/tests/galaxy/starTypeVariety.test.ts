@@ -8,14 +8,6 @@ import {
 } from "@/systems/galaxy/starTypeDistribution";
 import { GalaxySimulator } from "@/systems/GalaxySimulator";
 
-/**
- * Task 5 (diversify star types): every system used to be a hardcoded
- * `YELLOW_DWARF` — a galaxy of identical yellow suns. Generation now seeds a
- * varied, weighted star type per system, lighting up the existing
- * `star_maps/{blue_giant,red_dwarf,white_dwarf,neutron}` art. These tests assert
- * the *relationships* (varied distribution, every art-backed type resolves to
- * its prefix) rather than exact magnitudes, so weight tuning won't churn them.
- */
 describe("pickStarType (weighted galaxy star-type distribution)", () => {
   it("is deterministic for the same seed", () => {
     const a = pickStarType(new SeededRNG("sys_star_7"));
@@ -38,11 +30,9 @@ describe("pickStarType (weighted galaxy star-type distribution)", () => {
       const t = pickStarType(new SeededRNG(`draw_${i}`));
       counts.set(t, (counts.get(t) ?? 0) + 1);
     }
-    // Every weighted type appears at least once — galaxy is varied.
     for (const [type] of STAR_TYPE_WEIGHTS) {
       expect(counts.get(type) ?? 0).toBeGreaterThan(0);
     }
-    // Yellow is the most-weighted but far from universal (no all-yellow galaxy).
     const yellow = counts.get(StarType.YELLOW_DWARF) ?? 0;
     expect(yellow).toBeGreaterThan(0);
     expect(yellow).toBeLessThan(N); // not every sun is yellow
@@ -96,14 +86,11 @@ describe("GalaxySimulator seeds varied star types", () => {
       40,
     );
     const types = new Set(galaxy.systems.map((s) => s.starType));
-    // More than one distinct star type across the galaxy.
     expect(types.size).toBeGreaterThan(1);
-    // No single type dominates the whole galaxy.
     const yellow = galaxy.systems.filter(
       (s) => s.starType === StarType.YELLOW_DWARF,
     ).length;
     expect(yellow).toBeLessThan(galaxy.systems.length);
-    // Every generated star type is an art-backed one (resolves to a prefix).
     for (const s of galaxy.systems) {
       expect(STAR_MAP_PREFIX[s.starType]).toBeTruthy();
     }

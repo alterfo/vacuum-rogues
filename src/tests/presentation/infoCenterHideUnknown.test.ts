@@ -1,16 +1,3 @@
-/**
- * Playtest report (2026-06-27, Issue 4): the InfoCenter must HIDE unexplored
- * systems entirely from the rumor/news feed — not just margin-mask them. The
- * earlier `infocenter-margin-known-systems-only` work masked the margin number
- * but still rendered the route/system text; the player now wants a route/event
- * touching an unscouted system gone from the feed, with a "no intel yet"
- * empty-state.
- *
- * This is implemented additively: `buildRumorPanel(..., hideUnknown=true)` drops
- * unknown-endpoint rumors (the legacy default-false masking path is unchanged and
- * still locked by `infoCenterRumors.test.ts`), and the pure `feedEventVisible`
- * predicate gates news-feed events. Presentation-only — no schema/save change.
- */
 import { describe, it, expect } from "vitest";
 import {
   buildRumorPanel,
@@ -78,7 +65,6 @@ describe("buildRumorPanel — hideUnknown drops unexplored-system routes entirel
     const player = makePlayer([]);
 
     const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player, true);
-    // The whole row is gone — no masked «маржа ~?%» line lingers.
     expect(data.lines).toHaveLength(0);
     expect(data.emptyText).toBe(rumorPanelNoIntel());
   });
@@ -129,7 +115,6 @@ describe("buildRumorPanel — hideUnknown drops unexplored-system routes entirel
     const player = makePlayer([]);
 
     const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player);
-    // Row still present, margin masked — the old contract.
     expect(data.lines).toHaveLength(1);
     expect(data.lines[0].text).toContain("маржа ~?%");
   });

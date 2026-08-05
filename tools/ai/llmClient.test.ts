@@ -1,10 +1,3 @@
-/**
- * Tests for the injectable LLM client port (Task 2). Everything is deterministic
- * and free: the {@link FakeLlmClient} drives the interface, and the real
- * {@link AnthropicLlmClient} is exercised through an **injected transport** so we
- * assert the request shape without a live API call, a network round-trip, or an
- * installed SDK. The only live-path assertion is the missing-key guard.
- */
 import { describe, it, expect } from "vitest";
 import {
   AnthropicLlmClient,
@@ -136,8 +129,6 @@ describe("AnthropicLlmClient missing-key guard", () => {
   });
 
   it("throws a clear error only when the live transport is actually invoked", async () => {
-    // Default transport (no transport injected) + empty key → the guard fires
-    // before any SDK load, so this is deterministic and makes no network call.
     const client = new AnthropicLlmClient({ apiKey: "" });
     await expect(
       client.complete([{ role: "user", content: "judge this" }]),

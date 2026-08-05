@@ -28,23 +28,12 @@ export class Quest {
     public readonly issuedDay: number, // Game day when quest was issued
     public readonly deadline: number, // Days from issuedDay to complete (0 = no deadline)
     public readonly failurePenalty: QuestFailurePenalty | null = null, // Penalty if quest fails or expires
-    /** Star system the quest objective is located in (null for local quests). */
     public readonly targetSystemId: string | null = null,
-    /** Specific NpcShip id targeted by BOUNTY quests (null if not assigned). */
     public readonly targetObjectId: string | null = null,
-    /** Minimum faction reputation required to see/accept this quest (0 = no restriction). */
     public readonly minReputation: number = 0,
-    /** Chain identifier shared by the 3 sequential quests in a chain (null = standalone). */
     public readonly chainId: string | null = null,
-    /** Position in the chain: 0/1/2 for parts, 3 for finale, -1 = not a chain quest. */
     public readonly chainPart: number = -1,
-    /** Faction that issued this quest — used for reputation penalty on failure. Empty = fall back to planetId key. */
     public readonly factionId: string = "",
-    /**
-     * Specific target planet in the target system the objective must be fulfilled
-     * at — e.g. the «Местный подряд» neighbour the cargo is couriered to. Null
-     * means system-level completion (legacy quests + non-locational objectives).
-     */
     public readonly targetPlanetId: string | null = null,
   ) {}
 
@@ -53,7 +42,6 @@ export class Quest {
 
     const obj = this.objectives.find((o) => o.id === event.objectiveId);
     if (obj && !obj.completed) {
-      // Create updated objective to avoid readonly issues on interface
       const updated = {
         ...obj,
         currentAmount: Math.min(
@@ -71,26 +59,17 @@ export class Quest {
     this.isCompleted = this.objectives.every((o) => o.completed);
   }
 
-  /**
-   * Check if quest has expired based on current game day
-   */
   isExpired(currentDay: number): boolean {
     if (this.deadline === 0) return false; // No deadline
     if (this.isCompleted || this.isFailed || this.isPendingReturn) return false; // Already finished
     return currentDay > this.issuedDay + this.deadline;
   }
 
-  /**
-   * Get remaining days until deadline
-   */
   getRemainingDays(currentDay: number): number {
     if (this.deadline === 0) return Infinity;
     return Math.max(0, this.issuedDay + this.deadline - currentDay);
   }
 
-  /**
-   * Mark quest as failed
-   */
   markAsFailed(): void {
     this.isFailed = true;
   }

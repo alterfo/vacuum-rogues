@@ -30,38 +30,14 @@ export interface LootPickupDeps {
   showMessage(text: string, color?: number): void;
 }
 
-/**
- * Owns the floating loot dropped by destroyed NPC ships: the `spaceLoot` array,
- * per-item glowing PixiJS dots, the elapsed-ms clock, TTL despawn, pulse animation,
- * and proximity pickup. Extracted from {@link NpcShipManager} to give it a single
- * responsibility (NPC lifecycle orchestration) and make loot logic independently
- * testable.
- */
 export class LootDropHandler {
-  /** Floating drops currently live in this system. Public so NpcShipManager can
-   *  expose them to SpaceFlightScene (radar dots + pickup). */
   readonly spaceLoot: SpaceLootItem[] = [];
-  /** Per-loot glowing dot, keyed by loot id. Public so NpcShipManager can expose a
-   *  forwarding accessor for tests that inspect internal graphics counts. */
   readonly lootGraphics = new Map<string, Graphics>();
   private lootClockMs = 0;
   private readonly LOOT_TTL_MS = 60_000;
 
   constructor(private readonly gameLayer: Container) {}
 
-  /**
-   * Spawn floating loot items at a destroyed NPC's world position. Overmind
-   * ships drop Overmind artifacts, otherwise a salvaged module; the artifact
-   * chance and item count scale with the ship's `sizeTier` (a boss kill
-   * guarantees artifacts — see {@link OVERMIND_ARTIFACT_DROP}; a tier-less
-   * ship keeps the flat baseline). Everyone else drops a random module from
-   * their scanned loadout. `rng` is injectable so tests can drive the roll
-   * deterministically. `day` gates a `minDay`-restricted loadout token (e.g.
-   * the apex engine, {@link APEX_ENGINE_MIN_DAY}) out of the drop pool before
-   * its calendar gate — without this, combat loot bypasses the same gate
-   * {@link ShopGenerator} enforces for shop stock. Defaults to no gate for
-   * direct callers that don't track the calendar.
-   */
   spawn(
     npc: NpcShip,
     worldX: number,
@@ -74,9 +50,6 @@ export class LootDropHandler {
     const drop = isOvermind
       ? OVERMIND_ARTIFACT_DROP[npc.sizeTier ?? "small"]
       : undefined;
-    // `forcedCount` lets the wreck-drift loot cadence (Task 14/14.5c) pre-roll
-    // the total via rollDropCount and emit it one dot at a time along the drift
-    // — the per-kill distribution is unchanged, just spread over the wreck's life.
     const count = forcedCount ?? this.rollDropCount(npc, rng);
     const artifactChance = Math.min(
       1,
@@ -103,10 +76,6 @@ export class LootDropHandler {
     }
   }
 
-  /**
-   * Advance the loot clock, pulse each dot's alpha (0.6→1.0→0.6 at ~1 Hz) and
-   * despawn items older than {@link LOOT_TTL_MS}. Runs every frame.
-   */
   update(deltaTime: number): void {
     this.lootClockMs += deltaTime;
     if (this.spaceLoot.length === 0) return;
@@ -124,12 +93,6 @@ export class LootDropHandler {
     }
   }
 
-  /**
-   * Check each floating drop against the ship's proximity and the loadout's grav-
-   * tractor range; collect every reachable drop (gear → owned gear inventory,
-   * resource cargo → player hold), show a pickup toast, and remove the dot.
-   * A full hold leaves resource drops in space without touching gear items.
-   */
   collectIfInRange(deps: LootPickupDeps): void {
     if (this.spaceLoot.length === 0) return;
     const loadout = deps.getLoadout();
@@ -192,7 +155,6 @@ export class LootDropHandler {
     }
   }
 
-  /** Remove all live loot items and dispose their glowing dots. */
   destroy(): void {
     for (const g of this.lootGraphics.values()) {
       if (g.parent) g.parent.removeChild(g);
@@ -202,11 +164,6 @@ export class LootDropHandler {
     this.spaceLoot.length = 0;
   }
 
-  /**
-   * Roll a kill's TOTAL drop count — the same distribution {@link spawn} uses
-   * (uniform-thirds base + the Overmind tier bonus). Public so the wreck-drift
-   * loot cadence can pre-roll the total once and stagger it via `forcedCount`.
-   */
   rollDropCount(npc: NpcShip, rng: () => number = Math.random): number {
     const drop =
       npc.faction === Faction.OVERMIND
@@ -215,7 +172,6 @@ export class LootDropHandler {
     return this.rollLootCount(rng) + (drop?.bonusLootRolls ?? 0);
   }
 
-  /** Roll the per-kill loot count: 0, 1 or 2 (uniform thirds). */
   private rollLootCount(rng: () => number): number {
     const r = rng();
     if (r < 1 / 3) return 0;
@@ -223,11 +179,6 @@ export class LootDropHandler {
     return 2;
   }
 
-  /** Pick a module id for a non-artifact drop: a scanned loadout item, else a
-   *  generic salvage id when the NPC has no visible loadout. Excludes any
-   *  token whose resolved gear carries an unmet `minDay` (falls back to the
-   *  full pool only if every token happens to be gated, so a drop never goes
-   *  silently empty). */
   private pickModuleId(npc: NpcShip, rng: () => number, day: number): string {
     const pool =
       npc.loadoutSummary.length > 0 ? npc.loadoutSummary : DEFAULT_LOOT_MODULES;
@@ -240,7 +191,6 @@ export class LootDropHandler {
     return usable[Math.floor(rng() * usable.length) % usable.length];
   }
 
-  /** Mount a small glowing dot for a loot item (yellow module / cyan artifact). */
   private mountSprite(item: SpaceLootItem): void {
     const color = item.artifactId ? 0x33ffff : 0xffdd33;
     const g = new Graphics();
@@ -254,7 +204,6 @@ export class LootDropHandler {
     this.lootGraphics.set(item.id, g);
   }
 
-  /** Remove the loot item at `index` and dispose its glowing dot. */
   private removeAt(index: number): void {
     const item = this.spaceLoot[index];
     if (!item) return;

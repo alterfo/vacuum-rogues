@@ -1,10 +1,3 @@
-/**
- * Smoke tests for the vacuum-mcp tool implementations.
- *
- * These call the tool functions directly (tools.ts), not through the MCP
- * protocol — the protocol layer in vacuum-mcp.ts is a thin wrapper. The goal is
- * to prove each lookup returns the right shape against the real source tree.
- */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -42,9 +35,6 @@ describe("vacuum-mcp tools", () => {
       const tests = findTestsFor("src/systems/QuestManager.ts");
       expect(Array.isArray(tests)).toBe(true);
       expect(tests.length).toBeGreaterThan(0);
-      // Every result is under src/tests/ (the grep root guarantees that
-      // trivially) — so also assert the returned files genuinely reference the
-      // symbol, which is the behaviour the tool actually promises.
       const referencesSymbol = tests.some((t) =>
         readFileSync(join(REPO_ROOT, t), "utf8").includes("QuestManager"),
       );
@@ -74,7 +64,6 @@ describe("vacuum-mcp tools", () => {
     it("returns balance constants with STARTING_MONEY: 1000 at top level", async () => {
       const constants = await getBalanceConstants();
       expect(constants.STARTING_MONEY).toBe(1000);
-      // A top-level numeric export is also surfaced.
       expect(constants.QUEST_BASE_REWARD).toBe(400);
     });
   });

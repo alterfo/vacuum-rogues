@@ -5,36 +5,17 @@ import { CombatPauseOverlay } from "./CombatPauseOverlay";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { WeaponSpec } from "@/systems/equipment/GearCatalog";
 
-/** The flight scene binds the controller/overlay to these concrete handles. */
 export type FlightPauseController = CombatPauseController<
   NpcShipSprite,
   WeaponSpec
 >;
 export type FlightPauseOverlay = CombatPauseOverlay<NpcShipSprite, WeaponSpec>;
 
-/** Just the slice of the flight renderer the pause UI needs (Low Coupling). */
 interface PauseUiRenderer {
   uiLayer: Container;
   app: { screen: { width: number; height: number } };
 }
 
-/**
- * Wire the active-pause combat UI for the flight scene (Task 3): a pure
- * {@link CombatPauseController} plus its {@link CombatPauseOverlay}, cross-linked
- * so an incoming attack opens the overlay, row clicks update the controller's
- * selection (mirrored into the combat module so the reticle tracks it), and
- * confirm/resume fire one shot / resume time.
- *
- * The scene keeps only the returned controller (it reads `paused` and raises
- * `requestPause`); the overlay is owned entirely by the controller's dep
- * closures and lives on the UI layer, torn down with it on scene exit. Extracted
- * to keep `SpaceFlightScene` a thin Controller (flight-module convention).
- *
- * Called with no args (before the scene has a render context, e.g. at field-init
- * time or in unit tests) it returns a bare, overlay-less controller so the
- * `paused` flag is always defined; the scene rebuilds the wired one in
- * initialize() once the renderer + combat module exist.
- */
 export function createCombatPauseUi(
   renderer?: PauseUiRenderer,
   combat?: CombatModule,
@@ -42,8 +23,6 @@ export function createCombatPauseUi(
 ): FlightPauseController {
   if (!renderer || !combat) return new CombatPauseController();
 
-  // Controller ↔ overlay are mutually referential; this holder lets both be
-  // `const` (the overlay is assigned last, after the controller exists).
   const ref: { overlay?: FlightPauseOverlay } = {};
 
   const controller: FlightPauseController = new CombatPauseController({
@@ -74,12 +53,6 @@ export function createCombatPauseUi(
         controller.selectWeapon(w);
         sync();
       },
-      // Resuming from the overlay (fire OR continue) starts a fresh combat round
-      // (Task 9 (v)): the player has taken their between-rounds decision, so the
-      // round's spent-damage budget resets and fire re-opens. This is the
-      // live-only begin-round seam — the headless agent drives the controller's
-      // resume() directly (bypassing these handlers) and begins its rounds
-      // explicitly per step, so it never resets the budget mid-step.
       onConfirm: () => {
         combat.beginCombatRound();
         controller.confirm();
@@ -94,11 +67,6 @@ export function createCombatPauseUi(
   return controller;
 }
 
-/**
- * Pre-select the target/weapon for this pause (preserving any selection carried
- * over from before it, else the auto-fire defaults) and open the overlay with
- * the live combatant + fitted-weapon lists.
- */
 function openOverlay(
   overlay: FlightPauseOverlay,
   controller: FlightPauseController,

@@ -4,7 +4,6 @@ import { AsteroidBelt } from "@/presentation/flight/AsteroidBelt";
 import type { Renderer } from "@/presentation/Renderer";
 import { buildCometFlyby, hyperbolaPoint } from "@/utils/flightGeometry";
 
-/** Deterministic 0..1 generator (mulberry32) so a flyby is reproducible. */
 function seededRng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -16,7 +15,6 @@ function seededRng(seed: number): () => number {
   };
 }
 
-/** Minimal Renderer stand-in backed by a real Container (no WebGL needed). */
 function makeHarness(): { belt: AsteroidBelt; gameLayer: Container } {
   const gameLayer = new Container();
   const renderer = {
@@ -26,9 +24,6 @@ function makeHarness(): { belt: AsteroidBelt; gameLayer: Container } {
   return { belt: new AsteroidBelt(renderer, gameLayer), gameLayer };
 }
 
-/* Reach into the private field state for inspection — these are cosmetic
- * world-space motes with no public accessor, so a structural read is the only
- * way to assert their motion without standing up the whole flight scene. */
 interface Mote {
   graphics: { x: number; y: number; rotation: number; visible: boolean };
   x: number;
@@ -62,7 +57,6 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
     expect(comets.length).toBeGreaterThan(0);
     for (const c of comets) {
       expect(c.flyby).not.toBeNull();
-      // e > 1 is exactly what makes the path open (a closed orbit had e < 1).
       expect(c.flyby!.params.eccentricity).toBeGreaterThan(1);
     }
     belt.destroy();
@@ -77,8 +71,6 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
     const R = inner.asteroidFieldRadius();
     const comet = inner.asteroids.find((m) => m.comet)!;
 
-    // Pin a deterministic flyby starting at the incoming edge so the whole pass
-    // (entry → perihelion → exit) is observed regardless of the random spawn.
     const flyby = buildCometFlyby(cx, cy, R, seededRng(1));
     comet.flyby = flyby;
     comet.theta = flyby.thetaStart;
@@ -87,9 +79,6 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
     comet.graphics.visible = true;
 
     const dists: number[] = [];
-    // The entry point is the flyby's incoming edge crossing (true anomaly
-    // thetaStart) — NOT comet.x/comet.y here, which still hold the random spawn
-    // position until the first update() drives the body onto the flyby path.
     const firstPos = hyperbolaPoint(flyby.params, flyby.thetaStart);
     let exited = false;
     let lastPos = { x: comet.x, y: comet.y };
@@ -104,11 +93,9 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
       dists.push(Math.hypot(comet.x - cx, comet.y - cy));
     }
 
-    // It LEAVES — the comet exits the field instead of orbiting forever.
     expect(exited).toBe(true);
     expect(comet.cometCooldown).toBeGreaterThan(0);
 
-    // A SINGLE perihelion: distance falls to one interior minimum then rises.
     const minDist = Math.min(...dists);
     const minIdx = dists.indexOf(minDist);
     expect(minIdx).toBeGreaterThan(0);
@@ -119,12 +106,10 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
     for (let i = minIdx + 1; i < dists.length; i++) {
       expect(dists[i]).toBeGreaterThan(dists[i - 1] - 1e-6);
     }
-    // The closest approach matches the hyperbola's perihelion (inside the field).
     expect(minDist).toBeGreaterThanOrEqual(flyby.params.perihelion - 1);
     expect(minDist).toBeLessThan(flyby.params.perihelion + 5);
     expect(flyby.params.perihelion).toBeLessThan(R);
 
-    // NOT periodic: the exit point is far from the entry point, not a return.
     expect(
       Math.hypot(lastPos.x - firstPos.x, lastPos.y - firstPos.y),
     ).toBeGreaterThan(minDist);
@@ -141,7 +126,6 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
     const R = inner.asteroidFieldRadius();
     const comet = inner.asteroids.find((m) => m.comet)!;
 
-    // Force it just past the exit edge so the next tick parks it in cooldown.
     comet.theta = comet.flyby!.thetaEnd + 1;
     comet.cometCooldown = 0;
     comet.graphics.visible = true;
@@ -149,7 +133,6 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
     expect(comet.graphics.visible).toBe(false);
     expect(comet.cometCooldown).toBeGreaterThan(0);
 
-    // Fast-forward past the cooldown: a brand-new flyby flies in at the edge.
     belt.update(comet.cometCooldown + 1, 0);
     expect(comet.graphics.visible).toBe(true);
     expect(comet.flyby).not.toBeNull();
@@ -168,7 +151,6 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
     const rot0 = rock.graphics.rotation;
     const dt = 10;
     belt.update(dt, 0);
-    // Pure linear drift + constant spin — no orbital/hyperbolic terms applied.
     expect(rock.x).toBeCloseTo(x0 + rock.vx * dt, 9);
     expect(rock.y).toBeCloseTo(y0 + rock.vy * dt, 9);
     expect(rock.graphics.rotation).toBeCloseTo(rot0 + rock.spin * dt, 9);

@@ -1,14 +1,3 @@
-/**
- * Regression (docs/plans/20260620-planets-moons-rotate-during-pause.md):
- * pause applies **only to ships** — the ambient solar system stays alive. So a
- * planet's cosmetic axial spin + moon rotation (driven by `sprite.update(dt)`)
- * must advance on real elapsed time even while the turn is paused, matching the
- * sun and comets. Only the orbital POSITION stays day-tied (frozen when paused,
- * by design — chase/intercept lead + route targeting rely on it).
- *
- * Exercised through PlanetManager.update with a mocked PlanetSprite so no
- * WebGL/texture context is needed.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -91,7 +80,6 @@ function makePlanet(id: string): Planet {
   return { id, name: id.toUpperCase() } as unknown as Planet;
 }
 
-/** Mutable knobs so each test can flip pause / timeScale / game-day. */
 interface Knobs {
   turnRunning: boolean;
   timeScale: number;
@@ -153,10 +141,6 @@ describe("PlanetManager.update — spin keeps running while paused", () => {
     knobs = { turnRunning: false, timeScale: 1, orbitalDay: 0 };
     ({ manager } = makeHarness(knobs));
     manager.initialize();
-    // Precondition: the assertions below all live inside `for ... of
-    // manager.planetSprites`, so an empty collection would make every test pass
-    // vacuously. Guard it so a future regression in sprite creation fails loudly
-    // instead of silently disarming this spin-during-pause regression test.
     expect(manager.planetSprites).toHaveLength(2);
   });
 
@@ -166,7 +150,6 @@ describe("PlanetManager.update — spin keeps running while paused", () => {
     manager.update(DT, 100);
 
     for (const sprite of manager.planetSprites) {
-      // Spin/moons still tick — and at base rate, not ×timeScale (paused).
       expect(sprite.update).toHaveBeenCalledTimes(1);
       expect(sprite.update).toHaveBeenCalledWith(DT);
     }
@@ -184,7 +167,6 @@ describe("PlanetManager.update — spin keeps running while paused", () => {
   });
 
   it("orbital position stays a function of game-days regardless of pause/resume", () => {
-    // Paused at day 5 → orbit positioned for day 5.
     knobs.turnRunning = false;
     knobs.orbitalDay = 5;
     manager.update(DT, 100);
@@ -192,8 +174,6 @@ describe("PlanetManager.update — spin keeps running while paused", () => {
       expect(sprite.setOrbitForDay).toHaveBeenLastCalledWith(5);
     }
 
-    // Resume the turn but keep the same game-day → orbit position unchanged
-    // (it tracks days, not the pause flag).
     knobs.turnRunning = true;
     manager.update(DT, 100);
     for (const sprite of manager.planetSprites) {

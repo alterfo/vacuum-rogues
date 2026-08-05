@@ -5,7 +5,6 @@ test.describe('Combat System', () => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
     
-    // Navigate to star map
     const canvas = page.locator('canvas');
     const box = await canvas.boundingBox();
     
@@ -26,7 +25,6 @@ test.describe('Combat System', () => {
     const box = await canvas.boundingBox();
     
     if (box) {
-      // Click to trigger random encounter or enemy system
       await canvas.click({
         position: {
           x: box.width * 0.7,
@@ -37,7 +35,6 @@ test.describe('Combat System', () => {
 
     await page.waitForTimeout(2000);
     
-    // Combat scene should be active
     await expect(canvas).toBeVisible();
   });
 
@@ -45,7 +42,6 @@ test.describe('Combat System', () => {
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
     
-    // Hex grid is rendered in canvas
     const box = await canvas.boundingBox();
     expect(box?.width).toBeGreaterThan(0);
   });
@@ -55,7 +51,6 @@ test.describe('Combat System', () => {
     const box = await canvas.boundingBox();
     
     if (box) {
-      // Click on enemy ship or action button
       await canvas.click({
         position: {
           x: box.width * 0.6,
@@ -64,7 +59,6 @@ test.describe('Combat System', () => {
       });
       await page.waitForTimeout(500);
       
-      // Click again for another action
       await canvas.click({
         position: {
           x: box.width * 0.4,
@@ -75,7 +69,6 @@ test.describe('Combat System', () => {
 
     await page.waitForTimeout(1000);
     
-    // Combat should progress
     await expect(canvas).toBeVisible();
   });
 });

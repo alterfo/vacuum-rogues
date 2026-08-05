@@ -1,29 +1,3 @@
-/**
- * Letsplay engine — behavioural-cloning (BC) dataset exporter (dev-only).
- *
- * The neural player ({@link NeuralPolicy}) is trained by **cloning a teacher**:
- * run a known-good {@link PlayerPolicy} (the belief-using {@link
- * MemoryHeuristicPolicy} — the default teacher, since the net's input now carries
- * the memory block) on the *real* {@link GameEngine}, and at every step
- * log the pair `(featurize(obs, belief), actionIndex)` — the net's input vector
- * (including the agent's per-run belief block) and the teacher's chosen action as
- * an index into {@link ACTION_ORDER}. That stream of
- * `(features → label)` rows is a plain supervised-classification dataset: no
- * environment in the training loop, just `tools/ai/train_player.py` fitting the
- * tiny MLP to imitate the teacher, then exporting weights JSON for `mlp.ts`.
- *
- * {@link collectBcDataset} plays `K` sessions × `N` steps on a freshly-booted
- * harness per session and returns the rows in memory; {@link bcDatasetToJsonl}
- * serialises them to JSON-lines (one row per line) and {@link writeBcDataset}
- * persists that to disk (gitignored `.letsplay/`, regenerated each run). The whole
- * run is **deterministic by seed** — the same `seedPrefix` reproduces the same
- * dataset — so a training run is repeatable.
- *
- * **Dev-only.** Lives under `src/tests/`, imported by no production module
- * (enforced by `letsplayDevOnly.test.ts`); it is not a test file itself (no
- * `vi.mock`), so its caller must have mocked PixiJS — exactly why the data-gen
- * runs through vitest, like the letsplay runner.
- */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { RealEngineHarness } from "../realEngineHarness";
@@ -35,36 +9,18 @@ import type { PlayerPolicy } from "./PlayerPolicy";
 import { featurize } from "./NeuralPolicy";
 import type { ScenarioGoal } from "./goalBias";
 
-/**
- * One supervised training example: the {@link featurize} feature vector the
- * teacher saw and the {@link ACTION_ORDER} index of the action it took. A clean
- * `(input, label)` pair for multi-class classification — no reward, no env.
- */
 export interface BcRow {
-  /** `featurize(obs)` — the net input (FEATURE_LENGTH wide, every value in [0,1]). */
   readonly features: number[];
-  /** `ACTION_ORDER.indexOf(action.kind)` — the supervised label (0-based). */
   readonly action: number;
 }
 
-/** Knobs for a data-gen run; every field has a sane dev default. */
 export interface ExportBcOptions {
-  /** Number of sessions (fresh games) to play — `K`. */
   sessions?: number;
-  /** Steps the teacher takes per session — `N`. */
   steps?: number;
-  /** Seed prefix; each session uses `"<prefix>-<i>"` so runs are reproducible. */
   seedPrefix?: string;
-  /**
-   * Teacher policy factory — a fresh policy per session. Defaults to the
-   * belief-using {@link MemoryHeuristicPolicy} so the cloned labels reason over
-   * the same memory block the features carry (a memoryless teacher would train
-   * the net to ignore those belief features).
-   */
   policy?: () => PlayerPolicy;
 }
 
-/** Play one session of `steps` steps on a freshly-booted harness, logging rows. */
 async function collectSession(
   seed: string,
   steps: number,
@@ -77,23 +33,12 @@ async function collectSession(
     const rows: BcRow[] = [];
 
     for (let step = 0; step < steps; step++) {
-      // Snapshot the state the teacher is about to act in, then let the agent
-      // take exactly one step. `observe` is pure and nothing mutates between
-      // here and the agent's own `observe`, so the action it records is the
-      // teacher's choice *for this very observation* — the label for these
-      // features. (Re-using the agent keeps the real applier as the single
-      // source of truth for how an action advances the engine.)
       const obs = observe(harness.engine);
       const res = await agent.run(1);
       const action = res.steps[0]?.action;
       if (!action) continue;
       const index = ACTION_ORDER.indexOf(action.kind);
       if (index < 0) continue; // defensive: only log known vocabulary
-      // Featurize with the agent's belief *as the teacher saw it* this step:
-      // `run(1)` folds this same observation into the notebook before the teacher
-      // decides, so `agent.belief` is exactly the memory block behind the label.
-      // (Featurizing without it would record an all-zero belief block and train
-      // the net to ignore the memory features this plan added.)
       rows.push({ features: featurize(obs, agent.belief), action: index });
     }
     return rows;
@@ -102,13 +47,6 @@ async function collectSession(
   }
 }
 
-/**
- * Play `K` sessions × `N` steps with the teacher policy and return every logged
- * `(features, action)` row — the BC dataset, in memory. Deterministic from the
- * seed: same `seedPrefix` ⇒ same rows. Never throws on a play fault (a thrown
- * applier error lands in the harness sink, not here); each session boots its own
- * real engine so sessions are independent and reproducible.
- */
 export async function collectBcDataset(
   opts: ExportBcOptions = {},
 ): Promise<BcRow[]> {
@@ -126,57 +64,21 @@ export async function collectBcDataset(
   return rows;
 }
 
-/**
- * One stratum of a {@link collectScenarioMixDataset} run: `sessions` fresh games
- * of `steps` steps each, played by {@link MemoryHeuristicPolicy} biased toward
- * `goal` (or the goal-less base sequencing when `goal` is `null`).
- */
 export interface ScenarioMixEntry {
   readonly goal: ScenarioGoal | null;
   readonly sessions: number;
   readonly steps: number;
 }
 
-/**
- * The default BC mix — **goal-less only** (`docs/plans/20260701-smart-autopilot-player.md`,
- * Task 9). The shipped net deploys **goal-less** (both the live autopilot and the
- * headless `letsplay` construct `MemoryHeuristicPolicy` with no goal), and the
- * `goal` is **not** in the featurize vector (`FEATURE_LENGTH=54`, no goal one-hot).
- * An earlier goal-**mixed** stratified mix (the superseded
- * `20260701-letsplay-action-expansion-and-neural-scale.md` plan) therefore
- * labelled the *same* observation with conflicting actions across goals (e.g. an
- * explorer warps at game-start where the goal-less teacher lands) — the net
- * averaged them, argmaxed whichever barely won, and **collapsed to a single
- * action at rollout** despite ~99% teacher-forcing accuracy. Cloning the one
- * *deterministic* policy the net actually deploys removes that aliasing, so the
- * net reproduces the teacher's diverse repertoire in a real session.
- *
- * A single `goal: null` stratum (not several) because `collectScenarioMixDataset`
- * seeds each stratum by `goal` (`"<prefix>-<goal or 'base'>-<i>"`): two `goal:null`
- * strata would collide on the same `base` seed sub-range and generate identical
- * sessions. Many sessions on distinct seeds give the diversity instead.
- */
 export const DEFAULT_SCENARIO_MIX: readonly ScenarioMixEntry[] = [
   { goal: null, sessions: 200, steps: 500 },
 ];
 
-/**
- * Options for {@link scaleScenarioMix}: dial a mix (typically {@link
- * DEFAULT_SCENARIO_MIX}) up or down without hand-editing every stratum.
- */
 export interface ScaleMixOptions {
-  /** Multiplies every stratum's `sessions` (rounded, floored at 1). Default `1`. */
   sessionsFactor?: number;
-  /** Overrides every stratum's `steps` uniformly, if set. */
   steps?: number;
 }
 
-/**
- * Pure transform over a {@link ScenarioMixEntry} list — scales session counts
- * (e.g. for a fast local smoke run of the Task 9 mix) and/or overrides the
- * per-session step count, leaving `goal` untouched. Never returns a
- * zero-session stratum (floors at 1) so every goal still contributes rows.
- */
 export function scaleScenarioMix(
   mix: readonly ScenarioMixEntry[],
   opts: ScaleMixOptions = {},
@@ -189,13 +91,6 @@ export function scaleScenarioMix(
   }));
 }
 
-/**
- * Play every {@link ScenarioMixEntry} in `mix` and concatenate the rows into one
- * dataset — each stratum gets its own {@link MemoryHeuristicPolicy} (biased toward
- * its `goal`, or goal-less) and its own seed sub-range (`"<seedPrefix>-<goal
- * or 'base'>-<i>"`) so the whole mix stays deterministic and reproducible while
- * every stratum's sessions are independent of every other stratum's.
- */
 export async function collectScenarioMixDataset(
   mix: readonly ScenarioMixEntry[],
   seedPrefix = "BC",
@@ -215,30 +110,17 @@ export async function collectScenarioMixDataset(
   return rows;
 }
 
-/**
- * Serialise a BC dataset to **JSON-lines**: one compact JSON object per row,
- * newline-separated (the format `tools/ai/train_player.py` reads). A trailing
- * newline is included so the file is POSIX-clean and appends cleanly.
- */
 export function bcDatasetToJsonl(rows: readonly BcRow[]): string {
   return (
     rows.map((r) => JSON.stringify(r)).join("\n") + (rows.length ? "\n" : "")
   );
 }
 
-/** Where a written dataset lands. */
 export interface WrittenDataset {
-  /** Absolute/relative path to the JSONL file. */
   path: string;
-  /** Number of rows written. */
   rows: number;
 }
 
-/**
- * Persist a BC dataset to `dir` (default `.letsplay/`, gitignored) as JSONL.
- * Dev-only side-effect used by the data-gen driver; the in-suite test asserts on
- * {@link collectBcDataset} / {@link bcDatasetToJsonl} in memory and does not write.
- */
 export function writeBcDataset(
   rows: readonly BcRow[],
   dir = ".letsplay",

@@ -9,29 +9,15 @@ import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Core-journey behaviour scenarios over the **real** engine (Task 2 of the
- * real-engine playtest harness). Each scenario reads Given-When-Then and drives
- * the genuine wiring — real `GameEngine`, `QuestManager`, `BankingService`,
- * scene transitions and `CombatModule` — only PixiJS is stubbed. Every scenario
- * ends on the error-invariant (`errors()` empty), the cheap catch-all for the
- * "X is not a constructor / cannot read property" class of integration breakage
- * that mocked unit tests can never see.
- *
- * These are the journeys that broke this month (new-game reset, fly→land→trade,
- * local delivery, combat) — their regression lives here, against the real flow.
- */
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
 const FIRE = GAME_BALANCE.combatFireIntervalMs;
 const PULSE_DAMAGE = 14; // wpn_pulse — the starter weapon GameEngine.starterLoadout fits.
 
-/** A minimal ShipPhysics at a fixed position (CombatModule only reads shipX/shipY). */
 function physicsAt(x = 0, y = 0): ShipPhysics {
   return { shipX: x, shipY: y } as unknown as ShipPhysics;
 }
 
-/** A lightweight hostile NPC sprite (CombatModule reads x/y/npc/container only). */
 function makeHostile(
   id: string,
   x: number,
@@ -52,7 +38,6 @@ function makeHostile(
   } as unknown as NpcShipSprite;
 }
 
-/** Build a single-objective DELIVERY contract for system `targetSystemId`. */
 function deliveryTemplate(
   id: string,
   targetSystemId: string,
@@ -83,12 +68,10 @@ function deliveryTemplate(
   };
 }
 
-/** Systems carrying at least one planet (the only ones the land/trade flow needs). */
 function systemsWithPlanets(harness: RealEngineHarness) {
   return harness.galaxy()!.systems.filter((s) => s.planets.length > 0);
 }
 
-/** Let fire-and-forget engine work (e.g. the GAME_OVER transition) settle. */
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 describe("Core-journey behaviour scenarios (real engine)", () => {
@@ -107,8 +90,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
 
   describe("Scenario: «Новая игра» yields a genuinely fresh game", () => {
     it("resets player, quests, ledger and flight position from an in-progress game", async () => {
-      // Given an in-progress game with a completed + an active quest, credits
-      // moved off the starter balance, and a persisted flight position.
       await harness.newGame();
       const player = harness.player()!;
       const starterCredits = harness.credits();
@@ -130,8 +111,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       expect(active).not.toBeNull();
       harness.engine.lastFlightShipPos = { x: 123, y: 456 };
 
-      // Pre-state sanity: a real in-progress game (quests on the board, credits
-      // off the starter balance, a stored ship position).
       expect(harness.player()).not.toBeNull();
       expect(harness.quests().getActiveQuests()).toHaveLength(1);
       expect(harness.quests().getCompletedQuestIds()).toContain("jq_done");
@@ -142,10 +121,8 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
         "resetLedger",
       );
 
-      // When the player picks «Новая игра» (the real restart path).
       await harness.engine.restartNewGame();
 
-      // Then player/quests/flight-pos are wiped and the ledger was reset.
       expect(harness.player()).toBeNull();
       expect(harness.quests().getActiveQuests()).toEqual([]);
       expect(harness.quests().getCompletedQuestIds()).toEqual([]);
@@ -153,8 +130,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       expect(resetLedgerSpy).toHaveBeenCalled();
       expect(harness.currentSceneType()).toBe(SceneType.RACE_SELECTION);
 
-      // And starting again re-seeds a clean ledger — the prior game's credits do
-      // not carry over (the projection is back to the fresh starter balance).
       await harness.newGame();
       expect(harness.credits()).toBe(starterCredits);
       expect(harness.errors()).toEqual([]);
@@ -163,13 +138,10 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
 
   describe("Scenario: a fresh game ships fully fitted (starter loadout)", () => {
     it("installs weapon + grapple + engine and leaves nothing loose in the hold", async () => {
-      // Given the real new-game path (player + starter loadout).
       await harness.newGame();
       const player = harness.player()!;
       const loadout = harness.engine.playerLoadout!;
 
-      // Then the essential gear is installed: weapon, grapple (gravity tractor)
-      // and engine — a ready-to-play ship with no fitting required.
       const installed = loadout.installedGearIds();
       expect(installed).toContain("wpn_pulse"); // weapon
       expect(installed).toContain("grav_tractor_1"); // grapple/захват
@@ -179,11 +151,8 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       expect(stats.weaponDamage).toBeGreaterThan(0);
       expect(stats.gravTractorRange).toBeGreaterThan(0); // auto-pickup range
 
-      // The starter loadout fits the corvette's mass budget (≤ 40).
       expect(stats.massUsed).toBeLessThanOrEqual(stats.massCapacity);
 
-      // And the hold has nothing install-required loose: no legacy bag modules,
-      // no uninstalled owned gear for the player to discover and fit.
       expect(player.inventory.modules).toEqual([]);
       expect(player.inventory.ownedGearIds ?? []).toEqual([]);
 
@@ -193,19 +162,16 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
 
   describe("Scenario: fly → land → trade", () => {
     it("reaches the planet scene and the market is openable, with no errors", async () => {
-      // Given a fresh game in flight.
       await harness.newGame();
       const sys = systemsWithPlanets(harness)[0];
       expect(sys).toBeDefined();
       const planet = sys.planets[0];
       harness.player()!.currentSystemId = sys.id;
 
-      // When the player routes to the planet and lands.
       await harness.goTo(SceneType.PLANET, { planet });
       expect(harness.currentSceneType()).toBe(SceneType.PLANET);
       expect(harness.currentScene()).not.toBeNull();
 
-      // Then the market is openable from the planet.
       await harness.goTo(SceneType.TRADE, { planet });
       expect(harness.currentSceneType()).toBe(SceneType.TRADE);
       expect(harness.currentScene()).not.toBeNull();
@@ -216,7 +182,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
 
   describe("Scenario: local delivery to a neighbour planet", () => {
     it("completes + pays on the target system, but not on the issuer", async () => {
-      // Given a delivery contract for a *different* system and the cargo in hold.
       await harness.newGame();
       const withPlanets = systemsWithPlanets(harness);
       expect(withPlanets.length).toBeGreaterThanOrEqual(2);
@@ -243,7 +208,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       expect(quest).not.toBeNull();
       const creditsBefore = harness.credits();
 
-      // When the player lands on the ISSUER planet (wrong system) — nothing pays.
       player.currentSystemId = issuer.id;
       await harness.goTo(SceneType.PLANET, { planet: issuer.planets[0] });
       expect(
@@ -254,11 +218,9 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       ).toContain("jq_deliver");
       expect(harness.credits()).toBe(creditsBefore);
 
-      // When the player then lands on the TARGET planet — it completes and pays.
       player.currentSystemId = target.id;
       await harness.goTo(SceneType.PLANET, { planet: target.planets[0] });
 
-      // Then the contract is gone from the active board and the reward landed.
       expect(
         harness
           .quests()
@@ -273,11 +235,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
 
   describe("Scenario: in-system «Местный подряд» courier targets a neighbour", () => {
     it("completes on the target planet but NOT on the issuer planet in the same system", async () => {
-      // Guards the PlanetScene wiring seam: checkDeliveryQuestCompletion must
-      // thread this.planet.id so a courier (targetPlanetId, no VISIT objective)
-      // only completes on the named neighbour — landing back on the issuer planet
-      // (same system) must NOT pay. A dropped planet-id arg would silently revert
-      // to system-level completion and this would go red.
       await harness.newGame();
       const multi = systemsWithPlanets(harness).find(
         (s) => s.planets.length >= 2,
@@ -310,7 +267,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       expect(quest!.targetPlanetId).toBe(neighbourPlanet.id);
       const creditsBefore = harness.credits();
 
-      // Landing on the ISSUER planet (right system, wrong planet) → no completion.
       await harness.goTo(SceneType.PLANET, { planet: issuerPlanet });
       expect(
         harness
@@ -320,7 +276,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       ).toContain("jq_courier");
       expect(harness.credits()).toBe(creditsBefore);
 
-      // Landing on the NEIGHBOUR planet with the cargo → completes and pays.
       await harness.goTo(SceneType.PLANET, { planet: neighbourPlanet });
       expect(
         harness
@@ -335,7 +290,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
   });
 
   describe("Scenario: combat engages", () => {
-    /** A real CombatModule wired to the booted engine's player loadout + ship. */
     function realCombat(
       ship: { hullHP: number; maxHull: number },
       hooks: {
@@ -357,7 +311,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
     }
 
     it("both sides fire and hull drops when a hostile NPC is in range", async () => {
-      // Given a weaponed real player (starter wpn_pulse) and a hostile NPC in range.
       await harness.newGame();
       const ship = harness.player()!.ship;
       const maxHull = ship.maxHull;
@@ -365,11 +318,8 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       const npc = makeHostile("hostile-a", 50, 0, { hull: 100, damage: 20 });
       module.addCombatant(npc); // auto-selects it as the player's target
 
-      // When combat ticks one fire interval.
       module.update(FIRE);
 
-      // Then both sides fired: the NPC took the player's weapon damage and the
-      // player's hull dropped by the NPC's damage.
       expect(npc.npc.hullHP).toBe(100 - PULSE_DAMAGE);
       expect(ship.hullHP).toBe(maxHull - 20);
       module.destroy();
@@ -377,7 +327,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
     });
 
     it("an NPC kill routes to loot and never triggers a false game win", async () => {
-      // Given a hostile NPC weak enough to die to one player shot.
       await harness.newGame();
       const ship = harness.player()!.ship;
       const looted: NpcShipSprite[] = [];
@@ -388,15 +337,8 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       const npc = makeHostile("hostile-weak", 50, 0, { hull: 10, damage: 20 });
       module.addCombatant(npc);
 
-      // When the player's shot kills it.
       module.update(FIRE);
 
-      // Then it routes to the loot/death seam (onNpcDestroyed) and — crucially —
-      // CombatModule itself never decides a win on a kill: it delegates death to
-      // onNpcDestroyed and leaves the victory decision to the scene/NpcShipManager
-      // (only the OVERMIND core wins). The end-to-end "normal kill ≠ victory" rule
-      // lives in NpcShipManager.handleInFlightDeath, which this scenario does not
-      // drive — see the harness's known coverage gap on the combat scene seam.
       expect(looted).toContain(npc);
       expect(winSpy).not.toHaveBeenCalled();
       module.destroy();
@@ -404,7 +346,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
     });
 
     it("a lethal hit routes the player to the game-over flow", async () => {
-      // Given a hostile NPC whose shot is lethal.
       await harness.newGame();
       const ship = harness.player()!.ship;
       let deathReported = false;
@@ -420,11 +361,9 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       });
       module.addCombatant(npc);
 
-      // When the lethal NPC shot lands.
       module.update(FIRE);
       await flush(); // let the fire-and-forget GAME_OVER transition settle
 
-      // Then the real game-over flow fired (death callback + terminal scene).
       expect(deathReported).toBe(true);
       expect(harness.currentSceneType()).toBe(SceneType.GAME_OVER);
       module.destroy();
@@ -434,8 +373,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
 
   describe("Scenario: the job board does not re-offer a taken quest", () => {
     it("an accepted board quest disappears from the next board (real wiring)", async () => {
-      // Given a fresh game and a planet in the player's current system to issue
-      // a board from.
       await harness.newGame();
       const player = harness.player()!;
       const originSystem = harness
@@ -444,8 +381,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       const planetId = originSystem.planets[0]?.id;
       expect(planetId).toBeDefined();
 
-      // When a board is fetched and its first quest accepted, then the board is
-      // re-fetched (same day/bucket, so the underlying board is deterministic).
       const board1 = harness.engine.getQuestBoard(planetId!);
       expect(board1.length).toBeGreaterThan(0);
       const taken = board1[0];
@@ -455,10 +390,6 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
 
       const board2 = harness.engine.getQuestBoard(planetId!);
 
-      // Then the taken quest is gone — neither by its template id (the
-      // getQuestBoard `taken` post-filter) nor by its content key (the
-      // generator's `excludeKeys` dedupe) — proving the real wiring threads the
-      // active quest into both passes.
       expect(board2.map((q) => q.template.id)).not.toContain(taken.template.id);
       expect(board2.map((q) => questKey(q))).not.toContain(acceptedKey);
       expect(harness.errors()).toEqual([]);

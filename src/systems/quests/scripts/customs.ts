@@ -1,16 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Дизайн: Ты — таможенный инспектор. За 20 кораблей собери 5000 кр. штрафов
-// в казну поста (это план/квота, а не твой карман — награда фиксирована на
-// борде квестов: сохранённый пост + премия). Скан стоит 200. Контрабандист
-// (suspicion >= 7 или 40% шанс при 4–6) = +1000 штрафа. Ложный досмотр =
-// −500 рейтинга: рейтинг стартует со 100, так что ОДНА такая ошибка мгновенно
-// завершает квест (rating < 0 → quest_failure_rating) — текст найденного
-// «чистого» борта это честно проговаривает, второго шанса нет.
-// Прибытие борта (inspect_decision) — пул капитанских виньеток: seed выбирает
-// одну на прохождение, так что каждый заход к посту звучит по-новому.
-// Следующий борт (next_ship_*) ветвится по исходу: пойманный контрабандист и
-// пропущенный «на слово» борт провожаются разным текстом.
 export const customsScript: QuestScript = {
   id: "customs",
   title: "Таможня",
@@ -64,10 +53,6 @@ export const customsScript: QuestScript = {
   locations: [
     {
       id: "inspect_decision",
-      // Variance pool (Task 14): resolved once per (seed, id) — each playthrough
-      // draws a different captain, so the 20-ship loop stops reading as one
-      // template. Every variant keeps the {shipNum}/{suspicion}/{money}/{rating}
-      // HUD and the 5000-quota framing so the interpolation contract holds.
       text: [
         "Шлюз лязгает — к причальному воротнику подходит борт {shipNum} из двадцати. За смену выбейте из контрабандистов 5000 кредитов штрафов в казну поста, иначе вас снимут.\n\nПахнет озоном и горелой изоляцией. На комме сипит потный капитан-работяга, в третий раз повторяет, что везёт «только удобрения».\n\nПодозрительность: {suspicion}/10.  В кассе: {money} кр. при плане 5000.  Рейтинг: {rating}.\n\nСкан жрёт 200 кредитов и дарит дипломатический скандал, если трюм окажется чист. Чутьё против инструкции — решайте.",
         "Борт {shipNum} из двадцати замирает у воротника — холёный клипер с фамильным гербом на боку. Капитан в шёлковом кителе цедит через комм, что дружен с половиной вашего начальства, и «не советует» его задерживать.\n\nВ шлюзе пахнет озоном и чужими деньгами.\n\nПодозрительность: {suspicion}/10.  В кассе: {money} кр. из плановых 5000.  Рейтинг: {rating}.\n\nСкан — 200 кредитов и нота протеста на пустом трюме. Это блеф или настоящая угроза?",
@@ -90,7 +75,6 @@ export const customsScript: QuestScript = {
         },
       ],
     },
-    // Staged smuggler check: first filter high suspicion (>=7 = certain smuggler)
     {
       id: "scan_check_high",
       text: "Захваты фиксируют корпус. Сканирующая арка ползёт вдоль обшивки, и на экране медленно проступают контуры трюма...",
@@ -113,8 +97,6 @@ export const customsScript: QuestScript = {
         },
       ],
     },
-    // Second filter: suspicion < 4 always clean; suspicion 4-6 = 40% chance via roll
-    // Ordering is critical: low-suspicion check must come before roll check
     {
       id: "scan_check_medium",
       text: "Явных пустот сканер не нашёл. Вы гоняете сигнатуры через таможенную базу, вслушиваясь в шумы за переборкой. Чисто? Или капитан слишком хорошо спрятал груз?",
@@ -163,10 +145,6 @@ export const customsScript: QuestScript = {
       transitions: [
         {
           id: "accept_scandal",
-          // Rating starts at 100; −500 always drops below 0, so this false
-          // inspection is career-ending on the spot. Route straight to the
-          // failure terminal (the crit redirect would land here anyway) so the
-          // data matches the text — no fictional "work on" beat.
           label: "...",
           toLocation: "quest_failure_rating",
           effects: ["rating -= 500"],
@@ -174,9 +152,6 @@ export const customsScript: QuestScript = {
         },
       ],
     },
-    // Branched "next ship" beat (B fix): a caught smuggler and a waved-through
-    // ship are provoded with different text. Both auto-advance identically
-    // (shipNum += 1 → critMax fires check_final at ship 21; suspicion re-rolled).
     {
       id: "next_ship_caught",
       text: "Штраф оформлен, контейнеры опечатаны, капитан уполз в чёрное злой и на тысячу беднее. Вы провожаете его взглядом с законной ухмылкой — чутьё против инструкции, и сегодня чутьё выиграло. Мигает очередь: следующий борт уже тянется к шлюзу.",
@@ -203,7 +178,6 @@ export const customsScript: QuestScript = {
         },
       ],
     },
-    // Reached via critMax on shipNum (>20). Auto-check win/fail.
     {
       id: "check_final",
       text: "Двадцатый корабль растворился в звёздах. Смена окончена, шлюз затихает.\n\nВы сводите кассу под гул остывающих насосов: собрано {money} кр. при плане в 5000. Начальство ждёт цифру.",

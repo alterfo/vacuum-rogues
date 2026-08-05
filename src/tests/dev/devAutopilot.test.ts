@@ -5,16 +5,6 @@ import {
 } from "@/dev/devAutopilot";
 import type { GameEngine } from "@/systems/GameEngine";
 
-/**
- * Task 3 of the dev-autopilot plan: the **dev-only gate is absent in a non-DEV
- * build**. {@link attachDevAutopilot} is the single production seam that pulls in
- * the (otherwise dev-only, never-bundled) autopilot; this pins that when `isDev`
- * is false it loads + attaches *nothing*, and when true it loads the hook module
- * and installs it over the live engine. The build-time chunk exclusion is the
- * separate concern of the `import.meta.env.DEV`-guarded call site in `main.ts`
- * (covered by the dev-only guard test); here we lock the runtime contract.
- */
-/** Drain the microtask + macrotask queue so the load→install promise chain settles. */
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 describe("attachDevAutopilot — dev-only runtime gate", () => {
@@ -30,9 +20,6 @@ describe("attachDevAutopilot — dev-only runtime gate", () => {
   });
 
   it("loads + installs the hook over the live engine in a DEV build", async () => {
-    // A minimal engine exposing the two methods the install path calls, so the
-    // happy path runs to completion instead of throwing into the swallowed
-    // onError (which would let a broken install path still pass this test).
     const engine = {
       setAutopilotStateProvider: vi.fn(),
       getLoadedAutopilotEngaged: () => undefined,
@@ -49,7 +36,6 @@ describe("attachDevAutopilot — dev-only runtime gate", () => {
     expect(load).toHaveBeenCalledTimes(1);
     await flush();
     expect(installAutopilotHook).toHaveBeenCalledWith(engine);
-    // The install path completed cleanly — no fault was routed to onError.
     expect(onError).not.toHaveBeenCalled();
     expect(engine.setAutopilotStateProvider).toHaveBeenCalledTimes(1);
   });
@@ -70,17 +56,7 @@ describe("attachDevAutopilot — dev-only runtime gate", () => {
   });
 });
 
-/**
- * Task 4: the autopilot-resume seam. After installing the hook,
- * {@link attachDevAutopilot} must (a) inject an {@link IAutopilotStateProvider}
- * whose `resume(true)` re-engages via the hook, and (b) replay the boot
- * auto-load's missed resume by reading `getLoadedAutopilotEngaged()` once and
- * `start()`-ing when it was `true`. These pin that a save written while engaged
- * auto-resumes, and one written while *off* (or an old save with the flag
- * absent) never spuriously starts.
- */
 describe("attachDevAutopilot — autopilot resume seam", () => {
-  /** A fake engine capturing the injected provider + a configurable boot flag. */
   const makeEngine = (loadedEngaged: boolean | undefined) => {
     const engine = {
       injected: undefined as

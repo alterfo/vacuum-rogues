@@ -13,25 +13,6 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Task 4 — the active-pause resolves and the route-turn ends cleanly.
- *
- * Before the fix, the host wired `onCombatEnded` only to {@link
- * CombatPauseController.reset} (re-arm the pause debounce). Nothing ended the
- * turn, so a fight that resolved while the route-"Ход" flag was set left
- * `isTurnRunning` stuck true — a stationary "wait" turn that kept advancing the
- * calendar after the last enemy died ("ход не кончается после выстрела"). The
- * fix wires `onCombatEnded` to also call `SpaceFlightScene.endTurn()` (skipped on
- * teardown so a terminal scene isn't autosaved).
- *
- * This suite reconstructs that exact wiring in a tiny fake host — a real {@link
- * CombatModule} + {@link CombatPauseController} plus a `turnRunning` flag whose
- * `endTurn()` is wired into `onCombatEnded` the way the scene now does — and
- * drives the full lifecycle through the real fire path: requestPause → confirm →
- * resume → last combatant removed → combat ends → the turn-running projection
- * clears. Pure — no PixiJS render context.
- */
-
 const FIRE = GAME_BALANCE.combatFireIntervalMs;
 const ESCAPE = GAME_BALANCE.combatEscapeRange; // 1200
 
@@ -56,9 +37,7 @@ function makeSprite(id: string, x: number, hullHP = 100): NpcShipSprite {
 interface FakeHost {
   module: CombatModule;
   controller: CombatPauseController<NpcShipSprite, WeaponSpec>;
-  /** The raw route-turn flag (SpaceFlightScene.isTurnRunning). */
   turnRunning: () => boolean;
-  /** Effective turn state pushed to the HUD: isTurnRunning && !paused. */
   effectiveTurnRunning: () => boolean;
   endedCount: () => number;
   pauseReason: () => PauseReason | null;
@@ -66,12 +45,6 @@ interface FakeHost {
   weapon: () => WeaponSpec;
 }
 
-/**
- * Wire the module/controller exactly the way `SpaceFlightScene` does after the
- * Task 4 fix: `onCombatEnded` re-arms the debounce AND ends the turn. The fake
- * `endTurn` only clears the flag (the scene also settles the ship + autosaves —
- * irrelevant to the lifecycle under test).
- */
 function makeHost(): FakeHost {
   let isTurnRunning = true; // a route-"Ход" is in progress
   let endedCount = 0;
@@ -93,7 +66,6 @@ function makeHost(): FakeHost {
     getShipPhysics: () => makePhysics(),
     getPlayerLoadout: () => loadout,
     getPlayerShip: () => ship,
-    // Production gates fire on the active-pause only (real-time, not the turn).
     isPaused: () => controller.paused,
     onPlayerUnderAttack: () => {
       controller.requestPause("incoming-attack");
@@ -128,8 +100,6 @@ describe("the turn ends cleanly when combat resolves (Task 4)", () => {
     const enemy = makeSprite("a", 50, 14); // in range; one confirmed pulse is lethal
     host.module.addCombatant(enemy);
 
-    // An incoming shot pauses the fight; the player confirms a kill on the only
-    // enemy. confirm() resumes time, fires, and empties the combatant set.
     host.controller.requestPause("incoming-attack");
     expect(host.effectiveTurnRunning()).toBe(false); // frozen while paused
 
@@ -140,11 +110,9 @@ describe("the turn ends cleanly when combat resolves (Task 4)", () => {
     expect(enemy.npc.hullHP).toBe(0);
     expect(host.destroyed).toEqual([enemy]); // bounty/kill hook fired
     expect(host.controller.paused).toBe(false); // resumed after the confirmed shot
-    // The kill emptied the set but endCombat runs on the next module tick.
     expect(host.module.isActive).toBe(true);
     expect(host.turnRunning()).toBe(true); // not ended yet
 
-    // One frame with the set emptied resolves the fight and ends the turn.
     host.module.update(1);
 
     expect(host.module.isActive).toBe(false);
@@ -158,8 +126,6 @@ describe("the turn ends cleanly when combat resolves (Task 4)", () => {
     const enemy = makeSprite("a", 50, 14); // dies to one auto pulse before it can fire back
     host.module.addCombatant(enemy);
 
-    // One interval: the player's auto-fire (resolved before the NPC fire loop)
-    // kills the only enemy, so no incoming shot ever pauses the fight.
     host.module.update(FIRE);
 
     expect(host.controller.paused).toBe(false); // never paused — clean real-time kill
@@ -177,20 +143,15 @@ describe("the turn ends cleanly when combat resolves (Task 4)", () => {
     host.module.addCombatant(a);
     host.module.addCombatant(b);
 
-    // Incoming shot pauses; the player declines to fire (Продолжить / Esc).
     host.controller.requestPause("incoming-attack");
     expect(host.effectiveTurnRunning()).toBe(false);
     host.controller.resume();
 
-    // Resumed: the fight is still live in real time — the turn must NOT be stuck
-    // ended, nor frozen.
     expect(host.controller.paused).toBe(false);
     expect(host.module.isActive).toBe(true);
     expect(host.turnRunning()).toBe(true);
     expect(host.effectiveTurnRunning()).toBe(true);
 
-    // Both combatants open the gap beyond escape range and break off — the fight
-    // ends with no combatant left (never an empty-overlay re-pause), turn clears.
     a.x = ESCAPE + 300;
     b.x = ESCAPE + 300;
     host.module.update(FIRE);
@@ -209,21 +170,18 @@ describe("the turn ends cleanly when combat resolves (Task 4)", () => {
     host.module.addCombatant(a);
     host.module.addCombatant(b);
 
-    // Auto-fire kills `a`; a survivor remains → re-pause onto `b` (target-lost).
     host.module.update(FIRE);
     expect(host.controller.paused).toBe(true);
     expect(host.pauseReason()).toBe("target-lost");
     expect(host.module.selectedTarget).toBe(b);
     expect(host.turnRunning()).toBe(true); // still engaged — not ended yet
 
-    // The player confirms the kill on the last survivor; the set empties.
     host.controller.selectTarget(b);
     host.controller.selectWeapon(host.weapon());
     expect(host.controller.confirm()).not.toBeNull();
     expect(b.npc.hullHP).toBe(0);
     expect(host.controller.paused).toBe(false);
 
-    // The emptied set resolves on the next tick and the turn ends cleanly.
     host.module.update(1);
 
     expect(host.module.isActive).toBe(false);

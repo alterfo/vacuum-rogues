@@ -53,7 +53,6 @@ describe("RaceSelectionScene (US-021)", () => {
 
     scene.initialize({ gameEngine: mockEngine });
 
-    // Select a faction and start game
     (scene as any).selectedFaction = FactionType.SYNDICATE;
     await (scene as any).startGame();
 
@@ -75,7 +74,6 @@ describe("RaceSelectionScene (US-021)", () => {
 
     scene.initialize({ gameEngine: mockEngine });
 
-    // startGame without changing selection defaults to OUTLANDERS
     await (scene as any).startGame();
 
     expect(mockEngine.transitionTo).toHaveBeenCalledWith(

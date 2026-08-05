@@ -40,7 +40,6 @@ function makeNpc(id: string, opts: NpcOpts = {}): NpcShip {
   });
 }
 
-/** Deterministic RNG cycling through a fixed sequence of [0,1) values. */
 function seqRng(values: number[]): () => number {
   let i = 0;
   return () => values[i++ % values.length];
@@ -96,7 +95,6 @@ function lootGraphicsCount(manager: NpcShipManager): number {
 describe("NpcShipManager space loot", () => {
   it("adds loot items to spaceLoot when an NPC is destroyed", () => {
     const { manager, gameLayer } = makeManager();
-    // rng 0.9 → count 2; subsequent calls pick a module from the loadout.
     manager.spawnLootForNpc(
       makeNpc("trader_1", { loadout: ["laser_mk1"] }),
       120,
@@ -105,7 +103,6 @@ describe("NpcShipManager space loot", () => {
     );
 
     expect(manager.spaceLoot.length).toBe(2);
-    // A glowing dot was mounted for each loot item.
     expect(lootGraphicsCount(manager)).toBe(2);
     expect(gameLayer.children.length).toBe(2);
     manager.destroy();
@@ -124,7 +121,6 @@ describe("NpcShipManager space loot", () => {
 
   it("drops Overmind artifacts from an Overmind kill", () => {
     const { manager } = makeManager();
-    // count roll 0.5 → 1 item; artifact roll 0.1 < 0.4 → artifact.
     manager.spawnLootForNpc(
       makeNpc("ov_1", { faction: Faction.OVERMIND, role: NpcRole.PATROL }),
       0,
@@ -158,7 +154,6 @@ describe("NpcShipManager space loot", () => {
 
   it("can drop nothing (0-item roll)", () => {
     const { manager } = makeManager();
-    // rng 0.1 < 1/3 → 0 items.
     manager.spawnLootForNpc(makeNpc("t"), 0, 0, seqRng([0.1]));
     expect(manager.spaceLoot.length).toBe(0);
     expect(lootGraphicsCount(manager)).toBe(0);
@@ -170,7 +165,6 @@ describe("NpcShipManager space loot", () => {
     manager.spawnLootForNpc(makeNpc("t"), 0, 0, seqRng([0.9]));
     expect(manager.spaceLoot.length).toBe(2);
 
-    // Advance ~61 s of real elapsed time (1 s per update tick).
     for (let i = 0; i < 61; i++) manager.update(1000, 0);
 
     expect(manager.spaceLoot.length).toBe(0);
@@ -183,7 +177,6 @@ describe("NpcShipManager space loot", () => {
     const { manager } = makeManager();
     manager.spawnLootForNpc(makeNpc("t"), 0, 0, seqRng([0.9]));
 
-    // 30 s elapsed — well within the lifetime.
     for (let i = 0; i < 30; i++) manager.update(1000, 0);
 
     expect(manager.spaceLoot.length).toBe(2);

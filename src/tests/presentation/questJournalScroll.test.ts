@@ -1,18 +1,3 @@
-/**
- * Task 2 (plan 20260618-scrollable-list-design-and-planet-rotation): the quest
- * journal must surface EVERY active quest through a scrollable region instead of
- * the old `slice(0, maxVisible)` + non-interactive "+N ещё..." dead-end.
- *
- * These tests drive the real QuestJournalUI against a pixi.js mock (no WebGL):
- *  - few quests (<= fit count) still render directly, no scroll region;
- *  - many quests overflow into a `ScrollableList` that holds ALL of them;
- *  - the "+N ещё..." label is gone;
- *  - scrolling reaches the bottom (offset clamps to a positive maxOffset);
- *  - destroy() detaches the list's window-level wheel listener.
- *
- * Unlike the existing questJournalUI mock this one also provides `Rectangle`,
- * which `ScrollableList` constructs for its tracking hit area.
- */
 import { describe, it, expect, vi } from "vitest";
 import type { IQuestService } from "@/core/ports/IQuestService";
 
@@ -109,7 +94,6 @@ function makeQuestService(count: number): IQuestService {
   } as unknown as IQuestService;
 }
 
-// panelHeight 500, active section starts at y=60 → floor((500-60-30)/140) = 2.
 const FIT_COUNT = 2;
 
 describe("QuestJournalUI active-quest scrolling (Task 2)", () => {
@@ -122,12 +106,10 @@ describe("QuestJournalUI active-quest scrolling (Task 2)", () => {
       vi.fn(),
     );
 
-    // No scrollable list is created while everything fits.
     expect((ui as unknown as { activeList: unknown }).activeList).toBeNull();
 
     const texts = collectTexts(ui.container as unknown as TextNode);
     expect(texts.some((t) => /\+\d+\s*ещё/.test(t))).toBe(false);
-    // Both quests rendered.
     expect(texts).toContain("Активный квест 1");
     expect(texts).toContain("Активный квест 2");
   });
@@ -148,11 +130,9 @@ describe("QuestJournalUI active-quest scrolling (Task 2)", () => {
     ).activeList;
     expect(list).toBeTruthy();
     expect(list!.overflows).toBe(true);
-    // Every quest is rendered into the scroll content — not just the first 2.
     expect(list!.itemCount).toBe(COUNT);
     expect(list!.content.children).toHaveLength(COUNT);
 
-    // Every quest title is present in the rendered tree (reachable by scroll).
     const texts = collectTexts(ui.container as unknown as TextNode);
     for (let n = 1; n <= COUNT; n++) {
       expect(texts).toContain(`Активный квест ${n}`);

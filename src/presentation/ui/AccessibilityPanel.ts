@@ -19,53 +19,16 @@ import {
   type FlightKeymap,
 } from "@/presentation/input/keymap";
 
-/**
- * The Accessibility settings group (accessibility pass,
- * `docs/plans/20260625-accessibility-pass.md`, Task 4): the player-facing UI for
- * the three pure seams built in Tasks 1–3 —
- *   • **ПАЛИТРА** (palette mode): a cycle button stepping through
- *     {@link PALETTE_MODES} (default + three dichromat-friendly remaps), read via
- *     {@link currentPaletteMode}/{@link setPaletteMode};
- *   • **МЕНЬШЕ ДВИЖЕНИЯ** (reduced motion): a ВКЛ/ВЫКЛ toggle over the explicit
- *     player setting (`isReducedMotionSet`/`setReducedMotion`); the OS-level
- *     `prefers-reduced-motion` is honoured independently by `reducedMotion()`; and
- *   • **УПРАВЛЕНИЕ** (key remap): a row per {@link FlightAction} showing its bound
- *     key; tapping a row captures the next keypress and rebinds it through the
- *     pure {@link rebind} (conflicts are surfaced, not silently double-bound), plus
- *     a «Сбросить клавиши» reset.
- *
- * It is a **separate panel** from {@link SettingsPanel} (the unified ⚙ panel) on
- * purpose: the settings panel's hit-area layout is pinned by locked tests, so the
- * accessibility group lives in its own ♿ surface mounted alongside it by the HUD.
- *
- * Every control writes through its existing browser-level `localStorage` pref (no
- * new save-state field) and fans the live effect out via {@link
- * AccessibilityPanelDeps}. Control actions are public methods
- * ({@link cyclePalette}/{@link toggleReducedMotion}/{@link beginRebind}/
- * {@link captureRebind}/{@link resetKeymapToDefaults}) so the behaviour is
- * unit-testable without driving PixiJS pointer events or the DOM.
- */
 export interface AccessibilityPanelDeps {
-  /** Live-apply a palette change. Optional — colours otherwise apply on the next rebuild. */
   onPaletteChange?: (mode: PaletteMode) => void;
-  /** Live-apply a reduced-motion change. Optional — most consumers read the flag per-frame. */
   onReducedMotionChange?: (on: boolean) => void;
-  /** Notify the host a key binding changed (so anything caching the map can refresh). */
   onKeymapChange?: (map: FlightKeymap) => void;
-  /** Ask the host to close the panel (the «Закрыть» button). */
   onRequestClose?: () => void;
-  /**
-   * Install a keyboard capture while rebinding, returning a disposer. Defaults to
-   * a capture-phase `window` listener that swallows the key (so it neither
-   * scrolls the page nor reaches the flight key router). Injectable so the rebind
-   * flow is unit-testable without the DOM.
-   */
   installKeyCapture?: (
     handler: (e: { key: string; code?: string }) => void,
   ) => () => void;
 }
 
-/** Fixed panel geometry (the host positions the whole panel by these). */
 export const ACCESSIBILITY_PANEL_WIDTH = 240;
 export const ACCESSIBILITY_PANEL_HEIGHT = 384;
 
@@ -81,8 +44,6 @@ const ON_COLOR = 0x44ff88;
 const OFF_COLOR = 0x99a8ba;
 const CONFLICT_COLOR = 0xff5566;
 
-// Vertical layout — fixed row positions (a y per section keeps the panel legible
-// and the hit areas stable for the tests).
 const PALETTE_LABEL_Y = 40;
 const PALETTE_ROW_Y = 60;
 const MOTION_LABEL_Y = 102;
@@ -96,42 +57,29 @@ const CLOSE_ROW_Y = RESET_ROW_Y + 36;
 const KEY_CELL_W = 92;
 
 export class AccessibilityPanel {
-  /** The mounted panel container (stable across re-renders). */
   readonly container: Container;
   private content: Container | null = null;
 
-  /** The action currently awaiting a key (null when not rebinding). */
   private rebinding: FlightAction | null = null;
-  /** The action a rejected rebind collided with (cleared on success/cancel). */
   private conflictWith: FlightAction | null = null;
-  /** Disposer for the active rebind key capture. */
   private captureDispose: (() => void) | null = null;
 
   constructor(private readonly deps: AccessibilityPanelDeps = {}) {
     this.container = new Container();
     this.container.eventMode = "static";
-    // Swallow clicks so the scene's outside-click handler doesn't close the
-    // panel from under the player while they interact with it.
     this.container.on("pointerdown", (e) => e.stopPropagation());
     this.render();
   }
 
-  /** Tear down the panel container (children included) + any pending capture. */
   destroy(): void {
     this.disposeCapture();
     this.container.destroy({ children: true });
   }
 
-  // -------------------------------------------------------------------------
-  // Control actions (public so the behaviour is testable without PixiJS events)
-  // -------------------------------------------------------------------------
-
-  /** The active palette mode (reads the live `localStorage` store). */
   currentPalette(): PaletteMode {
     return currentPaletteMode();
   }
 
-  /** Step to the next palette mode (wrapping), persist, apply live, re-render. */
   cyclePalette(): void {
     const modes = PALETTE_MODES;
     const idx = Math.max(0, modes.indexOf(this.currentPalette()));
@@ -141,12 +89,10 @@ export class AccessibilityPanel {
     this.render();
   }
 
-  /** True while the explicit reduced-motion setting is on. */
   isReducedMotionOn(): boolean {
     return isReducedMotionSet();
   }
 
-  /** Flip the explicit reduced-motion setting, notify the host, re-render. */
   toggleReducedMotion(): void {
     const next = !this.isReducedMotionOn();
     setReducedMotion(next);
@@ -154,25 +100,18 @@ export class AccessibilityPanel {
     this.render();
   }
 
-  /** The active action→key bindings (reads the live `localStorage` store). */
   keymap(): FlightKeymap {
     return currentKeymap();
   }
 
-  /** True while `action`'s row is awaiting a key to bind. */
   isRebinding(action: FlightAction): boolean {
     return this.rebinding === action;
   }
 
-  /** The action a rejected rebind last collided with, or null. */
   rebindConflict(): FlightAction | null {
     return this.conflictWith;
   }
 
-  /**
-   * Start rebinding `action`: install a one-shot key capture and re-render so the
-   * row prompts for a key. Any in-progress rebind is cancelled first.
-   */
   beginRebind(action: FlightAction): void {
     if (this.rebinding) this.disposeCapture();
     this.rebinding = action;
@@ -182,12 +121,6 @@ export class AccessibilityPanel {
     this.render();
   }
 
-  /**
-   * Apply a captured key to the action being rebound. Escape aborts; a key
-   * already held by another action is rejected (the conflict is surfaced and the
-   * capture stays open so the player can pick a different key); a free key is
-   * bound, persisted, and the capture closes.
-   */
   captureRebind(event: { key: string; code?: string }): void {
     const action = this.rebinding;
     if (!action) return;
@@ -209,7 +142,6 @@ export class AccessibilityPanel {
     }
   }
 
-  /** Abort an in-progress rebind without changing any binding. */
   cancelRebind(): void {
     this.rebinding = null;
     this.conflictWith = null;
@@ -217,7 +149,6 @@ export class AccessibilityPanel {
     this.render();
   }
 
-  /** Restore the default key bindings, notify the host, re-render. */
   resetKeymapToDefaults(): void {
     if (this.rebinding) this.cancelRebind();
     resetKeymap();
@@ -232,11 +163,6 @@ export class AccessibilityPanel {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Rendering
-  // -------------------------------------------------------------------------
-
-  /** Rebuild the panel content to reflect the current settings. */
   private render(): void {
     if (this.content) this.content.destroy({ children: true });
     const content = new Container();
@@ -281,7 +207,6 @@ export class AccessibilityPanel {
     this.renderCloseRow(content);
   }
 
-  /** Section label above a control row. */
   private addSectionLabel(parent: Container, text: string, y: number): void {
     const lbl = scaledText(text, 12, LABEL_COLOR);
     lbl.x = PAD;
@@ -290,7 +215,6 @@ export class AccessibilityPanel {
     parent.addChild(lbl);
   }
 
-  /** ПАЛИТРА: a full-width cycle button showing the active mode's name. */
   private renderPaletteRow(parent: Container): void {
     this.addSectionLabel(parent, t("a11y.palette"), PALETTE_LABEL_Y);
     const mode = this.currentPalette();
@@ -307,7 +231,6 @@ export class AccessibilityPanel {
     );
   }
 
-  /** МЕНЬШЕ ДВИЖЕНИЯ: a full-width ВКЛ/ВЫКЛ toggle. */
   private renderMotionRow(parent: Container): void {
     this.addSectionLabel(parent, t("a11y.reducedMotion"), MOTION_LABEL_Y);
     const on = this.isReducedMotionOn();
@@ -325,7 +248,6 @@ export class AccessibilityPanel {
     );
   }
 
-  /** УПРАВЛЕНИЕ: one row per flight action (name + rebindable key) + reset. */
   private renderControlsRows(parent: Container): void {
     this.addSectionLabel(parent, t("a11y.controls"), CONTROLS_LABEL_Y);
     const map = this.keymap();
@@ -372,7 +294,6 @@ export class AccessibilityPanel {
     );
   }
 
-  /** A full-width «Закрыть» button (the deliberate close affordance). */
   private renderCloseRow(parent: Container): void {
     this.addCellButton(
       parent,
@@ -387,12 +308,6 @@ export class AccessibilityPanel {
     );
   }
 
-  /**
-   * A single highlightable cell button: rounded background (accent-bordered when
-   * active), a centred label, and a transparent `static` hit area that runs
-   * `onTap`. The label/background are `eventMode:"none"` so the hit area owns the
-   * click (PixiJS-8 layered-hit pattern, mirroring {@link SettingsPanel}).
-   */
   private addCellButton(
     parent: Container,
     x: number,
@@ -439,11 +354,6 @@ export class AccessibilityPanel {
   }
 }
 
-/**
- * The default rebind key capture: a capture-phase `window` keydown listener that
- * swallows the event (so the rebind key neither scrolls the page nor reaches the
- * flight key router) and forwards it to `handler`. No-op when `window` is absent.
- */
 function liveKeyCapture(
   handler: (e: { key: string; code?: string }) => void,
 ): () => void {

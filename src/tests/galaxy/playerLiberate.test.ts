@@ -8,14 +8,6 @@ import {
 import { Faction } from "@/types/faction";
 import { NpcRole, NpcState } from "@/types";
 
-/**
- * Player-driven liberation predicate (Task 4 of the late-game-recoverability
- * pass). A captured system becomes reclaimable the moment its hostile garrison is
- * cleared — the discoverable, fight-gated counter-play that makes the pirate /
- * Overmind front reversible mid-game. Pure + structural, covering both capture
- * kinds without booting the engine.
- */
-
 function ship(over: Partial<LiberationShipView>): LiberationShipView {
   return {
     currentSystemId: "s1",
@@ -75,7 +67,6 @@ describe("canPlayerLiberate", () => {
   });
 
   it("is true for an Overmind-captured system once its garrison is cleared", () => {
-    // A lingering DEAD hostile does not block — only present defenders do.
     const v = view(
       ["s1"],
       [ship({ role: NpcRole.PIRATE, state: NpcState.DEAD })],
@@ -84,11 +75,8 @@ describe("canPlayerLiberate", () => {
   });
 
   it("frees only the system the player is in (no map-wide auto-clear)", () => {
-    // Two captured systems, both cleared, but the predicate is single-system:
-    // liberation acts on the queried id alone.
     const v = view(["s1", "s2"], []);
     expect(canPlayerLiberate(v, "s1")).toBe(true);
-    // s2 is still hostile — the player must fly there + clear it separately.
     expect(v.isHostileSystem("s2")).toBe(true);
   });
 });

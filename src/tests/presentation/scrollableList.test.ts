@@ -1,15 +1,3 @@
-/**
- * Unit tests for the reusable `ScrollableList` component (plan
- * 20260618-scrollable-list-design-and-planet-rotation, Task 1).
- *
- * Pins the scroll math without a real renderer:
- *   - content height = items * itemHeight; item count preserved (no truncation);
- *   - offset clamps at the top (0) and bottom (maxOffset);
- *   - the content container translates by the negative offset;
- *   - the tracking hitArea advances with the offset (mask clips render only);
- *   - the mask is addChild'd to the root (PixiJS 8 mask rule);
- *   - wheel scrolls and destroy() detaches the listener.
- */
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -81,7 +69,6 @@ describe("ScrollableList", () => {
     const list = makeList(12);
     expect(list.itemCount).toBe(12);
     expect(list.contentHeight).toBe(12 * ITEM_H);
-    // content container holds all 12 rows.
     const content = (list as unknown as { content: { children: unknown[] } })
       .content;
     expect(content.children).toHaveLength(12);
@@ -131,7 +118,6 @@ describe("ScrollableList", () => {
     ).content;
     const worldTop = content.hitArea.y + content.y;
     list.scrollTo(120);
-    // The hit window stays fixed on screen as content scrolls under it.
     expect(content.hitArea.y + content.y).toBeCloseTo(worldTop, 5);
   });
 
@@ -142,7 +128,6 @@ describe("ScrollableList", () => {
     };
     const content = (list as unknown as { content: { mask: unknown } }).content;
     expect(content.mask).toBeTruthy();
-    // The assigned mask is also present in the root's scene graph.
     expect(root.children).toContain(content.mask);
   });
 
@@ -174,9 +159,6 @@ describe("ScrollableList", () => {
   });
 
   it("does not attach a wheel listener when enableWheel is false", () => {
-    // Hosts that already own a wheel handler driving this list (e.g. the
-    // Infocenter news tab, which maps wheel + ArrowUp/Down through one scroller)
-    // opt out so the two listeners don't double-scroll.
     const wheelHandlers: unknown[] = [];
     const addSpy = vi
       .spyOn(window, "addEventListener")
@@ -187,7 +169,6 @@ describe("ScrollableList", () => {
       const list = makeList(12, { enableWheel: false }); // overflows, but opted out
       expect(list.overflows).toBe(true);
       expect(wheelHandlers).toHaveLength(0);
-      // scrollBy still works (host drives it).
       list.scrollBy(80);
       expect(list.offset).toBe(80);
     } finally {
@@ -212,7 +193,6 @@ describe("ScrollableList", () => {
 
   it("drag-scrolls the content (down-drag reveals earlier rows)", () => {
     const list = makeList(12);
-    // Grab the federated handlers registered on the content container.
     const content = list as unknown as {
       content: { on: ReturnType<typeof vi.fn> };
     };
@@ -220,13 +200,11 @@ describe("ScrollableList", () => {
     for (const call of content.content.on.mock.calls) {
       handlers.set(call[0] as string, call[1] as (e: unknown) => void);
     }
-    // Scroll to the middle first so a down-drag has room to reduce the offset.
     list.scrollTo(120);
     handlers.get("pointerdown")!({ global: { y: 100 } });
     handlers.get("globalpointermove")!({ global: { y: 140 } }); // dragged +40
     expect(list.offset).toBe(80); // 120 - 40
     handlers.get("pointerup")!({});
-    // After pointerup, further moves do nothing.
     handlers.get("globalpointermove")!({ global: { y: 300 } });
     expect(list.offset).toBe(80);
   });

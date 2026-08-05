@@ -1,16 +1,3 @@
-/**
- * vacuum-mcp — a lightweight Model Context Protocol server for this codebase.
- *
- * Purpose: let an agent orient at the START of a task with ONE tool call instead
- * of reading 5 files. Each tool wraps a cheap shell/import lookup (see tools.ts).
- *
- * Run standalone:  npx tsx tools/mcp/vacuum-mcp.ts
- * Registered for Claude Code in project-root .mcp.json under mcpServers.vacuum
- * (settings.json only sets enableAllProjectMcpServers to auto-approve it).
- *
- * The tool logic lives in tools.ts (SDK-free) so it stays unit-testable without
- * the MCP transport. This file only wires those functions to the protocol.
- */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { pathToFileURL } from "node:url";
@@ -97,10 +84,8 @@ async function main(): Promise<void> {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  // Stays connected over stdio until the host disconnects.
 }
 
-// Only start the server when run directly (not when imported by a test).
 const isDirectRun =
   typeof process !== "undefined" &&
   process.argv[1] !== undefined &&

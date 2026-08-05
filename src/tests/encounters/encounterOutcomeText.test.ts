@@ -5,7 +5,6 @@ import type {
   EncounterOutcomeKind,
 } from "@/systems/encounters/encounterOutcome";
 
-/** Every discriminator the resolver can emit. */
 const ALL_KINDS: EncounterOutcomeKind[] = [
   "salvage",
   "trap",
@@ -27,9 +26,7 @@ describe("encounterOutcomeMessageRu", () => {
   it("returns Cyrillic copy that never leaks the raw enum kind token", () => {
     for (const kind of ALL_KINDS) {
       const text = encounterOutcomeMessageRu(outcome(kind, 100));
-      // Player-visible copy is Russian…
       expect(text).toMatch(/[А-Яа-яЁё]/);
-      // …and never the raw English discriminator.
       for (const token of ALL_KINDS) {
         expect(text).not.toContain(token);
       }

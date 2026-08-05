@@ -20,15 +20,6 @@ import {
 } from "@/systems/banking/products";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 
-/**
- * Task 6 — thin retail products over the core: a savings deposit (EOD interest
- * capitalizes) and an amortizing loan (disburse → accrue → repay). The two
- * invariants from Task 1 must hold throughout: every operation books a balanced
- * entry, so Σ(all postings) stays 0.
- *
- * Round-number rates so the arithmetic reads exactly.
- */
-
 const PLAYER = "cur:player";
 const SAVINGS_RATE = 0.01; // 1 %/day
 const LOAN_RATE = 0.02; // 2 %/day
@@ -38,7 +29,6 @@ interface Harness {
   service: BankingService;
 }
 
-/** Fresh seeded bank with the player's current account open and explicit rates. */
 function makeHarness(currentSeed = 0): Harness {
   const bus = new BankBus();
   const service = new BankingService(bus, {
@@ -131,7 +121,6 @@ describe("products — savings", () => {
 
 describe("products — amortization schedule (pure)", () => {
   it("loanPayment matches the closed-form annuity formula", () => {
-    // P=1000, r=0.02, n=5 → A = P·r·(1+r)^n / ((1+r)^n − 1)
     const factor = Math.pow(1.02, 5);
     const expected = (1000 * 0.02 * factor) / (factor - 1);
     expect(loanPayment(1000, 0.02, 5)).toBeCloseTo(expected, 9);
@@ -152,7 +141,6 @@ describe("products — amortization schedule (pure)", () => {
     const totalPrincipal = sched.reduce((s, p) => s + p.principal, 0);
     expect(totalPrincipal).toBeCloseTo(1000, 6);
 
-    // Total paid = principal + all interest > principal (interest is charged).
     const totalPaid = sched.reduce((s, p) => s + p.payment, 0);
     expect(totalPaid).toBeGreaterThan(1000);
     const totalInterest = sched.reduce((s, p) => s + p.interest, 0);
@@ -184,7 +172,6 @@ describe("products — loan lifecycle through the bus", () => {
   });
 
   it("amortizes to zero when EOD accrual + scheduled payments are driven each period", () => {
-    // Fund the current account generously so repayments never run dry.
     const h = makeHarness(10_000);
     const grant = takeLoan(h.bus, h.service, "player", PLAYER, {
       principal: 1000,
@@ -192,15 +179,12 @@ describe("products — loan lifecycle through the bus", () => {
       periods: 5,
     });
 
-    // Each period: close the day (loan accrues 2 %), then pay the scheduled
-    // installment from the current account into the loan account.
     for (const row of grant.schedule) {
       h.bus.dispatch({ kind: "RunEndOfDay" });
       repayLoan(h.bus, PLAYER, grant.loanAccountId, row.payment);
       expect(balanced(h.service)).toBe(true); // books balanced every step
     }
 
-    // Debt retired exactly.
     expect(h.service.balanceOf(grant.loanAccountId)).toBeCloseTo(0, 6);
     expect(balanced(h.service)).toBe(true);
   });
@@ -232,14 +216,9 @@ describe("products — loan lifecycle through the bus", () => {
       reason: "Loan",
     });
 
-    // A day passes: EOD accrues fractional interest (2 % of 4321 = 86.42), so the
-    // outstanding balance is no longer a whole number.
     h.bus.dispatch({ kind: "RunEndOfDay" });
     expect(Number.isInteger(h.service.balanceOf(loanId))).toBe(false);
 
-    // Repay in WHOLE credits only — `player.credits` is integer, so a Transfer
-    // onto the current account must move a whole amount (mirrors the Bank UI's
-    // wholeCreditsToCurrent flooring). Drive it down as far as whole credits allow.
     for (let i = 0; i < 20; i++) {
       const owed = -h.service.balanceOf(loanId);
       const whole = Math.floor(Math.min(1000, owed));
@@ -247,15 +226,10 @@ describe("products — loan lifecycle through the bus", () => {
       repayLoan(h.bus, PLAYER, loanId, whole);
     }
 
-    // The soft-lock: whole-credit repayment alone can never reach 0 — a sub-credit
-    // residual is stuck, leaving the loan permanently negative (which would block
-    // every future loan via BankScene's `balanceOf(loanId) < 0` guard).
     const residual = -h.service.balanceOf(loanId);
     expect(residual).toBeGreaterThan(0);
     expect(residual).toBeLessThan(1);
 
-    // The bank writes the dust off: the loan closes at exactly 0 and the books
-    // stay balanced (no fractional amount ever touched the current account).
     forgiveLoanResidual(
       h.bus,
       loanId,
@@ -267,11 +241,6 @@ describe("products — loan lifecycle through the bus", () => {
   });
 
   it("forgiveLoanResidual reverses interest income and never touches the current account", () => {
-    // "Balanced + loan == 0" alone is satisfiable by a wrong counter-leg (e.g.
-    // writing the dust off against CASH or the current account — which would
-    // re-introduce the fractional-projection bug this function exists to avoid).
-    // Pin the exact GL direction: the loan credit must reverse interest INCOME and
-    // leave the current account untouched.
     const h = makeHarness(0);
     const loanId = openLoanAccount(h.bus, h.service, "player");
     h.bus.dispatch({
@@ -292,15 +261,11 @@ describe("products — loan lifecycle through the bus", () => {
       residual,
     );
 
-    // The write-off credits the loan toward zero by exactly `residual`…
     expect(h.service.balanceOf(loanId)).toBeCloseTo(-1000 + residual, 6);
-    // …reversing the same sliver of interest income (NOT cash / the current account)…
     expect(h.service.balanceOf(INTERNAL_ACCOUNTS.INTEREST_INCOME)).toBeCloseTo(
       incomeBefore - residual,
       6,
     );
-    // …and the player's current account is untouched, so the integer projection
-    // stays whole (the whole reason the dust is written off this way).
     expect(h.service.balanceOf(PLAYER)).toBe(currentBefore);
     expect(balanced(h.service)).toBe(true);
   });

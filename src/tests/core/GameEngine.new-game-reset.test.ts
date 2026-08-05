@@ -73,13 +73,6 @@ vi.mock("pixi.js", () => ({
   BlurFilter: vi.fn().mockImplementation(() => ({})),
 }));
 
-/**
- * «Новая игра» must produce a genuinely fresh game even when one was already in
- * progress this session. The single full-reset point is
- * `generateDefaultGameState`; before this fix it cleared player/loadout/galaxy +
- * win/death guards but left quests, the banking ledger and the persisted flight
- * position from the prior game.
- */
 describe("GameEngine — new-game reset (generateDefaultGameState)", () => {
   let diDeps: GameEngineDIDependencies;
   let engine: GameEngine;
@@ -103,7 +96,6 @@ describe("GameEngine — new-game reset (generateDefaultGameState)", () => {
   });
 
   it("clears player, loadout, quests, banking ledger and flight position", async () => {
-    // Seed an in-progress game.
     engine.galaxy = await diDeps.galaxyService.generate("prior", 5);
     engine.player = diDeps.playerService.createPlayer({
       factionType: FactionType.OUTLANDERS,
@@ -122,22 +114,16 @@ describe("GameEngine — new-game reset (generateDefaultGameState)", () => {
       engine as unknown as { generateDefaultGameState: () => Promise<void> }
     ).generateDefaultGameState();
 
-    // Player + loadout wiped.
     expect(engine.player).toBeNull();
     expect(
       (engine as unknown as { playerLoadout: unknown }).playerLoadout,
     ).toBeNull();
-    // Quests cleared (active/completed/pending → empty).
     expect(restoreSpy).toHaveBeenCalledWith([], []);
-    // Banking ledger reset to a fresh seeded book.
     expect(resetLedgerSpy).toHaveBeenCalled();
-    // Persisted + transient flight position cleared so the new game never resumes
-    // the prior ship location.
     expect(engine.lastFlightShipPos).toBeNull();
     expect(
       (engine as unknown as { flightShipPos: unknown }).flightShipPos,
     ).toBeNull();
-    // A fresh galaxy was generated.
     expect(engine.galaxy).not.toBeNull();
   });
 });

@@ -22,9 +22,7 @@ import { GOOD_PIRATE_REP_THRESHOLD } from "@/config/balance";
 import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 
-/** Hostile-rep player: pirates treat as prey. */
 const HOSTILE_REP: HostilityContext = { pirateRep: 0 };
-/** Good-rep player: pirates leave alone (at the threshold). */
 const GOOD_REP: HostilityContext = { pirateRep: GOOD_PIRATE_REP_THRESHOLD };
 
 function candidate(
@@ -47,7 +45,6 @@ describe("selectPirateTarget — pirates pick the weakest prey", () => {
       shields: 100,
       damage: 40,
     });
-    // Order must not decide it — strong-first still yields the weak prey.
     expect(selectPirateTarget([strong, weak], HOSTILE_REP)?.id).toBe("weak");
     expect(selectPirateTarget([weak, strong], HOSTILE_REP)?.id).toBe("weak");
   });
@@ -63,7 +60,6 @@ describe("selectPirateTarget — pirates pick the weakest prey", () => {
       shields: 50,
       damage: 20,
     });
-    // The fellow pirate is weaker but still ignored — the trader is the mark.
     expect(selectPirateTarget([mate, trader], HOSTILE_REP)?.id).toBe("trader");
   });
 
@@ -110,7 +106,6 @@ describe("selectPirateTarget — pirates pick the weakest prey", () => {
     });
 
     it("skips a good-rep player even though it is the weakest mark", () => {
-      // The player is by far the weakest, yet exempt — the trader is chosen.
       expect(selectPirateTarget([trader, weakPlayer], GOOD_REP)?.id).toBe(
         "trader",
       );
@@ -122,7 +117,6 @@ describe("selectPirateTarget — pirates pick the weakest prey", () => {
   });
 });
 
-/** A hostile (aggressive) pirate with the given combat stats. */
 function makePirate(
   stats: { hullHP?: number; shields?: number; damage?: number } = {},
   hostile = true,
@@ -154,7 +148,6 @@ describe("wantsToShakedownPlayer — ransom gated on weakness + good-rep exempti
   it("never shakes down a good-rep player (at the threshold), whatever the roll", () => {
     const pirate = makePirate();
     for (let i = 0; i < 50; i++) {
-      // Helpless player (strength 0) → max demand chance, yet rep exempts them.
       expect(
         wantsToShakedownPlayer(
           pirate,
@@ -167,7 +160,6 @@ describe("wantsToShakedownPlayer — ransom gated on weakness + good-rep exempti
   });
 
   it("still shakes down a player just below the good-rep threshold", () => {
-    // chance == maxChance against a helpless player → many seeds must yield true.
     const pirate = makePirate();
     let yes = 0;
     for (let i = 0; i < 50; i++) {
@@ -212,10 +204,6 @@ describe("wantsToShakedownPlayer — ransom gated on weakness + good-rep exempti
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// In-flight wiring: a good-rep player is left alone by an aggressive pirate.
-// ---------------------------------------------------------------------------
 
 function buildManager(
   pirate: NpcShip,
@@ -303,8 +291,6 @@ describe("NpcShipManager — good pirate rep leaves the player alone (in-flight)
   });
 
   it("an aggressive pirate still engages a hostile-rep player (gate is rep-driven)", () => {
-    // A weak pirate the player out-guns won't bother shaking the player down
-    // (chance 0) — so it proceeds straight to the in-flight engage at weapon range.
     const { manager, engaged } = buildManager(
       makePirate({ hullHP: 10, shields: 0, damage: 2 }),
       0,

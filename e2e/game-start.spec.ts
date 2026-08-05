@@ -19,7 +19,6 @@ test.describe('Game Start Flow', () => {
   test('should start new game and show star map', async ({ page }) => {
     await page.getByText('Новая игра').click();
 
-    // Verify star map is displayed
     await expect(page.getByText('SECTOR MAP')).toBeVisible();
     await expect(page.getByText('Кликните на систему для информации')).toBeVisible();
   });

@@ -1,27 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: A cryptanalysis puzzle. A coded burst claws its way out of the static
-// on a dead channel — someone, or something, is calling, and every second the
-// decoder browns out is a second a stranded crew keeps dying. You have a finite
-// decoder-array `power` budget; every analysis pass drains it and raises
-// `clarity`. At zero power the array browns out and the signal is lost forever
-// (a `critMin` redirect to ending_signal_lost — the resource-pressure spine).
-// The puzzle is efficiency: pattern-deduction yields the most clarity per unit
-// of power; brute-forcing the cipher works but bleeds the budget dry.
-// Choice points:
-//   1. First pass — deduce the repeating structure (efficient), brute-force the
-//      cipher (wasteful), or cross-reference the distress catalogue (middling).
-//      The method chosen is remembered in `method` and colours the ending prose.
-//   2. Second pass — a clean spectral filter (steady), an overclock gamble
-//      (roll: a clean lock or an overheat that costs power — its own narrated
-//      beat), or lock what you have and read it (free, no gain).
-//   3. Interpret — an auto gate on `clarity` decides how much you recovered, then
-//      a per-method gate routes to the ending framed by HOW you cracked it.
-// Outcomes (by `clarity` at interpret, unless power ran out first):
-//   - ending_decoded[_brute/_catalog] (clarity >= 8 — coords AND message)  SUCCESS
-//   - ending_partial[_brute/_catalog] (clarity >= 4 — coords, msg garbled)  SUCCESS
-//   - ending_garbled     (clarity < 4  — nothing usable, channel died)      FAILURE
-//   - ending_signal_lost (power ran out mid-decode)                         FAILURE
 export const signalDecodeScript: QuestScript = {
   id: "signal-decode",
   title: "Расшифровка сигнала",
@@ -69,9 +47,6 @@ export const signalDecodeScript: QuestScript = {
       showInUI: false,
     },
     {
-      // Which first-pass method cracked the cipher: 1 deduction, 2 brute force,
-      // 3 catalogue. Read only by the interpret gates to colour the ending — it
-      // never touches a meter, so it can't shift the resource-pressure spine.
       id: "method",
       name: "Метод взлома",
       min: 0,
@@ -213,8 +188,6 @@ export const signalDecodeScript: QuestScript = {
       ],
     },
     {
-      // Full-decode terminal, routed by HOW the cipher was cracked. The reward
-      // is already applied on read_full; these transitions only pick prose.
       id: "decoded_gate",
       text: "Расшифровка полна. Вы откидываетесь от консоли и переводите дух.",
       transitions: [
@@ -244,7 +217,6 @@ export const signalDecodeScript: QuestScript = {
       ],
     },
     {
-      // Partial-decode terminal, likewise routed by method.
       id: "partial_gate",
       text: "Координаты есть, но сообщение осыпалось. Вы вглядываетесь в обрывки, надеясь, что пеленга хватит.",
       transitions: [

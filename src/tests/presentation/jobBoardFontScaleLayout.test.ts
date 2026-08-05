@@ -1,20 +1,3 @@
-/**
- * Task 1 (font-scale layout & galaxy faction bug-fix pack,
- * `docs/plans/20260708-font-scale-and-faction-bugs.md`): regression test for
- * the JobBoardPanel row-height bug — `ROW_H`/`ROW_H_OFFER` are fixed pixel
- * constants independent of `scaledFont`'s taller line height at "L" scale, and
- * the title is truncated by character count instead of word-wrap. Both let a
- * long quest's rendered content overflow its own row's drawn background, or
- * lose the tail of the title outright.
- *
- * PixiJS text metrics (`.width`/`.height` on a `Text`) need a real canvas
- * backend jsdom doesn't provide (see `questCardLayout.ts`'s block comment), so
- * this test instead reads each row's drawn box via `Graphics.getLocalBounds()`
- * (geometry-derived — works without a renderer, see `planetSpriteMask.test.ts`)
- * and estimates the wrapped description height with the same
- * `estimateWrappedLines`/`lineStepFor` upper-bound math `questCardLayout.ts`
- * already uses for `QuestJournalUI`'s dynamic card height.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import { Container, Graphics, Text } from "pixi.js";
 import { JobBoardPanel } from "@/presentation/JobBoardPanel";
@@ -71,7 +54,6 @@ function makeQuest(
   } as unknown as GeneratedQuest;
 }
 
-/** Recursively collects every descendant `Text` node. */
 function collectTexts(node: Container): Text[] {
   const out: Text[] = [];
   const visit = (n: Container): void => {
@@ -82,11 +64,6 @@ function collectTexts(node: Container): Text[] {
   return out;
 }
 
-/**
- * The offer-row list container: a plain `new Container()` with no fields of
- * its own, so `.constructor === Container` distinguishes it from `Graphics`/
- * `Text` children, which also `instanceof Container` in PixiJS 8's chain.
- */
 function findOffersContainer(panel: JobBoardPanel): Container {
   const offers = panel.container.children.find(
     (c) => c.constructor === Container,
@@ -108,8 +85,6 @@ describe("JobBoardPanel offer rows at L font scale", () => {
     });
 
     const offers = findOffersContainer(panel);
-    // Row backgrounds are `roundRect(10, y, W-20, rowH)` — width ~500. The
-    // narrower "Принять" button backgrounds (width 74) are filtered out.
     const rowBoxes = offers.children
       .filter((c): c is Graphics => c instanceof Graphics)
       .map((g) => g.getLocalBounds())
@@ -130,10 +105,7 @@ describe("JobBoardPanel offer rows at L font scale", () => {
     );
     const descBottom = descText!.y + lines * lineStepFor(fontPx);
 
-    // The bug: ROW_H_OFFER is a fixed constant, so a long wrapped description
-    // at "L" scale overflows past the row's own drawn background box.
     expect(descBottom).toBeLessThanOrEqual(rowA.y + rowA.height);
-    // Rows must never overlap each other either.
     expect(rowB.y).toBeGreaterThanOrEqual(rowA.y + rowA.height);
   });
 
@@ -149,17 +121,11 @@ describe("JobBoardPanel offer rows at L font scale", () => {
       t.text.startsWith(LONG_TITLE.slice(0, 20)),
     );
     expect(titleText, "expected the title Text node").toBeTruthy();
-    // Character-count truncation (`tpl.title.length > 36 ? slice(0,35)+"…" : …`)
-    // must be replaced by word-wrap that keeps the full string.
     expect(titleText!.text).toBe(LONG_TITLE);
   });
 
   it("keeps the reward badge clear of the (now word-wrapped) title line", () => {
     setFontScale("L");
-    // A long title used to be character-truncated short enough to clear the
-    // right-anchored reward badge; word-wrap alone (Task 2) lets a long
-    // title's first line run at full width, so the badge must live on its
-    // own line (the type-tag's) instead of sharing the title's.
     const panel = new JobBoardPanel(
       [makeQuest("q1", LONG_TITLE, "Короткое описание.")],
       800,
@@ -171,9 +137,6 @@ describe("JobBoardPanel offer rows at L font scale", () => {
     const rewardText = texts.find((t) => t.text.includes("💰"));
     expect(titleText, "expected the title Text node").toBeTruthy();
     expect(rewardText, "expected the reward badge Text node").toBeTruthy();
-    // The reward badge's own line must fully clear the title's first line —
-    // not just start above it, since the badge's font (13) renders taller
-    // than the tag's (11) it shares a line with.
     const rewardBottom = rewardText!.y + lineStepFor(scaledFont(13));
     expect(rewardBottom).toBeLessThanOrEqual(titleText!.y);
   });
@@ -202,18 +165,11 @@ describe("JobBoardPanel active-quest rows at L font scale", () => {
       t.text.startsWith(LONG_TITLE.slice(0, 20)),
     );
     expect(titleText, "expected the active-row title Text node").toBeTruthy();
-    // Same character-count truncation bug (`q.title.length > 28 ? … : …`) in
-    // `addActiveRow` must be replaced by word-wrap that keeps the full string.
     expect(titleText!.text).toBe(LONG_TITLE);
   });
 
   it("keeps the countdown badge clear of the (now word-wrapped) title line", () => {
     setFontScale("L");
-    // Mirrors the offer-row reward-badge fix: a long active-quest title used
-    // to be character-truncated short enough to clear the right-anchored
-    // countdown badge; word-wrap alone lets the title's first line run at
-    // full width, so the countdown must live on its own line (the type-tag's)
-    // instead of sharing the title's.
     const activeQuest = {
       type: QuestType.DELIVERY,
       title: LONG_TITLE,
@@ -248,9 +204,6 @@ describe("JobBoardPanel active-quest rows at L font scale", () => {
 describe("computeRowLayout gap accounting", () => {
   it("keeps a fully-empty active row at the historical MIN_ACTIVE_ROW_H floor", () => {
     setFontScale("M");
-    // Regression: an unconditional double GAP (one after the issuer block,
-    // one after the description block) used to fire even when neither block
-    // rendered, making a short active-quest row's floor (54px) unreachable.
     const layout = computeRowLayout(
       {
         title: "Короткое",

@@ -21,7 +21,6 @@ import {
   type SlotManagerLike,
 } from "@/systems/saves/saveSlots";
 
-/** In-memory manager exposing exactly the `SlotManagerLike` surface. */
 class FakeSlotManager implements SlotManagerLike {
   readonly rows = new Map<string, SaveSlotInfo>();
 
@@ -43,7 +42,6 @@ class FakeSlotManager implements SlotManagerLike {
     this.rows.delete(slotId);
   }
 
-  /** Test helper: inject a slot listing directly. */
   setRow(info: SaveSlotInfo): void {
     this.rows.set(info.slotId, info);
   }
@@ -179,13 +177,11 @@ describe("saveSlots — operations", () => {
     const m = new FakeSlotManager();
     expect(await nextFreeSlot(m)).toBe("slot-1");
 
-    // Fill every manual slot.
     for (const id of manualSlotIds()) {
       m.setRow({ slotId: id, timestamp: 1, playerLevel: 1, location: "X" });
     }
     expect(await nextFreeSlot(m)).toBeNull();
 
-    // The auto slot does not count as a manual free slot.
     m.rows.delete("slot-1");
     m.setRow({
       slotId: AUTO_SLOT_ID,
@@ -278,7 +274,6 @@ describe("saveSlots — Continue resolver", () => {
       location: "A",
       currentSceneType: SceneType.SPACE_FLIGHT,
     });
-    // A hidden recovery dump with the newest timestamp must NOT be resumed.
     m.setRow({
       slotId: "_emergency",
       timestamp: 999,
@@ -286,7 +281,6 @@ describe("saveSlots — Continue resolver", () => {
       location: "Crash",
       currentSceneType: SceneType.SPACE_FLIGHT,
     });
-    // An unrecognised slot id is likewise not a Continue candidate.
     m.setRow({
       slotId: "slot-99",
       timestamp: 998,

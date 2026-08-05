@@ -9,24 +9,13 @@ import { scaledFont } from "@/utils/fontScale";
 import { OVERMIND_BOSS_TIER } from "@/config/balance";
 import type { NpcSizeTier } from "@/types";
 
-/**
- * Everything the OVERMIND-core boss controller reads from (or pushes back to)
- * the owning {@link NpcShipManager} without depending on the concrete manager
- * class. Mirrors the {@link NpcInteractionController}/{@link
- * CombatPursuitController}/{@link EncounterController} shape (Tasks 1–3): a
- * narrow deps bundle, owned by the manager as a property, its methods
- * forwarded 1:1.
- */
 export interface OvermindBossControllerDeps {
   uiLayer: Container;
   getScreenSize(): { width: number; height: number };
-  /** Scene-facing accessors (the manager's own {@link NpcShipManagerDeps}). */
   flight: NpcShipManagerDeps;
   getGameEngine(): GameEngine | null;
   getNpcSprites(): NpcShipSprite[];
-  /** Spawn + mount a new NPC sprite (manager owns sprite/anchor bookkeeping). */
   addNpcSprite(npc: NpcShip, entry: boolean): void;
-  /** The manager's shared {@link NpcSimulator} OVERMIND-core factory. */
   spawnOvermindInSystem(
     rng: SeededRNG,
     id: string,
@@ -35,24 +24,15 @@ export interface OvermindBossControllerDeps {
   ): NpcShip;
 }
 
-/**
- * Owns the OVERMIND-core final-boss prompt + combatant spawn extracted from
- * {@link NpcShipManager} (plan Task 4): presenting the "attack the core /
- * retreat" prompt on entering the core's system, and spawning the boss as a
- * real in-flight combatant that auto-closes on the player. Killing it in
- * flight wins the game ({@link NpcShipManager.handleInFlightDeath}).
- */
 export class OvermindBossController {
   private overlay: Container | null = null;
 
   constructor(private readonly deps: OvermindBossControllerDeps) {}
 
-  /** True while the OVERMIND-core prompt overlay is open. */
   get isOpen(): boolean {
     return this.overlay !== null;
   }
 
-  /** Tear down any open prompt overlay (manager destroy()). */
   destroy(): void {
     if (this.overlay) {
       if (!this.overlay.destroyed) {
@@ -62,19 +42,15 @@ export class OvermindBossController {
     }
   }
 
-  /** Close the prompt overlay (manager closeModals()). Idempotent. */
   close(): void {
     if (!this.overlay) return;
     const ov = this.overlay;
     this.overlay = null;
-    // Guard: a scene transition may run clearUILayer() (which destroys this
-    // overlay) before the microtask fires — destroying it twice throws.
     queueMicrotask(() => {
       if (!ov.destroyed) ov.destroy({ children: true });
     });
   }
 
-  /** Rebuild the open prompt at the new font scale (manager refreshFontScale()). */
   refreshFontScale(): void {
     if (this.overlay && !this.overlay.destroyed) {
       this.overlay.destroy({ children: true });
@@ -83,15 +59,6 @@ export class OvermindBossController {
     }
   }
 
-  /**
-   * Spawn the OVERMIND-core final boss as a real in-flight combatant — real-time
-   * combat only, no hex CombatScene. The core enters as a hostile OVERMIND craft
-   * that auto-closes on the player (aggressor maneuver) and is selected as the
-   * player's auto-fire target; killing it in-flight wins the game. Idempotent: a
-   * second prompt-attack while the core is already engaged is a no-op. Public
-   * (not private) — exercised directly, via type-cast, by the existing
-   * `combat/overmindCoreInflight.test.ts`.
-   */
   spawnOvermindCoreCombatant(): void {
     const gameEngine = this.deps.getGameEngine();
     if (this.deps.getNpcSprites().some((s) => s.npc.id === OVERMIND_CORE_ID))
@@ -104,10 +71,6 @@ export class OvermindBossController {
       systemId,
       "boss",
     );
-    // Boss stats come from the shared OVERMIND_BOSS_TIER balance constant (see
-    // its doc for the folded-shields 450-HP rationale). The factory already
-    // applies them for the "boss" tier; re-apply here too so the boss stays at
-    // tier strength even through a deps factory that ignores the tier hint.
     core.name = "Ядро OVERMIND";
     core.sizeTier = "boss";
     core.hullHP = OVERMIND_BOSS_TIER.hull;
@@ -115,11 +78,6 @@ export class OvermindBossController {
     core.damage = OVERMIND_BOSS_TIER.damage;
     core.markHostile();
 
-    // Register the boss in the domain galaxy like every other in-system spawn
-    // (garrison/capture-fleet callers push too): a day boundary during the fight
-    // calls advanceGalaxyDay() → refresh(), which begins-departure on any sprite
-    // absent from galaxy.npcShips. Without this the core flies out and the win
-    // becomes unreachable; handleInFlightDeath's removeNpc would also no-op.
     const galaxy = gameEngine?.galaxy;
     if (galaxy) galaxy.npcShips.push(core);
 
@@ -134,7 +92,6 @@ export class OvermindBossController {
     this.deps.flight.showMessage("Ядро OVERMIND вступает в бой!", 0xff2200);
   }
 
-  /** Show a prompt when entering the OVERMIND core system so the player can fight the final encounter. */
   showOvermindCorePrompt(): void {
     if (!this.deps.getGameEngine()) return;
     const { width, height } = this.deps.getScreenSize();
@@ -146,8 +103,6 @@ export class OvermindBossController {
       color: 0x000000,
       alpha: 0.85,
     });
-    // Swallow clicks on the modal panel so they do not bubble to the stage
-    // route-planning handler behind it (playtest3 F6 audit, CLAUDE.md Rule 2).
     bg.eventMode = "static";
     bg.on("pointerdown", (e) => e.stopPropagation());
 
@@ -209,8 +164,6 @@ export class OvermindBossController {
     attackBtn.on("pointerdown", (e) => {
       e.stopPropagation();
       this.close();
-      // Real-time only: the core fights in-flight via the CombatModule (no hex
-      // CombatScene hop). Killing it wins the game (handleInFlightDeath).
       this.spawnOvermindCoreCombatant();
     });
 

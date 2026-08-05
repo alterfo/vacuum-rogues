@@ -9,11 +9,6 @@ import { SkillTree } from "@/domain/SkillTree";
 import { FactionRegistry } from "@/systems/FactionRegistry";
 import { logger } from "@/utils/logger";
 
-/**
- * Service responsible for Player lifecycle.
- * Follows Information Expert: knows how to assemble a Player with all dependencies.
- * Follows SRP: only player creation and management, no rendering or saving logic.
- */
 export class PlayerService implements IPlayerService {
   private player: Player | null = null;
 
@@ -22,7 +17,6 @@ export class PlayerService implements IPlayerService {
     const skillTree = new SkillTree([]);
     const inventory = new Inventory();
 
-    // Base stats modified by faction bonus
     const baseHull = 100;
     const baseShields = 50;
     const baseEnergy = 100;

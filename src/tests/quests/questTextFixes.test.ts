@@ -6,16 +6,9 @@ import { gravitySlalomScript } from "@/systems/quests/scripts/gravity-slalom";
 import { reactorScript } from "@/systems/quests/scripts/reactor";
 import { derelictSalvageScript } from "@/systems/quests/scripts/derelict-salvage";
 
-// Task 3 (quest-and-hub-polish-pass): quick text/content fixes across quest
-// scripts. These assert the specific defective strings from the 2026-07-25
-// jaded-player sweep no longer reach the data. String-absence guards, so a
-// future edit can't silently reintroduce the typo/placeholder.
-
-// Every player-facing string in a script: location prose + transition labels.
 function allStrings(script: QuestScript): string[] {
   const out: string[] = [];
   for (const loc of script.locations) {
-    // `text` may be a variance pool (Task 14) — flatten every variant.
     if (typeof loc.text === "string") out.push(loc.text);
     else out.push(...loc.text);
     for (const t of loc.transitions) out.push(t.label);
@@ -39,7 +32,6 @@ describe("Task 3 — quest text/content fixes", () => {
   it("signal-decode: no «коротая»/«Влобовой» typos", () => {
     expect(scriptContains(signalDecodeScript, "коротая")).toBe(false);
     expect(scriptContains(signalDecodeScript, "Влобовой")).toBe(false);
-    // The corrected forms are present.
     expect(scriptContains(signalDecodeScript, "короткая")).toBe(true);
     expect(scriptContains(signalDecodeScript, "Лобовой")).toBe(true);
   });
@@ -54,8 +46,6 @@ describe("Task 3 — quest text/content fixes", () => {
         expect(t.label).not.toBe("...");
       }
     }
-    // The setting is a named station (aligned with the in-game text, not the
-    // old «freighter» header comment).
     expect(scriptContains(reactorScript, "«Горнило»")).toBe(true);
   });
 

@@ -120,7 +120,6 @@ describe("evaluateDelivery (pure on-landing completion helper)", () => {
     it("right system but wrong planet (the issuer) → n/a (silent)", () => {
       const quest = deliveryQuest({ targetPlanetId: "P_neighbour" });
       const player = playerWith([{ type: "LUXURY", amount: 99 }]);
-      // Landing back on the issuer planet, holding the cargo, does NOT complete.
       expect(evaluateDelivery(quest, player, "SYS", "P_issuer").kind).toBe(
         "n/a",
       );
@@ -148,7 +147,6 @@ describe("evaluateDelivery (pure on-landing completion helper)", () => {
     it("legacy quest (null target planet) → completes system-level on any planet", () => {
       const quest = deliveryQuest({ targetPlanetId: null });
       const player = playerWith([{ type: "LUXURY", amount: 5 }]);
-      // Even landing on an arbitrary planet completes it (back-compat).
       expect(evaluateDelivery(quest, player, "SYS", "P_anything").kind).toBe(
         "complete",
       );
@@ -157,15 +155,10 @@ describe("evaluateDelivery (pure on-landing completion helper)", () => {
     it("target planet set but caller omits current planet → system-level (back-compat)", () => {
       const quest = deliveryQuest({ targetPlanetId: "P_neighbour" });
       const player = playerWith([{ type: "LUXURY", amount: 5 }]);
-      // No planet id threaded → the planet gate does not fire.
       expect(evaluateDelivery(quest, player, "SYS").kind).toBe("complete");
     });
 
     it("cross-system delivery (has a VISIT_LOCATION objective) stays system-level despite a targetPlanetId", () => {
-      // A buildRoutineQuest DELIVERY carries a concrete targetPlanetId (its VISIT
-      // objective's planet) plus a COLLECT_ITEM. The planet gate must NOT fire —
-      // landing on ANY planet in the target system completes it (pre-feature
-      // behaviour); the gate is for COLLECT-only «Местный подряд» couriers only.
       const quest = deliveryQuest({
         targetPlanetId: "P_target",
         objectives: [
@@ -182,7 +175,6 @@ describe("evaluateDelivery (pure on-landing completion helper)", () => {
         ],
       });
       const player = playerWith([{ type: "LUXURY", amount: 5 }]);
-      // Lands on a DIFFERENT planet in the right system → still completes.
       expect(evaluateDelivery(quest, player, "SYS", "P_other").kind).toBe(
         "complete",
       );

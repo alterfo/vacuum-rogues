@@ -1,19 +1,3 @@
-/**
- * Off-planet base art (plan 20260624, Task 2): `PlanetManager.createStations()`
- * renders each station as a per-type SPRITE when station art resolves to a
- * cached texture, and falls back to the existing colour-coded DIAMOND otherwise.
- *
- * These pixi-mocked tests pin the contract the renderer must keep in BOTH paths:
- *  - sprite path (mocked `stationSpriteKey` + cached `tex`): an 80×80, anchor-0.5,
- *    non-interactive Sprite is mounted (no diamond `poly`);
- *  - diamond path (`stationSpriteKey` → null): the diamond Graphics is drawn (no
- *    Sprite);
- *  - and in EITHER path the marker still gets a name label, a `static`
- *    pointer hit-area that calls `onStationClick` (→ `onStationDock`), a `90`
- *    zIndex container, and a `stationMarkers` entry that `getStationAt`/docking
- *    range can still find. (The wiring that breaks docking if the rewrite drops a
- *    bookkeeping step.)
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const pixi = vi.hoisted(() => ({
@@ -74,8 +58,6 @@ vi.mock("@/presentation/PlanetInfoPanel", () => ({
   })),
 }));
 
-// Control the art resolver + texture cache so we can drive the sprite/diamond
-// branch deterministically without any real `station/` art on disk.
 const art = vi.hoisted(() => ({
   stationSpriteKey: vi.fn<(type: unknown, id: string) => string | null>(),
   tex: vi.fn<(key: string) => unknown>(),
@@ -121,7 +103,6 @@ function makeMockRenderer(): Renderer {
   } as unknown as Renderer;
 }
 
-// Star centre is (400,300); a station at radius 100 / angle 0 lands at (500,300).
 const STATION: Station = {
   id: "sys_a-station-1",
   name: "Торговый порт «Меридиан»",
@@ -179,7 +160,6 @@ function makeHarness(): {
   };
 }
 
-/** The station container is the zIndex-90 object mounted on the game layer. */
 function stationContainer(gameLayer: { addChild: ReturnType<typeof vi.fn> }) {
   const ctn = gameLayer.addChild.mock.calls
     .map((c) => c[0] as Record<string, unknown>)
@@ -191,7 +171,6 @@ function stationContainer(gameLayer: { addChild: ReturnType<typeof vi.fn> }) {
   };
 }
 
-/** The container's children, split into the interactive hit-area and the rest. */
 function childrenOf(ctn: ReturnType<typeof stationContainer>) {
   const children = ctn.addChild.mock.calls.map((c) => c[0]) as Array<
     Record<string, unknown>
@@ -220,15 +199,12 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
     const { manager, gameLayer } = makeHarness();
     manager.initialize();
 
-    // The resolver was consulted with this station's type + id; the resolved
-    // key was looked up in the texture cache.
     expect(art.stationSpriteKey).toHaveBeenCalledWith(
       StationType.TRADE_POST,
       STATION.id,
     );
     expect(art.tex).toHaveBeenCalledWith("station/trade_01");
 
-    // Exactly one Sprite, sized 80×80, anchored centre, click-transparent.
     expect(pixi.sprites.length).toBe(1);
     const sprite = pixi.sprites[0];
     expect(
@@ -238,7 +214,6 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
     expect(sprite.height).toBe(80);
     expect(sprite.eventMode).toBe("none");
 
-    // No diamond was drawn (no Graphics had its `poly` called).
     expect(
       pixi.graphics.some(
         (g) => (g.poly as ReturnType<typeof vi.fn>).mock.calls.length > 0,
@@ -249,7 +224,6 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
   });
 
   it("falls back to the colour-coded diamond when the key resolves but is not cached", () => {
-    // Sprite key present, but texture not yet preloaded → diamond, no async.
     art.stationSpriteKey.mockReturnValue("station/trade_01");
     art.tex.mockReturnValue(undefined);
 
@@ -257,7 +231,6 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
     manager.initialize();
 
     expect(pixi.sprites.length).toBe(0);
-    // Exactly one diamond Graphics (the other Graphics is the hit-area).
     expect(
       pixi.graphics.filter(
         (g) => (g.poly as ReturnType<typeof vi.fn>).mock.calls.length > 0,
@@ -273,7 +246,6 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
     const { manager, gameLayer } = makeHarness();
     manager.initialize();
 
-    // No art key resolved → the texture cache is never consulted.
     expect(art.tex).not.toHaveBeenCalled();
     expect(pixi.sprites.length).toBe(0);
     expect(
@@ -286,7 +258,6 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
   });
 
   it("places the name label clear of (below) the 80px sprite — no overlap", () => {
-    // Sprite path: the marker mounts the full 80px station sprite.
     art.stationSpriteKey.mockReturnValue("station/trade_01");
     art.tex.mockReturnValue({ __station: true });
 
@@ -296,23 +267,15 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
     const marker = manager.stationMarkers[0] as StationMarker;
     const labelY = (marker.label as unknown as { y: number }).y;
 
-    // The label is top-anchored; its top edge must sit at or below the sprite's
-    // bottom edge (half the 80px sprite = 40) so the name never draws over it.
     expect(labelY).toBeGreaterThanOrEqual(STATION_SPRITE_SIZE / 2);
     expect(labelY).toBe(STATION_LABEL_Y);
   });
 });
 
-/**
- * Both render paths must preserve the marker bookkeeping that docking/route
- * planning depend on: a name label, a working `static` hit-area that fires
- * `onStationClick`, the zIndex-90 container, and a `getStationAt`-findable entry.
- */
 function assertMarkerWiring(
   manager: PlanetManager,
   gameLayer: { addChild: ReturnType<typeof vi.fn> },
 ): void {
-  // One marker recorded, locatable by world position (docking range = 50px).
   expect(manager.stationMarkers.length).toBe(1);
   const marker = manager.stationMarkers[0] as StationMarker;
   expect(marker.station.id).toBe(STATION.id);
@@ -324,8 +287,6 @@ function assertMarkerWiring(
   expect(found?.station.id).toBe(STATION.id);
   expect(manager.getStationAt(5000, 5000)).toBeNull();
 
-  // The hit-area is a `static`, click-transparent geometry whose pointerdown
-  // routes through onStationClick → onStationDock(stationId).
   const ctn = stationContainer(gameLayer);
   expect(ctn.zIndex).toBe(90);
   const { hit } = childrenOf(ctn);

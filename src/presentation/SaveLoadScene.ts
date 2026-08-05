@@ -13,30 +13,14 @@ import {
 
 interface SaveLoadContext {
   gameEngine?: GameEngine;
-  /** Scene to return to when the player closes the screen (default MAIN_MENU). */
   returnTo?: SceneType;
 }
 
-/** A pending two-step confirmation for a destructive row action. */
 interface PendingConfirm {
   readonly slotId: string;
   readonly action: "delete" | "overwrite";
 }
 
-/**
- * Save/Load screen: lists every save slot (auto + the manual grid) with
- * load / save (create + overwrite, confirmed) / delete actions.
- *
- * The pure slot-list model (`@/systems/saves/saveSlots`) owns all logic — this
- * scene is presentation + wiring only. Saving builds the real `SaveState`
- * through `GameEngine.saveGame(slotId)` (so galaxy/player/loadout/banking all
- * round-trip), then records the slot's display name via the model's
- * `setSlotName`. Loading delegates to `GameEngine.loadGame(slotId)`, which
- * routes terminal/over-context scenes back to flight on its own.
- *
- * Action methods are public so they are unit-testable without PixiJS pointer
- * events; `render()` no-ops when no real renderer/canvas is attached.
- */
 export class SaveLoadScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private returnTo: SceneType = SceneType.MAIN_MENU;
@@ -44,9 +28,7 @@ export class SaveLoadScene extends GameScene {
   private background: Graphics | null = null;
   private listContainer: Container | null = null;
   private messageText: Text | null = null;
-  /** Row awaiting a delete/overwrite confirmation, or null. */
   private pendingConfirm: PendingConfirm | null = null;
-  /** Transient banner shown on the next render after an action. */
   private flashMessage: { message: string; color: number } | null = null;
 
   initialize(context?: object): void {
@@ -74,48 +56,35 @@ export class SaveLoadScene extends GameScene {
     logger.info("SaveLoadScene destroyed");
   }
 
-  // ── Data ────────────────────────────────────────────────────────────────
-
   private get saveManager() {
     return this.gameEngine?.saveManager ?? null;
   }
 
-  /** A live, savable game exists (false from the main menu before any load). */
   canSave(): boolean {
     return !!(this.gameEngine?.player && this.gameEngine?.galaxy);
   }
 
-  /** Reload the slot rows from the SaveManager and re-render. */
   async refresh(): Promise<void> {
     const mgr = this.saveManager;
     this.rows = mgr ? await listSlotRows(mgr) : [];
     this.render();
   }
 
-  /** Current rows (test/inspection helper). */
   getRows(): readonly SlotRow[] {
     return this.rows;
   }
 
-  // ── Actions (public for unit tests) ───────────────────────────────────────
-
-  /** Load a slot — `GameEngine.loadGame` transitions away on success. */
   async loadSlot(slotId: string): Promise<void> {
     if (!this.gameEngine) return;
     try {
       const ok = await this.gameEngine.loadGame(slotId);
       if (!ok) this.showMessage("Сохранение не найдено", 0xffaa44);
-      // On success loadGame calls transitionTo → this scene is destroyed.
     } catch (e) {
       logger.error("SaveLoadScene: load failed", e);
       this.showMessage("Не удалось загрузить сохранение");
     }
   }
 
-  /**
-   * Write the live game into a slot and, when given, record its display name.
-   * No-op without an active game (the model's slot list still shows the slot).
-   */
   async saveSlot(slotId: string, name?: string): Promise<void> {
     if (!this.gameEngine || !this.canSave()) return;
     try {
@@ -131,7 +100,6 @@ export class SaveLoadScene extends GameScene {
     }
   }
 
-  /** Delete a slot's save (and forget its custom name), then re-list. */
   async removeSlot(slotId: string): Promise<void> {
     const mgr = this.saveManager;
     if (!mgr) return;
@@ -144,25 +112,21 @@ export class SaveLoadScene extends GameScene {
     }
   }
 
-  /** Create a save in an empty slot, prompting for an optional display name. */
   async createSave(slotId: string): Promise<void> {
     const name = this.promptName(defaultSlotName(slotId));
     await this.saveSlot(slotId, name);
   }
 
-  /** Arm a two-step confirmation for a destructive action on a row. */
   requestConfirm(slotId: string, action: "delete" | "overwrite"): void {
     this.pendingConfirm = { slotId, action };
     this.render();
   }
 
-  /** Cancel any armed confirmation. */
   cancelConfirm(): void {
     this.pendingConfirm = null;
     this.render();
   }
 
-  /** Carry out the armed confirmation (overwrite re-prompts for a name). */
   async confirmPending(): Promise<void> {
     const pending = this.pendingConfirm;
     this.pendingConfirm = null;
@@ -178,18 +142,12 @@ export class SaveLoadScene extends GameScene {
     }
   }
 
-  /** Return to the screen that opened the save/load list. */
   goBack(): void {
     const engine = this.gameEngine;
     if (!engine) return;
     void engine.transitionTo(this.returnTo, { gameEngine: engine });
   }
 
-  /**
-   * Prompt for a slot name via the browser (best-effort). Returns `undefined`
-   * when prompting is unavailable or the player cancels — the caller then keeps
-   * the existing/default name. Guarded so tests and prompt-less runtimes degrade.
-   */
   private promptName(current: string): string | undefined {
     try {
       if (
@@ -204,8 +162,6 @@ export class SaveLoadScene extends GameScene {
     }
     return undefined;
   }
-
-  // ── Rendering ─────────────────────────────────────────────────────────────
 
   private showMessage(message: string, color = 0xff5555): void {
     this.flashMessage = { message, color };
@@ -275,9 +231,6 @@ export class SaveLoadScene extends GameScene {
       this.messageText.x = width / 2;
       this.messageText.y = height - 16;
       this.renderer.uiLayer.addChild(this.messageText);
-      // One-shot: the banner stays drawn until the next action re-renders the
-      // screen, then clears — so a stale "Сохранено" doesn't linger over an
-      // unrelated later interaction (e.g. a delete confirm).
       this.flashMessage = null;
     }
   }
@@ -291,8 +244,6 @@ export class SaveLoadScene extends GameScene {
     bg.stroke({ color: row.isAuto ? 0x335577 : 0x223344, width: 1 });
     node.addChild(bg);
 
-    // Cap the displayed name so a long player-entered name can't overflow the
-    // row and overlap the right-aligned action buttons.
     const MAX_NAME_CHARS = 28;
     const displayName =
       row.name.length > MAX_NAME_CHARS
@@ -328,7 +279,6 @@ export class SaveLoadScene extends GameScene {
     detailText.y = 28;
     node.addChild(detailText);
 
-    // Action buttons, laid out right-to-left.
     let rightX = w - 12;
     const addAction = (label: string, color: number, cb: () => void): void => {
       const btn = this.makeButton(label, color, cb);

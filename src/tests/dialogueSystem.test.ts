@@ -58,11 +58,9 @@ describe("DialogueSystem session map growth (F7)", () => {
 
     for (let i = 0; i < 10; i++) {
       system.startDialogue(player, npc);
-      // Each call gets a distinct timestamped session id.
       vi.advanceTimersByTime(1000);
     }
 
-    // One live timestamped session + one npc.id alias — stale sessions deleted.
     expect(sessionMap(system).size).toBeLessThanOrEqual(2);
   });
 
@@ -101,9 +99,6 @@ describe("DialogueSystem session map growth (F7)", () => {
       vi.advanceTimersByTime(1000);
     }
 
-    // ≤ 2 entries per NPC (latest session + npc.id alias), and each NPC's
-    // alias still points at ITS OWN latest session — a regression that deletes
-    // by npc.id instead of previous.id would corrupt one of them.
     expect(sessionMap(system).size).toBeLessThanOrEqual(4);
     expect(sessionMap(system).get(npc.id)!.npc.id).toBe(npc.id);
     expect(sessionMap(system).get(other.id)!.npc.id).toBe(other.id);
@@ -112,7 +107,6 @@ describe("DialogueSystem session map growth (F7)", () => {
   it("stays bounded when two dialogues start in the same millisecond", () => {
     const system = makeSystem();
 
-    // Same timestamp → identical `dlg_<id>_<ts>` session key for both calls.
     system.startDialogue(player, npc);
     const second = system.startDialogue(player, npc);
 
@@ -123,9 +117,6 @@ describe("DialogueSystem session map growth (F7)", () => {
   it("caps the carried-over history so open/close cycles cannot grow it forever", () => {
     const system = makeSystem();
 
-    // Each startDialogue adds one opening anchor on top of the restored
-    // history; without the restore cap this grows by 1 per cycle, unbounded
-    // (submitPlayerChoice — the only other prune point — never runs here).
     for (let i = 0; i < 80; i++) {
       system.startDialogue(player, npc);
       vi.advanceTimersByTime(1000);

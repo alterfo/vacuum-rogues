@@ -1,15 +1,3 @@
-/**
- * Task 10 (quest-and-hub polish pass,
- * `docs/plans/20260726-quest-and-hub-polish-pass.md`): robot-assistant voice at
- * repair / refuel / hull-diagnostic.
- *
- * Canon §11.4 asks hangar/station service interactions to speak with a short
- * robot-assistant voice («System check: … Ship ready for launch») rather than a
- * bare mechanical toast. This suite pins the pure voice-line builders and asserts
- * the line actually reaches the toast on each of the three actions — station
- * repair (`StationScene.doRepair`), station refuel (`StationScene.doRefuel`), and
- * the hangar СЕРВИСНЫЙ ЦЕНТР diagnostic (`HangarPanel` repair button).
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   repairVoiceLine,
@@ -17,7 +5,6 @@ import {
   diagnosticVoiceLine,
 } from "@/systems/equipment/serviceVoice";
 
-// ── pure voice-line builders ────────────────────────────────────────────────
 describe("service voice lines (Task 10) — pure builders", () => {
   it("repair line names the cost and the ship-ready framing in robot voice", () => {
     const line = repairVoiceLine(200);
@@ -53,7 +40,6 @@ describe("service voice lines (Task 10) — pure builders", () => {
   });
 });
 
-// ── scene wiring ────────────────────────────────────────────────────────────
 interface FakeNode {
   text: string;
   alpha: number;
@@ -145,7 +131,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scenes + helpers see the fake pixi.
 import { Container } from "pixi.js";
 import { StationScene } from "@/presentation/StationScene";
 import { HangarPanel } from "@/presentation/ui/HangarPanel";
@@ -183,8 +168,6 @@ function makeEngine() {
       currentSystemId: "sys1",
       currentAccountId: "acc1",
       rank: 0,
-      // 20 HP missing, 10 energy missing — both service paths take the success
-      // branch.
       ship: { hullHP: 80, maxHull: 100, energy: 40, maxEnergy: 50 },
       isHostileTo: () => false,
       inventory,
@@ -261,7 +244,6 @@ describe("StationScene — robot-assistant voice on repair/refuel (Task 10)", ()
   });
 });
 
-// HangarPanel ctx harness (spy-based, mirrors hangarPanelSfxAndLabel.test.ts).
 function makePanelPlayer(): Player {
   const inventory = {
     ownedGearIds: [] as string[],

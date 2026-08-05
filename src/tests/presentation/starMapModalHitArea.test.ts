@@ -1,19 +1,7 @@
-/**
- * Real-pointer regression (playtest): the star-map purchase modal's buttons are
- * hand-rolled Containers whose children (bg Graphics + label Text) are all
- * eventMode='none'. In PixiJS 8 that leaves the Container with NO hit-test
- * geometry — the event boundary prunes 'none' children and a bare Container
- * contributes no bounds — so the button is mouse-dead without an explicit
- * hitArea (same trap as UiButton, see uiButtonHitArea.test.ts).
- *
- * Reported bug: with insufficient credits the only enabled action is "Закрыть",
- * and that button did nothing under a real mouse — the modal could not be closed.
- */
 import { describe, it, expect } from "vitest";
 import { Container, Rectangle, type Text } from "pixi.js";
 import { PlanetScene } from "@/presentation/PlanetScene";
 
-// scaledFont() reads localStorage; ensure it exists (Node 26 shadows jsdom's).
 if (typeof globalThis.localStorage === "undefined") {
   const store = new Map<string, string>();
   globalThis.localStorage = {
@@ -31,7 +19,6 @@ interface StubGalaxy {
   revealSystemsWithinHops: () => number;
 }
 
-/** Build an openStarMap-ready PlanetScene without its constructor/initialize. */
 function makeScene(credits: number): { uiLayer: Container; open: () => void } {
   const scene = Object.create(PlanetScene.prototype) as PlanetScene;
   const uiLayer = new Container();
@@ -53,7 +40,6 @@ function makeScene(credits: number): { uiLayer: Container; open: () => void } {
   };
 }
 
-/** Find the button Container whose label Text matches `label`. */
 function findButton(modal: Container, label: string): Container | undefined {
   return modal.children.find(
     (c): c is Container =>

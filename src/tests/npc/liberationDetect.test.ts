@@ -9,7 +9,6 @@ import { SeededRNG } from "@/utils/seededRNG";
 import { StarType, NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 
-/** sys_a ←→ sys_b, two-system chain. */
 function makeGalaxy(): Galaxy {
   const sysA = new StarSystem(
     "sys_a",
@@ -34,8 +33,6 @@ function makeGalaxy(): Galaxy {
   return new Galaxy("galaxy_lib_detect", [sysA, sysB], new Overmind(), [], []);
 }
 
-/** A parked RANGER NPC — counts toward the wandering population, never as a
- *  garrison ship (faction != OVERMIND, role != PIRATE). */
 function makeRanger(id: string, systemId: string): NpcShip {
   return new NpcShip({
     id,
@@ -58,7 +55,6 @@ function makeRanger(id: string, systemId: string): NpcShip {
   });
 }
 
-/** A live OVERMIND ship present in a system (a re-entering invader). */
 function makeOvermind(id: string, systemId: string): NpcShip {
   return new NpcShip({
     id,
@@ -81,9 +77,6 @@ function makeOvermind(id: string, systemId: string): NpcShip {
   });
 }
 
-/** Pad the wandering population up to the replenish target so tick() spawns no
- *  random pirates — a stray PIRATE-role ship landing in sys_a would otherwise
- *  read as garrison and falsely reset the liberation countdown. */
 function padWanderers(galaxy: Galaxy): void {
   const target = galaxy.systems.length * 4; // NPCS_PER_SYSTEM
   for (let i = 0; i < target; i++) {
@@ -91,8 +84,6 @@ function padWanderers(galaxy: Galaxy): void {
   }
 }
 
-/** Spawn then immediately destroy the standing garrison, leaving sys_a hostile
- *  with zero live garrison ships (the post-combat state). */
 function wipeGarrison(galaxy: Galaxy, sim: NpcSimulator, seed: string): void {
   sim.ensureGarrison(galaxy, new SeededRNG(seed));
   for (const n of galaxy.npcShips) {
@@ -132,7 +123,6 @@ describe("NpcSimulator liberation detection", () => {
     const sim = new NpcSimulator();
     wipeGarrison(galaxy, sim, "establish_early");
 
-    // Two clear days is not enough — liberation only fires on the third.
     sim.tick(galaxy, new SeededRNG("early_0"));
     sim.tick(galaxy, new SeededRNG("early_1"));
     expect(galaxy.isHostileSystem("sys_a")).toBe(true);
@@ -146,15 +136,12 @@ describe("NpcSimulator liberation detection", () => {
     const sim = new NpcSimulator();
     wipeGarrison(galaxy, sim, "establish_reset");
 
-    // Two clear days (countdown one short of liberating).
     sim.tick(galaxy, new SeededRNG("reset_0"));
     sim.tick(galaxy, new SeededRNG("reset_1"));
     expect(galaxy.isHostileSystem("sys_a")).toBe(true);
 
-    // A fresh invader arrives → presence resets the countdown.
     galaxy.npcShips.push(makeOvermind("reinforce_1", "sys_a"));
     sim.tick(galaxy, new SeededRNG("reset_2"));
-    // Without the reset this third clear tick would have liberated; it didn't.
     expect(galaxy.isHostileSystem("sys_a")).toBe(true);
   });
 

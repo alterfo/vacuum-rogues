@@ -10,15 +10,6 @@ import {
   type VitalsSample,
 } from "./sessionMetrics";
 
-/**
- * Task 1 of the letsplay CI oracle: the pure session-metrics + report evaluator.
- *
- * Every test runs on **synthetic** inputs (no engine, no I/O) — the whole point
- * of the pure split is that a clean session passes and an injected fault
- * (error / soft-lock / out-of-band balance signal) fails deterministically.
- */
-
-/** A clean, fault-free session input — the baseline every negative test perturbs. */
 function cleanInput(
   over: Partial<SessionMetricsInput> = {},
 ): SessionMetricsInput {
@@ -32,7 +23,6 @@ function cleanInput(
   };
 }
 
-/** A rising vitals series: credits up, an upgrade at day 2. */
 function risingSamples(): VitalsSample[] {
   return [
     { step: 0, day: 0, credits: 1000, hull: 100, maxHull: 100 },
@@ -416,16 +406,12 @@ describe("evaluate", () => {
   });
 
   it("fails a zero-session run rather than passing vacuously", () => {
-    // A misconfigured gate (e.g. LETSPLAY_CI_SESSIONS=0) plays nothing; the empty
-    // aggregate trips no fault ceiling, so without this guard it would green.
     const res = evaluate(aggregateRun([]));
     expect(res.ok).toBe(false);
     expect(res.reasons.join(" ")).toMatch(/no sessions/i);
   });
 
   it("accumulates every breach reason, not just the first", () => {
-    // An error AND a soft-lock AND an out-of-band band must all be reported, so a
-    // regression that early-returns after the first breach is caught.
     const run = aggregateRun([
       { ...clean, errors: 1, softLocks: 1, creditsPerDay: 99999 },
     ]);

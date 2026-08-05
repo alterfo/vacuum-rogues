@@ -1,10 +1,3 @@
-/**
- * Playtest3 F6 regression: the QuestJournalUI full-screen backdrop must swallow
- * pointer events. Without a stopPropagation handler, a click on the empty
- * journal area bubbles to the stage route-planning handler and plans a route
- * behind the modal (CLAUDE.md Rule 2 — eventMode="static" is a hit target, not
- * a bubble blocker). Mocks pixi.js so no WebGL/texture context is needed.
- */
 import { describe, it, expect, vi } from "vitest";
 import type { IQuestService } from "@/core/ports/IQuestService";
 
@@ -62,8 +55,6 @@ function makeQuestService(): IQuestService {
   } as unknown as IQuestService;
 }
 
-/** A quest service with one active quest carrying a VISIT_LOCATION objective so
- * the journal renders a populated card AND a "→ Лететь к цели" navigate button. */
 function makeQuestServiceWithQuest(): IQuestService {
   const quest = {
     id: "q-1",
@@ -87,13 +78,6 @@ function makeQuestServiceWithQuest(): IQuestService {
   } as unknown as IQuestService;
 }
 
-/**
- * Walk the journal tree and collect every NON-button leaf whose eventMode is not
- * "none". A "button" (and the catch-all backdrop) is an eventMode="static" node;
- * its subtree is interactive by design and stops propagation itself, so we skip
- * it. Any OTHER leaf that is not "none" is a click that would bubble to the
- * stage route handler behind the modal (the F6 leak).
- */
 function collectLeakyLeaves(node: MockNode): MockNode[] {
   const leaks: MockNode[] = [];
   for (const child of node.children ?? []) {
@@ -112,18 +96,15 @@ describe("QuestJournalUI backdrop (playtest3 F6)", () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
     const ui = new QuestJournalUI(makeQuestService(), 1280, 720, vi.fn());
 
-    // The backdrop is the first child added to the journal container.
     const backdrop = (ui.container as unknown as MockNode).children[0];
     expect(backdrop).toBeDefined();
     expect(backdrop.eventMode).toBe("static");
 
-    // It must register a pointerdown listener (the bubble-blocker).
     const pointerdown = backdrop.on.mock.calls.find(
       (c: unknown[]) => c[0] === "pointerdown",
     );
     expect(pointerdown).toBeDefined();
 
-    // Invoking that listener must call stopPropagation on the event.
     const stopPropagation = vi.fn();
     (pointerdown![1] as (e: { stopPropagation: () => void }) => void)({
       stopPropagation,
@@ -136,21 +117,13 @@ describe("QuestJournalUI backdrop (playtest3 F6)", () => {
     const ui = new QuestJournalUI(makeQuestService(), 1280, 720, vi.fn());
     const root = ui.container as unknown as MockNode;
 
-    // children[0] is the catch-all backdrop (static). The panel background must
-    // be non-interactive so the only hit target left for a non-button click is
-    // the swallowing backdrop.
     expect(root.children[1].eventMode).toBe("none");
 
-    // No non-button leaf anywhere in the tree may bubble (recurses, skipping the
-    // backdrop and the close button — both static).
     expect(collectLeakyLeaves(root)).toEqual([]);
   });
 
   it("populated quest cards and their labels are eventMode='none' (only the buttons stay interactive)", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
-    // 5th arg (onNavigateToObjective) defined so the VISIT_LOCATION nav button
-    // renders — its inner bg/text default to interactive, so this guards that
-    // the recursion's button-skip is the ONLY interactive exception.
     const ui = new QuestJournalUI(
       makeQuestServiceWithQuest(),
       1280,
@@ -160,8 +133,6 @@ describe("QuestJournalUI backdrop (playtest3 F6)", () => {
     );
     const root = ui.container as unknown as MockNode;
 
-    // A quest card (a NON-static Container — the close button is also a
-    // multi-child container but it is static) was actually created.
     const card = root.children.find(
       (c) =>
         c.eventMode !== "static" &&
@@ -170,21 +141,13 @@ describe("QuestJournalUI backdrop (playtest3 F6)", () => {
     );
     expect(card).toBeDefined();
 
-    // The navigate button exists and is interactive (static) — proves the card
-    // path rendered and that buttons are NOT swallowed by the none-sweep.
     const navButton = card!.children.find((c) => c.eventMode === "static");
     expect(navButton).toBeDefined();
 
-    // Every NON-button leaf across the populated tree (card bg, title, type,
-    // objective text) must be eventMode="none" so the backdrop catches the click.
     expect(collectLeakyLeaves(root)).toEqual([]);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Reward detail: quest cards must show a "Награда:" summary line that lists
-// credits, experience, items, and reputation delta.
-// ---------------------------------------------------------------------------
 type TextNode = { text: string; children: TextNode[] };
 
 function collectTexts(node: TextNode): string[] {
@@ -264,10 +227,6 @@ describe("QuestJournalUI reward detail", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Task 3: expired quests section and remaining-days display
-// ---------------------------------------------------------------------------
-
 describe("QuestJournalUI expired quests section", () => {
   it("shows 'ПРОВАЛЕНО' section when getExpiredQuests returns failed quests", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
@@ -331,14 +290,6 @@ describe("QuestJournalUI expired quests section", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// "Местный подряд" fix: COLLECT_ITEM (local delivery) progress is never emitted
-// in production, so objective.currentAmount stays frozen at 0. The journal must
-// instead read the player's actual cargo via the cargoCarried resolver so the
-// counter reflects what's in the hold (the same inventory the landing
-// auto-completion checks).
-// ---------------------------------------------------------------------------
-
 describe("QuestJournalUI live cargo progress (Местный подряд)", () => {
   function deliveryQuest() {
     return {
@@ -369,7 +320,6 @@ describe("QuestJournalUI live cargo progress (Местный подряд)", () 
       getCompletedQuestIds: vi.fn().mockReturnValue([]),
     } as unknown as IQuestService;
 
-    // 5 medicine units in the hold → journal must read 5/8, not the frozen 0/8.
     const ui = new QuestJournalUI(
       qs,
       1280,
@@ -395,7 +345,6 @@ describe("QuestJournalUI live cargo progress (Местный подряд)", () 
       getCompletedQuestIds: vi.fn().mockReturnValue([]),
     } as unknown as IQuestService;
 
-    // 12 units carried (more than the 8 required) → clamp to 8/8 + ready hint.
     const ui = new QuestJournalUI(
       qs,
       1280,
@@ -435,7 +384,6 @@ describe("QuestJournalUI remaining days display", () => {
   it("shows 'осталось N дн.' warning when remaining days < 5 and currentDay > 0", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
 
-    // issuedDay=0, deadline=3, currentDay=1 → remaining = 3-1 = 2 < 5 → show warning
     const urgentQuest = {
       id: "q-urgent",
       title: "Срочный эскорт",
@@ -487,7 +435,6 @@ describe("QuestJournalUI remaining days display", () => {
       getExpiredQuests: vi.fn().mockReturnValue([]),
     } as unknown as import("@/core/ports/IQuestService").IQuestService;
 
-    // No currentDay passed — defaults to 0 → no remaining-days label
     const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
     const texts = collectTexts(ui.container as unknown as TextNode);
 

@@ -47,9 +47,6 @@ interface InfoContext {
   station?: Station;
 }
 
-// ── Localisation ────────────────────────────────────────────────────────────
-
-/** Localized bracket tag for a news event type (e.g. "[МАРШРУТ]" / "[ROUTE]"). */
 function newsTypeLabel(type: NewsEvent["type"]): string {
   return t(`news.type.${type}`);
 }
@@ -89,8 +86,6 @@ function gearStatLine(g: Gear): string {
   return `потенц:${eq.potency}`;
 }
 
-// ── News generation ─────────────────────────────────────────────────────────
-
 interface NewsItem {
   day: number;
   text: string;
@@ -118,8 +113,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
   const originId =
     gameEngine.player?.currentSystemId ?? galaxy.systems[0]?.id ?? "";
   const player = gameEngine.player ?? null;
-  // Partial observability: the feed never names a system the player hasn't
-  // scouted (explored/visited). A null player (headless) keeps everything.
   const known = (id: string): boolean =>
     player == null || isSystemKnown(player, galaxy, id);
 
@@ -133,8 +126,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     const sysName = systemMap.get(event.systemId)?.name ?? event.systemId;
     const label = newsTypeLabel(event.type);
     const color = NEWS_TYPE_COLOR[event.type] ?? 0xaaaaaa;
-    // Partial observability: re-mask a trade-rumor margin baked into the feed for
-    // a route the player hasn't discovered (mirrors the rumor panel above).
     const desc = maskTradeNewsMargin(
       event.description || t("news.fallbackDesc", { label, system: sysName }),
       event,
@@ -193,7 +184,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
           ? t("news.distHere")
           : t("news.distJumps", { n: hit.jumps });
 
-      // Price delta vs current system
       let deltaStr = "";
       if (hit.jumps > 0) {
         const localHit = registry.findResource({
@@ -287,8 +277,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
   return items;
 }
 
-// ── Data-fog helper ──────────────────────────────────────────────────────────
-
 function isStaleSystem(
   systemId: string,
   systemMap: Map<string, StarSystem>,
@@ -300,23 +288,13 @@ function isStaleSystem(
   return currentDay - sys.lastVisitedDay > 30;
 }
 
-// ── Scene ───────────────────────────────────────────────────────────────────
-
 type Tab = "news" | "objects" | "gear";
 type GearSortOption = "price" | "tech" | "distance";
 
 const GEAR_SORT_OPTIONS: GearSortOption[] = ["price", "tech", "distance"];
 const GEAR_MAX_PRICE_OPTIONS = [0, 1000, 5000, 10000, 50000];
-/**
- * The "Т.ур:" range ceiling. Catalog literals top out at tech 7, but
- * `upgradeGear` boosts an item's techLevel by +1 (the type's documented 1..8
- * domain), so the ceiling is 8 to keep any upgraded listing searchable —
- * defaulting BELOW the reachable max silently hides gear (the original bug:
- * a hardcoded 6 excluded tech-7 items with no visible sign).
- */
 export const GEAR_TECH_MAX = 8;
 
-/** Cycle a "Т.ур:" min/max value: 1 → 2 → … → GEAR_TECH_MAX → wrap to 1. */
 export function cycleGearTech(value: number): number {
   return (value % GEAR_TECH_MAX) + 1;
 }
@@ -352,47 +330,31 @@ export class InfoCenterScene extends GameScene {
   private mainContainer: Container | null = null;
   private blocked = false;
 
-  // tab state
   private activeTab: Tab = "news";
   private newsItems: NewsItem[] = [];
-  // Persisted scroll position of the news list, in PIXELS (survives the re-render
-  // triggered by a bookmark toggle / tab switch). Restored onto a freshly-built
-  // ScrollableList each render.
   private newsScroll = 0;
-  // The reusable scrollable region wrapping ALL news rows (no slicing). Rebuilt
-  // each render; owns a drag handler that destroy() must tear down.
   private newsList: ScrollableList<NewsItem> | null = null;
 
-  // objects tab state
   private objectsQuery = "";
   private objectsResults: ObjectResult[] = [];
 
-  // gear tab state — multi-select; empty set = all types shown
   private gearFacets = new Set<EquipmentFacet>(["engine" as EquipmentFacet]);
   private gearMinTech = 1;
   private gearMaxTech = GEAR_TECH_MAX;
   private gearMaxPriceIdx = 0; // index into GEAR_MAX_PRICE_OPTIONS
   private gearSort: GearSortOption = "price";
   private gearResults: EquipmentHit[] = [];
-  // Persisted scroll position + the scrollable region for the results list —
-  // same pattern as newsScroll/newsList (no ad-hoc "show first N" truncation).
   private gearScroll = 0;
   private gearList: ScrollableList<EquipmentHit> | null = null;
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private detachWheel: (() => void) | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so it sits above the panel and survives the
-   * scene's `render()` UI rebuilds.
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -400,8 +362,6 @@ export class InfoCenterScene extends GameScene {
       "INFO_CENTER",
     );
   }
-
-  // ── lifecycle ──────────────────────────────────────────────────────────────
 
   initialize(context?: object): void {
     const ctx = context as InfoContext | undefined;
@@ -439,8 +399,6 @@ export class InfoCenterScene extends GameScene {
 
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
-    // Mouse-wheel scrolls the news/gear lists (matches the ArrowUp/Down keys);
-    // other tabs ignore the wheel.
     this.detachWheel = attachWheelScroll((dir) => {
       if (this.activeTab === "news") this.scrollNews(dir);
       else if (this.activeTab === "gear") this.scrollGear(dir);
@@ -480,13 +438,8 @@ export class InfoCenterScene extends GameScene {
     this.station = null;
   }
 
-  // ── rendering ──────────────────────────────────────────────────────────────
-
   private render(): void {
     if (!this.mainContainer) return;
-    // Capture the live scroll position (wheel/drag may have moved it) and tear
-    // the old list down before removeChildren orphans its container — destroy()
-    // detaches the drag handlers that removeChildren alone would leak.
     if (this.newsList) {
       this.newsScroll = this.newsList.offset;
       this.newsList.destroy();
@@ -558,7 +511,6 @@ export class InfoCenterScene extends GameScene {
     creditsText.eventMode = "none";
     this.mainContainer.addChild(creditsText);
 
-    // 3-tab switcher
     const TAB_Y = PY + 50;
     const tabDefs: { id: Tab; label: string }[] = [
       { id: "news", label: "НОВОСТИ" },
@@ -599,9 +551,6 @@ export class InfoCenterScene extends GameScene {
       this.mainContainer.addChild(tabLabel);
     }
 
-    // Discoverability nudge: the search field lives only on ОБЪЕКТЫ, so a
-    // player who starts typing on another tab gets a visible pointer instead
-    // of silently-dropped keystrokes (Bug 6).
     if (this.activeTab !== "objects" && PW > 620) {
       const searchHint = scaledText(
         t("infoCenter.objectsHintOtherTab"),
@@ -692,9 +641,6 @@ export class InfoCenterScene extends GameScene {
     this.mainContainer!.addChild(back);
   }
 
-  // ── news tab ───────────────────────────────────────────────────────────────
-
-  /** Fixed per-row height of the news list, in px. */
   private static readonly NEWS_ROW_H = 38;
 
   private renderNews(container: Container, pw: number, ph: number): void {
@@ -702,13 +648,8 @@ export class InfoCenterScene extends GameScene {
     const ROW_H = InfoCenterScene.NEWS_ROW_H;
     const STAR_W = 28;
 
-    // Trade-route rumors band sits above the scrollable news list (unmasked).
     const rumorH = this.renderRumorPanel(container, pw);
 
-    // The news list scrolls inside the shared `ScrollableList` (one design across
-    // every list panel — see plan 20260618), offset below the rumor band so the
-    // clip never covers the rumors. ALL items render (no slicing); the component
-    // owns the mask, hit-area tracking, clamping and drag.
     const listH = Math.max(ROW_H, ph - rumorH);
     const VISIBLE = Math.floor(listH / ROW_H);
     const bookmarks = this.gameEngine?.player?.newsBookmarks ?? [];
@@ -720,22 +661,15 @@ export class InfoCenterScene extends GameScene {
       height: listH,
       itemHeight: ROW_H,
       items: this.newsItems,
-      // The scene owns one wheel handler (also bound to ArrowUp/Down) that drives
-      // this list via scrollNews — don't also bind the window wheel here or each
-      // notch would scroll twice.
       enableWheel: false,
       renderItem: (item, i) =>
         this.buildNewsRow(item, i, pw, PAD, ROW_H, STAR_W, bookmarks),
     });
-    // Restore the persisted pixel offset; scrollTo clamps, so reflect the clamp
-    // back into newsScroll/the footer hint.
     this.newsList.scrollTo(this.newsScroll);
     this.newsScroll = this.newsList.offset;
     container.addChild(this.newsList.container);
 
     if (this.newsItems.length > VISIBLE) {
-      // Footer lives on the (unmasked) content container so it stays fixed while
-      // the rows scroll under the clip.
       const firstRow = Math.round(this.newsScroll / ROW_H);
       const hint = scaledText(
         `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
@@ -751,7 +685,6 @@ export class InfoCenterScene extends GameScene {
     }
   }
 
-  /** Builds one news row at a local origin (the list positions it by index). */
   private buildNewsRow(
     item: NewsItem,
     i: number,
@@ -766,8 +699,6 @@ export class InfoCenterScene extends GameScene {
     const rowBg = new Graphics();
     rowBg.rect(PAD, 2, pw - PAD * 2, ROW_H - 4);
     rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
-    // 'none' so a click on the row body falls through to the list's drag hit-area
-    // (a child with default eventMode would swallow the drag pointerdown).
     rowBg.eventMode = "none";
     row.addChild(rowBg);
 
@@ -811,18 +742,10 @@ export class InfoCenterScene extends GameScene {
     return row;
   }
 
-  /**
-   * Draws the "Торговые возможности" band at the top of the news tab — the
-   * active trade-route rumors (most-profitable first) or an empty-state line.
-   * Returns the vertical space it consumed so the news list can sit below it.
-   */
   private renderRumorPanel(container: Container, pw: number): number {
     const PAD = 16;
     const HEADER_H = 24;
     const ROW_H = 22;
-    // Partial observability: HIDE routes touching systems the player hasn't
-    // explored/visited entirely (not just margin-masked) — the feed never names
-    // an unscouted system (`buildRumorPanel(..., hideUnknown=true)`).
     const data = buildRumorPanel(
       this.gameEngine?.galaxy ?? null,
       RUMOR_PANEL_MAX,
@@ -890,22 +813,15 @@ export class InfoCenterScene extends GameScene {
     this.render();
   }
 
-  // ── objects tab ────────────────────────────────────────────────────────────
-
   private renderObjects(container: Container, pw: number, ph: number): void {
     const PAD = 16;
 
-    // Text input box
     const inputBg = new Graphics();
     inputBg.rect(PAD, 4, pw - PAD * 2 - 110, 30);
     inputBg.fill({ color: 0x0d1522 });
-    // The objects tab takes keyboard input as soon as it is open, so the input
-    // box always renders in its focused (blue) state here.
     inputBg.stroke({ color: 0x88ccff, width: 1 });
     inputBg.eventMode = "static";
     inputBg.cursor = "text";
-    // Clicking the box just swallows the event; the tab is already accepting
-    // keystrokes, so there is no separate focus state to toggle.
     inputBg.on("pointerdown", (e) => {
       e.stopPropagation();
     });
@@ -926,8 +842,6 @@ export class InfoCenterScene extends GameScene {
     inputLabel.eventMode = "none";
     container.addChild(inputLabel);
 
-    // cursor indicator — always shown; the input is focused whenever this tab
-    // is open.
     const cursor = scaledText("|", 13, 0x88ccff, {
       rawColor: true,
       fontFamily: "monospace",
@@ -937,7 +851,6 @@ export class InfoCenterScene extends GameScene {
     cursor.eventMode = "none";
     container.addChild(cursor);
 
-    // Search button
     const btnX = pw - PAD - 100;
     const searchBtn = new Graphics();
     searchBtn.rect(btnX, 4, 94, 30);
@@ -962,7 +875,6 @@ export class InfoCenterScene extends GameScene {
     searchBtnLabel.eventMode = "none";
     container.addChild(searchBtnLabel);
 
-    // Results
     const LIST_Y = 44;
     const ROW_H = 34;
     const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
@@ -1037,7 +949,6 @@ export class InfoCenterScene extends GameScene {
       lineLabel.eventMode = "none";
       container.addChild(lineLabel);
 
-      // "→ карта" button
       const mapBtnX = pw - PAD - 76;
       const mapBtn = new Graphics();
       mapBtn.rect(mapBtnX, y + 4, 70, ROW_H - 8);
@@ -1127,14 +1038,11 @@ export class InfoCenterScene extends GameScene {
     });
   }
 
-  // ── gear tab ───────────────────────────────────────────────────────────────
-
   private renderGear(container: Container, pw: number, ph: number): void {
     const PAD = 16;
     const CTRL_H = 28;
     const GAP = 6;
 
-    // Faceted pill buttons row (top)
     const PILL_Y = 4;
     const PILL_H = 26;
     const pillWidths = EQUIPMENT_FACETS.map(
@@ -1174,7 +1082,6 @@ export class InfoCenterScene extends GameScene {
       px += pw2 + GAP;
     }
 
-    // Show comparison bar only when exactly one facet is selected.
     const singleFacet =
       this.gearFacets.size === 1
         ? (this.gearFacets.values().next().value as EquipmentFacet)
@@ -1225,11 +1132,9 @@ export class InfoCenterScene extends GameScene {
       container.addChild(equippedStats);
     }
 
-    // Second controls row: tech level, max price, sort, find
     const CTRL_Y = PILL_Y + PILL_H + equippedRowH + 8;
     let cx = PAD;
 
-    // Tech level range
     const techLabel = scaledText("Т.ур:", 12, 0x88aacc, {
       rawColor: true,
       fontFamily: "monospace",
@@ -1240,7 +1145,6 @@ export class InfoCenterScene extends GameScene {
     container.addChild(techLabel);
     cx += 38;
 
-    // Tech min
     const techMinBg = new Graphics();
     techMinBg.rect(cx, CTRL_Y, 34, CTRL_H);
     techMinBg.fill({ color: 0x0d1522 });
@@ -1277,7 +1181,6 @@ export class InfoCenterScene extends GameScene {
     container.addChild(techSep);
     cx += 14;
 
-    // Tech max
     const techMaxBg = new Graphics();
     techMaxBg.rect(cx, CTRL_Y, 34, CTRL_H);
     techMaxBg.fill({ color: 0x0d1522 });
@@ -1304,7 +1207,6 @@ export class InfoCenterScene extends GameScene {
     container.addChild(techMaxVal);
     cx += 34 + GAP;
 
-    // Max price
     const priceLabel = scaledText("Цена≤:", 12, 0x88aacc, {
       rawColor: true,
       fontFamily: "monospace",
@@ -1343,7 +1245,6 @@ export class InfoCenterScene extends GameScene {
     container.addChild(priceVal);
     cx += 72 + GAP;
 
-    // Sort
     const sortLabel = scaledText("Сорт:", 12, 0x88aacc, {
       rawColor: true,
       fontFamily: "monospace",
@@ -1379,7 +1280,6 @@ export class InfoCenterScene extends GameScene {
     container.addChild(sortVal);
     cx += 84 + GAP;
 
-    // Find button
     const findBtnX = pw - PAD - 80;
     const findBtn = new Graphics();
     findBtn.rect(findBtnX, CTRL_Y, 74, CTRL_H);
@@ -1404,12 +1304,7 @@ export class InfoCenterScene extends GameScene {
     findBtnLabel.eventMode = "none";
     container.addChild(findBtnLabel);
 
-    // Results
     const LIST_Y = CTRL_Y + CTRL_H + 8;
-    // Historically a fixed 38 px, sized for the "M" scale's line + stats
-    // two-line stack — at "L" scale the taller line bled into the stats line
-    // beneath it (Task 3, `docs/plans/20260708-font-scale-and-faction-bugs.md`).
-    // Grows with the current font scale, floored at the historical 38 px.
     const ROW_H = Math.max(
       38,
       5 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(10)) + 3,
@@ -1435,9 +1330,6 @@ export class InfoCenterScene extends GameScene {
     );
     const currentDay = galaxy?.gameDays ?? 0;
 
-    // The results list scrolls inside the shared `ScrollableList` (same design
-    // as the news tab) — ALL hits render, no ad-hoc "show first N" truncation
-    // that could hide the exact (pricier/rarer) item the player is after.
     const listH = Math.max(ROW_H, ph - LIST_Y);
     const VISIBLE = Math.floor(listH / ROW_H);
     this.gearList = new ScrollableList<EquipmentHit>({
@@ -1471,7 +1363,6 @@ export class InfoCenterScene extends GameScene {
     }
   }
 
-  /** Build one gear-search result row (local coords — positioned by the ScrollableList). */
   private buildGearRow(
     hit: EquipmentHit,
     i: number,
@@ -1491,11 +1382,6 @@ export class InfoCenterScene extends GameScene {
 
     const distStr = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
     const staleStr = stale ? " (уст.)" : "";
-    // Column widths in chars, calibrated in PIXELS at the "M"-scale baseline
-    // (font 11) and re-derived per the current font scale — a fixed 18/22
-    // char count rendered WIDER at "L" scale (same glyph count, bigger
-    // glyphs) and bled past the row into the "→ карта" button (Task 3, same
-    // class of bug as BankScene's `maxReasonChars`).
     const baseCharPx = 11 * MONO_CHAR_WIDTH_RATIO;
     const charPx = Math.max(1, scaledFont(11) * MONO_CHAR_WIDTH_RATIO);
     const gearNameChars = Math.max(6, Math.floor((18 * baseCharPx) / charPx));
@@ -1523,14 +1409,10 @@ export class InfoCenterScene extends GameScene {
       fontFamily: "monospace",
     });
     statsLabel.x = PAD + 4;
-    // Stacked below the main line — steps by its own font-scale line height
-    // so the two never overlap at "L" (Task 3: the fixed +20 offset assumed
-    // the "M"-scale ~14 px line height).
     statsLabel.y = lineTop + lineStepFor(scaledFont(11));
     statsLabel.eventMode = "none";
     row.addChild(statsLabel);
 
-    // "→ карта" button
     const mapBtnX = pw - PAD - 70;
     const mapBtn = new Graphics();
     mapBtn.rect(mapBtnX, 3, 64, ROW_H - 6);
@@ -1573,14 +1455,12 @@ export class InfoCenterScene extends GameScene {
       maxPrice: maxPrice > 0 ? maxPrice : undefined,
     });
 
-    // Apply tech level filter
     hits = hits.filter(
       (h) =>
         h.gear.techLevel >= this.gearMinTech &&
         h.gear.techLevel <= this.gearMaxTech,
     );
 
-    // Sort
     if (this.gearSort === "tech") {
       hits.sort(
         (a, b) => b.gear.techLevel - a.gear.techLevel || a.price - b.price,
@@ -1588,12 +1468,7 @@ export class InfoCenterScene extends GameScene {
     } else if (this.gearSort === "distance") {
       hits.sort((a, b) => a.jumps - b.jumps || a.price - b.price);
     }
-    // default "price" sort is already applied by findEquipment
 
-    // No cap: the results list scrolls (ScrollableList) instead of hiding a
-    // pricier/rarer match past a fixed top-N — a hard cap here combined with
-    // the default cheapest-first sort could silently drop exactly the
-    // expensive/powerful item the player is searching for.
     this.gearResults = hits;
   }
 
@@ -1625,8 +1500,6 @@ export class InfoCenterScene extends GameScene {
     return null;
   }
 
-  // ── navigation ──────────────────────────────────────────────────────────────
-
   private async openStarMapForSystem(systemId: string): Promise<void> {
     if (!this.gameEngine) return;
     await this.gameEngine.transitionTo(SceneType.STAR_MAP, {
@@ -1634,8 +1507,6 @@ export class InfoCenterScene extends GameScene {
       pendingSelectedSystemId: systemId,
     });
   }
-
-  // ── input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.key === "Escape") {
@@ -1652,8 +1523,6 @@ export class InfoCenterScene extends GameScene {
       if (e.key === "ArrowDown") this.scrollGear(1);
       return;
     }
-    // The objects tab is always "focused" for typing while it is active — no
-    // separate click on the input box is required (playtest 2026-06-15 fix).
     if (this.activeTab === "objects") {
       if (e.key === "Enter") {
         this.runObjectsSearch();
@@ -1672,27 +1541,21 @@ export class InfoCenterScene extends GameScene {
     }
   }
 
-  /** Scroll the news list by `deltaRows` rows (wheel notch / arrow press). */
   private scrollNews(deltaRows: number): void {
     if (!this.newsList) {
       this.render();
       return;
     }
-    // Nudge the live list (it clamps), then sync newsScroll BEFORE the re-render —
-    // render() re-reads the offset off the list, so the order matters. The
-    // re-render refreshes the footer "X–Y / N" hint.
     this.newsList.scrollBy(deltaRows * InfoCenterScene.NEWS_ROW_H);
     this.newsScroll = this.newsList.offset;
     this.render();
   }
 
-  /** Scroll the gear-search results by `deltaRows` rows (wheel notch / arrow press). */
   private scrollGear(deltaRows: number): void {
     if (!this.gearList) {
       this.render();
       return;
     }
-    // Same row-height formula as renderGear's ROW_H (font-scale dependent).
     const rowH = Math.max(
       38,
       5 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(10)) + 3,

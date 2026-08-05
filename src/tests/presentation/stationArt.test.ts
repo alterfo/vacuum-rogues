@@ -1,16 +1,3 @@
-/**
- * Station art resolver guard (plan 20260624-off-planet-base-art, Task 1).
- *
- * The prefix map and sprite-key resolver are pure and deterministic. These tests
- * pin two contracts:
- *  - STATION_TEXTURE_PREFIX is a TOTAL mapping over StationType (every type → a
- *    stable, non-empty, unique prefix; no undefined), so the art prefixes never
- *    drift out of sync with the enum.
- *  - stationSpriteKey is deterministic per id and degrades safely: with no
- *    `station/` art committed today, pickVariantKey("station", …) yields
- *    undefined, so the resolver returns null and the renderer falls back to the
- *    diamond. (When art lands, the same code returns a real key with no change.)
- */
 import { describe, it, expect } from "vitest";
 import { StationType } from "@/types";
 import {
@@ -53,8 +40,6 @@ describe("STATION_TEXTURE_PREFIX — total, stable, unique mapping", () => {
 
 describe("stationSpriteKey — graceful fallback + determinism", () => {
   it("resolves a real station/<prefix>_NN key now that art is committed", () => {
-    // Art has landed (src/assets/station/*), so the same resolver that returned
-    // null pre-art now yields a stable manifest key for every type.
     for (const type of ALL_TYPES) {
       const key = stationSpriteKey(type, "station-1");
       expect(key, `key for ${type}`).toMatch(
@@ -81,8 +66,6 @@ describe("stationSpriteKey — graceful fallback + determinism", () => {
   });
 
   it("resolves a key even for an empty id/seed (no throw)", () => {
-    // Edge: pickVariantKey hashes any seed, including "" — an empty id still maps
-    // to a real variant rather than throwing.
     expect(stationSpriteKey(StationType.TRADE_POST, "")).toMatch(
       /^station\/trade_\d+$/,
     );

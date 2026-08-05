@@ -27,11 +27,6 @@ function makeGalaxy(): Galaxy {
   return new Galaxy("galaxy_size_tier", [sysA], new Overmind(), [], []);
 }
 
-/**
- * Task 2 of 20260709-overmind-ship-identity-and-balance: Overmind ships come
- * in size tiers (small/medium/large/boss) that scale their spawn stats from
- * the Task 1 `ROLE_STATS[NpcRole.OVERMIND]` base and drive per-tier hull art.
- */
 describe("Overmind sizeTier — stat scaling", () => {
   const base = ROLE_STATS[NpcRole.OVERMIND];
 
@@ -51,7 +46,6 @@ describe("Overmind sizeTier — stat scaling", () => {
     const large = spawn("large");
     expect(small.maxHull).toBeLessThan(medium.maxHull);
     expect(large.maxHull).toBeGreaterThan(medium.maxHull);
-    // The multipliers come from the balance table, not ad-hoc numbers.
     expect(small.maxHull).toBe(
       Math.round(base.hull * OVERMIND_SIZE_TIERS.small.statMult),
     );

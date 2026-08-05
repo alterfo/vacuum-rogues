@@ -1,22 +1,5 @@
-/**
- * Task 1 (docs/plans/20260619-keyboard-controls-turn-modals-map-jump.md):
- * "Space runs the planned turn in flight."
- *
- * Flight movement is two-step: click to plan a route, then act again to execute
- * it. Pressing Space is the keyboard equivalent of that confirming second click
- * — it executes the currently planned route (launches the turn) so the player
- * needn't click the target again. With no route planned Space is a no-op and
- * shows a "проложите маршрут" hint. It is guarded so a held key (auto-repeat),
- * a combat pause, or an already-running turn can't re-fire executeRouteTo.
- *
- * The handler is exercised by dispatching a KeyboardEvent at the bound
- * `onKeyDown` (mirrors waitTurnPause.test.ts's scene harness). The existing
- * Esc / i / j behaviours must be unaffected by the new Space branch.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock pixi.js + presentation helpers so SpaceFlightScene constructs in jsdom
-// (mirrors waitTurnPause.test.ts).
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -198,7 +181,6 @@ describe("Space runs the planned turn in flight", () => {
       closeContactPanel: vi.fn(),
     };
     s.planetManager = { hasInfoPanel: false, closeInfoPanel: vi.fn() };
-    // combatPause is created by the constructor; default state is not paused.
     s.isTurnRunning = false;
     s.plannedRoute = null;
   });
@@ -270,12 +252,6 @@ describe("Space runs the planned turn in flight", () => {
   });
 
   it("Escape resuming a round-complete combat pause starts a fresh combat round", () => {
-    // Regression: Escape (and the touch «✕» button, which replays this same
-    // Escape action) used to call `combatPause.resume()` directly, bypassing
-    // `combatModule.beginCombatRound()` — unlike the overlay's own «Продолжить»
-    // button (combatPauseUi.ts onResume), which always begins a fresh round.
-    // Left unfixed, `CombatModule.roundComplete` would stay stuck `true` and
-    // silently block fire for BOTH sides for the rest of the engagement.
     const beginCombatRound = vi.fn();
     s.combatModule = { beginCombatRound };
     const resume = vi.fn();
@@ -285,7 +261,6 @@ describe("Space runs the planned turn in flight", () => {
 
     expect(beginCombatRound).toHaveBeenCalledTimes(1);
     expect(resume).toHaveBeenCalledTimes(1);
-    // beginCombatRound must run BEFORE resume (mirrors combatPauseUi.ts onResume).
     expect(beginCombatRound.mock.invocationCallOrder[0]).toBeLessThan(
       resume.mock.invocationCallOrder[0],
     );

@@ -1,16 +1,5 @@
-/**
- * Player-death checkpoint (plan 20260619, Task 1): every planet take-off writes
- * the "auto" save BEFORE flight begins, so a later death can roll the player back
- * to their most recent take-off. Locks the autosave at the unit level:
- *   - `takeOff()` calls `saveGame("auto")` exactly once, before the SPACE_FLIGHT
- *     transition;
- *   - the e2e take-off entry (`e2eTakeOff`) exercises the same path;
- *   - a blocked take-off (no engine) does NOT autosave.
- */
 import { describe, it, expect, vi } from "vitest";
 
-// PlanetScene imports pixi.js at module load; mock it so the scene can be
-// imported without a real renderer (takeOff() never constructs display objects).
 vi.mock("pixi.js", () => ({
   Container: vi.fn(),
   Graphics: vi.fn(),
@@ -21,7 +10,6 @@ vi.mock("pixi.js", () => ({
 import { PlanetScene } from "@/presentation/PlanetScene";
 import { SceneType } from "@/types";
 
-/** Build a takeOff-ready PlanetScene without running its constructor/initialize. */
 function makeScene(opts: { planetId?: string; canTakeOff?: boolean }): {
   takeOff: () => Promise<void>;
   e2eTakeOff: () => Promise<void>;

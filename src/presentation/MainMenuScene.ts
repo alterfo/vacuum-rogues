@@ -39,11 +39,9 @@ interface DemoShip {
 
 interface MenuPlanet {
   node: Container;
-  /** Radians per millisecond of slow axial-looking rotation. */
   spin: number;
 }
 
-/** Matches the ship-art orientation convention (see NpcShipSprite). */
 const SHIP_SPRITE_ROTATION = Math.PI / 2;
 
 export class MainMenuScene extends GameScene {
@@ -60,27 +58,12 @@ export class MainMenuScene extends GameScene {
   private demoShips: DemoShip[] = [];
   private menuPlanets: MenuPlanet[] = [];
   private saveAvailable = false;
-  // The shared settings panel (speed / font / language / neural), opened from the
-  // «Настройки» menu button. Mounted on `renderer.stage` (above the UI layer) with
-  // a dimmed backdrop so it survives the menu's `clearUILayer` re-renders; closed
-  // on its own control, an outside click, or scene teardown
-  // (`docs/plans/20260626-playtest-bugs-pause-help-infocenter-i18n.md`, Task 8 —
-  // relocated here from the in-flight ⚙ HUD button).
   private settingsPanel: SettingsPanel | null = null;
   private settingsBackdrop: Graphics | null = null;
-  // The accessibility group (colourblind ПАЛИТРА / МЕНЬШЕ ДВИЖЕНИЯ / key remap)
-  // mounted beside the settings panel in the same overlay, so accessibility now
-  // lives in the general Settings rather than only the in-flight ♿ HUD button
-  // (`docs/plans/20260626-playtest-bugs-2-pause-victory-onboarding-accessibility.md`,
-  // Task 4). It reuses the existing browser-level accessors — no new save field.
   private accessibilityPanel: AccessibilityPanel | null = null;
-  // Bumped on every re-render/destroy so in-flight async texture mounts
-  // (lazy nebula) for a stale render generation become no-ops (see CLAUDE.md
-  // lazy-category pattern).
   private renderGen = 0;
 
   initialize(context?: object): void {
-    // Ensure stage is interactive so pointer events reach children
     this.renderer.app.stage.eventMode = "static";
 
     this.gameEngine =
@@ -88,7 +71,6 @@ export class MainMenuScene extends GameScene {
     this.renderMainMenu();
     void this.checkSaveAvailability();
 
-    // Re-render menu when canvas actually gets its size (fixes first-load centering)
     if (typeof ResizeObserver !== "undefined" && this.renderer.app.canvas) {
       this.resizeObserver = new ResizeObserver(() => {
         this.renderMainMenu();
@@ -104,23 +86,17 @@ export class MainMenuScene extends GameScene {
     const h = this.renderer.app.screen.height;
     const time = performance.now();
 
-    // Accessibility: when reduced motion is active the menu backdrop is rendered
-    // but frozen — stars/ships/planets are still drawn + positioned, just not
-    // advanced, twinkled or spun (the decorative idle motion the preference targets).
     const reduced = reducedMotion();
 
-    // Animate stars with parallax and twinkling
     if (this.starGraphics) {
       this.starGraphics.clear();
       for (const s of this.starParticles) {
-        // Twinkling effect (held steady under reduced motion)
         const tw = reduced
           ? 1
           : Math.sin(time * s.twinkleSpeed + s.twinkleOffset) * 0.3 + 0.7;
         this.starGraphics.fill({ color: s.color, alpha: s.alpha * tw });
         this.starGraphics.circle(s.x, s.y, s.size);
 
-        // Parallax scrolling (slower for distant stars)
         if (!reduced) {
           s.x += s.speed * s.layer * deltaTime * 0.01;
           if (s.x > w + 10) {
@@ -131,7 +107,6 @@ export class MainMenuScene extends GameScene {
       }
     }
 
-    // Animate multiple ships (positioned every frame, only advanced when not reduced)
     if (w > 0 && h > 0) {
       for (const ship of this.demoShips) {
         if (!reduced) ship.angle += deltaTime * ship.speed;
@@ -142,7 +117,6 @@ export class MainMenuScene extends GameScene {
       }
     }
 
-    // Slow planet rotation keeps the backdrop alive (frozen under reduced motion)
     if (!reduced) {
       for (const p of this.menuPlanets) {
         p.node.rotation += p.spin * deltaTime;
@@ -189,23 +163,17 @@ export class MainMenuScene extends GameScene {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Skip render if canvas hasn't received its size yet
     if (width === 0 || height === 0) {
       logger.warn("MainMenuScene: canvas size is zero, deferring render");
       return;
     }
 
-    // A re-render rebuilds the whole UI layer; close any open settings overlay
-    // first so a stale panel/backdrop (e.g. after a language pick re-renders the
-    // menu, or a window resize) can't linger over the fresh menu. The panel lives
-    // on `renderer.stage`, not the UI layer, so it would otherwise survive.
     this.closeSettings();
 
     this.renderGen++; // invalidate async mounts from the previous render
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    // Draw deep space gradient background
     this.background = new Graphics();
     this.background.rect(0, 0, width, height);
     this.background.fill({
@@ -214,10 +182,8 @@ export class MainMenuScene extends GameScene {
     });
     this.renderer.gameLayer.addChild(this.background);
 
-    // Real nebula art as a dimmed backdrop (lazy category — async pattern)
     this.mountNebulaBackdrop(width, height);
 
-    // Add subtle gradient effect with overlays
     const gradientOverlay = new Graphics();
     gradientOverlay.circle(width * 0.3, height * 0.2, width * 0.4);
     gradientOverlay.fill({ color: 0x0a0a30, alpha: 0.15 });
@@ -225,7 +191,6 @@ export class MainMenuScene extends GameScene {
     gradientOverlay.fill({ color: 0x1a0520, alpha: 0.1 });
     this.renderer.gameLayer.addChild(gradientOverlay);
 
-    // Add distant planets — real planet art when loaded, dim disc fallback
     this.menuPlanets = [];
     const planetSpecs = [
       {
@@ -263,7 +228,6 @@ export class MainMenuScene extends GameScene {
         sp.alpha = spec.alpha;
         node.addChild(sp);
       } else {
-        // Texture not preloaded (tests / very early boot) — keep the old disc
         const g = new Graphics();
         g.circle(0, 0, spec.radius);
         g.fill({ color: spec.fallback, alpha: 0.2 });
@@ -273,7 +237,6 @@ export class MainMenuScene extends GameScene {
       this.renderer.gameLayer.addChild(node);
     }
 
-    // Enhanced animated starfield with multiple layers and colors
     this.starParticles = [];
     this.starGraphics = new Graphics();
 
@@ -295,10 +258,8 @@ export class MainMenuScene extends GameScene {
     }
     this.renderer.gameLayer.addChild(this.starGraphics);
 
-    // Create multiple demo ships with different trajectories
     this.demoShips = [];
 
-    // Main ship (player-like)
     const ship1 = this.createShip(
       16,
       0x4488cc,
@@ -315,7 +276,6 @@ export class MainMenuScene extends GameScene {
       offsetY: 0.25,
     });
 
-    // Smaller escort ships
     const ship2 = this.createShip(
       10,
       0x44cc88,
@@ -352,7 +312,6 @@ export class MainMenuScene extends GameScene {
       this.renderer.gameLayer.addChild(ship.container);
     }
 
-    // Title
     this.title = new Text({
       text: t("menu.title"),
       style: {
@@ -376,7 +335,6 @@ export class MainMenuScene extends GameScene {
     this.title.y = height / 3;
     this.renderer.uiLayer.addChild(this.title);
 
-    // One-paragraph premise, between the title and the buttons.
     this.intro = new Text({
       text: t("menu.intro"),
       style: {
@@ -394,17 +352,13 @@ export class MainMenuScene extends GameScene {
     this.intro.y = height / 3 + 48;
     this.renderer.uiLayer.addChild(this.intro);
 
-    // Buttons container
     this.buttonsContainer = new Container();
     this.buttonsContainer.x = width / 2;
-    // Keep the buttons at mid-screen, but push them below the premise paragraph
-    // if it would otherwise reach them (robust across short windows).
     this.buttonsContainer.y = Math.max(
       height / 2,
       this.intro.y + this.intro.height + 28,
     );
 
-    // Helper to create clickable text button
     const createButton = (
       text: string,
       y: number,
@@ -440,9 +394,6 @@ export class MainMenuScene extends GameScene {
       return buttonText;
     };
 
-    // Primary action: bright cyan so it reads as the strongest button while
-    // still belonging to the menu's cyan accent family (0x88ddff/0x66ccff on the
-    // secondary buttons below) — the old default 0x00ff00 green clashed with it.
     const newGameBtn = createButton(
       t("menu.newGame"),
       0,
@@ -465,9 +416,6 @@ export class MainMenuScene extends GameScene {
     }
     this.buttonsContainer.addChild(continueBtn);
 
-    // Save/Load screen — full slot management (load any slot, name/overwrite,
-    // delete). From the menu there is no live game, so it opens read-only-ish
-    // (load + delete of existing saves); `returnTo` brings the player back here.
     const savesBtn = createButton(
       t("menu.saves"),
       95,
@@ -477,10 +425,6 @@ export class MainMenuScene extends GameScene {
     );
     this.buttonsContainer.addChild(savesBtn);
 
-    // Settings (speed / font / language / neural) — relocated from the in-flight
-    // ⚙ HUD button (Task 8). Reachable here so the player can change speed/font/
-    // language/neural before a run; the choices persist via `gameSettings` and
-    // apply on «Продолжить».
     const settingsBtn = createButton(
       t("menu.settings"),
       135,
@@ -499,8 +443,6 @@ export class MainMenuScene extends GameScene {
     );
     this.buttonsContainer.addChild(feedbackBtn);
 
-    // Replay the first-time onboarding hints (clears the browser-level "seen"
-    // set so every screen's auto-hint shows again on next visit).
     const replayHelpBtn = createButton(
       t("menu.replayTutorial"),
       215,
@@ -513,12 +455,6 @@ export class MainMenuScene extends GameScene {
     this.renderer.uiLayer.addChild(this.buttonsContainer);
   }
 
-  /**
-   * Toggle the shared settings overlay (speed / font / language / neural). The
-   * panel is the SAME `SettingsPanel` the in-flight HUD used before Task 8 moved
-   * it here — every control writes through `gameSettings` (no new save field), so
-   * a speed/font/language/neural choice persists and applies on «Продолжить».
-   */
   private toggleSettings(): void {
     if (this.settingsPanel) {
       this.closeSettings();
@@ -527,18 +463,10 @@ export class MainMenuScene extends GameScene {
     this.openSettings();
   }
 
-  /**
-   * Mount the settings panel centred over a dimmed, click-to-close backdrop on
-   * `renderer.stage` (above the UI layer, so a menu re-render can't clobber it).
-   * A font/language pick re-renders the menu in place (live re-localize) then
-   * closes; speed/neural re-render only the panel. Speed writes onto the engine's
-   * `gameSpeedMultiplier` so the choice survives into flight.
-   */
   private openSettings(): void {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Dimmed full-screen backdrop — clicking outside the panel closes it.
     const backdrop = new Graphics();
     backdrop.rect(0, 0, width, height).fill({ color: 0x000000, alpha: 0.5 });
     backdrop.eventMode = "static";
@@ -550,11 +478,7 @@ export class MainMenuScene extends GameScene {
         gameSpeedMultiplier: GAME_BALANCE.gameSpeedDefault,
       },
       speedSteps: GAME_BALANCE.gameSpeedMultipliers,
-      // No live HUD/physics in the menu — the choice is persisted on the engine
-      // store and applied when the player enters flight.
       applySpeed: () => {},
-      // A font/language change re-renders the menu so its labels pick up the new
-      // size/language immediately (the menu's own live re-localize).
       applyFont: () => this.renderMainMenu(),
       applyLanguage: () => this.renderMainMenu(),
       onNeuralToggle: (on) =>
@@ -565,19 +489,10 @@ export class MainMenuScene extends GameScene {
       onRequestClose: () => this.closeSettings(),
     });
 
-    // The accessibility group (colourblind palette / reduced-motion / key remap)
-    // shares the overlay so accessibility lives in the general Settings (Task 4).
-    // The menu itself draws no faction colours, so there is nothing to live-restyle
-    // here: each control persists through its own browser-level accessor and the
-    // panel re-renders its own rows. The colourblind faction hues then render under
-    // the new palette on the faction-selection screen and in flight (both read
-    // `factionColor` live), and reduced motion is honoured per-frame by the menu's
-    // own `update`. The overlay stays open so the player can keep cycling.
     const accPanel = new AccessibilityPanel({
       onRequestClose: () => this.closeSettings(),
     });
 
-    // Lay the two panels side by side, centred as a group.
     const GAP = 16;
     const groupW = SETTINGS_PANEL_WIDTH + GAP + ACCESSIBILITY_PANEL_WIDTH;
     const left = Math.round((width - groupW) / 2);
@@ -596,12 +511,6 @@ export class MainMenuScene extends GameScene {
     this.accessibilityPanel = accPanel;
   }
 
-  /**
-   * Tear down the settings overlay (panel + backdrop) if open. Refs are nulled
-   * synchronously; the actual destroys are deferred to a microtask (guarded
-   * against double-destroy) because this can fire from a pointerdown mid-dispatch
-   * over the panel's own hit area / the backdrop (mirrors `FlightHud.closeModals`).
-   */
   private closeSettings(): void {
     const panel = this.settingsPanel;
     const accPanel = this.accessibilityPanel;
@@ -623,12 +532,6 @@ export class MainMenuScene extends GameScene {
       });
   }
 
-  /**
-   * Open the save/load screen, returning to the main menu when it closes. From
-   * the menu there is no live game (player/galaxy are null until a load), so the
-   * screen offers load/delete of existing saves rather than new manual saves —
-   * the in-flight system-menu entry is where the player creates named saves.
-   */
   private handleSaveLoad(): void {
     if (!this.gameEngine) {
       logger.error("GameEngine not available for Save/Load!");
@@ -641,11 +544,6 @@ export class MainMenuScene extends GameScene {
     });
   }
 
-  /**
-   * Open the prefilled GitHub Issue Form in a new tab. From the menu the only
-   * live context is the build + (if a run is loaded) its galaxy seed/day; the
-   * scene is MAIN_MENU. The URL shape is owned by `buildFeedbackUrl`.
-   */
   private handleFeedback(): void {
     const { version, sha } = buildInfo();
     const galaxy = this.gameEngine?.galaxy ?? null;
@@ -658,12 +556,6 @@ export class MainMenuScene extends GameScene {
     });
   }
 
-  /**
-   * Replay onboarding: clear the browser-level "seen" set so every screen's
-   * first-time help hint auto-shows again on the next visit (and «?» still
-   * works as before). Browser-level only — no game-state/schema change, so it
-   * survives «Новая игра» exactly like the rest of the onboarding flags.
-   */
   private handleReplayOnboarding(): void {
     logger.info("Replaying onboarding — clearing seen help-hints");
     resetSeen();
@@ -672,11 +564,6 @@ export class MainMenuScene extends GameScene {
 
   private async handleNewGame(): Promise<void> {
     logger.info("New game selected");
-    // Run the FULL reset before character creation: restartNewGame clears the
-    // prior in-session player/galaxy/quests/ledger/flight position, then enters
-    // RACE_SELECTION. A bare transitionTo(RACE_SELECTION) would leave the old
-    // player set, so the `!player` new-game gate is skipped and the previous game
-    // carries through (playtest 2026-06-23).
     if (this.gameEngine) {
       await this.gameEngine.restartNewGame();
     } else {
@@ -699,9 +586,6 @@ export class MainMenuScene extends GameScene {
     this.gameEngine.showLoadingOverlay(t("menu.loading"));
 
     try {
-      // Continue resumes the latest *meaningful* save across all slots (auto +
-      // the manual grid), not just the `"auto"` autosave — so a more recent
-      // named save (or one taken after the autosave hit a win/lose screen) wins.
       const loaded = await this.gameEngine.continueGame();
       if (!loaded) {
         logger.warn("No save found for continue");
@@ -712,7 +596,6 @@ export class MainMenuScene extends GameScene {
         }
         this.showMessage(t("menu.noSaves"));
       }
-      // On success: transitionTo was called inside loadGame → scene destroyed with overlay
     } catch (error) {
       logger.error("Failed to load save:", error);
       this.gameEngine?.hideLoadingOverlay();
@@ -728,7 +611,6 @@ export class MainMenuScene extends GameScene {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Clear previous message
     if (this.messageTimeoutId) {
       clearTimeout(this.messageTimeoutId);
       this.messageTimeoutId = null;
@@ -754,12 +636,10 @@ export class MainMenuScene extends GameScene {
     const buttonsY = this.buttonsContainer
       ? this.buttonsContainer.y
       : height / 2;
-    // Below the button stack (the lowest button sits at relative y≈215).
     msgText.y = buttonsY + 255;
     this.renderer.uiLayer.addChild(msgText);
     this.currentMsgText = msgText;
 
-    // Remove after 5 seconds
     this.messageTimeoutId = setTimeout(() => {
       if (msgText.parent) {
         this.renderer.uiLayer.removeChild(msgText);
@@ -770,19 +650,12 @@ export class MainMenuScene extends GameScene {
     }, 5000);
   }
 
-  /**
-   * Lazily mount a real nebula panorama behind the starfield. nebula/ is a
-   * LAZY_PREFIXES category, so the texture may not be cached at first render —
-   * follow the pickVariantKey + loadTextureAsync pattern with a render-
-   * generation guard (CLAUDE.md, Texture Loading).
-   */
   private mountNebulaBackdrop(width: number, height: number): void {
     const gen = this.renderGen;
     const key = pickVariantKey("nebula", "blue_far", "main_menu");
     if (!key) return;
 
     const mount = (t: Texture): void => {
-      // Scene re-rendered (resize) or destroyed since the load started
       if (gen !== this.renderGen) return;
       const sp = new Sprite(t);
       sp.anchor.set(0.5);
@@ -795,7 +668,6 @@ export class MainMenuScene extends GameScene {
       sp.y = height / 2;
       sp.alpha = 0.5; // dimmed — the menu must stay subdued and readable
       sp.eventMode = "none";
-      // Right above the flat background fill, below stars/planets/ships
       const layer = this.renderer.gameLayer;
       layer.addChildAt(sp, Math.min(1, layer.children.length));
     };
@@ -818,7 +690,6 @@ export class MainMenuScene extends GameScene {
   ): Container {
     const container = new Container();
 
-    // Prefer real ship art (eager category — synchronously available after boot)
     if (artPrefix && artSeed) {
       const shipTex = pickVariant("ships", artPrefix, artSeed);
       if (shipTex) {
@@ -835,7 +706,6 @@ export class MainMenuScene extends GameScene {
 
     const shipG = new Graphics();
 
-    // Main ship body
     shipG
       .poly([
         size,
@@ -849,7 +719,6 @@ export class MainMenuScene extends GameScene {
       ])
       .fill({ color: primaryColor, alpha });
 
-    // Cockpit/accent
     shipG
       .poly([
         size * 0.3,

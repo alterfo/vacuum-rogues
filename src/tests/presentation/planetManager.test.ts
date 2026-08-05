@@ -1,9 +1,3 @@
-/**
- * Task 9 (SOLID refactor): PlanetManager owns planet sprites, station markers,
- * the info panel and the route-target state extracted from SpaceFlightScene.
- * These exercise the module directly with mocked PlanetSprite/PlanetInfoPanel so
- * no WebGL/texture context is needed.
- */
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -144,7 +138,6 @@ describe("PlanetManager", () => {
     expect(manager.planetSprites.length).toBe(0);
     manager.initialize();
     expect(manager.planetSprites.length).toBe(2);
-    // Each planet disc is mounted on the game layer.
     expect(gameLayer.addChild).toHaveBeenCalledTimes(2);
   });
 
@@ -156,7 +149,6 @@ describe("PlanetManager", () => {
 
   it("getPlanetAt returns the planet whose disc the point falls within (else null)", () => {
     manager.initialize();
-    // Sprites are mocked at (100, 200).
     expect(manager.getPlanetAt(100, 200)).not.toBeNull();
     expect(manager.getPlanetAt(5000, 5000)).toBeNull();
     expect(manager.getStationAt(0, 0)).toBeNull();
@@ -187,13 +179,6 @@ describe("PlanetManager", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The hover tooltip surfaces the landing-denial reason. The seam under test is
-// the closure PlanetManager hands to PlanetSprite.setTooltipHandlers — it must
-// thread this.landingDenial(p) into deps.showPlanetTooltip's 5th arg. Capture
-// (overmind / pirate) is tracked per-system on the galaxy, NOT on
-// planet.capturedBy, so this can only be verified through the wired manager.
-// ---------------------------------------------------------------------------
 describe("PlanetManager hover tooltip threads the landing denial", () => {
   function makeHoverHarness(opts: {
     overmind?: boolean;
@@ -242,7 +227,6 @@ describe("PlanetManager hover tooltip threads the landing denial", () => {
     return { manager, showPlanetTooltip };
   }
 
-  /** Drive the onOver closure the manager registered for the first sprite. */
   function hoverFirstPlanet(manager: PlanetManager): void {
     manager.initialize();
     const sprite = manager.planetSprites[0];
@@ -274,13 +258,6 @@ describe("PlanetManager hover tooltip threads the landing denial", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Playtest4 C: planetLeadPoint leads a pursuit course ahead of an orbiting
-// planet. This is the only non-trivial new math on the planet side — the
-// px/game-day → px/ms unit conversion feeding the intercept solver. A wrong
-// conversion (dropped/inverted scale) would aim wildly off with no other test
-// catching it (only the orbital-velocity primitive is pinned elsewhere).
-// ---------------------------------------------------------------------------
 describe("PlanetManager.planetLeadPoint (playtest4 C lead)", () => {
   function makeLeadManager(
     getShipPhysics: PlanetManagerDeps["getShipPhysics"],
@@ -312,7 +289,6 @@ describe("PlanetManager.planetLeadPoint (playtest4 C lead)", () => {
     );
   }
 
-  // A planet drifting +y; a sprite stub exposing only what planetLeadPoint reads.
   const makeDriftingSprite = (vyPerDay: number) =>
     ({
       screenX: 500,
@@ -321,8 +297,6 @@ describe("PlanetManager.planetLeadPoint (playtest4 C lead)", () => {
     }) as unknown as import("@/presentation/PlanetSprite").PlanetSprite;
 
   it("aims AHEAD of the planet along its orbital drift (not at its current centre)", () => {
-    // Ship at origin, faster than the (converted) planet drift → an intercept
-    // solves. Planet at (500,0) moving +y at 100 px/game-day.
     const manager = makeLeadManager(
       () =>
         ({
@@ -333,8 +307,6 @@ describe("PlanetManager.planetLeadPoint (playtest4 C lead)", () => {
     );
     const lead = manager.planetLeadPoint(makeDriftingSprite(100));
 
-    // Pure +y drift → x is unchanged, y leads ahead of the current centre (0).
-    // A no-lead implementation would return (500,0); lead.y>0 distinguishes it.
     expect(lead.x).toBeCloseTo(500, 3);
     expect(lead.y).toBeGreaterThan(0);
   });

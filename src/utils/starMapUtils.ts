@@ -1,4 +1,3 @@
-/** Visibility tiers for star map rendering */
 export type SystemVisibility = "visited" | "charted" | "neighbor" | "unknown";
 
 export interface LabelBound {
@@ -21,11 +20,6 @@ export interface WarpLine {
   y2: number;
 }
 
-/**
- * Pick the first non-overlapping position for a system name label.
- * Falls back to positions[0] rather than returning null so every explored
- * system always renders its name (prevents unlabelled "dot" systems).
- */
 export function pickLabelPosition(
   positions: { x: number; y: number }[],
   labelBounds: LabelBound[],
@@ -72,7 +66,6 @@ export function pickLabelPosition(
 
     return pos;
   }
-  // Fallback: prefer the first candidate over rendering no label at all.
   return positions[0] ?? { x: 0, y: 0 };
 }
 
@@ -112,19 +105,6 @@ interface SystemRef {
   connections: { toSystemId: string }[];
 }
 
-/**
- * Returns the visibility tier for a system on the star map.
- *
- * - visited: player has personally been to this system
- * - charted: revealed by a purchased star chart (`explored`) — name is known
- *   even though the player has never been there
- * - neighbor: reachable in 1 jump from any visited system (bidirectional)
- * - unknown: no connection to any visited system, and not charted
- *
- * Precedence: visited > charted > neighbor > unknown. Both `charted` and
- * `neighbor` are "named" tiers (their name renders); only `unknown` shows "?".
- * `chartedSystemIds` defaults to empty so existing callers are unaffected.
- */
 export function getSystemVisibility(
   systemId: string,
   visitedSystemIds: readonly string[],
@@ -135,19 +115,15 @@ export function getSystemVisibility(
 
   if (visitedSet.has(systemId)) return "visited";
 
-  // A purchased chart reveals the system name even without a visit.
   if (chartedSystemIds.includes(systemId)) return "charted";
 
-  // Check if any visited system connects to this one, or this one connects to any visited system
   for (const system of allSystems) {
     if (!visitedSet.has(system.id)) continue;
-    // visited system → this system
     if (system.connections.some((c) => c.toSystemId === systemId)) {
       return "neighbor";
     }
   }
 
-  // this system → any visited system
   const thisSystem = allSystems.find((s) => s.id === systemId);
   if (thisSystem) {
     for (const conn of thisSystem.connections) {

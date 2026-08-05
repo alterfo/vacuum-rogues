@@ -48,8 +48,6 @@ describe("generateShop", () => {
     const dayN = generateShop({ ...BASE_OPTS, day: SHOP_REFRESH_DAYS })
       .map((l) => l.gear.id)
       .join(",");
-    // Not guaranteed to differ by exactly 1 day, but after a full refresh cycle
-    // the inventory can legitimately change (probabilistic). Just verify it runs.
     expect(typeof day0).toBe("string");
     expect(typeof dayN).toBe("string");
   });

@@ -33,7 +33,6 @@ test.describe('Playtest 01: Full game loop', () => {
 
     const initialCredits = await driver.getCredits();
 
-    // Land on first planet in system
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
@@ -42,7 +41,6 @@ test.describe('Playtest 01: Full game loop', () => {
     });
     await waitForScene(page, 'PlanetScene', 15_000);
 
-    // Navigate to trade scene directly with the first available planet
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         transitionTo: (scene: string, ctx?: object) => Promise<void>;
@@ -55,7 +53,6 @@ test.describe('Playtest 01: Full game loop', () => {
     });
     await waitForScene(page, 'TradeScene', 15_000);
 
-    // Buy 1 unit of fuel
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: { e2eBuyItem?: (resource: string, qty: number) => boolean } | null;
@@ -66,7 +63,6 @@ test.describe('Playtest 01: Full game loop', () => {
     const creditsAfterTrade = await driver.getCredits();
     expect(creditsAfterTrade).toBeLessThan(initialCredits);
 
-    // Take off back to space flight
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         transitionTo: (scene: string, ctx?: object) => Promise<void>;
@@ -84,7 +80,6 @@ test.describe('Playtest 01: Full game loop', () => {
 
     const initialCredits = await driver.getCredits();
 
-    // Land on first planet
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
@@ -93,7 +88,6 @@ test.describe('Playtest 01: Full game loop', () => {
     });
     await waitForScene(page, 'PlanetScene', 15_000);
 
-    // Open trade scene
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         transitionTo: (scene: string, ctx?: object) => Promise<void>;
@@ -106,7 +100,6 @@ test.describe('Playtest 01: Full game loop', () => {
     });
     await waitForScene(page, 'TradeScene', 15_000);
 
-    // Exit without buying — go back to planet then take off
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         transitionTo: (scene: string, ctx?: object) => Promise<void>;

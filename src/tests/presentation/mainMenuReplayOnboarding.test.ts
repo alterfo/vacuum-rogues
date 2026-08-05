@@ -1,11 +1,3 @@
-/**
- * Onboarding replay (Task 6): the Main-Menu «Показать обучение заново» control
- * clears the browser-level "seen" help-hint set via `resetSeen()`, so every
- * screen's first-time auto-hint shows again on the next visit. We mock the
- * onboarding-state module so the test asserts the control invokes `resetSeen`
- * (the AC), and stub `showMessage` so the confirmation toast never touches the
- * renderer (the scene is built bare, like the feedback/new-game handler tests).
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { resetSeen } from "@/systems/onboarding/onboardingState";
@@ -18,14 +10,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-/** Bare scene; the replay handler only calls `resetSeen` + a stubbed message. */
 function makeScene() {
   const scene = new MainMenuScene({} as never) as unknown as {
     handleReplayOnboarding: () => void;
     showMessage: (m: string, c?: number) => void;
   };
-  // The confirmation toast reads `this.renderer.app.screen` — stub it out so the
-  // unit stays off the render path (mirrors handleFeedback's renderer-free test).
   scene.showMessage = vi.fn();
   return scene;
 }

@@ -6,9 +6,6 @@ import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { bindModalKeys } from "./ui/bindModalKeys";
 
-/**
- * Dialogue node representing a single dialogue exchange
- */
 export interface DialogueNode {
   id: string;
   npcText: string;
@@ -16,9 +13,6 @@ export interface DialogueNode {
   questOfferId?: string; // ID of quest to offer
 }
 
-/**
- * Player response option
- */
 export interface DialogueResponse {
   text: string;
   nextNodeId: string | null; // null means end dialogue
@@ -26,9 +20,6 @@ export interface DialogueResponse {
   completesQuest?: string; // If set, completes the quest with this ID
 }
 
-/**
- * Dialogue tree template
- */
 export interface DialogueTree {
   npcId: string;
   npcName: string;
@@ -36,9 +27,6 @@ export interface DialogueTree {
   nodes: Map<string, DialogueNode>;
 }
 
-/**
- * Scene for displaying NPC dialogues with template-based conversation trees
- */
 export class DialogueScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private currentNPC: NPC | null = null;
@@ -52,8 +40,6 @@ export class DialogueScene extends GameScene {
   private npcNameText: Text | null = null;
   private dialogueText: Text | null = null;
   private responseButtons: Container[] = [];
-  // Shared modal-key convention: Enter = the node's primary (first) response,
-  // Esc = close the dialogue. Detached in destroy() so the listener never leaks.
   private detachModalKeys: (() => void) | null = null;
 
   initialize(context?: object): void {
@@ -73,7 +59,6 @@ export class DialogueScene extends GameScene {
       return;
     }
 
-    // Load dialogue tree for this NPC; fall back to a minimal 1-node tree
     this.dialogueTree = this.loadDialogueTree(this.currentNPC.id);
     if (!this.dialogueTree) {
       logger.warn(
@@ -99,7 +84,6 @@ export class DialogueScene extends GameScene {
     this.createDialogueUI();
     this.displayNode(this.dialogueTree.startNodeId);
 
-    // Enter confirms the primary (first) reply; Esc closes the dialogue.
     this.detachModalKeys = bindModalKeys({
       onConfirm: () => this.confirmPrimaryResponse(),
       onCancel: () => void this.goBack(),
@@ -108,11 +92,6 @@ export class DialogueScene extends GameScene {
     logger.info(`DialogueScene initialized with NPC: ${this.currentNPC.name}`);
   }
 
-  /**
-   * Enter picks the current node's first response — the default/primary reply
-   * (no-op if the node has none). Reads `currentNode` at press time so it always
-   * targets whatever node is on screen.
-   */
   private confirmPrimaryResponse(): void {
     const primary = this.currentNode?.responses[0];
     if (primary) this.onResponseSelected(primary);
@@ -135,22 +114,16 @@ export class DialogueScene extends GameScene {
     logger.info("DialogueScene destroyed");
   }
 
-  /**
-   * Load dialogue tree for NPC (hardcoded templates for MVP)
-   */
   private loadDialogueTree(npcId: string): DialogueTree | null {
-    // Create a simple dialogue tree for governors
     if (npcId.includes("governor")) {
       const nodes = new Map<string, DialogueNode>();
 
-      // Check for completed quests
       const completedQuests = this.gameEngine?.questManager
         .getActiveQuests()
         .filter((q) => q.isCompleted);
 
       const greetingResponses: DialogueResponse[] = [];
 
-      // Add quest completion option if applicable
       if (completedQuests && completedQuests.length > 0) {
         greetingResponses.push({
           text: `Я выполнил задание: ${completedQuests[0].title}`,
@@ -192,7 +165,6 @@ export class DialogueScene extends GameScene {
         responses: [{ text: "До связи", nextNodeId: null }],
       });
 
-      // Dynamic quest completion node with rewards
       let questCompleteText = "Отличная работа, рейнджер! Вот ваша награда:";
       if (completedQuests && completedQuests.length > 0) {
         const reward = completedQuests[0].reward;
@@ -236,22 +208,17 @@ export class DialogueScene extends GameScene {
     return null;
   }
 
-  /**
-   * Create dialogue UI container
-   */
   private createDialogueUI(): void {
     this.dialogueContainer = new Container();
 
     const screenWidth = this.renderer.app.screen.width;
     const screenHeight = this.renderer.app.screen.height;
 
-    // Semi-transparent backdrop
     const backdrop = new Graphics();
     backdrop.rect(0, 0, screenWidth, screenHeight);
     backdrop.fill({ color: 0x000000, alpha: 0.7 });
     this.dialogueContainer.addChild(backdrop);
 
-    // Main dialogue panel
     const panelWidth = 700;
     const panelHeight = 400;
     const panelX = (screenWidth - panelWidth) / 2;
@@ -263,13 +230,11 @@ export class DialogueScene extends GameScene {
     panel.stroke({ color: 0x00ffff, width: 2 });
     this.dialogueContainer.addChild(panel);
 
-    // NPC portrait (simple colored circle for MVP)
     this.npcPortrait = new Graphics();
     this.npcPortrait.circle(panelX + 60, panelY + 60, 40);
     this.npcPortrait.fill({ color: 0x4488cc });
     this.dialogueContainer.addChild(this.npcPortrait);
 
-    // NPC name
     this.npcNameText = new Text({
       text: this.dialogueTree?.npcName ?? "NPC",
       style: {
@@ -283,7 +248,6 @@ export class DialogueScene extends GameScene {
     this.npcNameText.y = panelY + 30;
     this.dialogueContainer.addChild(this.npcNameText);
 
-    // Dialogue text area
     this.dialogueText = new Text({
       text: "",
       style: {
@@ -301,9 +265,6 @@ export class DialogueScene extends GameScene {
     this.renderer.uiLayer.addChild(this.dialogueContainer);
   }
 
-  /**
-   * Display a dialogue node with responses
-   */
   private displayNode(nodeId: string): void {
     if (!this.dialogueTree) return;
 
@@ -315,18 +276,15 @@ export class DialogueScene extends GameScene {
 
     this.currentNode = node;
 
-    // Update dialogue text
     if (this.dialogueText) {
       this.dialogueText.text = node.npcText;
     }
 
-    // Clear old response buttons
     for (const btn of this.responseButtons) {
       btn.destroy({ children: true });
     }
     this.responseButtons = [];
 
-    // Create response buttons
     const panelX = (this.renderer.app.screen.width - 700) / 2;
     const panelY = (this.renderer.app.screen.height - 400) / 2;
     const buttonStartY = panelY + 250;
@@ -344,9 +302,6 @@ export class DialogueScene extends GameScene {
     }
   }
 
-  /**
-   * Create a clickable response button
-   */
   private createResponseButton(
     text: string,
     x: number,
@@ -375,7 +330,6 @@ export class DialogueScene extends GameScene {
     buttonText.y = 10;
     container.addChild(buttonText);
 
-    // Make interactive
     container.eventMode = "static";
     container.cursor = "pointer";
     container.on("pointerdown", onClick);
@@ -395,13 +349,9 @@ export class DialogueScene extends GameScene {
     return container;
   }
 
-  /**
-   * Handle response selection
-   */
   private onResponseSelected(response: DialogueResponse): void {
     logger.debug(`Response selected: ${response.text}`);
 
-    // Handle quest acceptance
     if (
       response.acceptsQuest &&
       this.currentNode?.questOfferId &&
@@ -422,7 +372,6 @@ export class DialogueScene extends GameScene {
       }
     }
 
-    // Handle quest completion
     if (response.completesQuest && this.gameEngine?.player) {
       const questManager = this.gameEngine.questManager;
       const success = questManager.completeQuest(
@@ -434,7 +383,6 @@ export class DialogueScene extends GameScene {
       }
     }
 
-    // Navigate to next node or close dialogue
     if (response.nextNodeId) {
       this.displayNode(response.nextNodeId);
     } else {
@@ -442,9 +390,6 @@ export class DialogueScene extends GameScene {
     }
   }
 
-  /**
-   * Close dialogue and return to previous scene
-   */
   async goBack(): Promise<void> {
     await this.closeDialogue();
   }

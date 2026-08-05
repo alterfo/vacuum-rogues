@@ -22,11 +22,6 @@ import {
   type QuestDestinationGalaxyLike,
 } from "@/systems/quests/questDestination";
 
-// Pending-return ("ВЫПОЛНЕНО — ЗАБРАТЬ НАГРАДУ") card vertical metrics. Chosen so a
-// short card (1-line title + 1-line return + reward) computes to exactly the
-// historical 80 px box (8 + line + 4 + line + 2 + line + 12 = 80 at the M font),
-// while a long title / long issuer-system name wraps + grows the box instead of
-// bleeding off the right edge (the same overflow the active card fixed).
 const PENDING_TOP_PAD = 8;
 const PENDING_TITLE_GAP = 4;
 const PENDING_RETURN_GAP = 2;
@@ -34,10 +29,6 @@ const PENDING_BOTTOM_PAD = 12;
 const PENDING_MIN_CARD_HEIGHT = 80;
 const PENDING_CARD_GAP = 10;
 
-/**
- * Quest Journal UI - displays active and completed quests with progress
- * Accessible via "J" key or UI button
- */
 export class QuestJournalUI {
   public readonly container: Container;
   private readonly questManager: IQuestService;
@@ -46,27 +37,12 @@ export class QuestJournalUI {
   private readonly onClose: () => void;
   private readonly onNavigateToObjective?: (locationId: string) => void;
   private readonly currentDay: number;
-  // Maps a planet/system id to a human-readable display name; falls back to the
-  // raw id when no resolver is supplied (e.g. in unit tests).
   private readonly resolveName: (id: string) => string;
-  // Returns how many units of a given itemType the player currently carries.
-  // Used to show live cargo progress for COLLECT_ITEM objectives instead of the
-  // frozen currentAmount (which is never incremented in production).
   private readonly cargoCarried: ((itemType: string) => number) | undefined;
-  // Structural galaxy view used to NAME the system a pending-return quest sends
-  // the player back to (the issuer planet's system). Undefined in unit tests /
-  // before the galaxy is wired — the system suffix is then simply omitted.
   private readonly galaxy: QuestDestinationGalaxyLike | undefined;
-  // The player's current system id, fed to `questDestination` so the resolved
-  // descriptor's `sameSystem` is correct (used by the plot-route button).
   private readonly currentSystemId: string;
-  // Scrollable region wrapping the active quests when they overflow the panel
-  // (replaces the old slice + dead "+N ещё" label). Null while everything fits.
-  // Owns a window-level wheel listener that destroy() must tear down.
   private activeList: ScrollableList<Quest> | null = null;
 
-  // Opens the contextual-help panel for the journal (the «?» button). Undefined
-  // in unit tests / when no help is wired — the «?» button is then omitted.
   private readonly onShowHelp: (() => void) | undefined;
 
   constructor(
@@ -93,29 +69,16 @@ export class QuestJournalUI {
     this.onShowHelp = onShowHelp;
     this.container = new Container();
 
-    // Center panel on screen
     this.container.x = (screenWidth - this.panelWidth) / 2;
     this.container.y = (screenHeight - this.panelHeight) / 2;
 
     this.render();
   }
 
-  /**
-   * Render the journal panel with all quests
-   */
   private render(): void {
-    // Semi-transparent overlay backdrop
     const backdrop = new Graphics();
     backdrop.rect(-1000, -1000, 3000, 3000);
     backdrop.fill({ color: 0x000000, alpha: 0.7 });
-    // playtest3 F6: every click inside the journal — empty backdrop AND the
-    // panel/labels — used to bubble to the stage route-planning handler (which
-    // closed the modal or planned a route behind it). eventMode="static" makes
-    // the backdrop a hit target but does NOT stop bubbling on its own
-    // (CLAUDE.md Rule 2). The fix makes the backdrop the single full-screen
-    // catch-all: it swallows every pointer event, and all non-button content
-    // (panel, labels, card backgrounds) is eventMode="none" so clicks fall
-    // through to it (Rule 3). Only the close/navigate buttons stay interactive.
     backdrop.eventMode = "static";
     const swallow = (event: { stopPropagation: () => void }): void => {
       event.stopPropagation();
@@ -125,8 +88,6 @@ export class QuestJournalUI {
     backdrop.on("pointertap", swallow);
     this.container.addChild(backdrop);
 
-    // Main panel background — non-interactive so clicks fall through to the
-    // catch-all backdrop instead of bubbling to the stage.
     const panel = new Graphics();
     panel.rect(0, 0, this.panelWidth, this.panelHeight);
     panel.fill({ color: 0x1a1a2e, alpha: 0.95 });
@@ -134,7 +95,6 @@ export class QuestJournalUI {
     panel.eventMode = "none";
     this.container.addChild(panel);
 
-    // Title
     const titleText = scaledText("ЖУРНАЛ КВЕСТОВ", 18, 0x00ffff, {
       rawColor: true,
       fontWeight: "bold",
@@ -144,13 +104,11 @@ export class QuestJournalUI {
     titleText.eventMode = "none";
     this.container.addChild(titleText);
 
-    // Close button
     const closeBtn = this.createCloseButton();
     closeBtn.x = this.panelWidth - 30;
     closeBtn.y = 15;
     this.container.addChild(closeBtn);
 
-    // Contextual-help «?» button, left of the close button. Only when wired.
     if (this.onShowHelp) {
       const helpBtn = this.createHelpButton();
       helpBtn.x = this.panelWidth - 58;
@@ -158,12 +116,10 @@ export class QuestJournalUI {
       this.container.addChild(helpBtn);
     }
 
-    // Active quests section
     const activeQuests = this.questManager.getActiveQuests();
     let nextSectionY = this.renderActiveQuests(activeQuests, 60);
     nextSectionY += 10;
 
-    // Pending-return quests section (between active and completed)
     const pendingReturnQuests =
       this.questManager.getPendingReturnQuests?.() ?? [];
     if (pendingReturnQuests.length > 0) {
@@ -174,20 +130,17 @@ export class QuestJournalUI {
       nextSectionY += 10;
     }
 
-    // Completed quests section (if any)
     const completedQuestIds = this.questManager.getCompletedQuestIds();
     if (completedQuestIds.length > 0) {
       this.renderCompletedQuestsSection(completedQuestIds, nextSectionY);
       nextSectionY += 80;
     }
 
-    // Expired/failed quests section (if any)
     const expiredQuests = this.questManager.getExpiredQuests?.() ?? [];
     if (expiredQuests.length > 0) {
       this.renderExpiredQuestsSection(expiredQuests, nextSectionY);
     }
 
-    // Empty state if no quests at all
     if (
       activeQuests.length === 0 &&
       pendingReturnQuests.length === 0 &&
@@ -208,9 +161,6 @@ export class QuestJournalUI {
     }
   }
 
-  /**
-   * Render active quests list
-   */
   private renderActiveQuests(quests: Quest[], startY: number): number {
     const sectionTitle = scaledText("АКТИВНЫЕ КВЕСТЫ", 14, 0xffaa00, {
       rawColor: true,
@@ -221,11 +171,6 @@ export class QuestJournalUI {
     sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
-    // Card height now TRACKS each card's wrapped content (a long title / a long
-    // objective / many objectives no longer overflow a fixed 130 px box). The
-    // `ScrollableList` viewport wants ONE row height, so use the tallest card's
-    // height + a gap as the uniform step — short cards keep the historical 130 px
-    // box (their own snug height is drawn per-card; the step just spaces them).
     const CARD_GAP = 10;
     const maxBoxHeight = quests.reduce(
       (max, q) => Math.max(max, this.cardBoxHeight(q)),
@@ -233,15 +178,12 @@ export class QuestJournalUI {
     );
     const cardStep = maxBoxHeight + CARD_GAP;
     const cardsTop = startY + 30;
-    // How many cards fit in the space the active section is allotted. Matches the
-    // old `maxVisible` formula so the layout below the section is unchanged.
     const fitCount = Math.max(
       1,
       Math.floor((this.panelHeight - startY - 30) / cardStep),
     );
 
     if (quests.length <= fitCount) {
-      // Everything fits — render the cards directly (no scroll, no truncation).
       let yOffset = cardsTop;
       for (const quest of quests) {
         const questUI = this.createQuestCard(quest, yOffset);
@@ -251,13 +193,6 @@ export class QuestJournalUI {
       return yOffset;
     }
 
-    // Overflow: wrap ALL active quests in a scrollable region so every one is
-    // reachable by scrolling — replacing the old `slice` + non-interactive
-    // "+N ещё..." dead-end. Drag is disabled on purpose: a dragging content
-    // container is an eventMode="static" hit target whose pointerdown does not
-    // stopPropagation, which would re-open the playtest3 F6 click-through (the
-    // modal relies on non-button content falling through to the catch-all
-    // backdrop). Scroll is wheel-driven here.
     const viewportHeight = fitCount * cardStep;
     this.activeList = new ScrollableList<Quest>({
       x: 0,
@@ -266,7 +201,6 @@ export class QuestJournalUI {
       height: viewportHeight,
       itemHeight: cardStep,
       items: quests,
-      // The list positions each row by index; build the card at a local origin.
       renderItem: (quest) => this.createQuestCard(quest, 0),
       enableDrag: false,
     });
@@ -274,23 +208,14 @@ export class QuestJournalUI {
     return cardsTop + viewportHeight;
   }
 
-  /** Geometry inputs for a quest card — one source for sizing AND rendering. */
   private cardMetrics(): QuestCardMetrics {
     return {
       fontSizePx: scaledFont(13),
-      // Title wraps before the right-aligned [type] label.
       titleWrapWidth: this.panelWidth - 160,
-      // Objective + reward body text wraps clear of the right-side nav/deadline.
       bodyWrapWidth: this.panelWidth - 220,
     };
   }
 
-  /**
-   * Build the card's text content ONCE so the height math (`cardBoxHeight`) and
-   * the renderer (`createQuestCard`) can never disagree about how many lines a
-   * card holds. Returns the per-objective display lines (+ their nav targets),
-   * the reward summary line and the highlight tags.
-   */
   private buildCardContent(quest: Quest): {
     objectives: Array<{
       text: string;
@@ -301,13 +226,6 @@ export class QuestJournalUI {
     highlights: Array<{ label: string; value: string; color: number }>;
     courierDest: QuestDestination | null;
   } {
-    // A local courier run («Местный подряд») has only a COLLECT_ITEM objective —
-    // no VISIT objective to host the "→ Лететь к цели" button — yet its goods go
-    // to a concrete NEIGHBOUR planet (`targetPlanetId`). Resolve that destination
-    // so the cargo objective can offer a route to the neighbour. Cross-system
-    // deliveries already route via their own VISIT_LOCATION objective, so skip
-    // those (they keep the existing per-objective button). A BOUNTY hunt
-    // (DEFEAT_ENEMY-only) reuses the same resolution below.
     const hasVisitObjective = quest.objectives.some(
       (o) => o.type === "VISIT_LOCATION" || o.type === "VISIT_SYSTEM",
     );
@@ -317,9 +235,6 @@ export class QuestJournalUI {
     const courierNavId = courierDest ? this.routeNavId(courierDest) : null;
 
     const objectives = quest.objectives.map((objective) => {
-      // For COLLECT_ITEM objectives use live cargo count from the resolver
-      // (production never emits COLLECT_ITEM progress events, so currentAmount
-      // stays frozen at 0 without this).
       let displayAmount = objective.currentAmount;
       let isReadyToDeliver = false;
       if (
@@ -336,11 +251,6 @@ export class QuestJournalUI {
       const suffix = isReadyToDeliver ? " — ✓ сдать" : "";
       const text = `${completedOrReady ? "✓" : "○"} ${objective.description}: ${displayAmount}/${objective.targetAmount}${suffix}`;
 
-      // Navigate target for VISIT_LOCATION / VISIT_SYSTEM / courier COLLECT_ITEM /
-      // BOUNTY DEFEAT_ENEMY. The bounty hunt reuses the courier destination
-      // resolution (same-system + concrete target planet → the planet, else the
-      // system), falling back to the quest's target system when no concrete
-      // target planet resolves at all (e.g. an uninhabited target system).
       const navTargetId =
         !objective.completed && this.onNavigateToObjective
           ? objective.type === "VISIT_LOCATION" &&
@@ -358,7 +268,6 @@ export class QuestJournalUI {
       return { text, completedOrReady, navTargetId };
     });
 
-    // Reward summary — credits / xp / items / reputation.
     const r = quest.reward;
     const parts: string[] = [];
     if (r?.credits) parts.push(`${r.credits} кр`);
@@ -369,7 +278,6 @@ export class QuestJournalUI {
     }
     const rewardLine = `Награда: ${parts.length ? parts.join(", ") : "—"}`;
 
-    // Highlights row: derive from available Quest fields (system, issuer planet).
     const highlights: Array<{ label: string; value: string; color: number }> =
       [];
     if (quest.targetSystemId) {
@@ -380,7 +288,6 @@ export class QuestJournalUI {
       });
     }
     if (quest.planetId && quest.planetId !== "unknown") {
-      // For text-adventure quests the issuer planet IS the completion planet.
       const planetLabel =
         quest.type === QuestType.TEXT_ADVENTURE ? "Планета" : "Выдан";
       highlights.push({
@@ -389,10 +296,6 @@ export class QuestJournalUI {
         color: quest.type === QuestType.TEXT_ADVENTURE ? 0x66ffcc : 0xaaaaaa,
       });
     }
-    // Name the delivery NEIGHBOUR (a «Местный подряд» courier target) so the
-    // player sees WHERE the goods go — distinct from the issuer ("Выдан"). Only
-    // for the in-system courier case (cross-system deliveries already name their
-    // target system above, and route via their VISIT_LOCATION objective).
     if (
       courierDest &&
       quest.targetPlanetId &&
@@ -408,11 +311,6 @@ export class QuestJournalUI {
     return { objectives, rewardLine, highlights, courierDest };
   }
 
-  /**
-   * The drawn box height for a card — the wrapped-content height (so a long
-   * title / objective / many objectives never overflow), clamped to the
-   * historical {@link MIN_CARD_HEIGHT} so short cards look unchanged.
-   */
   private cardBoxHeight(quest: Quest): number {
     const content = this.buildCardContent(quest);
     const layout = layoutQuestCard(
@@ -427,12 +325,6 @@ export class QuestJournalUI {
     return Math.max(MIN_CARD_HEIGHT, layout.contentHeight);
   }
 
-  /**
-   * Create a card displaying quest information. Text is word-wrapped at the
-   * card's inner width and laid out top-down by {@link layoutQuestCard}, so a
-   * long title, a long objective description or many objectives wrap + push the
-   * box taller instead of spilling past the card's right/bottom edge.
-   */
   private createQuestCard(quest: Quest, yPos: number): Container {
     const card = new Container();
     card.y = yPos;
@@ -450,7 +342,6 @@ export class QuestJournalUI {
     );
     const boxHeight = Math.max(MIN_CARD_HEIGHT, layout.contentHeight);
 
-    // Card background — non-interactive so clicks fall through to the backdrop.
     const bg = new Graphics();
     bg.rect(20, 0, this.panelWidth - 40, boxHeight);
     bg.fill({ color: 0x16213e, alpha: 0.8 });
@@ -458,7 +349,6 @@ export class QuestJournalUI {
     bg.eventMode = "none";
     card.addChild(bg);
 
-    // Quest title (wrapped so a long title stacks instead of running off-card).
     const titleText = scaledText(
       quest.title,
       13,
@@ -476,7 +366,6 @@ export class QuestJournalUI {
     titleText.eventMode = "none";
     card.addChild(titleText);
 
-    // Quest type
     const typeText = scaledText(
       `[${questTypeLabel(quest.type)}]`,
       13,
@@ -488,7 +377,6 @@ export class QuestJournalUI {
     typeText.eventMode = "none";
     card.addChild(typeText);
 
-    // Objectives (each wrapped + positioned by the pure layout).
     content.objectives.forEach((objective, i) => {
       const objY = layout.objectiveYs[i];
       const objText = scaledText(
@@ -515,7 +403,6 @@ export class QuestJournalUI {
       }
     });
 
-    // Reward summary line (wrapped to stay clear of the deadline warning).
     const rewardText = scaledText(content.rewardLine, 13, 0xffcc66, {
       rawColor: true,
       wordWrap: true,
@@ -527,7 +414,6 @@ export class QuestJournalUI {
     rewardText.eventMode = "none";
     card.addChild(rewardText);
 
-    // Highlights row.
     if (content.highlights.length > 0) {
       const hTagSpacing = 150;
       let hx = 40;
@@ -544,7 +430,6 @@ export class QuestJournalUI {
       }
     }
 
-    // Remaining days warning for quests with an approaching deadline.
     if (quest.deadline > 0 && this.currentDay > 0) {
       const remaining = quest.getRemainingDays(this.currentDay);
       if (remaining < 5) {
@@ -564,13 +449,6 @@ export class QuestJournalUI {
     return card;
   }
 
-  /**
-   * Resolve where an ACTIVE contract sends the goods — the concrete
-   * `targetPlanetId` (a «Местный подряд» neighbour) within `targetSystemId`.
-   * Returns the {@link questDestination} descriptor, or null when no galaxy is
-   * wired (unit tests) or the quest names no concrete target planet — so the
-   * caller falls back to system-level / no route.
-   */
   private activeDestination(quest: Quest): QuestDestination | null {
     if (!this.galaxy || !quest.targetPlanetId || !quest.targetSystemId) {
       return null;
@@ -585,12 +463,6 @@ export class QuestJournalUI {
     );
   }
 
-  /**
-   * The id the route dispatch sends for a resolved destination: the planet id
-   * when same-system + concrete (in-system approach), else the system id
-   * (star-map warp) — mirrors {@link questRouteAction}, so the navigation seam
-   * (`SpaceFlightScene.navigateToQuestObjective`) can resolve it.
-   */
   private routeNavId(dest: QuestDestination): string {
     const action = questRouteAction(dest);
     return action.kind === "approach-planet"
@@ -598,9 +470,6 @@ export class QuestJournalUI {
       : action.systemId;
   }
 
-  /**
-   * Create "Navigate to objective" button
-   */
   private createNavigateButton(locationId: string): Container {
     const btn = new Container();
 
@@ -646,9 +515,6 @@ export class QuestJournalUI {
     return btn;
   }
 
-  /**
-   * Render "return to issuer" pending-reward section
-   */
   private renderPendingReturnSection(quests: Quest[], startY: number): number {
     const sectionTitle = scaledText(
       `ВЫПОЛНЕНО — ЗАБРАТЬ НАГРАДУ (${quests.length})`,
@@ -665,15 +531,12 @@ export class QuestJournalUI {
     for (const quest of quests) {
       const card = this.createPendingReturnCard(quest, yOffset);
       this.container.addChild(card);
-      // Step by each card's own wrapped height (variable) + a gap — a short card
-      // keeps the historical 90 px step, a tall card pushes the next one down.
       yOffset += this.pendingCardLayout(quest).boxHeight + PENDING_CARD_GAP;
     }
 
     return yOffset;
   }
 
-  /** The "↩ Вернитесь в <planet> — система <system>" return prompt for a card. */
   private pendingReturnLine(
     quest: Quest,
     dest: QuestDestination | null,
@@ -686,13 +549,6 @@ export class QuestJournalUI {
     return `↩ Вернитесь в ${issuerPlanetId}${systemSuffix}`;
   }
 
-  /**
-   * Lay a pending-return card out top-down from its wrapped content so the
-   * renderer and the section's per-card step never disagree about its height —
-   * a long title or a long issuer-system name wraps and grows the box instead of
-   * spilling past the card's edge. `dest`/`returnLine` are resolved here once so
-   * the renderer reuses them (the route button + return prompt).
-   */
   private pendingCardLayout(quest: Quest): {
     boxHeight: number;
     titleY: number;
@@ -726,13 +582,6 @@ export class QuestJournalUI {
     return { boxHeight, titleY, returnY, rewardY, returnLine, dest };
   }
 
-  /**
-   * Resolve the destination a pending-return quest sends the player back to:
-   * the issuer planet (`quest.planetId`) and the system that hosts it. Returns
-   * the {@link questDestination} descriptor (system name + sameSystem, reused by
-   * the plot-route button), or null when no galaxy is wired (unit tests) or the
-   * issuer planet can't be located in it.
-   */
   private returnDestination(quest: Quest): QuestDestination | null {
     if (!this.galaxy || !quest.planetId || quest.planetId === "unknown") {
       return null;
@@ -748,9 +597,6 @@ export class QuestJournalUI {
     );
   }
 
-  /**
-   * Create a compact card for a pending-return quest
-   */
   private createPendingReturnCard(quest: Quest, yPos: number): Container {
     const card = new Container();
     card.y = yPos;
@@ -766,8 +612,6 @@ export class QuestJournalUI {
     bg.eventMode = "none";
     card.addChild(bg);
 
-    // Title wraps (+ breaks long tokens) at the body width so it clears the
-    // right-column type label / route button instead of running off the card.
     const titleText = scaledText(quest.title, 13, 0xffff88, {
       rawColor: true,
       fontWeight: "bold",
@@ -791,9 +635,6 @@ export class QuestJournalUI {
     typeText.eventMode = "none";
     card.addChild(typeText);
 
-    // Return-to-issuer prompt in yellow — name the system the issuer planet
-    // sits in (so the player knows WHERE to fly, not just which planet). Wrapped
-    // so a long planet/system name stacks instead of bleeding off the card.
     const returnText = scaledText(layout.returnLine, 12, 0xffcc00, {
       rawColor: true,
       fontWeight: "bold",
@@ -806,7 +647,6 @@ export class QuestJournalUI {
     returnText.eventMode = "none";
     card.addChild(returnText);
 
-    // Reward summary
     const r = quest.reward;
     const parts: string[] = [];
     if (r?.credits) parts.push(`${r.credits} кр`);
@@ -823,7 +663,6 @@ export class QuestJournalUI {
     rewardText.eventMode = "none";
     card.addChild(rewardText);
 
-    // "Выдан: X" highlight rendered yellow (target color)
     if (quest.planetId && quest.planetId !== "unknown") {
       const issuedTag = scaledText(
         `[Выдан: ${this.resolveName(quest.planetId)}]`,
@@ -837,10 +676,6 @@ export class QuestJournalUI {
       card.addChild(issuedTag);
     }
 
-    // «Проложить маршрут»: dispatch the pure route action onto the existing
-    // flight routing seam (in-system planet approach vs. star-map warp). Only
-    // shown when the destination resolves (galaxy wired + issuer planet found)
-    // and a navigate hook is present — otherwise there is no target to route to.
     if (dest && this.onNavigateToObjective) {
       const routeBtn = this.createPlotRouteButton(dest);
       routeBtn.x = this.panelWidth - 175;
@@ -851,16 +686,6 @@ export class QuestJournalUI {
     return card;
   }
 
-  /**
-   * Build the «Проложить маршрут» (plot-route) button for a resolved
-   * destination. On click it runs {@link questRouteAction} and dispatches the
-   * chosen id to the existing `onNavigateToObjective` route hook:
-   * - `approach-planet` → the planet id (the flight scene plots an in-system
-   *   route to it);
-   * - `warp-to-system` → the system id (the flight scene opens the star-map
-   *   warp toward that system).
-   * Both reuse `SpaceFlightScene.navigateToQuestObjective` — no new navigation.
-   */
   private createPlotRouteButton(dest: QuestDestination): Container {
     const btn = new Container();
     const width = 155;
@@ -909,9 +734,6 @@ export class QuestJournalUI {
     return btn;
   }
 
-  /**
-   * Render expired/failed quests section
-   */
   private renderExpiredQuestsSection(quests: Quest[], startY: number): void {
     const sectionTitle = scaledText(
       `ПРОВАЛЕНО / ПРОСРОЧЕНО (${quests.length})`,
@@ -937,9 +759,6 @@ export class QuestJournalUI {
     }
   }
 
-  /**
-   * Render completed quests section
-   */
   private renderCompletedQuestsSection(
     questIds: string[],
     startY: number,
@@ -955,8 +774,6 @@ export class QuestJournalUI {
     sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
-    // For large numbers of completed quests, show a scrollable list
-    // instead of just a count message
     const CARD_HEIGHT = 60;
     const CARD_GAP = 10;
     const availableHeight = this.panelHeight - startY - 30;
@@ -966,7 +783,6 @@ export class QuestJournalUI {
     );
 
     if (questIds.length <= fitCount) {
-      // Show all completed quests if they fit
       let yOffset = startY + 30;
       for (const questId of questIds) {
         const row = scaledText(
@@ -984,11 +800,9 @@ export class QuestJournalUI {
         yOffset += CARD_HEIGHT + CARD_GAP;
       }
     } else {
-      // Show scrollable list for many completed quests
       const cardsTop = startY + 30;
       const viewportHeight = fitCount * (CARD_HEIGHT + CARD_GAP);
 
-      // Create a scrollable container for completed quests
       const completedList = new ScrollableList<string>({
         x: 0,
         y: cardsTop,
@@ -1027,10 +841,6 @@ export class QuestJournalUI {
     }
   }
 
-  /**
-   * Create the contextual-help «?» button — opens the journal's help panel via
-   * the injected `onShowHelp` hook (FlightHud mounts the shared HelpPanel).
-   */
   private createHelpButton(): Container {
     const helpBtn = new Container();
     helpBtn.eventMode = "static";
@@ -1059,9 +869,6 @@ export class QuestJournalUI {
     return helpBtn;
   }
 
-  /**
-   * Create close button
-   */
   private createCloseButton(): Container {
     const closeBtn = new Container();
     closeBtn.eventMode = "static";
@@ -1101,21 +908,11 @@ export class QuestJournalUI {
     return closeBtn;
   }
 
-  /**
-   * Clean up resources
-   */
   destroy(): void {
-    // Tear down the active-quests scroll region first so its window-level wheel
-    // listener is detached (container.destroy alone cannot remove it). Pixi's
-    // destroy is idempotent, so a later container.destroy({children:true}) won't
-    // double-free the already-removed list container.
     if (this.activeList) {
       this.activeList.destroy();
       this.activeList = null;
     }
-    // Idempotent: the journal is closed via a deferred microtask (see
-    // FlightHud.closeModals) which may run after the scene's clearUILayer() has
-    // already destroyed this container — destroying it twice throws.
     if (this.container.destroyed) return;
     if (this.container.parent) {
       this.container.parent.removeChild(this.container);

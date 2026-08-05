@@ -1,15 +1,3 @@
-/**
- * Task 7 (gear icon art category): `gearIcon.ts` is the single shared
- * resolution helper — `HangarPanel` and `EquipmentShopScene`'s gear listing
- * both mount icons through it, never a forked copy. `pickVariantKey`/`tex`
- * are mocked so these tests can pin (a) the EXACT `icons/<family>_<tier>`
- * prefix computed for a representative item of every weapon class and
- * equipment family/tier — a typo here would silently desync from
- * `tools/comfyui/asset_prompts.json`'s axis keys and the generated art would
- * never resolve — and (b) the fallback-to-flat-icon / text-only contract
- * when no tiered art is loaded yet (today's real state, since Task 7 only
- * lands the prompts; generation is a separate Post-Completion step).
- */
 import { describe, it, expect, vi } from "vitest";
 
 const pickVariantKeyMock = vi.fn(

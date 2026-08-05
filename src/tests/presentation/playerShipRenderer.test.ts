@@ -4,12 +4,6 @@ import { PlayerShipRenderer } from "@/presentation/flight/PlayerShipRenderer";
 import type { Renderer } from "@/presentation/Renderer";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 
-/**
- * Build a minimal Renderer stand-in backed by a real PixiJS Container plus a
- * real ShipPhysics. In the test environment no ship texture is loaded, so the
- * renderer falls back to the procedural hull (no Sprite / WebGL texture needed)
- * — exercising the actual scene-graph wiring on the injected game layer.
- */
 function makeHarness(
   initialX = 100,
   initialY = 200,
@@ -38,12 +32,10 @@ describe("PlayerShipRenderer (extracted FlightModule)", () => {
 
     ship.initialize();
 
-    // Ship container + heading crosshair are both on the game layer.
     expect(gameLayer.children.length).toBe(2);
     const container = ship.container;
     expect(container).not.toBeNull();
     expect(container!.children.length).toBeGreaterThan(0); // glow + hull graphics
-    // Container is parked at the physics spawn position.
     expect(container!.x).toBe(100);
     expect(container!.y).toBe(200);
 
@@ -69,7 +61,6 @@ describe("PlayerShipRenderer (extracted FlightModule)", () => {
 
     expect(ship.isArcActive()).toBe(false);
 
-    // A short two-point arc; physics is parked at the end (as the scene does).
     const arc = [
       { x: 0, y: 0 },
       { x: 10, y: 0 },
@@ -78,10 +69,8 @@ describe("PlayerShipRenderer (extracted FlightModule)", () => {
     ship.startTakeoffArc(arc);
 
     expect(ship.isArcActive()).toBe(true);
-    // Arc start positions the container at the first point.
     expect(ship.container!.x).toBe(0);
 
-    // Advancing far enough completes the walk and clears the arc.
     ship.update(1000, 100);
     expect(ship.isArcActive()).toBe(false);
     expect(ship.container!.x).toBe(10);
@@ -100,7 +89,6 @@ describe("PlayerShipRenderer (extracted FlightModule)", () => {
 
     ship.finishTakeoff();
     expect(ship.isArcActive()).toBe(false);
-    // finishTakeoff() is a no-op when there is no arc.
     expect(() => ship.finishTakeoff()).not.toThrow();
   });
 

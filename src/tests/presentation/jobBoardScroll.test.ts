@@ -1,11 +1,3 @@
-/**
- * UI bug fix (playtest, 2026-06-15): the Job Board had no scrolling, so with
- * ≥4 offers the rows ran off the bottom of the screen and the "Принять"
- * buttons were unreachable. This pins the scroll behaviour:
- *   - the panel height is capped to the screen (never overflows),
- *   - scrolling shifts the offers' visible area,
- *   - no scroll indicator appears when everything already fits.
- */
 import { describe, it, expect, vi } from "vitest";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { QuestTemplate } from "@/systems/QuestManager";
@@ -111,7 +103,6 @@ describe("JobBoardPanel scrolling", () => {
       onAccept: vi.fn(),
       onClose: vi.fn(),
     });
-    // 6 offers × 130 + chrome would be > 600; the panel must stay on-screen.
     expect(panel.panelHeight).toBeLessThanOrEqual(SCREEN_H - 16);
   });
 
@@ -129,16 +120,11 @@ describe("JobBoardPanel scrolling", () => {
     expect(offers!.y).toBe(0);
     panel.scrollOffers(1, 3);
     expect(offers!.y).toBeLessThan(0);
-    // Scrolling back to the top restores the original offset.
     panel.scrollOffers(-10, 3);
     expect(offers!.y).toBe(0);
   });
 
   it("clips offer hit-testing to the visible window as it scrolls", async () => {
-    // A PixiJS mask clips RENDERING only; without a tracking hitArea the
-    // scrolled-out rows' "Принять" buttons would stay clickable in their old
-    // on-screen spots. The hit window must stay fixed on screen while content
-    // scrolls under it.
     const { JobBoardPanel } = await import("@/presentation/JobBoardPanel");
     const quests = Array.from({ length: 6 }, (_, i) => makeQuest(i));
     const panel = new JobBoardPanel(quests, SCREEN_W, SCREEN_H, {
@@ -152,7 +138,6 @@ describe("JobBoardPanel scrolling", () => {
     ).offersContainer;
     expect(offers).not.toBeNull();
     expect(offers!.hitArea).toBeTruthy();
-    // On-screen top of the hit window = local hitArea.y + container offset.
     const worldTop = offers!.hitArea!.y + offers!.y;
     panel.scrollOffers(1, 5);
     expect(offers!.y).toBeLessThan(0);
@@ -160,10 +145,6 @@ describe("JobBoardPanel scrolling", () => {
   });
 
   it("scrolls the offers when a window wheel event fires", async () => {
-    // The panel used to rely on a federated `container.on("wheel")` that the
-    // rows on top swallowed; it now scrolls via a window-level wheel listener
-    // (attachWheelScroll). Capture that listener and assert it scrolls + that
-    // destroy() detaches it (no leaked listeners across panel rebuilds).
     const { JobBoardPanel } = await import("@/presentation/JobBoardPanel");
     const wheelHandlers: ((e: WheelEvent) => void)[] = [];
     const addSpy = vi

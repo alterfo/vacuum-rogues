@@ -9,7 +9,6 @@ import type { StarSystem } from "@/domain/StarSystem";
 import type { Overmind } from "@/domain/Overmind";
 import type { GalacticEvent } from "@/domain/GalacticEvent";
 
-/** A two-system galaxy: "sol" (with planet "earth") and "alpha" (with "alphab"). */
 const galaxy: QuestDestinationGalaxyLike = {
   systems: [
     {
@@ -78,7 +77,6 @@ describe("questDestination", () => {
   });
 
   it("does not match a planet that belongs to a different system", () => {
-    // "earth" lives in "sol", not "alpha" → unresolved within the target system.
     const dest = questDestination(
       { targetSystemId: "alpha", targetPlanetId: "earth" },
       galaxy,
@@ -124,15 +122,6 @@ describe("questRouteAction", () => {
   });
 });
 
-/**
- * Contract test (real domain): the id the «Проложить маршрут» button dispatches
- * (`questRouteAction(...).systemId|planetId`) must be one the real navigation
- * seam can resolve. `SpaceFlightScene.navigateToQuestObjective` ultimately calls
- * `Galaxy.systemForLocation(id)` for any id not matching a current-system planet
- * sprite, so this ties the resolver's OUTPUT to the seam's INPUT against a real
- * Galaxy — the gap the mocked UI tests (which dispatch into a `vi.fn()`) leave
- * open. If either half's id semantics drift, this goes red.
- */
 describe("questRouteAction id resolves through real Galaxy.systemForLocation", () => {
   function makeSystem(
     id: string,

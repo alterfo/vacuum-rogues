@@ -56,7 +56,6 @@ describe("musicDirector — desiredTrack ambient", () => {
     expect(
       d.desiredTrack(ctx({ scene: SceneType.SPACE_FLIGHT, lowHull: true })),
     ).toBe("tension_low");
-    // Low hull while docked/trading still plays the scene's track.
     expect(d.desiredTrack(ctx({ scene: SceneType.TRADE, lowHull: true }))).toBe(
       "market",
     );
@@ -81,13 +80,10 @@ describe("musicDirector — combat transitions", () => {
 
   it("returns to ambient only after the combat-hold window elapses", () => {
     const d = new MusicDirector();
-    // Engage at t=0.
     expect(d.desiredTrack(ctx({ inCombat: true, now: 0 }))).toBe("combat");
-    // Disengage — still held within the window.
     expect(
       d.desiredTrack(ctx({ inCombat: false, now: COMBAT_HOLD_MS - 1 })),
     ).toBe("combat");
-    // Past the window — reverts to ambient.
     expect(
       d.desiredTrack(ctx({ inCombat: false, now: COMBAT_HOLD_MS + 1 })),
     ).toBe("explore_calm");
@@ -96,19 +92,16 @@ describe("musicDirector — combat transitions", () => {
   it("debounces a brief skirmish so it never flaps back to ambient", () => {
     const d = new MusicDirector();
     const sequence: (string | null)[] = [];
-    // Rapid engage/disengage toggles, each well within the hold window.
     for (let i = 0; i < 6; i++) {
       sequence.push(
         d.desiredTrack(ctx({ inCombat: i % 2 === 0, now: i * 100 })),
       );
     }
-    // Every tick stays on combat — no flap to ambient mid-skirmish.
     expect(sequence.every((t) => t === "combat")).toBe(true);
   });
 
   it("does not play combat music outside flight scenes", () => {
     const d = new MusicDirector();
-    // A station scene never enters combat: the inCombat flag is ignored there.
     expect(
       d.desiredTrack(ctx({ inCombat: true, scene: SceneType.STATION, now: 0 })),
     ).toBe("equipment_shop");

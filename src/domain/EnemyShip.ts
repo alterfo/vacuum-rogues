@@ -2,7 +2,6 @@ import type { EnemyType, Ability, AIProfile } from "@/types";
 
 export class EnemyShip {
   public readonly maxHull: number;
-  /** Turns remaining where shield cannot absorb damage (EMP effect). */
   public shieldDisabledTurns: number = 0;
 
   constructor(

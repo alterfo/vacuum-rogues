@@ -1,16 +1,3 @@
-/**
- * `IAutopilotStateProvider` port + `NoOpAutopilotStateProvider` adapter
- * (plan 20260713-autosave-autopilot-resume, Task 2). The DI seam that lets
- * `GameEngine` read/resume the DEV-only live-autopilot engagement flag without
- * importing anything under `src/tests/playtest/letsplay/`.
- *
- * Two angles:
- *   1. The no-op adapter: `isEngaged()` is always `false`, `resume()` never
- *      throws — the production/test default that never persists a spurious flag.
- *   2. GameEngine falls back to the no-op when the provider isn't injected, and
- *      exposes the boot-catch-up seam (`getLoadedAutopilotEngaged()` +
- *      `setAutopilotStateProvider()`).
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";
 import { DIContainer } from "@/core/DIContainer";
@@ -25,7 +12,6 @@ import {
 } from "@/tests/mocks";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 
-// Broad PixiJS mock — GameEngine transitively pulls in SceneFactory/scenes.
 vi.mock("pixi.js", () => ({
   Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
@@ -119,7 +105,6 @@ describe("GameEngine autopilot-state DI seam", () => {
       },
     };
     expect(() => engine.setAutopilotStateProvider(provider)).not.toThrow();
-    // Sanity: the injected provider is a real object we can drive directly.
     provider.resume(true);
     expect(resumed).toBe(true);
   });

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { avoidStarPath, catmullRomSpline, Point } from "@/utils/flightGeometry";
 
-/** Angle (radians) at vertex P1 between vectors P0→P1 and P1→P2. */
 function turnAngle(p0: Point, p1: Point, p2: Point): number {
   const ax = p1.x - p0.x;
   const ay = p1.y - p0.y;
@@ -32,7 +31,6 @@ describe("avoidStarPath smoothness (Task 4: Catmull-Rom arc)", () => {
   });
 
   it("no sharp angles > 30° between consecutive segments (Catmull-Rom smoothness)", () => {
-    // Straight path through the star at origin — worst-case arc deviation.
     const path = avoidStarPath(-600, 0, 600, 0, 0, 0, 300);
     expect(path.length).toBeGreaterThan(2);
     for (let i = 1; i < path.length - 1; i++) {
@@ -42,7 +40,6 @@ describe("avoidStarPath smoothness (Task 4: Catmull-Rom arc)", () => {
   });
 
   it("no sharp angles when the path barely clips the star", () => {
-    // Path from (-500, 280) to (500, 280) clips a star of R=300 at (0,0).
     const path = avoidStarPath(-500, 280, 500, 280, 0, 0, 300);
     for (let i = 1; i < path.length - 1; i++) {
       const angle = turnAngle(path[i - 1], path[i], path[i + 1]);

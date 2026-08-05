@@ -167,7 +167,6 @@ describe("Player.contrabandGoods", () => {
 
   it("zero-amount goods are not counted as illegal", () => {
     const trade = new TradeSystem();
-    // Simulate: player has 0 WEAPONS in REPUBLIC
     const hasGoods =
       0 > 0 &&
       !trade.isLegal(ResourceType.WEAPONS, "REPUBLIC" as PoliticalSystem);

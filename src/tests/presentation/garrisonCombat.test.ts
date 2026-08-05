@@ -48,7 +48,6 @@ function makeNpc(id: string, opts: NpcOpts = {}): NpcShip {
   });
 }
 
-/** Sprites are private; expose them for white-box assertions (test-only seam). */
 function sprites(manager: NpcShipManager): Array<{
   npc: NpcShip;
   aggressive: boolean;
@@ -109,10 +108,6 @@ function makeManager(
 
 describe("NpcShipManager.checkGarrisonAggro", () => {
   it("flags the Overmind garrison aggressive in an Overmind system, but NOT a stray pirate (playtest 2026-06-27 #6)", () => {
-    // The garrison is faction-matched: an Overmind-controlled (hostile, NOT
-    // pirate-controlled) system aggros its Overmind craft, but a pirate merely
-    // passing through is the Overmind's prey — an intruder it fights, never an
-    // ally that ganged up on the player (the "they look allied" bug).
     const manager = makeManager(
       [
         makeNpc("ov_1", { role: NpcRole.PATROL, faction: Faction.OVERMIND }),
@@ -124,23 +119,19 @@ describe("NpcShipManager.checkGarrisonAggro", () => {
     );
     manager.initialize();
 
-    // refresh() → checkGarrisonAggro path (the system is captured/hostile).
     manager.refresh();
     manager.checkGarrisonAggro("sys_a", true);
 
     const byId = new Map(sprites(manager).map((s) => [s.npc.id, s]));
     expect(byId.get("ov_1")!.aggressive).toBe(true);
     expect(byId.get("ov_2")!.aggressive).toBe(true);
-    // A stray pirate in an Overmind system does NOT gang up on the player.
     expect(byId.get("pirate_1")!.aggressive).toBe(false);
-    // A friendly trader co-located in the captured system is never an aggressor.
     expect(byId.get("trader_1")!.aggressive).toBe(false);
 
     manager.destroy();
   });
 
   it("flags a pirate aggressive in a PIRATE-controlled system (their own turf)", () => {
-    // The faction-matched counterpart: pirates defend the systems they hold.
     const manager = makeManager(
       [
         makeNpc("pirate_1", { role: NpcRole.PIRATE }),
@@ -154,7 +145,6 @@ describe("NpcShipManager.checkGarrisonAggro", () => {
 
     const byId = new Map(sprites(manager).map((s) => [s.npc.id, s]));
     expect(byId.get("pirate_1")!.aggressive).toBe(true);
-    // A friendly trader is still spared.
     expect(byId.get("trader_1")!.aggressive).toBe(false);
     manager.destroy();
   });
@@ -202,7 +192,6 @@ describe("NpcShipManager.checkGarrisonAggro", () => {
     sprite.y = 0;
     const before = sprite.x;
 
-    // Several update ticks advance the chase toward the player at (0,0).
     for (let i = 0; i < 20; i++) manager.update(100, 0);
 
     expect(sprite.x).toBeLessThan(before);
@@ -210,10 +199,6 @@ describe("NpcShipManager.checkGarrisonAggro", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Off-screen garrison combat: an OVERMIND garrison defends its captured system
-// against friendly NPCs that wander into it (mirrors the wandering-pirate path).
-// ---------------------------------------------------------------------------
 function makeOffscreenGalaxy(): Galaxy {
   const sysA = new StarSystem(
     "sys_a",
@@ -252,7 +237,6 @@ describe("NpcSimulator garrison off-screen combat", () => {
     const sim = new NpcSimulator();
     sim.ensureGarrison(galaxy, new SeededRNG("garrison_combat"));
 
-    // A friendly trader strays into the captured system (player elsewhere).
     const victim = makeNpc("stray_trader", {
       role: NpcRole.TRADER,
       faction: Faction.INDEPENDENT,
@@ -289,7 +273,6 @@ describe("NpcSimulator garrison off-screen combat", () => {
     const sim = new NpcSimulator();
     sim.ensureGarrison(galaxy, new SeededRNG("garrison_safe"));
 
-    // Friendly trader is in the friendly system sys_b — no garrison there.
     const safe = makeNpc("safe_trader", {
       role: NpcRole.TRADER,
       faction: Faction.INDEPENDENT,

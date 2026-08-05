@@ -72,7 +72,6 @@ function makePlanet(id = "pl1"): Planet {
 
 const ALL_RESOURCES = Object.values(ResourceType) as ResourceType[];
 
-// --- Buy/sell spread ---
 describe("TradeSystem — buy/sell spread (Task 9)", () => {
   const trade = new TradeSystem();
 
@@ -113,9 +112,7 @@ describe("TradeSystem — buy/sell spread (Task 9)", () => {
   });
 });
 
-// --- Ledger reason localization (UX review: raw enum leaks into bank ledger) ---
 describe("TradeSystem — bank-ledger reason is localized, no raw enum token", () => {
-  /** A real bank wired to the player so the booked reason can be read back. */
   function wireBank(player: Player): {
     bus: BankBus;
     service: BankingService;
@@ -168,7 +165,6 @@ describe("TradeSystem — bank-ledger reason is localized, no raw enum token", (
   });
 });
 
-// --- Reputation-affects-price (live report 2026-07-19) ---
 describe("TradeSystem — reputation-based pricing keys off the planet's controlling faction", () => {
   const trade = new TradeSystem();
 
@@ -201,11 +197,6 @@ describe("TradeSystem — reputation-based pricing keys off the planet's control
   });
 
   it("omitting the planet faction stays reputation-neutral (0), regardless of stored reputation", () => {
-    // Regression for the live bug: getMarketPrice used to read
-    // `player.reputation[planet.id]` — a key that never matched any real
-    // faction id, so this was ALWAYS the effective behavior (silently). Now
-    // it's an explicit, documented default for callers that don't have the
-    // planet's faction handy, not an accidental dead feature.
     const planet = makePlanet();
     const good = ResourceType.ELECTRONICS;
     const extreme = makePlayer();
@@ -244,7 +235,6 @@ describe("TradeSystem — reputation-based pricing keys off the planet's control
   });
 });
 
-// --- Contraband penalty ---
 describe("TradeSystem — contraband detection (Task 9)", () => {
   const trade = new TradeSystem();
 
@@ -264,9 +254,6 @@ describe("TradeSystem — contraband detection (Task 9)", () => {
   });
 
   it("selling contraband without license triggers negative reputation delta", () => {
-    // The reputation penalty formula is: delta = -(basePrice * amount * 0.01).
-    // This is applied by the scene / inspection logic; here we verify that the
-    // delta is always negative for any illegal resource.
     const resource = ResourceType.WEAPONS;
     const amount = 5;
     const basePrice = trade.getBasePrice(resource);
@@ -292,13 +279,11 @@ describe("TradeSystem — contraband detection (Task 9)", () => {
       "REPUBLIC" as PoliticalSystem,
     );
     expect(isLegalInRepublic).toBe(true);
-    // No penalty applies for legal goods
     const repDelta = isLegalInRepublic ? 0 : -trade.getBasePrice(resource);
     expect(repDelta).toBe(0);
   });
 });
 
-// --- Supply/demand shift ---
 describe("TradeSystem — supply/demand shift after purchases (Task 9)", () => {
   it("buyPrice increases after 10 consecutive purchases", () => {
     const trade2 = new TradeSystem();
@@ -307,7 +292,6 @@ describe("TradeSystem — supply/demand shift after purchases (Task 9)", () => {
 
     const priceBefore = trade2.getBuyPrice(planet, ResourceType.METALS, player);
 
-    // 10 purchases of 1 unit each → supply decreases by 10 * 0.01 = 0.1
     for (let i = 0; i < 10; i++) {
       trade2.executeTrade(player, planet, ResourceType.METALS, 1, true);
     }
@@ -356,7 +340,6 @@ describe("TradeSystem — supply/demand shift after purchases (Task 9)", () => {
     const planet = makePlanet("floor_test");
     const player = makePlayer(100_000_000);
 
-    // Force supply to near-zero with many purchases
     for (let i = 0; i < 200; i++) {
       trade2.executeTrade(player, planet, ResourceType.FUEL, 1, true);
     }

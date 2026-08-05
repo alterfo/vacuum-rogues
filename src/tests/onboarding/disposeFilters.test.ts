@@ -4,13 +4,6 @@ import {
   type FilterableNode,
 } from "@/presentation/flight/disposeFilters";
 
-/**
- * `disposeFiltersDeep` (extracted from `SpaceFlightScene`) is the pure GPU-leak
- * guard that destroys every filter in a display-object subtree before teardown
- * (PixiJS v8 `Container.destroy` does not dispose `filters`). It has branchy
- * input handling — array vs single filter vs null, recursion through children,
- * and an optional `destroy` — so each branch is pinned here.
- */
 describe("disposeFiltersDeep", () => {
   it("destroys every filter in an array", () => {
     const a = vi.fn();

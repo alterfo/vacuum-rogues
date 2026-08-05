@@ -1,10 +1,3 @@
-/**
- * «Новая игра» from the main menu must run the FULL reset
- * (`GameEngine.restartNewGame` → `generateDefaultGameState` + RACE_SELECTION), not
- * a bare `transitionTo(RACE_SELECTION)`. A bare transition leaves the prior
- * in-session player set, so the `!this.player` new-game gate in
- * `GameEngine.transitionTo` is skipped and the old game carries through.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { SceneType } from "@/types";
@@ -36,7 +29,6 @@ describe("MainMenuScene — «Новая игра»", () => {
     await scene.handleNewGame();
 
     expect(restartNewGame).toHaveBeenCalledTimes(1);
-    // Must not bypass the reset by jumping straight to character creation.
     expect(transitionTo).not.toHaveBeenCalledWith(
       SceneType.RACE_SELECTION,
       expect.anything(),

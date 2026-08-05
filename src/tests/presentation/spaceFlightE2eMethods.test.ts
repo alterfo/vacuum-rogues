@@ -1,11 +1,3 @@
-/**
- * Task 3 (e2e-visual plan): the SpaceFlightScene e2e* driver methods used by the
- * visual E2E suite must (a) run without throwing under __DEBUG__, (b) forward to
- * the right module, and (c) no-op safely on a bare scene / out-of-range index.
- *
- * These bypass initialize() (PlanetSprite/NpcShipSprite are mocked in jsdom) and
- * stub the flight modules directly, mirroring playPauseImmediate.test.ts.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -238,9 +230,6 @@ describe("SpaceFlightScene e2e* driver methods (Task 3)", () => {
   });
 
   it("read/click/background driver methods no-op safely on a bare scene", () => {
-    // e2eStartTurn deliberately omitted: starting a turn drives onPlayPause(),
-    // which needs the flight modules a real (initialized) scene always has.
-    // e2ePressPause is safe here because no turn is running.
     const bare = new SpaceFlightScene(makeMockRenderer());
     expect(() => {
       const state = bare.e2eGetSceneState();

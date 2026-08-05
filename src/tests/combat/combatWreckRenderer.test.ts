@@ -6,7 +6,6 @@ import {
   type WreckRenderSpec,
 } from "@/presentation/flight/combatWreckRenderer";
 
-// Minimal fake Graphics recorder — the seam only touches these three methods.
 function fakeGraphics() {
   const polys: number[][] = [];
   return {
@@ -28,7 +27,6 @@ describe("drawWrecks — drifting wreck silhouette (Task 14)", () => {
     const g = fakeGraphics();
     drawWrecks(g as never, [wreck()]);
     expect(g.clear).toHaveBeenCalledTimes(1);
-    // 2 polys (hull + ember core) for one wreck
     expect(g.poly).toHaveBeenCalledTimes(2);
     const colors = g.fill.mock.calls.map((c) => c[0].color);
     expect(colors).toContain(WRECK_HULL_COLOR);
@@ -56,7 +54,6 @@ describe("drawWrecks — drifting wreck silhouette (Task 14)", () => {
     const g = fakeGraphics();
     drawWrecks(g as never, [wreck({ x: 200, y: 80, size: 10 })]);
     const pts = g.polys[0];
-    // every polygon vertex sits within `size` of the centre
     for (let i = 0; i < pts.length; i += 2) {
       expect(Math.abs(pts[i] - 200)).toBeLessThanOrEqual(10 + 1e-6);
       expect(Math.abs(pts[i + 1] - 80)).toBeLessThanOrEqual(10 + 1e-6);
@@ -68,7 +65,6 @@ describe("drawWrecks — drifting wreck silhouette (Task 14)", () => {
     const turned = fakeGraphics();
     drawWrecks(flat as never, [wreck({ angle: 0 })]);
     drawWrecks(turned as never, [wreck({ angle: Math.PI / 2 })]);
-    // a non-zero rotation moves the vertices (the tumble reads on screen)
     expect(turned.polys[0]).not.toEqual(flat.polys[0]);
   });
 

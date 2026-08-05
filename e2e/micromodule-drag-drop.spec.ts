@@ -1,18 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { applyMockHeavySystems } from './fixtures/mockHeavySystems';
 
-/**
- * E2E (overhaul Task 6): drag-and-drop micromodule fitting at a station hangar.
- *
- *   buy a weapon micromodule → drag the tray chip onto the fitted weapon →
- *   weapon damage rises and the micromodule is consumed from inventory.
- *
- * The DRAG is a real pointer gesture (page.mouse down/move/up over coords read
- * from the live render) so it exercises the chip's `pointerdown`, the stage
- * `globalpointermove`/`pointerup` wiring and the drop hit-test — an `e2e*`
- * driver alone could never catch a mouse-dead chip (see e2e/CLAUDE.md). A
- * reject drag (weapon chip onto the engine slot) asserts the clear hint path.
- */
 
 type DropZone = {
   x: number;
@@ -52,7 +40,6 @@ test.describe('Micromodule drag-and-drop fitting', () => {
       () => !!(window as unknown as { __gameEngine?: unknown }).__gameEngine,
       { timeout: 15000 },
     );
-    // SPACE_FLIGHT creates the player + starter loadout (hull_corvette, engine, tank).
     await page.evaluate(async () => {
       await (window as unknown as { __gameEngine: GameEngine }).__gameEngine.transitionTo(
         'SPACE_FLIGHT',
@@ -63,8 +50,6 @@ test.describe('Micromodule drag-and-drop fitting', () => {
   test('drag a weapon micromodule onto the fitted weapon raises weapon damage', async ({
     page,
   }) => {
-    // Arrange: fit a weapon, own a matching weapon micromodule, dock at a craft
-    // centre and open the hangar fitting board.
     const setup = await page.evaluate(() => {
       const e = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       e.player.credits = 10000;
@@ -99,7 +84,6 @@ test.describe('Micromodule drag-and-drop fitting', () => {
       { timeout: 8000 },
     );
 
-    // Render the hangar, then read the live chip + weapon-slot coordinates.
     const coords = await page.evaluate(() => {
       const e = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const scene = e.currentScene;
@@ -118,13 +102,11 @@ test.describe('Micromodule drag-and-drop fitting', () => {
     });
     expect(coords).not.toBeNull();
 
-    // Real-pointer drag: press the chip, move over the weapon slot, release.
     await page.mouse.move(coords!.chip.cx, coords!.chip.cy);
     await page.mouse.down();
     await page.mouse.move(coords!.slot.cx, coords!.slot.cy, { steps: 8 });
     await page.mouse.up();
 
-    // Assert: damage rose and the micromodule left the inventory.
     const result = await page.evaluate(() => {
       const e = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       return {
@@ -207,7 +189,6 @@ test.describe('Micromodule drag-and-drop fitting', () => {
         ownedCount: e.player.inventory.micromodules.length,
       };
     });
-    // Wrong-category drop: nothing applied, the chip stays in inventory.
     expect(result.afterDamage).toBe(before);
     expect(result.ownedCount).toBe(1);
   });

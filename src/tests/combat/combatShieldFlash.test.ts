@@ -5,7 +5,6 @@ import {
   type ShieldFlashSpec,
 } from "@/presentation/flight/combatShieldFlash";
 
-// Minimal fake Graphics recorder — the seam only touches these three methods.
 function fakeGraphics() {
   return {
     clear: vi.fn(),
@@ -23,10 +22,8 @@ describe("drawShieldFlashes — shield-hit flash draw (Task 12)", () => {
     const g = fakeGraphics();
     drawShieldFlashes(g as never, [flash()]);
     expect(g.clear).toHaveBeenCalledTimes(1);
-    // Two concentric circles (outer soft + inner core) per flash.
     expect(g.circle).toHaveBeenCalledTimes(2);
     expect(g.fill).toHaveBeenCalledTimes(2);
-    // Inner core is the brighter fill (full spec alpha); outer is dimmer.
     const alphas = g.fill.mock.calls.map((c) => c[0].alpha);
     expect(Math.max(...alphas)).toBeCloseTo(0.4);
     expect(Math.min(...alphas)).toBeLessThan(0.4);
@@ -55,7 +52,6 @@ describe("drawShieldFlashes — shield-hit flash draw (Task 12)", () => {
       flash({ radius: 0 }),
       flash({ alpha: 0.3 }),
     ]);
-    // Only the one live flash draws (2 circles).
     expect(g.circle).toHaveBeenCalledTimes(2);
   });
 

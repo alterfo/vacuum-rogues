@@ -13,7 +13,6 @@ import {
 } from "@/presentation/ui/responsiveLayout";
 import type { DeviceEnv } from "@/systems/device/isMobileDevice";
 
-/** A DeviceEnv whose matchMedia answers `(pointer: coarse)` per `coarse`. */
 function env(opts: { coarse?: boolean; w?: number; h?: number }): DeviceEnv {
   return {
     matchMedia: (q: string) => ({
@@ -27,7 +26,6 @@ function env(opts: { coarse?: boolean; w?: number; h?: number }): DeviceEnv {
 describe("layoutFor — viewport → layout mode", () => {
   it("classifies a phone (short side < 768) in portrait and landscape", () => {
     expect(layoutFor({ width: 390, height: 844 }).mode).toBe("phone");
-    // landscape: width is the short side
     expect(layoutFor({ width: 844, height: 390 }).mode).toBe("phone");
   });
 
@@ -97,8 +95,6 @@ describe("touchHitArea — gated touch-target expansion", () => {
   });
 
   it("returns the exact bounds on a narrow DESKTOP window (no coarse pointer)", () => {
-    // A small resized desktop browser is a touch *layout* by viewport but not a
-    // touch *device* — must NOT get fat targets (desktop stays byte-for-byte).
     const ha = touchHitArea(160, 32, env({ coarse: false, w: 600, h: 700 }));
     expect(ha).toEqual({ x: 0, y: 0, width: 160, height: 32 });
   });
@@ -107,7 +103,6 @@ describe("touchHitArea — gated touch-target expansion", () => {
     const ha = touchHitArea(32, 32, env({ coarse: true, w: 390, h: 844 }));
     expect(ha.width).toBe(MIN_TOUCH_TARGET_PX);
     expect(ha.height).toBe(MIN_TOUCH_TARGET_PX);
-    // re-centred: padding split evenly above/left of the visual element
     expect(ha.x).toBe((32 - MIN_TOUCH_TARGET_PX) / 2);
     expect(ha.y).toBe((32 - MIN_TOUCH_TARGET_PX) / 2);
   });
@@ -154,8 +149,6 @@ describe("isTouchLayoutActive — the shared touch-controls gate", () => {
   });
 
   it("is false on a small viewport with a fine pointer (narrow desktop window)", () => {
-    // A laptop window dragged narrow must NOT get touch chrome — the desktop
-    // path stays unchanged unless the pointer is actually coarse.
     expect(isTouchLayoutActive(env({ coarse: false, w: 390, h: 844 }))).toBe(
       false,
     );

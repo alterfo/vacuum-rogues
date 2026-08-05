@@ -4,13 +4,6 @@ import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
 import { travelDays } from "@/systems/npc/npcTravel";
 
-/**
- * `travelDays` is a pure hop-cost helper extracted from the NpcSimulator split
- * (docs/plans/completed/20260711-parallel-workstream-boundaries.md). It has three
- * branches — warp-connected fuel cost, coordinate-distance fallback, and a `1`
- * floor when a system id is unknown — all of which must never yield a sub-1-day
- * arrival (a 0-day hop would corrupt `daysToArrival` scheduling downstream).
- */
 const sys = (
   id: string,
   q: number,
@@ -40,7 +33,6 @@ describe("travelDays", () => {
   });
 
   it("falls back to rounded coordinate distance / 10 when not warp-connected", () => {
-    // distance = sqrt(50^2 + 0^2) = 50 → round(50/10) = 5
     const g = galaxyOf([sys("a", 0, 0), sys("b", 50, 0)]);
     expect(travelDays(g, "a", "b")).toBe(5);
   });

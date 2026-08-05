@@ -10,19 +10,6 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Task 2 — active-pause freezes simulation time.
- *
- * The scene gates every per-frame simulation read on the pause controller; the
- * load-bearing piece for combat is the {@link CombatModule}'s own
- * `isTurnRunning` gate, which the scene folds the pause into
- * (`isTurnRunning && !combatPause.paused`). Here we wire a real controller to a
- * real module exactly the way `SpaceFlightScene` does and prove that an incoming
- * shot pauses the fight, that subsequent frames advance no sim state (hull
- * unchanged, fire timers frozen), and that resuming lets the fight advance
- * again. Pure — no PixiJS render context.
- */
-
 const FIRE = GAME_BALANCE.combatFireIntervalMs; // 2500 ms
 const PULSE_DMG = 14; // wpn_pulse damage (range 240) — see combatModule.test.ts
 
@@ -49,11 +36,6 @@ function makeSprite(
   } as unknown as NpcShipSprite;
 }
 
-/**
- * A module wired to a pause controller the same way the scene wires them: the
- * turn is "running" except while the controller is paused, and a landed shot
- * raises the controller's incoming-attack trigger.
- */
 function makeWiredFight(): {
   module: CombatModule;
   controller: CombatPauseController<NpcShipSprite, WeaponSpec>;
@@ -68,8 +50,6 @@ function makeWiredFight(): {
     getShipPhysics: () => makePhysics(),
     getPlayerLoadout: () => loadout,
     getPlayerShip: () => ship,
-    // Mirror SpaceFlightScene: combat advances only while the turn runs AND
-    // active-pause is not freezing the world.
     isTurnRunning: () => !controller.paused,
     onPlayerUnderAttack: () => {
       controller.requestPause("incoming-attack");
@@ -89,8 +69,6 @@ describe("active-pause freezes simulation time (Task 2)", () => {
     expect(ship.hullHP).toBe(100);
     expect(enemy.npc.hullHP).toBe(100);
 
-    // First frame the fire interval elapses: the player fires (NPC hull drops)
-    // and the NPC fires (player hull drops + raises the pause trigger).
     module.update(FIRE);
 
     expect(ship.hullHP).toBe(80); // 100 - 20 NPC damage
@@ -106,8 +84,6 @@ describe("active-pause freezes simulation time (Task 2)", () => {
     const enemyHullAfterPause = enemy.npc.hullHP;
     expect(controller.paused).toBe(true);
 
-    // Several full fire intervals pass while the overlay is open — nothing fires
-    // because the module's isTurnRunning gate folds in the pause.
     module.update(FIRE);
     module.update(FIRE);
     module.update(FIRE * 3);
@@ -123,8 +99,6 @@ describe("active-pause freezes simulation time (Task 2)", () => {
     const hullAfterPause = ship.hullHP;
     const enemyHullAfterPause = enemy.npc.hullHP;
 
-    // The player declines to act and resumes (the incoming-attack trigger is now
-    // debounced, so the next landed shot won't re-pause this engagement).
     controller.resume();
     expect(controller.paused).toBe(false);
 
@@ -144,11 +118,6 @@ describe("active-pause freezes simulation time (Task 2)", () => {
   });
 
   it("with several aligned aggressors, only one shot lands on the pausing frame", () => {
-    // Three aggressors in range, all engaged the same frame → fire timers aligned
-    // at 0. On the frame the interval first elapses, the first NPC shot raises the
-    // active-pause; the world is frozen the instant pause is raised, so the two
-    // survivors must NOT also fire this frame (else the player eats 3× damage on
-    // the very frame the pause was meant to protect them).
     const controller = new CombatPauseController<NpcShipSprite, WeaponSpec>();
     const ship = { hullHP: 100, maxHull: 100 };
     const loadout = new ShipLoadout("hull_warden");

@@ -1,15 +1,3 @@
-/**
- * Task 16b (three-year-campaign) — the closing "re-run a 3-session live
- * smoke" checkbox. A real browser session isn't available headlessly, so
- * this drives the "real-scene playtest equivalent" the plan itself allows:
- * the real `SpaceFlightScene`/`GameEngine` (pixi-stubbed) through the exact
- * `observe → updateMemory → decide → applyLiveAction` loop the live
- * `AutopilotController` runs, for a long-enough horizon to exercise the F1/
- * F6/F7/F8/F10 fixes landed in this task. Not a permanent CI gate (no fixed
- * win-rate/day assertions — Task 9 already established those need the
- * user's deferred architectural decision); this is the "prove the specific
- * live-session failures are gone" smoke, recorded per-session in the plan.
- */
 import { describe, it, expect, vi } from "vitest";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { SceneType } from "@/types";
@@ -30,7 +18,6 @@ function formatRecorded(errors: RecordedError[]): string {
   return errors.map((e) => `[${e.source}] ${e.message}`).join("\n");
 }
 
-/** One live session: drives the real engine via the live controller for `steps` folds. */
 async function runLiveSession(seed: string, steps: number) {
   const harness = await RealEngineHarness.boot({ seed, systemCount: 24 });
   try {
@@ -53,8 +40,6 @@ async function runLiveSession(seed: string, steps: number) {
 
       const action = policy.decide(obs, memory);
       await applyLiveAction(action, obs, controller);
-      // Advance the rAF-equivalent a few frames per fold, like the real
-      // ~800ms autopilot tick would let the engine simulate between decisions.
       for (let f = 0; f < 4; f++) harness.tick(200);
     }
 
@@ -72,7 +57,6 @@ async function runLiveSession(seed: string, steps: number) {
   }
 }
 
-/** Longest run of `a-b-a-b...` alternation between exactly two systems. */
 function longestTwoSystemPingPong(seq: string[]): number {
   let best = 1;
   let run = 1;
@@ -94,13 +78,10 @@ describe("Task 16b — live smoke (real-scene playtest equivalent)", () => {
       `[LIVE-SMOKE-16B-1] maxDay=${r.maxDaySeen} finalDays=${r.finalGameDays} arc=${r.overmindArc?.status} playerLiberations=${r.playerLiberations} pingPong=${longestTwoSystemPingPong(r.systemIdSequence)} died=${r.died}`,
     );
     expect(r.errors, formatRecorded(r.errors)).toEqual([]);
-    // F7: the calendar must actually advance, not freeze at day 0.
     expect(r.maxDaySeen).toBeGreaterThan(0);
-    // F10: a win must never fire without genuine player participation.
     if (r.overmindArc?.status === "won") {
       expect(r.playerLiberations).toBeGreaterThan(0);
     }
-    // F1: no pathological 2-system ping-pong dominating the whole session.
     expect(longestTwoSystemPingPong(r.systemIdSequence)).toBeLessThan(30);
   }, 60_000);
 

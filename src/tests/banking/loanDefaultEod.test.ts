@@ -8,15 +8,6 @@ import { BankBus, type BankEvent } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
 import { LOAN_DEFAULT_THRESHOLD } from "@/systems/banking/loanDefault";
 
-/**
- * Task 4 — wiring the pure loan-default machine into the EOD batch: an overdue,
- * unpaid loan must accrue at the **penalty rate**, the bank must **seize** toward
- * the debt from the current account (balanced, capped, never negative), the loan
- * must **default** after the threshold of consecutive misses (publishing a single
- * `LoanDefaulted` event — the reputation trigger), and the GL must stay balanced
- * throughout. Round-number rates so the interest math reads exactly.
- */
-
 const PLAYER = "cur:player";
 const LOAN = "loan:player";
 const LOAN_RATE = 0.02; // 2 %/day base
@@ -28,7 +19,6 @@ interface Harness {
   events: BankEvent[];
 }
 
-/** Fresh seeded bank, player current account open, explicit loan rate, day 1. */
 function makeHarness(): Harness {
   const bus = new BankBus();
   const service = new BankingService(bus, {
@@ -58,7 +48,6 @@ function makeHarness(): Harness {
   return { bus, service, events };
 }
 
-/** Disburse `principal` into the current account (loan goes negative, current funded). */
 function disburse(h: Harness, principal: number): void {
   h.bus.dispatch({
     kind: "DisburseLoan",
@@ -69,7 +58,6 @@ function disburse(h: Harness, principal: number): void {
   });
 }
 
-/** Drain `amount` out of the current account (simulate the player spending the loan). */
 function spend(h: Harness, amount: number): void {
   h.bus.dispatch({
     kind: "Transfer",
@@ -80,7 +68,6 @@ function spend(h: Harness, amount: number): void {
   });
 }
 
-/** Top the current account up (simulate income arriving). */
 function fund(h: Harness, amount: number): void {
   h.bus.dispatch({
     kind: "Transfer",
@@ -114,14 +101,11 @@ describe("EOD loan default — penalty accrual", () => {
     disburse(h, 5000);
     spend(h, 5000); // the player spent the loan: no funds left to service it
 
-    // Day 1 closes before the first due (firstDueDate = disburse day + 1): base rate.
     eod(h);
     expect(h.service.balanceOf(LOAN)).toBeCloseTo(-5100, 6); // −5000 × 1.02
     expect(balanced(h.service)).toBe(true);
 
-    // Day 2 reaches the first due with no funds → missed → penalty rate (×1.5).
     eod(h);
-    // Penalty, not base: −5100 × 1.03 = −5253 (base would be −5202).
     expect(h.service.balanceOf(LOAN)).toBeCloseTo(
       -5100 * (1 + PENALTY_RATE),
       6,
@@ -143,8 +127,6 @@ describe("EOD loan default — default event (reputation trigger)", () => {
     eod(h); // day 1: not yet due → no miss
     expect(defaults(h.events)).toHaveLength(0);
 
-    // One EOD per day; the first due is day 2, so the threshold-th miss lands on
-    // day (1 + threshold) and not before.
     for (let i = 0; i < LOAN_DEFAULT_THRESHOLD; i++) {
       expect(defaults(h.events)).toHaveLength(0);
       eod(h);
@@ -179,11 +161,7 @@ describe("EOD loan default — seizure", () => {
     expect(h.service.balanceOf(PLAYER)).toBe(200);
 
     eod(h); // day 2: overdue, unpaid → seize what little there is (200), then penalty
-    // Capped at available funds (200) and floored to whole credits → current emptied,
-    // never negative.
     expect(h.service.balanceOf(PLAYER)).toBe(0);
-    // The seizure paid 200 off the −5100 owed (→ −4900) before penalty interest:
-    // −4900 × 1.03 = −5047.
     expect(h.service.balanceOf(LOAN)).toBeCloseTo(
       -4900 * (1 + PENALTY_RATE),
       6,
@@ -192,10 +170,6 @@ describe("EOD loan default — seizure", () => {
   });
 
   it("floors a fractional seizure to whole credits, leaving the current account integral, and writes off the sub-credit residual", () => {
-    // A fresh harness with a rate that makes the outstanding fractional, so the
-    // seize amount (min(available, outstanding)) is itself fractional and the
-    // Math.floor in seizeTowardLoan is load-bearing. CLAUDE.md: a non-integer
-    // current-account balance throws on reload (PlayerSchema.credits is int()).
     const bus = new BankBus();
     const service = new BankingService(bus, {
       startDate: 1,
@@ -230,12 +204,9 @@ describe("EOD loan default — seizure", () => {
     expect(service.balanceOf(LOAN)).toBeCloseTo(-102.5, 6);
 
     eod(h); // day 2: overdue → seize floor(min(150, 102.5)) = 102, then residual write-off
-    // Seized exactly 102 (floored), so current stays a whole number.
     expect(service.balanceOf(PLAYER)).toBe(48);
     expect(Number.isInteger(service.balanceOf(PLAYER))).toBe(true);
-    // The 0.5 sub-credit residual is written off → the loan closes cleanly at 0…
     expect(service.balanceOf(LOAN)).toBe(0);
-    // …so the borrower who actually had the funds is not dinged into default.
     expect(defaults(events)).toHaveLength(0);
     expect(balanced(service)).toBe(true);
   });
@@ -248,11 +219,8 @@ describe("EOD loan default — seizure", () => {
     eod(h); // day 1: base accrual → −5100, not yet due
     eod(h); // day 2: overdue → seize toward the −5100 debt
 
-    // Capped at the outstanding (≈5100), not the full 6000 balance: the loan closes
-    // and the borrower keeps the surplus.
     expect(h.service.balanceOf(LOAN)).toBe(0);
     expect(h.service.balanceOf(PLAYER)).toBeGreaterThan(0);
-    // Loan retired by seizure → arrears clear, no default fires.
     expect(defaults(h.events)).toHaveLength(0);
     expect(balanced(h.service)).toBe(true);
   });
@@ -261,8 +229,6 @@ describe("EOD loan default — seizure", () => {
     const h = makeHarness();
     disburse(h, 3000); // current = 3000
 
-    // Each period: close the day, then voluntarily repay 500 (more than the
-    // interest) so the debt keeps falling — the bank should never need to seize.
     for (let i = 0; i < 4; i++) {
       eod(h);
       h.bus.dispatch({
@@ -274,12 +240,8 @@ describe("EOD loan default — seizure", () => {
       });
     }
 
-    // Current dropped by exactly the four voluntary repayments (4 × 500) — no
-    // seizure moved anything extra out of it.
     expect(h.service.balanceOf(PLAYER)).toBe(3000 - 4 * 500);
-    // A serviced loan never goes into arrears, so it never defaults.
     expect(defaults(h.events)).toHaveLength(0);
-    // Debt is well below the original principal and the books are balanced.
     expect(-h.service.balanceOf(LOAN)).toBeLessThan(3000);
     expect(balanced(h.service)).toBe(true);
   });

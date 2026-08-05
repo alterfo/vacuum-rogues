@@ -194,7 +194,6 @@ describe("DELIVERY quest auto-completion logic", () => {
     const quest = makeDeliveryQuest("sys_B", cargo, qty);
     qm["activeQuests"].set(quest.id, quest);
 
-    // Simulate PlanetScene logic: check if player is in target system and has cargo
     const activeDelivery = qm
       .getActiveQuests()
       .filter(
@@ -230,7 +229,6 @@ describe("DELIVERY quest auto-completion logic", () => {
     const quest = makeDeliveryQuest("sys_B", cargo, 8);
     qm["activeQuests"].set(quest.id, quest);
 
-    // Simulate PlanetScene check
     const activeDelivery = qm
       .getActiveQuests()
       .filter(
@@ -248,7 +246,6 @@ describe("DELIVERY quest auto-completion logic", () => {
     );
     const hasEnough = stack && stack.amount >= collectObj.targetAmount;
     expect(hasEnough).toBeFalsy();
-    // No forceComplete called → still active
     expect(qm.getActiveQuests()).toHaveLength(1);
   });
 
@@ -279,7 +276,6 @@ describe("BOUNTY quest auto-completion on NPC kill", () => {
     const quest = makeBountyQuest(npcId, "sys_B");
     qm["activeQuests"].set(quest.id, quest);
 
-    // Simulate SpaceFlightScene bounty check
     for (const q of qm.getActiveQuests()) {
       if (q.type !== QuestType.BOUNTY || q.isCompleted || q.isFailed) continue;
       if (
@@ -320,7 +316,6 @@ describe("BOUNTY quest auto-completion on NPC kill", () => {
     const quest = makeBountyQuest("npc_target_1", "sys_B");
     qm["activeQuests"].set(quest.id, quest);
 
-    // Different NPC killed, different system
     const killedNpcId = "npc_random_99";
     const currentSystem = "sys_A";
     for (const q of qm.getActiveQuests()) {
@@ -441,7 +436,6 @@ describe("QuestManager.checkExpiredQuests — deadline expiry and penalties", ()
     qm["activeQuests"].set(quest.id, quest);
 
     qm.checkExpiredQuests(5, player);
-    // -90 - 30 = -120, clamped to -100
     expect(player.reputation["faction_A"]).toBe(-100);
   });
 
@@ -552,8 +546,6 @@ describe("QuestGenerator wires targetSystemId into template", () => {
   });
 });
 
-// ─── DIPLOMACY quest completion ──────────────────────────────────────────────
-
 function makeDiplomacyQuest(
   targetPlanetId: string,
   targetSystemId: string,
@@ -623,21 +615,17 @@ describe("DIPLOMACY quest — completion on planet landing", () => {
         (o) => o.type === "VISIT_LOCATION",
       );
       expect(obj).toBeDefined();
-      // locationId must be a planet-level ID (not just the system ID "B")
       expect(obj!.locationId).not.toBe("B");
       expect(obj!.locationId).toBeDefined();
     }
   });
 
   it("PlanetScene should mark DIPLOMACY quest pending-return when landing on target planet", () => {
-    // This test documents the expected PlanetScene behavior:
-    // when player lands on the quest's VISIT_LOCATION target, the quest goes to pendingReturn.
     const qm = new QuestManager();
     const targetPlanetId = "B_p1";
     const q = makeDiplomacyQuest(targetPlanetId, "B");
     qm["activeQuests"].set(q.id, q);
 
-    // Simulate what PlanetScene.checkDiplomacyQuestCompletion() must do:
     const active = qm.getActiveQuests();
     for (const quest of active) {
       if (quest.type !== QuestType.DIPLOMACY) continue;

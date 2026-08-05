@@ -1,10 +1,3 @@
-/**
- * SaveLoadScene wires the pure slot-list model (`@/systems/saves/saveSlots`) to
- * the screen: rows come from `listSlotRows`, and each action delegates to the
- * model / `GameEngine`. These tests drive the public action methods directly
- * (no PixiJS pointer events); `render()` no-ops without a real renderer, so the
- * scene runs headless with a `{}` renderer stub.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SaveLoadScene } from "@/presentation/SaveLoadScene";
 import { SceneType } from "@/types";
@@ -110,7 +103,6 @@ describe("SaveLoadScene — actions delegate to the model/engine", () => {
     await scene.saveSlot("slot-2", "Перед боссом");
     expect(saveGame).toHaveBeenCalledWith("slot-2");
     expect(getSlotName("slot-2")).toBe("Перед боссом");
-    // The row list refreshed to include the new save.
     expect(scene.getRows().find((r) => r.slotId === "slot-2")?.occupied).toBe(
       true,
     );

@@ -4,31 +4,6 @@ import { textures, allTextures } from "@/assets/manifest";
 import { STAR_MAP_PREFIX } from "@/systems/galaxy/starTypeDistribution";
 import { STATION_TEXTURE_PREFIX } from "@/presentation/flight/stationArt";
 
-/**
- * Task 4 — the letsplay oracle's **asset-coverage** sweep (memory
- * `feedback-letsplay-oddity-hunting`: catch *missing images*, not just crashes).
- *
- * Two guarantees:
- *  1. Every `pickVariant(category, prefix, …)` production resolves at runtime is
- *     backed by ≥1 manifest asset — so no entity (planet, star, ship, station,
- *     portrait, nebula backdrop) renders as a missing/placeholder image. A new
- *     type/role/faction with no art (or a typo'd prefix) reds the gate.
- *  2. No art category ships *unreferenced* — every category with assets is wired
- *     to a production read path, except a small, documented allowlist of known
- *     not-yet-wired art. New orphan art (someone drops a folder nobody renders)
- *     reds the gate.
- *
- * The non-exported production prefix maps (PlanetSprite's `PLANET_TEXTURE_PREFIX`,
- * PlanetScene's `PLANET_BIOME`, NpcShipSprite's `ROLE_SHIP_PREFIX`) are mirrored
- * here as `Record<Enum, string>` — typed against the live enum so TypeScript
- * *forces* this mirror to grow with the enum, and the resolve check then proves
- * the art exists. The exported maps (`STAR_MAP_PREFIX`, `STATION_TEXTURE_PREFIX`)
- * are imported directly. `nebula` / `player_ships` / `portraits` are derived the
- * exact way production derives them (family×depth · hull `.toLowerCase()` ·
- * faction `.toLowerCase()`).
- */
-
-// --- production prefix mirrors (typed against the enum ⇒ compile-time complete) ---
 const PLANET_PREFIX: Record<PlanetType, string> = {
   [PlanetType.TERRESTRIAL]: "terrestrial",
   [PlanetType.GAS_GIANT]: "gas",
@@ -37,7 +12,6 @@ const PLANET_PREFIX: Record<PlanetType, string> = {
   [PlanetType.INDUSTRIAL]: "industrial",
   [PlanetType.HABITAT]: "habitat",
 };
-// PlanetScene's `PLANET_BIOME` (surfaces/<biome>_NN landing backdrops).
 const BIOME_PREFIX: Record<PlanetType, string> = {
   [PlanetType.ICE]: "ice",
   [PlanetType.VOLCANIC]: "volcanic",
@@ -46,19 +20,15 @@ const BIOME_PREFIX: Record<PlanetType, string> = {
   [PlanetType.INDUSTRIAL]: "industrial",
   [PlanetType.HABITAT]: "city",
 };
-// NpcShipSprite's `ROLE_SHIP_PREFIX` (ships/<role>_NN).
 const ROLE_PREFIX: Record<NpcRole, string> = {
   [NpcRole.RANGER]: "ranger",
   [NpcRole.TRADER]: "trader",
   [NpcRole.PIRATE]: "pirate",
   [NpcRole.PATROL]: "patrol",
-  // Mirrors production: OVERMIND reuses patrol hull art until the dedicated
-  // overmind_* tier art lands (plan 20260709 Task 2 + manual generation).
   [NpcRole.OVERMIND]: "patrol",
 };
 const NEBULA_FAMILIES = ["red", "blue", "green", "teal"]; // SpaceBackgroundLayer
 const NEBULA_DEPTHS = ["far", "mid", "near"];
-// PlayerShipRenderer's `HULL_ART_ALIAS` (player_ships/<hullClass, aliased>_NN).
 const HULL_SHIP_PREFIX: Record<HullClass, string> = {
   [HullClass.LIGHT_FIGHTER]: "light_fighter",
   [HullClass.CORVETTE]: "corvette",
@@ -66,16 +36,12 @@ const HULL_SHIP_PREFIX: Record<HullClass, string> = {
   [HullClass.DESTROYER]: "destroyer",
   [HullClass.TRANSPORT]: "transport",
   [HullClass.HEAVY_FREIGHTER]: "heavy_freighter",
-  // Mirrors production: hull_cruiser reuses destroyer hull art until dedicated
-  // cruiser art lands (gear-catalog & garrison-power-ceiling plan, 2026-07-19).
   [HullClass.CRUISER]: "destroyer",
 };
 
-/** A (category, prefix) the engine derives a `pickVariant` on. */
 interface ProdPrefix {
   category: string;
   prefix: string;
-  /** Where production derives it (for a readable failure). */
   source: string;
 }
 
@@ -101,7 +67,6 @@ const PRODUCTION_PREFIXES: ProdPrefix[] = [
     prefix,
     source: "NpcShipSprite",
   })),
-  // PlayerShipRenderer falls back to ships/ranger for the player hull.
   {
     category: "ships",
     prefix: "ranger",
@@ -131,7 +96,6 @@ const PRODUCTION_PREFIXES: ProdPrefix[] = [
   })),
 ];
 
-/** Mirror of `pickVariant`'s key-matching: exact OR `<wanted>_NN`. */
 function variantCount(category: string, prefix: string): number {
   const wanted = `${category}/${prefix}`;
   return allTextures(category).filter(
@@ -153,7 +117,6 @@ describe("asset coverage — every production pickVariant prefix resolves", () =
 });
 
 describe("asset coverage — no unreferenced ('orphan') art category", () => {
-  // Categories production reads via pickVariant (the resolve check above covers them).
   const PICKVARIANT_CATEGORIES = new Set([
     "nebula",
     "portraits",
@@ -165,12 +128,7 @@ describe("asset coverage — no unreferenced ('orphan') art category", () => {
     "star_maps",
     "station",
   ]);
-  // Categories read by explicit manifest key (not pickVariant): cursors, backdrops.
   const KEYED_CATEGORIES = new Set(["ui", "panoramas"]);
-  // Shipped art not yet wired to any render path — documented, so a NEW orphan
-  // (art nobody renders) still reds the gate. Remove an entry once its art is
-  // wired or deleted. `stars` is superseded by the equirect `star_maps`;
-  // `icons/<module>` has no consumer yet.
   const ORPHAN_ALLOWLIST = new Set(["icons", "stars"]);
 
   const categoriesWithArt = new Set(
@@ -201,7 +159,6 @@ describe("asset coverage — no unreferenced ('orphan') art category", () => {
   });
 
   it("the orphan allowlist stays honest — each entry still ships art", () => {
-    // If `stars`/`icons` art is deleted, drop it from the allowlist too.
     for (const c of ORPHAN_ALLOWLIST) {
       expect(
         allTextures(c).length,

@@ -1,11 +1,3 @@
-/**
- * Task 5 regressions: ESCORT quest details.
- *
- * ESCORT quests must:
- * - Include a named convoy ship ("Транспорт «…»") in the description.
- * - Use a VISIT_SYSTEM objective (not VISIT_LOCATION/planet), so the
- *   "Fly to target" button routes the player to the system, not a planet.
- */
 import { describe, it, expect } from "vitest";
 import type { StarSystem } from "@/domain/StarSystem";
 import { QuestType } from "@/types";
@@ -62,9 +54,7 @@ describe("ESCORT quest details (Task 5)", () => {
       );
       expect(escortObj).toBeDefined();
       expect(escortObj!.type).toBe("VISIT_SYSTEM");
-      // The system id on the objective must match the quest's target system.
       expect(escortObj!.targetSystemId).toBe(q.targetSystemId);
-      // Must NOT set a planet locationId — routing is to the system.
       expect(escortObj!.locationId).toBeUndefined();
     }
   });

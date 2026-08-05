@@ -10,7 +10,6 @@ type VMHandle = {
   isSuccess: () => boolean;
 };
 
-/** Drive a QuestVM through all consecutive auto-execute transitions */
 function pumpAutoExec(vm: VMHandle, maxSteps = 50): void {
   let steps = maxSteps;
   while (!vm.isFinished() && steps-- > 0) {
@@ -45,7 +44,6 @@ test.describe('Playtest 02: Text quests', () => {
     });
     await waitForScene(page, 'SpaceFlightScene', 20_000);
 
-    // Land on planet to get a planet context for the quest return scene
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
@@ -66,7 +64,6 @@ test.describe('Playtest 02: Text quests', () => {
     });
     await waitForScene(page, 'TextQuestScene', 15_000);
 
-    // Get time_left after pumping through init auto-executes — should still be 120
     const initialTimeLeft = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -74,7 +71,6 @@ test.describe('Playtest 02: Text quests', () => {
       const scene = engine.currentScene;
       if (!scene) return -1;
 
-      // Cancel pending auto-execute timer from scene rendering
       if (scene['autoExecuteTimer'] != null) {
         clearTimeout(scene['autoExecuteTimer'] as number);
         scene['autoExecuteTimer'] = null;
@@ -83,7 +79,6 @@ test.describe('Playtest 02: Text quests', () => {
       const vm = scene['vm'] as VMHandle | null;
       if (!vm) return -1;
 
-      // Pump init_reactor → check_stable → reactor_control (no time cost)
       let pumps = 20;
       while (!vm.isFinished() && pumps-- > 0) {
         const t = vm.availableTransitions();
@@ -95,7 +90,6 @@ test.describe('Playtest 02: Text quests', () => {
     });
     expect(initialTimeLeft).toBe(120);
 
-    // Execute exactly 5 player transitions (each costs 5 seconds)
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -116,7 +110,6 @@ test.describe('Playtest 02: Text quests', () => {
         if (playerTransitions.length === 0) break;
         vm.execute(playerTransitions[0].id);
 
-        // Pump check_stable → reactor_control auto chain
         let pumps = 20;
         while (!vm.isFinished() && pumps-- > 0) {
           const auto = vm.availableTransitions();
@@ -134,7 +127,6 @@ test.describe('Playtest 02: Text quests', () => {
       return vm?.getParam('time_left') ?? -1;
     });
 
-    // 5 moves × 5 seconds each = time_left 120 − 25 = 95
     expect(finalTimeLeft).toBe(95);
 
     errorCollector.assertAndDetach();
@@ -151,7 +143,6 @@ test.describe('Playtest 02: Text quests', () => {
     });
     await waitForScene(page, 'TextQuestScene', 15_000);
 
-    // Drive VM to failure by exhausting time_left (24 moves × 5s = 120s)
     const didFail = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -167,7 +158,6 @@ test.describe('Playtest 02: Text quests', () => {
       const vm = scene['vm'] as VMHandle | null;
       if (!vm) return false;
 
-      // Pump initial auto-executes
       let pumps = 20;
       while (!vm.isFinished() && pumps-- > 0) {
         const t = vm.availableTransitions();
@@ -175,7 +165,6 @@ test.describe('Playtest 02: Text quests', () => {
         vm.execute(t[0].id);
       }
 
-      // Execute moves until VM reaches a terminal (failure) state
       let moves = 0;
       while (!vm.isFinished() && moves < 30) {
         const playerTransitions = vm.availableTransitions().filter((t) => !t.autoExecute);
@@ -196,10 +185,8 @@ test.describe('Playtest 02: Text quests', () => {
 
     expect(didFail).toBe(true);
 
-    // Scene is still TextQuestScene — failure screen is displayed without crashing
     await waitForScene(page, 'TextQuestScene', 5_000);
 
-    // Press Escape to trigger doReturn() → back to PlanetScene
     await page.keyboard.press('Escape');
     await waitForScene(page, 'PlanetScene', 10_000);
 
@@ -217,8 +204,6 @@ test.describe('Playtest 02: Text quests', () => {
     });
     await waitForScene(page, 'TextQuestScene', 15_000);
 
-    // Strategy: scan ships with suspicion >= 7 (guaranteed smuggler), pass all others.
-    // With seed=1 this yields 6400 credits across 20 ships → isSuccess.
     const succeeded = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -248,13 +233,11 @@ test.describe('Playtest 02: Text quests', () => {
         iterations++;
         const transitions = vm.availableTransitions();
 
-        // All auto-execute — pump through routing/branching nodes
         if (transitions.every((t) => t.autoExecute)) {
           pumpAuto();
           continue;
         }
 
-        // Player decision at inspect_decision
         const suspicion = vm.getParam('suspicion');
         if (suspicion >= 7) {
           const scanT = transitions.find((t) => t.id === 'scan');
@@ -281,13 +264,6 @@ test.describe('Playtest 02: Text quests', () => {
     errorCollector.assertAndDetach();
   });
 
-  // Task 18: quest illustration (quest_art/<scriptId>) — no `quest_art/` art
-  // is shipped yet (generation is a Post-Completion, GPU-box step), so this
-  // is the real, currently-reachable state: the description panel must
-  // render exactly as before (no missing-texture placeholder, no crash). The
-  // "art lands" mount path is pinned at the unit level
-  // (`textQuestIllustration.test.ts`, mocked manifest) since a real asset
-  // would be needed to reach it through the actual Vite-built manifest here.
   test('text quest scene renders correctly with no quest_art asset (graceful no-art fallback)', async ({ page }) => {
     const errorCollector = new ErrorCollector(page);
 

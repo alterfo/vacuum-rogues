@@ -1,21 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: Salvage mystery aboard the drifting freighter «Морвен».
-// Three meaningful choice points, all of which surface in the endings:
-//   1. How to board — dock carefully (full cargo) vs force a breach (damaged
-//      cargo). The breach is called out in the reported-clean ending.
-//   2. What to do in the hold — seal the dangerous bio-container (`sealed`) vs
-//      extract the bio-sample (`sample`) for extra credits but at outbreak risk.
-//      Sealing is no longer a dead flag: an intact, sealed class-IV container
-//      fetches a fat black-market premium (at a steep reputation cost).
-//   3. Final disposition — report to authorities vs sell on the black market.
-// Outcomes:
-//   - ending_report            (clean report, +rep, official bounty)         SUCCESS
-//   - ending_report_forced     (clean report after a scorched breach)        SUCCESS
-//   - ending_sample_seized     (reported with the sample → confiscated+fine)  SUCCESS
-//   - ending_blackmarket       (sold the haul, more credits, −rep)           SUCCESS
-//   - ending_blackmarket_sealed(fenced the intact sealed container, −−rep)    SUCCESS
-//   - ending_outbreak          (sold the bio-sample → spores escape + ruin)   FAILURE
 export const derelictSalvageScript: QuestScript = {
   id: "derelict-salvage",
   title: "Дрейфующий сухогруз",
@@ -135,7 +119,6 @@ export const derelictSalvageScript: QuestScript = {
         },
       ],
     },
-    // Cargo condition depends on how we boarded.
     {
       id: "cargo_gate",
       text: "Путь к грузовому отсеку...",

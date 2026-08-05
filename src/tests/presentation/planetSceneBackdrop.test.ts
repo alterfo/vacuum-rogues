@@ -1,19 +1,3 @@
-/**
- * Playtest 3 — F5: the planet backdrop must read as a LIGHT PARALLAX, not a
- * magnifying lens. The Task 8 GLSL `PanoramaViewer` projection (FOV 100°,
- * `tan(uFovX*0.5)`) fisheyed the equirectangular map hard at the edges; the
- * user agreed on the Task 6 flat-sprite parallax (a wide draggable sprite with
- * a gentle mouse-X drift). That projection path was dropped — `PanoramaViewer`
- * is deleted — so this locks the flat-sprite parallax as the PRIMARY backdrop:
- *
- *  - when a panorama texture is available, PlanetScene mounts a draggable flat
- *    `Sprite` (eventMode "static", cursor "grab") with a non-zero pan width;
- *  - `update()` eases that sprite toward the parallax target (the drift wiring);
- *  - `destroy()` leaves both layers empty (no leaked backdrop / filter).
- *
- * pixi.js is mocked (jsdom has no canvas/WebGL) following the scene-test
- * convention in inventoryScene.test.ts / transitionClearsLayers.test.ts.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -78,7 +62,6 @@ vi.mock("pixi.js", () => {
   return { Sprite, Container, Graphics, Text, Rectangle };
 });
 
-// A wide equirectangular panorama (2:1) so the flat-sprite path mounts.
 vi.mock("@/presentation/textures", () => ({
   panoramaTex: vi.fn(() => ({ width: 4096, height: 2048 })),
   tex: vi.fn(() => ({ width: 4096, height: 2048 })), // resolved backdrop key
@@ -141,7 +124,6 @@ function makeRenderer(): {
   return { renderer, gameLayer, uiLayer };
 }
 
-/** Build a createUI-ready PlanetScene without running its constructor. */
 function makeScene(): {
   scene: PlanetScene;
   fields: Record<string, unknown>;
@@ -197,14 +179,10 @@ describe("PlanetScene backdrop — flat-sprite light parallax (playtest3 F5)", (
       filters: unknown;
     } | null;
     expect(sprite).not.toBeNull();
-    // Draggable look-around: static hit target with a grab cursor.
     expect(sprite!.eventMode).toBe("static");
     expect(sprite!.cursor).toBe("grab");
-    // The dropped GLSL projection ran through a Filter; the light path has none.
     expect(sprite!.filters).toBeFalsy();
-    // The backdrop sprite is actually in the scene graph.
     expect(gameLayer.children).toContain(sprite);
-    // Pan width is the wide-sprite width, leaving room for parallax drift.
     expect(fields.panoramaWidth as number).toBeGreaterThan(0);
   });
 
@@ -216,34 +194,24 @@ describe("PlanetScene backdrop — flat-sprite light parallax (playtest3 F5)", (
     const startX = sprite.x;
     const w = 1280;
     const panW = fields.panoramaWidth as number;
-    // Aim at the far (left) edge of the pan range so the drift is unambiguous.
     fields.panoramaTargetX = clampPanoramaX(-1e9, panW, w);
     expect(fields.panoramaTargetX as number).toBeLessThan(startX);
 
     (scene as unknown as { update(dt: number): void }).update(16);
 
-    // Drifted toward the target, but not snapped past it (eased).
     expect(sprite.x).toBeLessThan(startX);
     expect(sprite.x).toBeGreaterThanOrEqual(fields.panoramaTargetX as number);
   });
 
   it("dims the backdrop only lightly so the planet art reads through", () => {
-    // Regression (playtest 2026-06-27 #1): the dim overlay behind the planet
-    // menu was alpha 0.55 and buried a nice planet background. It must stay
-    // light — the menu's own per-row dark panels carry text contrast.
     expect(PLANET_BACKDROP_OVERLAY_ALPHA).toBeLessThanOrEqual(0.4);
     expect(PLANET_BACKDROP_OVERLAY_ALPHA).toBeGreaterThan(0); // still takes the edge off
   });
 
   it("applies the lighter overlay alpha to the actual backdrop fill", () => {
-    // The value assertion above guards the constant; this guards the wiring — a
-    // regression that hardcodes a darker alpha back into the overlay fill (while
-    // leaving the constant light) would re-bury the planet art undetected.
     const { scene } = makeScene();
     callCreateUI(scene);
 
-    // Every Graphics built by createUI records its fill() call args; the dim
-    // backdrop overlay is the one filled at PLANET_BACKDROP_OVERLAY_ALPHA.
     const GraphicsMock = Graphics as unknown as {
       mock: {
         results: Array<{ value: { fill: { mock: { calls: unknown[][] } } } }>;

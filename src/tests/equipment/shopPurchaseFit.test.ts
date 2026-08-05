@@ -8,17 +8,6 @@ import {
   gearFit,
 } from "@/systems/equipment/GearBridge";
 
-/**
- * Equipment-shop purchase rework (Ship Fitting Task 4). In SR-canon the shop is a
- * warehouse counter: buying gear drops it into the owned-uninstalled store (СКЛАД/
- * ТРЮМ) — it never auto-fits the ship. Installation is a separate hangar action.
- * Each listing surfaces a fit hint (fits / no free <category> slot / over mass)
- * computed from the current hull's category capacity + mass budget, so the player
- * knows before buying whether the item will fit. The hint is a pure projection of
- * `ShipLoadout.canInstall` via `gearFit`.
- */
-
-/** Minimal Player stand-in — the purchase helpers only touch `.inventory`. */
 function playerWith(inventory: Inventory): Player {
   return { inventory } as unknown as Player;
 }
@@ -31,17 +20,13 @@ describe("shop purchase → warehouse (no auto-install)", () => {
 
     acquireUninstalledGear(player, "wpn_pulse");
 
-    // The bought item is in the warehouse…
     expect(ownedUninstalledGear(player, loadout)).toEqual(["wpn_pulse"]);
-    // …and nothing was fitted: installing is a separate hangar step.
     expect(loadout.installedGearIds()).toEqual([]);
   });
 
   it("buying more than the hull can hold still stocks spares in the warehouse", () => {
     const inv = new Inventory();
     const player = playerWith(inv);
-    // hull_scout has 2 weapon slots, but the shop never gates on slots — three
-    // weapons can be bought and held as spares for a future hull.
     acquireUninstalledGear(player, "wpn_pulse");
     acquireUninstalledGear(player, "wpn_pulse");
     acquireUninstalledGear(player, "wpn_pulse");
@@ -76,7 +61,6 @@ describe("gearFit — per-listing fit indicator", () => {
     const lo = new ShipLoadout("hull_scout"); // massCapacity 30
     lo.install("wpn_torpedo"); // 12
     lo.install("wpn_torpedo"); // 24 → massFree 6
-    // The engine slot is empty, but eq_engine_iii (mass 8) > 6 free.
     expect(gearFit(lo, "eq_engine_iii")).toEqual({
       status: "over-mass",
       mass: 8,
@@ -87,8 +71,6 @@ describe("gearFit — per-listing fit indicator", () => {
   it("an engine/radar swap that fits the mass budget still reports 'fits'", () => {
     const lo = new ShipLoadout("hull_scout");
     lo.install("eq_engine_i"); // occupies the single engine slot
-    // A second engine never reports 'no-slot' — it replaces the current one, and
-    // the swap frees the old engine's mass, so a within-budget swap still fits.
     expect(gearFit(lo, "eq_engine_iii")).toEqual({ status: "fits" });
   });
 
@@ -97,9 +79,6 @@ describe("gearFit — per-listing fit indicator", () => {
     lo.install("eq_engine_i"); // mass 6 in the single engine slot
     lo.install("wpn_torpedo"); // 12
     lo.install("wpn_torpedo"); // 12 → massUsed 30, massFree 0
-    // Swapping to eq_engine_iii (mass 8) frees the old engine's 6 first, so the
-    // real overflow is only +2. The readout must credit that displaced mass
-    // (massFree 6, not the raw 0) so the deficit shown matches the swap.
     expect(gearFit(lo, "eq_engine_iii")).toEqual({
       status: "over-mass",
       mass: 8,

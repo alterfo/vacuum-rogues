@@ -4,13 +4,6 @@ import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import obfuscator from 'rollup-plugin-obfuscator';
 
-// Resolve the build's git SHA for the feedback diagnostics. PREFER the actual
-// checked-out commit (`git rev-parse --short HEAD`): the deployed build runs in a
-// SEPARATE repo's CI (the alterfo blog fetches this repo's master and builds it —
-// see .github/workflows/notify-alterfo.yml), where GITHUB_SHA is the *blog's*
-// commit and useless for triaging a game report. The game checkout's HEAD is the
-// real game SHA. Only fall back to GITHUB_SHA when local git is unavailable (this
-// repo's own CI without a full checkout), then 'dev' (source tarball, no git).
 function resolveBuildSha(): string {
   try {
     const local = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
@@ -22,10 +15,6 @@ function resolveBuildSha(): string {
   return ci ? ci.slice(0, 7) : 'dev';
 }
 
-// Read the version straight from package.json so it is correct regardless of how
-// the build is invoked. `process.env.npm_package_version` is only populated when
-// vite runs *through* an npm script; the cross-repo deploy may call `vite build`
-// directly, which would silently degrade the diagnostics version to 'dev'.
 function resolveBuildVersion(): string {
   try {
     const pkg = JSON.parse(
@@ -50,15 +39,6 @@ export default defineConfig(({ mode }) => ({
       input: {
         main: path.resolve(__dirname, 'src/index.html'),
       },
-      // Obfuscation is OPT-IN (`OBFUSCATE=1 npm run build`), not on by default.
-      // With `global: true` it processed the WHOLE bundle and corrupted Vite's
-      // dynamic-import URL placeholders — a hashed chunk like `chunk-<hash>.js`
-      // came out as `chunk-!~{003}~.js` → 404 → game init crash. It also
-      // broke PixiJS enum init (the DXT1 crash). A plain `npm run build` (what we
-      // use for testing) now ships a clean, working bundle. When you DO obfuscate
-      // for a release, it runs per-module (`global: false`) and skips vendor
-      // (`exclude` node_modules) so it can't mangle library chunks or Vite's
-      // placeholders — verify that build before shipping.
       plugins:
         mode === 'production' && process.env.OBFUSCATE === '1'
           ? [
@@ -91,10 +71,4 @@ export default defineConfig(({ mode }) => ({
     __BUILD_VERSION__: JSON.stringify(resolveBuildVersion()),
     __BUILD_SHA__: JSON.stringify(resolveBuildSha()),
   },
-  // NOTE: there are currently no production Web Workers (the ONNX inference
-  // worker was removed — see docs/plans/20260625-pure-ts-mlp-drop-onnx.md). If
-  // one is ever reintroduced, load it via a `?worker` import (Vite compiles it)
-  // and do NOT add `assetsInclude: ['**/*.worker.ts']` — that forces Vite to
-  // treat the worker as a static asset and inline its RAW TypeScript (served as
-  // video/mp2t), which breaks the prod build.
 }));

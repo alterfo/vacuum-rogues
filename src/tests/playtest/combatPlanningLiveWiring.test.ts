@@ -1,17 +1,3 @@
-/**
- * Task 14.5b (`docs/plans/20260713-tactical-pause-combat-rework.md`): the
- * planning-phase UI + planned per-weapon targeting are live in the wired flight
- * scene — this pins the WIRING over the real engine, not the pure math (Tasks
- * 2–7 unit-cover that):
- *
- * - engaging a fight mounts the weapon bar + range rings (and re-mounts them on
- *   the next planning round);
- * - the two-step weapon→target assignment writes into the live planned-turn
- *   draft, and the confirmed turn's execute window fires AT the assigned target;
- * - an EMPTY confirmed plan holds the player's fire for the whole window (the
- *   "unassigned = hold fire" rule, Task 6) while NPC return fire still lands —
- *   the legacy nearest-in-range auto-fire is no longer the in-loop behaviour.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "./realEngineHarness";
 import type { NpcShipManager } from "@/presentation/flight/NpcShipManager";
@@ -26,11 +12,8 @@ import { GAME_BALANCE, COMBAT_ROUND_MS } from "@/config/balance";
 
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
-// One player fire cadence — the 2900ms window ticks below must exceed it so a
-// legacy nearest-in-range auto-fire (the pre-14.5b behaviour) WOULD have shot.
 const FIRE = GAME_BALANCE.combatFireIntervalMs;
 
-/** Stationary controlled hostile (mirrors combatPauseFreezesLiveFight's stub). */
 function makeStaticHostile(id: string, x: number, y: number): NpcShipSprite {
   const container = { x, y, zIndex: 100 };
   const sprite = {
@@ -112,7 +95,6 @@ describe("Planning-phase UI + planned targeting live in the wired scene (14.5b)"
     scene.combatPlanning.confirm();
     expect(scene.combatPlanningUi.isOpen).toBe(false); // torn down for the window
 
-    // The round timer re-opens planning on its own — the surface comes back.
     for (let i = 0; i < 32; i++) harness.tick(100); // 3200ms > COMBAT_ROUND_MS
     expect(scene.combatPlanning.isPlanning).toBe(true);
     expect(scene.combatPlanningUi.isOpen).toBe(true);
@@ -129,7 +111,6 @@ describe("Planning-phase UI + planned targeting live in the wired scene (14.5b)"
     engage(scene, foe);
     expect(scene.combatPlanning.isPlanning).toBe(true);
 
-    // Two-step assignment through the live UI: arm the fitted gun, click the foe.
     const gun = scene.combatModule.fittedWeapons()[0];
     expect(gun).toBeTruthy();
     scene.combatPlanningUi.armWeapon(gun);
@@ -159,8 +140,6 @@ describe("Planning-phase UI + planned targeting live in the wired scene (14.5b)"
     const playerHull0 = harness.player()!.ship.hullHP;
     scene.combatPlanning.confirm(); // EMPTY plan — hold position, hold fire
 
-    // Tick out (almost) the whole window: several player cadences would have
-    // fired under the legacy nearest-in-range auto-fire.
     for (let i = 0; i < 29; i++) harness.tick(100); // 2900ms < COMBAT_ROUND_MS
     expect(scene.combatPlanning.isExecuting).toBe(true);
 
@@ -170,10 +149,6 @@ describe("Planning-phase UI + planned targeting live in the wired scene (14.5b)"
   });
 
   it("routes a planning-phase left-click to the movement preview despite the running turn (click-order regression)", () => {
-    // Engagement holds `isTurnRunning` open, and onPointerDown's turn-running
-    // guard ("⏸ Поставь на паузу…") used to sit BEFORE the planning branch —
-    // so a live planning movement click could never reach previewCombatCourse.
-    // The planning branch must win while the sim is frozen for planning.
     const scene = harness.currentScene() as unknown as FlightPrivates & {
       onPointerDown(e: unknown): void;
       sceneReadyAt: number;
@@ -202,9 +177,6 @@ describe("Planning-phase UI + planned targeting live in the wired scene (14.5b)"
   });
 
   it("COMBAT_ROUND_MS parity guard: the wired round length is the balance constant", () => {
-    // The playtest ticks above encode 2900ms/3200ms boundaries — pin the
-    // constants so a balance retune consciously revisits them: the window must
-    // outlast one player fire cadence, else the hold-fire test proves nothing.
     expect(COMBAT_ROUND_MS).toBe(3000);
     expect(FIRE).toBeLessThan(2900);
   });

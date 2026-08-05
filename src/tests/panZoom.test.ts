@@ -11,8 +11,6 @@ describe("PanZoomController", () => {
 
   it("startPan activates panning (RMB, works regardless of isTurnRunning)", () => {
     const ctrl = new PanZoomController();
-    // Simulates: turn is running (isTurnRunning=true) — caller still calls startPan
-    // because the scene guards RMB before checking turn state.
     ctrl.startPan(100, 200);
     expect(ctrl.isPanning).toBe(true);
   });
@@ -77,15 +75,10 @@ describe("PanZoomController", () => {
   });
 
   it("pan during isTurnRunning: panning sets isPanning, so scene skips route logic", () => {
-    // Documents the contract: the scene checks isPanning before any route
-    // planning. When panning (even during a running turn), no route is set.
     const ctrl = new PanZoomController();
-    // Caller (SpaceFlightScene) always starts pan on RMB regardless of turn state.
     ctrl.startPan(0, 0);
     ctrl.onMove(50, 30); // pan some amount
 
-    // isPanning is true → the scene's onPointerDown/Up would return early
-    // before planRouteTo() or executeRouteTo() is ever called.
     expect(ctrl.isPanning).toBe(true);
     expect(ctrl.onMove(60, 40)).not.toBeNull(); // still returning pan delta
   });

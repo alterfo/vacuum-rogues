@@ -42,7 +42,6 @@ describe("isCameraOnPlayer", () => {
   });
 
   it("button should be visible when camera is panned away from ship", () => {
-    // Scenario: ship is at (800, 400), but camera is manually panned to (0, 0)
     const shipX = 800;
     const shipY = 400;
     const centered = isCameraOnPlayer(0, 0, shipX, shipY, 1280, 720, 1.0);

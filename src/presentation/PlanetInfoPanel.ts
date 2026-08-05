@@ -12,7 +12,6 @@ import {
 } from "./ui/planetProfile";
 
 const PANEL_WIDTH = 220;
-/** Vertical step between stacked info lines. */
 const LINE_STEP = 20;
 
 export class PlanetInfoPanel {
@@ -24,15 +23,6 @@ export class PlanetInfoPanel {
   private readonly economyType?: string;
   private readonly politicalSystem?: string;
   private readonly reputation?: number;
-  /**
-   * Localized landing-denial reason (Overmind / pirate-rep) when the current
-   * player may NOT land here, else undefined. When set, the «Приземлиться»
-   * button is rendered inert (dimmed, no hover) and its click no-ops — the same
-   * gate the scene's land-attempt applies, moved to the click surface so a
-   * denied planet never even *attempts* the land (which would show a message and
-   * burn a wait-turn day downstream). The wording comes from the shared
-   * `landingDenialMessage`, so it matches the hover tooltip verbatim.
-   */
   private readonly landingDenialText?: string;
 
   constructor(
@@ -62,8 +52,6 @@ export class PlanetInfoPanel {
   }
 
   render(): void {
-    // Title can wrap to two lines; the info stack + land button follow it, and
-    // the background rect is sized to the resulting content height.
     const title = scaledText(this.planet.name, 14, 0x00ffff, {
       fontWeight: "bold",
       wordWrap: true,
@@ -78,12 +66,7 @@ export class PlanetInfoPanel {
       : LINE_STEP;
     const contentTop = title.y + Math.max(LINE_STEP + 5, titleHeight + 6);
 
-    // Info line count is known up front, so the background can be sized and
-    // mounted (behind everything) before the lines — avoids reordering the
-    // scene graph after the fact.
     const infoLineCount = this.planet.isHabitable ? 7 : 3;
-    // A denied land button carries an extra reason line below it — reserve room
-    // so the background rect covers it instead of the text spilling past the box.
     const denialLine = this.onLand && this.landingDenialText ? 1 : 0;
     const panelHeight =
       contentTop +
@@ -113,9 +96,6 @@ export class PlanetInfoPanel {
     addLine(`Тип: ${this.getType(this.planet.type)}`, 0xaaaaaa);
 
     if (this.planet.isHabitable) {
-      // Unowned/unset systems are the project's "Независимая" (independent), not
-      // "Окраинники" (the OUTLANDERS faction) — the former hardcoded fallback
-      // silently mislabelled every ownerless planet as an Outlander world.
       const factionName = factionDisplayLabel(
         this.ownerFaction ?? Faction.INDEPENDENT,
       );
@@ -130,11 +110,7 @@ export class PlanetInfoPanel {
       addLine(`Строй: ${politicalLabel(this.politicalSystem)}`, 0x88ccff);
 
       const rep = this.reputation ?? 0;
-      addLine(
-        `Отношение: ${getRepLabel(rep)}`,
-        getRepColor(rep),
-        /* rawColor */ true,
-      );
+      addLine(`Отношение: ${getRepLabel(rep)}`, getRepColor(rep), true);
     } else {
       addLine(`Дроны: ${this.planet.drones}`, 0x88ccff);
     }
@@ -159,9 +135,6 @@ export class PlanetInfoPanel {
       land.cursor = denied ? "default" : "pointer";
       land.on("pointerdown", (e) => {
         e.stopPropagation();
-        // Re-check the landing gate at click time: an un-landable planet's
-        // button must no-op, never fall through to a doomed land attempt (which
-        // shows a denial message and ends the turn — a wasted game day).
         if (this.landingDenialText != null && this.landingDenialText !== "")
           return;
         this.onLand?.();
@@ -175,8 +148,6 @@ export class PlanetInfoPanel {
       this.container.addChild(land);
       y = land.y + LINE_STEP;
       if (denied) {
-        // Say WHY landing is closed (Overmind / pirate rep) — same shared
-        // wording as the hover tooltip, so the panel and tooltip never disagree.
         const reason = scaledText(this.landingDenialText, 10, 0xff6666, {
           rawColor: true,
         });
@@ -212,9 +183,6 @@ export class PlanetInfoPanel {
   }
 
   destroy(): void {
-    // Idempotent: closed via a deferred microtask (see PlanetManager.
-    // closeInfoPanel) that may run after the scene's clearUILayer() already
-    // destroyed this container — destroying it twice throws.
     if (this.container.destroyed) return;
     if (this.container.parent)
       this.container.parent.removeChild(this.container);

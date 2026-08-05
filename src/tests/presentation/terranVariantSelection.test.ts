@@ -1,30 +1,10 @@
-/**
- * Terran variant-selection guard (plan 20260620-alien-terran-planet-art, Task 3).
- *
- * Alien-terran variety is glob-driven: landing more `terrestrial_NN` files into
- * src/assets/planet_maps|planets widens variety with no code change, because
- * pickVariant/pickVariantKey hash the planet id across ALL matching variants.
- * These tests pin that contract:
- *  - selection is deterministic per planet id (stable across reloads),
- *  - it ranges over every globbed terran variant (no variant is unreachable),
- *  - distinct ids spread across variants (worlds don't all twin),
- *  - a missing / absent variant falls back to undefined without throwing.
- *
- * Note: in unit tests the texture cache is empty (preloadTextures is never
- * called), so pickVariant — which only returns *loaded* textures — yields
- * undefined here; that exercises the graceful-fallback path. The manifest-level
- * mirror pickVariantKey is what drives the lazy planet_maps sphere upgrade in
- * production, so the determinism/spread contract is asserted through it.
- */
 import { describe, it, expect } from "vitest";
 import { pickVariant, pickVariantKey } from "@/presentation/textures";
 import { allTextures } from "@/assets/manifest";
 
 const TERRAN = "terrestrial";
-// A large, fixed (hence deterministic — never flaky) spread of planet ids.
 const IDS = Array.from({ length: 200 }, (_, i) => `planet-${i}`);
 
-/** The globbed terran variant keys for a category, mirroring pickVariant's filter. */
 function availableTerran(category: string): string[] {
   const wanted = `${category}/${TERRAN}`;
   return allTextures(category)
@@ -98,9 +78,6 @@ describe("terran variant selection — missing-variant fallback", () => {
   });
 
   it("falls back when the manifest key exists but no texture is loaded", () => {
-    // planet_maps is lazy-loaded (never eagerly cached); here the cache is empty,
-    // so the cached-only pickVariant falls back to undefined even though a
-    // manifest key resolves — the production lazy-upgrade path then loads it.
     expect(pickVariantKey("planet_maps", TERRAN, "p1")).toBeDefined();
     expect(pickVariant("planet_maps", TERRAN, "p1")).toBeUndefined();
   });

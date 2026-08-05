@@ -1,19 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: Murder mystery on an orbital station.
-// 4 suspects: mechanic (0), pilot (1), trader2 (2), guard (3).
-// murderer = random(0,3) at quest start.
-// Clues 0-4 are real physical evidence; clues 5-7 are planted to frame the mechanic.
-// Player must interview all 4 suspects + examine >=5 clues before accusing.
-// Wrong accusation costs 200 reputation; 3 wrong accusations = failure.
-//
-// Deduction is NOT decorative: the voice-log clue (Улика 5) can be run through
-// biometric analysis (`voice_analysis`), which branches on the real `murderer`
-// and names the killer — so perfect play deduces the answer and needs zero wrong
-// guesses (the 3-strike rating budget only punishes careless elimination). The
-// guard's own key-confession from his interview also becomes actionable: once the
-// arsenal-key clue (Улика 7) is examined, the interrogation offers a confront
-// beat that neutralises that planted clue with his prior testimony.
 export const investigationScript: QuestScript = {
   id: "investigation",
   title: "Следствие",
@@ -151,7 +137,6 @@ export const investigationScript: QuestScript = {
   ],
   startLocation: "warehouse",
   locations: [
-    // ── HUB ────────────────────────────────────────────────────────────────
     {
       id: "warehouse",
       text: "Грузовой отсек станции «Кентавр-9». Двери загерметизированы изнутри — с 02:00 отсюда никто не выходил и не входил. Тело торговца Льерны лежит у шлюза Б-7, лицом вниз, руки раскинуты. Время смерти: 02:50. Убийца всё ещё на станции. Их четверо, и один из них лжёт.\nОпрошено: {interviews_done}/4 | Улик: {clues_examined}/8 | Репутация: {rating}\n\nС чего начнём?",
@@ -249,7 +234,6 @@ export const investigationScript: QuestScript = {
       ],
     },
 
-    // ── INTERVIEWS ─────────────────────────────────────────────────────────
     {
       id: "interview_mechanic",
       text: "Механик Карл Хенце, 42 года. Руки в застарелой смазке, взгляд загнанный.\n«Всю ночь я провозился с гиперприводом в дальнем ангаре, один. Свидетелей нет, и я это понимаю, как это выглядит. Карточку доступа я потерял ещё с вечера — весь стеллаж перерыл, нету. Да, мы с Льерной сцепились из-за долга, он мне полторы тысячи задолжал. Но чтоб убить человека... За кого вы меня держите?»",
@@ -318,7 +302,6 @@ export const investigationScript: QuestScript = {
       ],
     },
 
-    // ── EVIDENCE 0–4 (real clues) ──────────────────────────────────────────
     {
       id: "examine_evidence_0",
       text: "Улика 1 — Следы борьбы у шлюза Б-7.\nЗапорный механизм погнут — здесь кого-то прижали к переборке. В петлях застрял клочок синтетического волокна, серо-зелёного. Спектрометр даёт однозначный ответ: технический комбинезон, стандарт ТС-400. Такие носит только ремонтная бригада станции.",
@@ -385,10 +368,6 @@ export const investigationScript: QuestScript = {
         },
       ],
     },
-    // ── VOICE-LOG DEDUCTION (branches on the real murderer) ─────────────────
-    // Running the 02:00 call through the crew's voiceprints is the one clue that
-    // points at the actual killer. `voice_analysis` auto-selects the matching
-    // suspect from `murderer`; each `voice_match_N` names them and logs the clue.
     {
       id: "voice_analysis",
       text: "Станционный ИИ раскладывает восьмиминутную запись на форманты и прогоняет через голосовые слепки четверых. Это единственный человек, кого Льерна впустил к шлюзу Б-7 в свой последний час, — тот, кому он доверял. Полоса совпадения ползёт вверх...",
@@ -475,7 +454,6 @@ export const investigationScript: QuestScript = {
       ],
     },
 
-    // ── EVIDENCE 5–7 (planted clues — point to mechanic, but contradicted) ──
     {
       id: "examine_evidence_5",
       text: "Улика 6 — Карточка доступа [ПОДОЗРИТЕЛЬНА].\nСлужебная карточка механика Карла отметилась на считывателе шлюза Б-7 в 02:30 — в самый разгар мёртвой зоны камеры. На первый взгляд — прямая улика против Карла. ПРОТИВОРЕЧИЕ: но Карл ещё вечером заявил, что потерял карточку, и любой на станции мог её подобрать и провести к шлюзу вместо себя. Карта прошла — но кто держал её в руке?",
@@ -513,7 +491,6 @@ export const investigationScript: QuestScript = {
       ],
     },
 
-    // ── ACCUSATION GATE ────────────────────────────────────────────────────
     {
       id: "accuse_gate_interviews",
       text: "Вы взвешиваете, готовы ли назвать имя...",
@@ -581,7 +558,6 @@ export const investigationScript: QuestScript = {
       ],
     },
 
-    // ── ACCUSATION ─────────────────────────────────────────────────────────
     {
       id: "accuse",
       text: "Четверо стоят перед вами в тесном грузовом отсеке. Улики собраны, показания записаны, противоречия обнажены. Теперь одно слово решит всё — и его уже не взять назад. Кто убил торговца Льерну?\n\nВнимание: ложное обвинение опозорит вас и стоит 200 репутации. Настоящий убийца будет смотреть, как вы ошибаетесь.",
@@ -613,9 +589,6 @@ export const investigationScript: QuestScript = {
       ],
     },
 
-    // ── ACCUSATION CHECKS ──────────────────────────────────────────────────
-    // Pattern: first auto-execute checks the matching murderer value;
-    // fallback (no condition) goes to wrong_accusation.
     {
       id: "check_mechanic_guilt",
       text: "Вы называете имя. В отсеке повисает тишина...",
@@ -701,7 +674,6 @@ export const investigationScript: QuestScript = {
       ],
     },
 
-    // ── WRONG ACCUSATION ───────────────────────────────────────────────────
     {
       id: "wrong_accusation",
       text: "Обвиняемый спокойно выкладывает своё алиби — и оно железное. По отсеку проходит ропот, кто-то усмехается. Вы указали не на того. Настоящий убийца по-прежнему среди этих четверых и теперь знает, что вы способны ошибиться.\nШтраф: −200 репутации. Репутация: {rating}\n\nМожно назвать другое имя — но следующая ошибка обойдётся ещё дороже.",
@@ -715,7 +687,6 @@ export const investigationScript: QuestScript = {
       ],
     },
 
-    // ── TERMINAL ───────────────────────────────────────────────────────────
     {
       id: "quest_success",
       text: "Улики сомкнулись, и убийце нечего возразить. Под тяжестью противоречий он ломается и сознаётся прямо в отсеке. Наручники щёлкают, его уводят к властям станции — Льерна отмщён, справедливость восстановлена.\nВы прочли то, что убийца так старательно прятал за подброшенными уликами. Администрация «Кентавра-9» благодарит вас, а ваше имя детектива теперь звучит по всему сектору.",

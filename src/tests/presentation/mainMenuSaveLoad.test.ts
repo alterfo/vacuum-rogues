@@ -1,14 +1,3 @@
-/**
- * Main-menu wiring for the save-slots UI (Task 3):
- *  - «Продолжить» resumes the **latest meaningful** save via
- *    `GameEngine.continueGame()` (the across-all-slots resolver), NOT a hardcoded
- *    `loadGame("auto")`.
- *  - «Сохранения» routes to the {@link SceneType.SAVE_LOAD} screen, asking it to
- *    return to the main menu on close.
- *
- * Driven through the scene's handlers directly (no PixiJS render), mirroring
- * `mainMenuNewGame.test.ts`.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { SceneType } from "@/types";
@@ -53,7 +42,6 @@ describe("MainMenuScene — Continue + Save/Load entry", () => {
     await scene.handleContinue();
 
     expect(continueGame).toHaveBeenCalledTimes(1);
-    // The old hardcoded auto-slot path must be gone.
     expect(loadGame).not.toHaveBeenCalled();
   });
 

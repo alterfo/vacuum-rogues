@@ -1,7 +1,6 @@
 import type { NpcShip } from "@/domain/NpcShip";
 import type { ShipPhysics } from "./ShipPhysics";
 
-/** Minimal slice of NpcShipSprite needed for combat decisions. */
 export interface NpcSpriteView {
   npc: NpcShip;
   x: number;
@@ -22,16 +21,7 @@ export type FlightCombatDecision =
   | { action: "chase"; targetX: number; targetY: number }
   | { action: "launch"; npc: NpcShip };
 
-/**
- * Stateless resolver for in-flight auto-attack logic, extracted from
- * SpaceFlightScene.updateCombat so the decision logic is testable in isolation.
- */
 export class FlightCombatResolver {
-  /**
-   * Given the current flight state, returns what the combat loop should do this
-   * frame: idle (no target), lost (target gone), chase (close on target), or
-   * launch (transition to CombatScene).
-   */
   decide(ctx: FlightCombatContext): FlightCombatDecision {
     if (!ctx.isTurnRunning || !ctx.followNpcId) {
       return { action: "idle" };

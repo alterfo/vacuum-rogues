@@ -15,16 +15,6 @@ import { FactionType } from "@/types";
 import { PIRATE_FACTION_ID } from "@/systems/galaxy/landingAccess";
 import { PIRATE_TRIBUTE_REP_GAIN } from "@/config/balance";
 
-/**
- * Regression for the call site of the pirate-rep recovery (Task 3). The pure
- * `grantPirateTributeRep` is tested in isolation in `pirateRepRecovery.test.ts`,
- * but that test cannot see the call site in `NpcShipManager.onPayTribute` — and
- * the call site is where standing must be **bought, not free**: a penniless
- * player's tribute is 0 (`shakedownTribute(0) === 0`), so paying nothing must
- * grant nothing (else a broke player farms +pirate-rep for free, defeating the
- * credit-costed gate). A real (non-zero) payoff still raises standing.
- */
-
 function makeManager(startingMoney: number): {
   manager: NpcShipManager;
   player: import("@/domain/Player").Player;
@@ -80,10 +70,7 @@ function makeManager(startingMoney: number): {
   return { manager, player };
 }
 
-/** Drive the private «Откупиться» handler with a bare pirate (no live sprite —
- *  `disengagePirate` no-ops when it can't find one). */
 function payTributeTo(manager: NpcShipManager, id: string): void {
-  // `credits` is read when the bank seeds the pirate's account on the payoff.
   const npc = { id, name: "Бандит", credits: 200 } as unknown as NpcShip;
   (manager as unknown as { onPayTribute(n: NpcShip): void }).onPayTribute(npc);
 }

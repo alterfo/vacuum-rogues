@@ -1,23 +1,3 @@
-/**
- * Task 1 (docs/plans/20260711-autopilot-reliability-fixes.md, Issue 1): a
- * routine mouse-wheel zoom gesture during flight used to disengage the dev
- * autopilot, because `SpaceFlightScene.onWheel()` never stopped the event
- * from reaching the autopilot's `window`-level reclaim-on-input listener.
- *
- * Both `onWheel` and the autopilot's default input source register directly
- * on `window` — the SAME node (unlike `StarMapScene.handleWheel`, which is
- * on `canvas`, a genuine descendant; see `starMapWheelZoomAutopilotReclaim.test.ts`).
- * `stopPropagation()` does not stop other listeners on the same node from
- * firing — only `stopImmediatePropagation()` does, and even that only runs
- * before a listener added *after* it, unless the earlier listener runs in an
- * earlier dispatch phase. `onWheel` is therefore registered with
- * `capture: true` so it always runs before the autopilot's default
- * (bubble-phase) listener, regardless of which was attached first — this
- * matters because the autopilot's listener is attached once at `.start()`
- * and stays alive across scene recreation (e.g. every warp destroys and
- * recreates `SpaceFlightScene`, re-registering `onWheel` *after* an
- * already-engaged autopilot's listener).
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -79,7 +59,6 @@ import type { PlayerPolicy } from "@/tests/playtest/letsplay/PlayerPolicy";
 import type { Observation } from "@/tests/playtest/letsplay/observe";
 import type { Renderer } from "@/presentation/Renderer";
 
-/** Never actually fires — the wheel-reclaim path under test never ticks. */
 const inertScheduler: AutopilotScheduler = { start: () => () => {} };
 
 function makeMockRenderer(): Renderer {
@@ -117,7 +96,6 @@ function makeMockRenderer(): Renderer {
   } as unknown as Renderer;
 }
 
-/** Bare scene fields `onWheel`/`isBlockingModalOpen` read, without running the (jsdom-impractical) full `initialize()`. */
 function primeSceneForWheel(scene: SpaceFlightScene): {
   zoomAtClient: ReturnType<typeof vi.fn>;
 } {
@@ -184,12 +162,6 @@ describe("SpaceFlightScene wheel-zoom vs. the real dev autopilot: DOM integratio
     document.body.innerHTML = "";
   });
 
-  /**
-   * Registers the scene's real, bound `onWheel` on `window` with the exact
-   * options production uses (`passive: false, capture: true`) — mirroring
-   * `initialize()`'s wiring line without running the rest of that
-   * (jsdom-impractical) method.
-   */
   function attachRealOnWheel(scene: SpaceFlightScene): () => void {
     const bound = (
       scene as unknown as { onWheel: (e: WheelEvent) => void }
@@ -199,11 +171,6 @@ describe("SpaceFlightScene wheel-zoom vs. the real dev autopilot: DOM integratio
   }
 
   it("a real wheel gesture zooms and leaves an ALREADY-ENGAGED autopilot untouched (post-warp listener order)", () => {
-    // Reproduces the realistic ordering: the autopilot engages once (its
-    // window listener registers first) and then the player warps, which
-    // destroys and recreates SpaceFlightScene — re-registering onWheel
-    // AFTER the autopilot's listener. Without the capture-phase fix this
-    // ordering defeats a plain stopPropagation()/stopImmediatePropagation().
     const controller = new AutopilotController({
       observe: () => ({}) as unknown as Observation,
       policy: { decide: vi.fn() } as unknown as PlayerPolicy,
@@ -217,15 +184,6 @@ describe("SpaceFlightScene wheel-zoom vs. the real dev autopilot: DOM integratio
     const { zoomAtClient } = primeSceneForWheel(scene);
     const detach = attachRealOnWheel(scene); // registered AFTER the autopilot
 
-    // Dispatch on a genuine descendant of `window` — not `window` itself.
-    // A real wheel gesture always targets the canvas element under the
-    // cursor, never bare `window`: dispatching straight on `window` would
-    // make it both target and currentTarget, and per the DOM spec, listeners
-    // registered on the same node at the AT_TARGET phase fire in add order
-    // regardless of the capture flag — which would defeat this test's whole
-    // point (it'd pass even if `onWheel` weren't capture-phase at all). Using
-    // a descendant forces the real capturing-then-bubbling traversal through
-    // `window`, exactly like production.
     const canvas = document.createElement("canvas");
     document.body.appendChild(canvas);
 

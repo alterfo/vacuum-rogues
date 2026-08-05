@@ -2,10 +2,6 @@ import type { ISaveService } from "@/core/ports/ISaveService";
 import type { SaveState } from "@/domain/SaveState";
 import type { SaveSlotInfo } from "@/types";
 
-/**
- * Mock implementation of ISaveService for testing.
- * Follows LSP: behaves like real SaveManager but stores data in-memory.
- */
 export class MockSaveService implements ISaveService {
   private readonly saves = new Map<string, SaveState>();
 
@@ -35,12 +31,10 @@ export class MockSaveService implements ISaveService {
     }));
   }
 
-  /** Test helper: inject a save directly. */
   setSave(slotId: string, state: SaveState): void {
     this.saves.set(slotId, state);
   }
 
-  /** Test helper: clear all saves. */
   clear(): void {
     this.saves.clear();
   }

@@ -12,18 +12,6 @@ import { legalActionsForScene, type Observation } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { readFlags, clearFlags } from "./oddityFlags";
 
-/**
- * Task 2 of the dev-only autopilot: the controller (observe → decide → apply on a
- * timer). It is pure logic over ports, so it is tested against a **fake scene +
- * clock** (no PixiJS, no real engine):
- *  - it decides+applies once per scheduler tick, at the configured cadence;
- *  - `stop()` halts ticking, hides the indicator, and unsubscribes input;
- *  - a simulated human input disengages it (reclaim-on-input);
- *  - a faulty policy / applier never throws out of the tick loop;
- *  - a slow async apply can't overlap the next tick (re-entrancy guard).
- */
-
-/** A hand-driven fake clock: captures the tick callback so the test fires it. */
 function makeFakeScheduler(): {
   scheduler: AutopilotScheduler;
   fire: () => void;
@@ -56,7 +44,6 @@ function makeFakeScheduler(): {
   };
 }
 
-/** A spy controller recording the verbs invoked, in order. */
 function makeController(overrides: Partial<LiveSceneController> = {}): {
   controller: LiveSceneController;
   calls: ApplyCall[];
@@ -91,7 +78,6 @@ function makeController(overrides: Partial<LiveSceneController> = {}): {
   return { controller, calls };
 }
 
-/** A SPACE_FLIGHT observation whose legalActions come from the real pure helper. */
 function flightObs(): Observation {
   return {
     scene: SceneType.SPACE_FLIGHT,
@@ -113,12 +99,10 @@ function flightObs(): Observation {
   };
 }
 
-/** A policy that always returns the same action (kind must be legal in the obs). */
 function fixedPolicy(action: Action): PlayerPolicy {
   return { name: "fixed", decide: () => action };
 }
 
-/** Flush all pending microtasks (the async apply chain settles within these). */
 const flush = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -204,7 +188,6 @@ describe("AutopilotController — engage / tick cadence", () => {
     const { controller, calls } = makeController();
     const ap = new AutopilotController({
       observe: flightObs,
-      // "repair" is not legal in SPACE_FLIGHT → the applier no-ops it.
       policy: fixedPolicy({ kind: "repair" }),
       controller,
       scheduler: sch.scheduler,
@@ -239,8 +222,6 @@ describe("AutopilotController — blocking-modal gate (F-shakedown, 2026-07-12)"
     await flush();
 
     expect(dismissBlockingModal).toHaveBeenCalledTimes(1);
-    // A hostile is present in `flightObs()` — without the gate the policy
-    // would legally pick attack/flee; the gate must pre-empt that entirely.
     expect(decide).not.toHaveBeenCalled();
     expect(calls).toEqual([]);
   });
@@ -329,8 +310,6 @@ describe("AutopilotController — disengage", () => {
     expect(calls).toEqual(["land"]);
 
     ap.stop();
-    // The fake clock callback is cleared by cancel, so firing is inert; even if a
-    // stale tick leaked through, the disengaged guard would no-op it.
     sch.fire();
     await flush();
 
@@ -389,10 +368,6 @@ describe("AutopilotController — disengage", () => {
   });
 
   it("stops itself at a terminal scene instead of deciding forever (2026-07-18 live report)", async () => {
-    // Game Over / Win screen: only "wait" is ever legal there, so pre-fix the
-    // autopilot span on deciding "wait" forever, indicator up, looking like it
-    // was still "playing" a screen whose only real next step is a human
-    // restarting the game.
     const sch = makeFakeScheduler();
     const indicator: AutopilotIndicator = { show: vi.fn(), hide: vi.fn() };
     const decide = vi.fn(() => ({ kind: "wait" }) as Action);
@@ -448,13 +423,11 @@ describe("AutopilotController — disengage", () => {
       indicator: noopIndicator(),
     });
 
-    // tickOnce before start → no-op
     await ap.tickOnce();
     expect(decide).not.toHaveBeenCalled();
 
     ap.start();
     ap.stop();
-    // tickOnce after stop → no-op
     await ap.tickOnce();
     expect(decide).not.toHaveBeenCalled();
   });
@@ -486,7 +459,6 @@ describe("AutopilotController — robustness (never throws)", () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(calls).toEqual([]);
 
-    // The loop recovers on the next tick once the policy stops throwing.
     blowUp = false;
     await ap.tickOnce();
     expect(calls).toEqual(["land"]);
@@ -538,14 +510,12 @@ describe("AutopilotController — robustness (never throws)", () => {
     await flush();
     expect(decide).toHaveBeenCalledTimes(1);
 
-    // A second tick while busy must be skipped (no second decide).
     await ap.tickOnce();
     expect(decide).toHaveBeenCalledTimes(1);
 
     release!();
     await first;
 
-    // Once the in-flight apply settles, a fresh tick proceeds.
     await ap.tickOnce();
     expect(decide).toHaveBeenCalledTimes(2);
   });
@@ -641,8 +611,6 @@ describe("AutopilotController — flag() (live oddity flagging, Task 7)", () => 
     await ap.tickOnce();
     try {
       expect(() => ap.flag()).not.toThrow();
-      // The write failure is swallowed inside flagOddity itself (best-effort
-      // storage), so it never reaches AutopilotController's onError sink.
       expect(onError).not.toHaveBeenCalled();
     } finally {
       localStorage.setItem = original;
@@ -652,8 +620,6 @@ describe("AutopilotController — flag() (live oddity flagging, Task 7)", () => 
 
 describe("AutopilotController — ignoreReclaimKey (Shift+F must not reclaim)", () => {
   it("a keydown matching ignoreReclaimKey does not disengage the autopilot", () => {
-    // Exercise the real default input source (no onHumanInput override) by
-    // temporarily capturing window's keydown listener.
     const handlers: ((e: KeyboardEvent) => void)[] = [];
     const spy = vi.spyOn(window, "addEventListener").mockImplementation(((
       type: string,
@@ -695,9 +661,6 @@ describe("AutopilotController — busy-latch timeout (live stuck-in-combat, 2026
   it("releases the busy latch when an apply hangs forever: surfaces the timeout to onError and keeps flying", async () => {
     const sch = makeFakeScheduler();
     const decide = vi.fn(() => ({ kind: "land" }) as Action);
-    // A verb that NEVER settles — the live wedge: `busy` stayed true forever,
-    // every later tick no-op'd, the ship sat frozen mid-combat-PLANNING with
-    // the «● АВТОПИЛОТ» pill still up.
     const { controller } = makeController({
       land: () => new Promise<void>(() => {}),
     });
@@ -717,13 +680,10 @@ describe("AutopilotController — busy-latch timeout (live stuck-in-combat, 2026
     await flush();
     expect(decide).toHaveBeenCalledTimes(1);
 
-    // Still inside the timeout window: the re-entrancy guard correctly skips.
     await ap.tickOnce();
     expect(decide).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
 
-    // Past the timeout: the latch must have been force-released and the
-    // timeout surfaced (previously: silent, permanent wedge).
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(onError).toHaveBeenCalledTimes(1);
 
@@ -755,7 +715,6 @@ describe("AutopilotController — busy-latch timeout (live stuck-in-combat, 2026
   });
 });
 
-/** A throwaway no-op indicator for tests that don't assert on it. */
 function noopIndicator(): AutopilotIndicator {
   return { show() {}, hide() {} };
 }

@@ -1,12 +1,3 @@
-/**
- * Task 4 («Местный подряд» neighbour delivery): a local courier contract has
- * only a COLLECT_ITEM objective (no VISIT objective) yet its goods go to a
- * concrete NEIGHBOUR planet (`targetPlanetId`). The quest journal's active card
- * must therefore offer a "→ Лететь к цели" route that points at the NEIGHBOUR
- * (not the issuer planet, not just the system) so the player can navigate there,
- * and name that destination ("Куда: …"). Cross-system deliveries keep routing
- * via their own VISIT_LOCATION objective. Mocks pixi.js — no WebGL needed.
- */
 import { describe, it, expect, vi } from "vitest";
 import type { IQuestService } from "@/core/ports/IQuestService";
 import type { QuestDestinationGalaxyLike } from "@/systems/quests/questDestination";
@@ -66,7 +57,6 @@ function collectTexts(node: MockNode): string[] {
   return out;
 }
 
-/** Find the first static (button) node whose label subtree contains `needle`. */
 function findButton(node: MockNode, needle: string): MockNode | null {
   for (const child of node.children ?? []) {
     if (
@@ -81,7 +71,6 @@ function findButton(node: MockNode, needle: string): MockNode | null {
   return null;
 }
 
-/** Invoke the pointerdown handler registered on a (mocked) button node. */
 function clickButton(btn: MockNode): void {
   const pd = btn.on.mock.calls.find((c: unknown[]) => c[0] === "pointerdown");
   expect(pd).toBeDefined();
@@ -94,7 +83,6 @@ const ISSUER = "planet_issuer";
 const NEIGHBOUR = "planet_neighbour";
 const SYS = "sys_home";
 
-// A single home system holding the issuer + the delivery neighbour.
 const galaxy: QuestDestinationGalaxyLike = {
   systems: [
     {
@@ -117,7 +105,6 @@ function resolveName(id: string): string {
   return id;
 }
 
-/** A «Местный подряд»: COLLECT_ITEM only, goods bound for a NEIGHBOUR planet. */
 function localDeliveryQuest() {
   return {
     id: "q-local",
@@ -198,7 +185,6 @@ describe("QuestJournalUI local-delivery navigation (Task 4)", () => {
     const kuda = texts.find((t) => t.includes("Куда:"));
     expect(kuda).toBeDefined();
     expect(kuda).toContain("Окраина"); // the neighbour
-    // The issuer is still shown under "Выдан" — they must be different planets.
     const vydan = texts.find((t) => t.includes("Выдан:"));
     expect(vydan).toBeDefined();
     expect(vydan).toContain("Гавань");
@@ -207,8 +193,6 @@ describe("QuestJournalUI local-delivery navigation (Task 4)", () => {
   it("offers no route when no galaxy is wired (back-compat: descriptor unresolved)", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
     const onNavigate = vi.fn();
-    // No galaxy / currentSystemId → activeDestination returns null, so the
-    // COLLECT_ITEM objective gets no nav button (and no "Куда" highlight).
     const ui = new QuestJournalUI(
       service(localDeliveryQuest()),
       1280,
@@ -224,8 +208,6 @@ describe("QuestJournalUI local-delivery navigation (Task 4)", () => {
   it("a cross-system delivery still routes via its own VISIT_LOCATION objective (no duplicate courier route)", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
     const onNavigate = vi.fn();
-    // Two objectives (COLLECT_ITEM + VISIT_LOCATION) → hasVisitObjective, so the
-    // courier branch is skipped and the existing VISIT button drives navigation.
     const crossSystem = {
       ...localDeliveryQuest(),
       id: "q-cross",
@@ -267,9 +249,7 @@ describe("QuestJournalUI local-delivery navigation (Task 4)", () => {
     const navBtn = findButton(root, "Лететь к цели");
     expect(navBtn).not.toBeNull();
     clickButton(navBtn!);
-    // The VISIT_LOCATION objective dispatches its locationId verbatim.
     expect(onNavigate).toHaveBeenCalledWith(NEIGHBOUR);
-    // No "Куда" courier highlight is added for the cross-system case.
     expect(collectTexts(root).find((t) => t.includes("Куда:"))).toBeUndefined();
   });
 });

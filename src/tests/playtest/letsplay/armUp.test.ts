@@ -1,13 +1,3 @@
-/**
- * Task 2 regression: the military-progression `arm-up` executor + planner.
- *
- * `executeArmUp`/`planArmUp`/`canArmUp`/`bestAffordableWeapon` drive real credit
- * + gear moves through the canonical banking / `GearBridge` seams against a live
- * `GameEngine` (no mocked seam), mirroring `newActions.test.ts`. The point of the
- * action is to raise **installed** `weaponDamage` (the firepower half of the
- * battle-ready signal), so every assertion reads the loadout's derived stat, not
- * merely what the player owns.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
 import { StationType } from "@/types";
@@ -36,8 +26,6 @@ describe("letsplay arm-up executor (Task 2)", () => {
     harness = await RealEngineHarness.boot({ seed: "ARMUP-TEST" });
     await harness.newGame();
 
-    // A shoppable, weapon-stocking system: a tech level high enough to unlock
-    // the whole gear catalogue (weapons start at techLevel 2) plus a station.
     const sys = currentSystem(harness.engine)!;
     sys.techLevel = 6;
     sys.stations.push(
@@ -50,7 +38,6 @@ describe("letsplay arm-up executor (Task 2)", () => {
         0,
       ),
     );
-    // Deep pockets so affordability never gates the firepower assertions.
     adjustPlayerCredits(
       harness.engine.bank,
       harness.engine.player!,
@@ -89,8 +76,6 @@ describe("letsplay arm-up executor (Task 2)", () => {
     const loadout = harness.engine.playerLoadout!;
     const before = loadout.derivedStats().weaponDamage;
 
-    // Bounded loop: each pass either raises damage or is the terminal no-op —
-    // `canArmUp` must eventually go false (no infinite arm-up soft-lock).
     let guard = 0;
     while (canArmUp(harness.engine) && guard < 12) {
       const prev = loadout.derivedStats().weaponDamage;
@@ -130,7 +115,6 @@ describe("letsplay arm-up executor (Task 2)", () => {
   it("only spends credits when the pick isn't already owned", () => {
     const plan = planArmUp(harness.engine);
     expect(plan).toBeTruthy();
-    // First arm-up out of the starter loadout buys a fresh gun (nothing owned).
     expect(plan!.buyId).toBeTruthy();
     const strongest = bestAffordableWeapon(harness.engine);
     expect((strongest!.gear as WeaponSpec).damage).toBeGreaterThan(0);

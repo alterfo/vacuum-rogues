@@ -7,7 +7,6 @@ function distance(a: StarSystem, b: StarSystem): number {
   return Math.sqrt(dq * dq + dr * dr);
 }
 
-/** Days a hop takes: warp-path cost if connected, else coordinate distance. */
 export function travelDays(
   galaxy: Galaxy,
   fromId: string,

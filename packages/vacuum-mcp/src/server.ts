@@ -1,7 +1,3 @@
-/**
- * vacuum-mcp MCP server — wires find_symbol and find_tests_for to the
- * Model Context Protocol. Usable standalone or embedded in a larger server.
- */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { findSymbolText, findTestsFor } from "./find-symbol.js";
@@ -9,17 +5,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export interface ServerOptions {
-  /**
-   * Project root — all relative paths returned by the tools are relative to this.
-   * Defaults to process.cwd().
-   */
   root?: string;
-  /**
-   * Optional path to an architecture JSON file. When provided, the server exposes
-   * a `get_architecture` tool that returns its contents.
-   */
   architectureFile?: string;
-  /** Directories inside root to search. Defaults to ["src", "."] */
   searchDirs?: string[];
 }
 

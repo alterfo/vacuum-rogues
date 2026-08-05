@@ -12,7 +12,6 @@ import {
 } from "@/presentation/flight/combatMissile";
 import { MISSILE_COMBAT } from "@/config/balance";
 
-// A homing/non-homing missile fired from the origin at a target 300px away in +x.
 function fire(
   opts: { homing?: boolean; speedPerMs?: number } = {},
 ): MissileState {
@@ -26,7 +25,6 @@ function fire(
   });
 }
 
-// Fly a missile to a terminal or arrived state against a (possibly moving) target.
 function flyToEnd(
   state: MissileState,
   targetAt: (elapsedMs: number) => { x: number; y: number } | null,
@@ -106,7 +104,6 @@ describe("advanceMissile — travel + arrival (Task 7)", () => {
 
   it("arrival snaps the missile onto the aim point", () => {
     const m = fire();
-    // One giant step overshoots the 300px target — should snap, not fly past.
     const s = advanceMissile(
       m,
       { x: 300, y: 0 },
@@ -118,7 +115,6 @@ describe("advanceMissile — travel + arrival (Task 7)", () => {
   });
 
   it("a homing missile re-aims at a moving target and still arrives", () => {
-    // Target drifts in +y while the missile chases it.
     const end = flyToEnd(fire({ homing: true }), (t) => ({
       x: 300,
       y: t * 0.02,
@@ -137,8 +133,6 @@ describe("advanceMissile — clean despawn, no dangling entity (Task 7)", () => 
   });
 
   it("a target that outruns the missile past its range budget expires", () => {
-    // Non-homing missile aimed at (300,0); target flees far away so the missile,
-    // flying its fixed line, blows its range budget without arriving.
     const slow = launchMissile({
       id: "m2",
       from: { x: 0, y: 0 },
@@ -147,7 +141,6 @@ describe("advanceMissile — clean despawn, no dangling entity (Task 7)", () => 
       damage: 40,
       homing: false,
     });
-    // Homing at a target that runs directly away faster than the missile flies.
     const runner = launchMissile({
       id: "m3",
       from: { x: 0, y: 0 },
@@ -159,7 +152,6 @@ describe("advanceMissile — clean despawn, no dangling entity (Task 7)", () => 
     const end = flyToEnd(runner, (t) => ({ x: 300 + t * 0.5, y: 0 }));
     expect(end.status).toBe("expired");
     expect(isMissileDone(end)).toBe(true);
-    // Sanity: the fixed-line missile against a stationary aim still arrives (control).
     const control = flyToEnd(slow, () => ({ x: 300, y: 0 }));
     expect(control.status).toBe("arrived");
   });
@@ -221,7 +213,6 @@ describe("missileHitChance — evasion curve (Task 7)", () => {
     const cfg = DEFAULT_MISSILE_CONFIG;
     const at = (d: number) =>
       missileHitChance({ ...fire(), targetDisplacement: d });
-    // Two small displacements well above the floor: the drop is evasionPerPx × Δd.
     expect(at(50) - at(100)).toBeCloseTo(cfg.evasionPerPx * 50, 6);
   });
 });
@@ -279,7 +270,6 @@ describe("integration — stationary vs. actively-maneuvering target (Task 7)", 
     expect(still.status).toBe("arrived");
     expect(still.targetDisplacement).toBeCloseTo(0, 3);
     expect(weaving.targetDisplacement).toBeGreaterThan(0);
-    // The weaving target is meaningfully harder to hit.
     expect(missileHitChance(weaving)).toBeLessThan(missileHitChance(still));
   });
 

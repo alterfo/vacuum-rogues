@@ -1,25 +1,8 @@
-/**
- * Intercept-lead solver, kept PixiJS-free so the pursuit math is unit-tested in
- * isolation (the scene/managers that consume it are otherwise hard to test).
- */
-
 export interface InterceptPoint {
   x: number;
   y: number;
 }
 
-/**
- * Predicted intercept point: a shooter at (sx,sy) closing at `shooterSpeed`
- * (px/ms) on a target at (tx,ty) drifting with constant velocity (tvx,tvy)
- * (px/ms). Solves the time-to-intercept quadratic |R + V·t| = shooterSpeed·t
- * for the earliest positive t and returns where the target *will* be at that t,
- * so the pursuer aims ahead of a moving target instead of at where it is now.
- * Re-solved each leg, this curves a chase to lead a crossing target (playtest4
- * C; also the NPC attack/approach lead and the orbiting-planet pursuit lead).
- *
- * Falls back to the target's CURRENT position when there is no positive-time
- * solution — both effectively stationary, or the target outruns the shooter.
- */
 export function solveInterceptPoint(
   sx: number,
   sy: number,
@@ -36,8 +19,6 @@ export function solveInterceptPoint(
   const c = rx * rx + ry * ry;
   let t = -1;
   if (Math.abs(a) < 1e-9) {
-    // Degenerate (target speed ≈ shooter speed): the quadratic collapses to a
-    // linear b·t + c = 0.
     if (Math.abs(b) > 1e-9) t = -c / b;
   } else {
     const disc = b * b - 4 * a * c;

@@ -66,7 +66,6 @@ describe("PlayerSchema.gameMode persistence", () => {
     const player = makePlayer();
     player.setGameMode("GOD");
 
-    // Mirror SaveState.serialize/deserialize: JSON stringify then parse.
     const json = JSON.parse(JSON.stringify(player));
     expect(json.gameMode).toBe("GOD");
 

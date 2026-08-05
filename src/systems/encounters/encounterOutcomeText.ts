@@ -1,13 +1,5 @@
 import type { EncounterOutcome } from "./encounterOutcome";
 
-/**
- * Russian, player-facing text for a resolved exploration-encounter outcome.
- *
- * Single source of the per-kind copy shared by the in-flight toast
- * (`EncounterController.encounterOutcomeMessage`) **and** the bank-ledger
- * reason builder (`applyEncounterOutcome`), so neither leaks the raw English
- * `outcome.kind` enum token into player-visible text. Pure — no PixiJS/DOM.
- */
 export function encounterOutcomeMessageRu(outcome: EncounterOutcome): string {
   const credits = outcome.credits ?? 0;
   switch (outcome.kind) {

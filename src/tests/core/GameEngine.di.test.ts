@@ -11,10 +11,7 @@ import {
 } from "@/tests/mocks";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 
-// Mock PixiJS
 vi.mock("pixi.js", () => ({
-  // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
-  // module load, so the partial mock must expose a constructable Filter.
   Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
     init: vi.fn().mockResolvedValue(undefined),
@@ -38,7 +35,6 @@ vi.mock("pixi.js", () => ({
     poly: vi.fn().mockReturnThis(),
     moveTo: vi.fn().mockReturnThis(),
     lineTo: vi.fn().mockReturnThis(),
-    // PixiJS v8 Graphics extends Container, so it supports child management.
     addChild: vi.fn(),
     addChildAt: vi.fn(),
     removeChild: vi.fn(),
@@ -169,22 +165,8 @@ describe("GameEngine with DI", () => {
     expect(questService.acceptCallCount).toBe(1);
     expect(questService.lastTemplateId).toBe("quest_delivery_ore");
   });
-
-  // ⚠️ dual-hull Task 5: the "should use injected equipment service" test was
-  // retired with the IEquipmentService port. The legacy equip/unequip path it
-  // exercised (ship.modules) was removed; gear now installs into the canonical
-  // ShipLoadout (covered by purchaseCraftToLoadout / lootToLoadout tests).
 });
 
-/**
- * F9, confirmed live 2026-07-12: a hidden/backgrounded tab throttles
- * `requestAnimationFrame` to near-zero in real browsers, so `gameLoop` (which
- * only self-schedules via rAF) stops advancing the scene — while the dev
- * autopilot's `setInterval` tick kept deciding/acting regardless, making it
- * look like the autopilot was "stuck" when actually the whole world was
- * frozen. `startGameLoop` now also arms a `setInterval` fallback while
- * `document.visibilityState === "hidden"`.
- */
 describe("GameEngine background-tab fallback (F9)", () => {
   function makeEngine(): GameEngine {
     return new GameEngine({
@@ -199,9 +181,6 @@ describe("GameEngine background-tab fallback (F9)", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    // Isolate the assertions to the setInterval fallback — a real
-    // requestAnimationFrame would also route through the fake timer queue
-    // and double-count `update` calls when advancing time.
     vi.stubGlobal("requestAnimationFrame", vi.fn().mockReturnValue(0));
   });
 
@@ -212,9 +191,6 @@ describe("GameEngine background-tab fallback (F9)", () => {
   });
 
   it("arms the fallback immediately when the tab is already hidden at startup (no transition event)", () => {
-    // visibilitychange only fires on a transition — a session opened/reloaded
-    // directly in a background tab never gets one, so the fallback must also
-    // check the current state once when the loop starts.
     const engine = makeEngine();
     const update = vi.fn();
     engine.currentScene = {

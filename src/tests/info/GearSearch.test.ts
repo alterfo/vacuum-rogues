@@ -19,7 +19,6 @@ function sys(id: string, toIds: string[]): StarSystem {
   } as unknown as StarSystem;
 }
 
-/** Chain A—B—C—D (origin A). */
 function chain(): StarSystem[] {
   return [
     sys("A", ["B"]),
@@ -47,7 +46,6 @@ describe("GalacticRegistry — gear parameter search (US-093/094)", () => {
       kind: GearKind.HULL,
       minHp: 200,
     });
-    // courier (hp120) excluded; warden cheaper than bastion → first.
     expect(hits.map((h) => h.gear.id)).toEqual(["hull_warden", "hull_bastion"]);
     expect(hits[0].jumps).toBe(1);
     expect(hits[1].jumps).toBe(2);
@@ -101,7 +99,6 @@ describe("GalacticRegistry — gear parameter search (US-093/094)", () => {
     ];
     const reg = new GalacticRegistry(chain(), [], gear);
 
-    // Cheapest overall is D, but within 2 jumps only B qualifies.
     const within2 = reg.bestGear({
       originSystemId: "A",
       kind: GearKind.WEAPON,
@@ -109,7 +106,6 @@ describe("GalacticRegistry — gear parameter search (US-093/094)", () => {
     });
     expect(within2?.systemId).toBe("B");
 
-    // Cap the price → the dear B listing is excluded.
     const cheap = reg.findGear({
       originSystemId: "A",
       kind: GearKind.WEAPON,

@@ -2,8 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { RaceSelectionScene } from "@/presentation/RaceSelectionScene";
 import { SceneType, FactionType } from "@/types";
 
-// Mirror the lightweight PixiJS mock used by RaceSelectionScene.test.ts so the
-// scene can render its mode chips without a real renderer.
 vi.mock("pixi.js", () => ({
   Container: vi.fn().mockImplementation(() => ({
     addChild: vi.fn(),

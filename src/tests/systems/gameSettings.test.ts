@@ -12,7 +12,6 @@ import {
 } from "@/systems/settings/gameSettings";
 import { GAME_BALANCE } from "@/config/balance";
 
-/** In-memory Storage subset for the neural-flag persistence tests. */
 function fakeStore(initial: Record<string, string> = {}): SettingsStore & {
   map: Map<string, string>;
 } {
@@ -93,7 +92,6 @@ describe("gameSettings — font delegates to fontScale", () => {
   it("setFontKey persists and getFontKey reads it back", () => {
     setFontKey("L");
     expect(getFontKey()).toBe("L");
-    // Delegates to the shared fontScale store under its own key.
     expect(localStorage.getItem("fontScale")).toBe("L");
     setFontKey("S");
     expect(getFontKey()).toBe("S");

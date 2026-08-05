@@ -11,26 +11,14 @@ import { hashStr } from "@/utils/hashStr";
 import { decideManeuver, ManeuverMode } from "@/systems/combat/combatManeuver";
 import { avoidStarPath, type Point } from "@/utils/flightGeometry";
 
-/** Maps an NPC role to its ship-art asset prefix (src/assets/ships/<prefix>). */
 const ROLE_SHIP_PREFIX: Record<NpcRole, string> = {
   [NpcRole.RANGER]: "ranger",
   [NpcRole.TRADER]: "trader",
   [NpcRole.PIRATE]: "pirate",
   [NpcRole.PATROL]: "patrol",
-  // Overmind-faction ships resolve size-tier art via shipArtPrefix before this
-  // map is consulted; the entry only backstops a hypothetical OVERMIND-role
-  // ship of another faction (exhaustiveness — a Record<NpcRole, …> must be total).
   [NpcRole.OVERMIND]: "patrol",
 };
 
-/**
- * Resolve the hull-art asset prefix (`src/assets/ships/<prefix>`) for an NPC.
- * Overmind-faction ships get size-tier-specific art (`overmind_<tier>`, a
- * tier-less old-save ship reads as medium); everything else keys on role. An
- * ungenerated `overmind_*` variant simply makes {@link pickVariant} return
- * undefined and the sprite falls back to its procedural Graphics hull — the
- * same degradation every role already relies on.
- */
 export function shipArtPrefix(
   npc: Pick<NpcShip, "role" | "faction" | "sizeTier">,
 ): string {
@@ -40,38 +28,19 @@ export function shipArtPrefix(
   return ROLE_SHIP_PREFIX[npc.role] ?? "ranger";
 }
 
-/** Hull art faces nose-up (bow at the top of the image); the container points +X
- *  along heading, so the sprite is pre-rotated +90° (clockwise) to align the
- *  nose with the direction of travel. */
 const SHIP_SPRITE_ROTATION = Math.PI / 2;
 
-/** Click hit-area geometry. The radius is `HIT_RADIUS_PX / cameraZoom` so the
- *  clickable area stays a fixed ~screen size, but never shrinks below
- *  `MIN_HIT_RADIUS_PX` (world px). The floor — plus the finite-zoom guard in
- *  {@link NpcShipSprite.assertClickable} — is what keeps a ship from going
- *  mouse-dead at high zoom or when the camera zoom briefly reads NaN/0. */
 const HIT_RADIUS_PX = 40;
 const MIN_HIT_RADIUS_PX = 28;
 
-// Hull colour by faction now reads through the colorblind-safe palette
-// (`ui/palette.ts` → `factionColor`); the default mode renders the same hues.
-
-/** Intent indicator colour by role (hostile / trade / neutral). */
 const INTENT_COLORS: Record<NpcRole, number> = {
   [NpcRole.PIRATE]: 0xff3030,
   [NpcRole.TRADER]: 0xffcc44,
   [NpcRole.RANGER]: 0x44ddff,
   [NpcRole.PATROL]: 0x44ff88,
-  // Hostile hive magenta — matches the overmind bioluminescent-circuitry motif.
   [NpcRole.OVERMIND]: 0xdd44ff,
 };
 
-/**
- * System geometry the NPC moves within.
- * - `rInner`..`rOuter` — band where ships wander.
- * - `boundary` — the system edge (рубеж гиперпрыжка): ships enter and leave
- *   the system here, never popping in/out mid-system.
- */
 export interface SystemBounds {
   cx: number;
   cy: number;
@@ -80,45 +49,22 @@ export interface SystemBounds {
   boundary: number;
 }
 
-/**
- * Visual representation of an autonomous NPC ship inside the player's current
- * system (Feature 8, slice 2). Position is presentation-managed and ephemeral;
- * identity/state come from the (persisted) NpcShip. Movement advances only when
- * the world is running (turn-based pause).
- *
- * Hyperjumps happen only at the system boundary: arriving ships spawn on the
- * boundary and fly inward; departing ships fly out to the boundary and then
- * "jump" (the sprite is removed once it reaches the edge).
- */
 export class NpcShipSprite {
   public readonly container: Container;
   public readonly npc: NpcShip;
-  /** Faction colour, exposed for the minimap radar dot. Re-read on a palette
-   *  change via {@link refreshPaletteColors} so the colourblind swap reaches the
-   *  radar too (it is otherwise set once in the constructor). */
   public mapColor: number;
   public x: number;
   public y: number;
 
   private targetX: number;
   private targetY: number;
-  /** Bypass waypoints (star-avoidance, see {@link setDestination}) queued ahead
-   *  of `targetX`/`targetY`; empty when the straight leg already clears the
-   *  star's exclusion ring. */
   private waypoints: Point[] = [];
   private readonly graphics: Graphics;
-  // Hull art (if loaded); when present the procedural triangle is skipped and
-  // only the faction halo + intent dot are drawn (US-070 #8).
   private shipSprite: Sprite | null = null;
   private readonly bounds: SystemBounds;
-  // Cruise/pursuit speed (px/ms), by class: interceptors (OVERMIND/PIRATE) are
-  // fast and out-run the starter; basic ships are slower than it. Set in the
-  // constructor from the npc; exposed via {@link cruiseSpeed} so the manager's
-  // escape + intercept-lead math uses this ship's real speed, not a constant.
   private readonly speed: number;
   private departing = false;
   private gone = false;
-  // When set, the ship orbits this point (a planet it's "visiting").
   private anchorX: number | null = null;
   private anchorY: number | null = null;
   private orbitAngle = 0;
@@ -126,54 +72,18 @@ export class NpcShipSprite {
   private orbitDir = 1; // +1 / -1
   private readonly orbitSpeed = 0.0006; // rad/ms (~10s per lap)
   private clickCallback: ((npc: NpcShip) => void) | null = null;
-  /** Last finite camera zoom applied to the hit-area, so interactivity can be
-   *  re-asserted (turn-end / combat) without a fresh camera transform. Seeded to
-   *  1 and only overwritten by a finite, positive zoom (a NaN/0 zoom is ignored
-   *  rather than collapsing the hit circle). */
   private lastHitZoom = 1;
-  /**
-   * When set, `pickNewTarget` calls this instead of random ring/anchor logic.
-   * Injected by `NpcShipManager` so movement is role-driven without the sprite
-   * importing other modules (dependency inversion).
-   * The `seq` parameter is incremented each call so successive waypoints differ
-   * while remaining deterministic.
-   */
   private targetProvider: ((seq: number) => { x: number; y: number }) | null =
     null;
   private targetSeq = 0;
-  /**
-   * Called by `NpcShipManager` when a non-departing ship arrives at its target.
-   * Allows the manager to re-anchor the sprite to the destination planet without
-   * the sprite importing manager types (dependency inversion).
-   */
   private arrivalCallback: (() => void) | null = null;
-  /** How long (ms game time) the ship dwells in orbit before moving on. */
   public readonly dwellDurationMs: number;
-  /** Accumulated orbit time (ms) toward dwellDurationMs. */
   private dwellElapsed = 0;
-  /**
-   * When true this is a captured-system garrison aggressor: it breaks off any
-   * planet orbit and pursues the player ship (target refreshed each frame by
-   * {@link NpcShipManager} via {@link setPursuitTarget}) instead of wandering.
-   * The actual exchange of fire is resolved in-flight by the combat module
-   * (later tasks); the sprite only handles the chase.
-   */
   public aggressive = false;
   private pursuitX: number | null = null;
   private pursuitY: number | null = null;
-  /** Player cruise speed last reported with the pursuit target — feeds the
-   *  break-off/over-matched decision in {@link decideManeuver}. */
   private pursuitTargetSpeed = 0;
-  /** +1 / -1: which way this aggressor circles the player (seeded per ship id
-   *  so foes don't all orbit the same direction). Set in the constructor. */
   private aggressorOrbitDir: 1 | -1 = 1;
-  /**
-   * NPC-vs-NPC engagement target (a hostile NPC's world position), set each frame
-   * by {@link NpcShipManager} so this ship closes on + strafes another NPC rather
-   * than wandering — a visible cross-faction fight (e.g. a pirate intruder vs the
-   * Overmind garrison). Null when it has no NPC quarry; **lower priority** than
-   * the player chase, so a player-aggressor ignores it.
-   */
   private npcCombatX: number | null = null;
   private npcCombatY: number | null = null;
 
@@ -186,12 +96,8 @@ export class NpcShipSprite {
     this.bounds = bounds;
     this.targetX = x;
     this.targetY = y;
-    // Deterministic dwell duration (8–20 s of game time) based on ship id so
-    // ships desynchronise naturally and don't all leave their planets at once.
     const h = hashStr(npc.id);
     this.dwellDurationMs = 8000 + (h % 12001);
-    // Seed the orbit direction from a different bit than the planet orbit dir so
-    // aggressors circle the player either way, deterministically per ship id.
     this.aggressorOrbitDir = (h >>> 17) & 1 ? 1 : -1;
 
     this.container = new Container();
@@ -200,8 +106,6 @@ export class NpcShipSprite {
     this.container.x = x;
     this.container.y = y;
 
-    // Prefer ship art for the hull; a deterministic variant per ship id keeps
-    // the same ship looking consistent across frames/visits.
     const prefix = shipArtPrefix(npc);
     const tex = pickVariant("ships", prefix, npc.id);
     if (tex) {
@@ -216,20 +120,12 @@ export class NpcShipSprite {
     }
 
     this.render();
-    // Initial targetX/targetY = spawn position. pickNewTarget() is called by
-    // setTargetProvider() once the manager wires the role-driven provider, so the
-    // very first waypoint is purposeful (not a random ring point).
   }
 
-  /** This ship's cruise/pursuit speed (px/ms) — fast for interceptor-class
-   *  ships, slow (out-runnable by a fresh starter) for basic ones. Read by the
-   *  manager's escape predicate + intercept-lead so they use the ship's real
-   *  speed rather than a single global constant. */
   get cruiseSpeed(): number {
     return this.speed;
   }
 
-  /** Wire hover callbacks for the tooltip system (must be called after setClickHandler). */
   setHoverHandler(
     onOver: (npc: NpcShip, screenX: number, screenY: number) => void,
     onOut: () => void,
@@ -240,7 +136,6 @@ export class NpcShipSprite {
     this.container.on("pointerout", onOut);
   }
 
-  /** Wire a click handler; stops propagation so the stage doesn't also fire. */
   setClickHandler(cb: (npc: NpcShip) => void): void {
     this.clickCallback = cb;
     this.assertClickable();
@@ -252,15 +147,6 @@ export class NpcShipSprite {
     });
   }
 
-  /**
-   * The clickability invariant for a live (non-departing/gone) ship: the
-   * container is statically interactive with a finite circular hit-area never
-   * smaller than {@link MIN_HIT_RADIUS_PX}. Re-asserting both `eventMode` and the
-   * hit geometry on every camera transform / turn-end heals any clobber that
-   * combat or a cursor switch may have left, and the finite-zoom floor means a
-   * transient NaN/0 zoom can never collapse the hit circle to "never hits"
-   * (`Math.max(28, 40/NaN) === NaN`, which `Circle.contains` always rejects).
-   */
   private assertClickable(): void {
     this.container.eventMode = "static";
     const worldR = Math.max(
@@ -270,23 +156,14 @@ export class NpcShipSprite {
     this.container.hitArea = new Circle(0, 0, worldR);
   }
 
-  /** Whether the sprite currently has an orbit anchor set. */
   isAnchored(): boolean {
     return this.anchorX !== null;
   }
 
-  /** Whether the ship is in the process of leaving the system. */
   isLeaving(): boolean {
     return this.departing;
   }
 
-  /**
-   * Scale the hit circle inversely with camera zoom so the clickable area stays
-   * ~40 screen-px regardless of how far the player has zoomed out, and re-assert
-   * interactivity so combat / cursor switches never leave a live ship mouse-dead.
-   * A non-finite or non-positive `cameraZoom` is ignored (the last good zoom is
-   * kept) so a transient bad transform can't collapse the hit-area.
-   */
   updateHitArea(cameraZoom: number): void {
     if (this.departing || this.gone) return; // jumping out — non-interactive
     if (Number.isFinite(cameraZoom) && cameraZoom > 0) {
@@ -295,22 +172,11 @@ export class NpcShipSprite {
     this.assertClickable();
   }
 
-  /**
-   * Re-enable click/hover interactivity unless the ship is leaving the system.
-   * Called when a turn ends so any ship that lost its hit-area mid-turn becomes
-   * clickable again (Task 6: NPC ships must stay clickable between turns).
-   * Departing/gone ships stay non-interactive — they are about to hyperjump out.
-   */
   restoreInteractivity(): void {
     if (this.departing || this.gone) return;
     this.assertClickable();
   }
 
-  /**
-   * Begin leaving the system: head straight out to the boundary, where the ship
-   * will hyperjump (be removed). Used when the simulation moves this NPC to a
-   * different system.
-   */
   beginDeparture(): void {
     if (this.departing) return;
     this.departing = true;
@@ -320,25 +186,16 @@ export class NpcShipSprite {
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
     this.targetX = this.bounds.cx + (dx / len) * this.bounds.boundary;
     this.targetY = this.bounds.cy + (dy / len) * this.bounds.boundary;
-    // Departure heads straight outward along the ship's own radial line — it
-    // never approaches the star, so no bypass is needed; drop any leftover
-    // waypoints from the leg that was in progress.
     this.waypoints = [];
   }
 
-  /** True once a departing ship has reached the boundary and should be removed. */
   isGone(): boolean {
     return this.gone;
   }
 
-  /** Advance movement. Call only while the world is running. */
   update(deltaTime: number): void {
     if (this.gone) return;
 
-    // Garrison aggressor: maneuver against the player ship's live position —
-    // CLOSE to weapon range, then ORBIT (circle/strafe) instead of tail-chasing;
-    // BREAK_OFF when over-matched or badly hurt. The manager refreshes the
-    // pursuit target each frame; in-flight combat (later modules) handles firing.
     if (
       this.aggressive &&
       !this.departing &&
@@ -354,10 +211,6 @@ export class NpcShipSprite {
       return;
     }
 
-    // NPC-vs-NPC engagement (manager-driven, LOWER priority than the player chase
-    // above): a ship that is NOT hunting the player closes on + strafes a hostile
-    // NPC so the two visibly fight rather than drifting past — e.g. a pirate
-    // intruder vs the Overmind garrison in a captured system.
     if (
       !this.aggressive &&
       !this.departing &&
@@ -368,9 +221,6 @@ export class NpcShipSprite {
       return;
     }
 
-    // Visiting a planet: smoothly orbit it (eases onto the ring, then circles).
-    // This reads as a deliberate "calling at the planet" rather than the chaotic
-    // random hops it did before (US-070: NPCs need a clear purpose).
     if (!this.departing && this.anchorX !== null && this.anchorY !== null) {
       this.orbitAngle += this.orbitDir * this.orbitSpeed * deltaTime;
       const tx = this.anchorX + Math.cos(this.orbitAngle) * this.orbitRadius;
@@ -387,10 +237,6 @@ export class NpcShipSprite {
       this.container.x = this.x;
       this.container.y = this.y;
 
-      // Bounded dwell: after dwellDurationMs the ship finishes its visit and
-      // picks a new destination (another planet or a lane waypoint).  The
-      // manager's update loop watches isAnchored() to clean up its anchor-planet
-      // map and optionally re-anchor the ship when it approaches the next planet.
       this.dwellElapsed += deltaTime;
       if (this.dwellElapsed >= this.dwellDurationMs) {
         this.dwellElapsed = 0;
@@ -401,8 +247,6 @@ export class NpcShipSprite {
       return;
     }
 
-    // Steer toward the next star-avoidance waypoint (if any) instead of
-    // cutting straight at the final target — see setDestination().
     const aim = this.waypoints[0] ?? { x: this.targetX, y: this.targetY };
     const dx = aim.x - this.x;
     const dy = aim.y - this.y;
@@ -414,9 +258,6 @@ export class NpcShipSprite {
       } else if (this.departing) {
         this.gone = true; // reached the boundary → hyperjump out
       } else {
-        // Notify the manager before picking the next target so it can re-anchor
-        // this sprite to the planet it just arrived at (restoring orbit behavior
-        // on every visit, not just the first).
         this.arrivalCallback?.();
         this.pickNewTarget();
       }
@@ -432,15 +273,11 @@ export class NpcShipSprite {
   }
 
   private pickNewTarget(): void {
-    // Role-driven destination: use the injected provider when available so the
-    // ship flies purposefully (planet visit, pirate hunt, patrol circuit) rather
-    // than a random ring point.
     if (this.targetProvider) {
       const pos = this.targetProvider(this.targetSeq++);
       this.setDestination(pos.x, pos.y);
       return;
     }
-    // Fallback for anchored ships (orbit loiter near the planet).
     if (this.anchorX !== null && this.anchorY !== null) {
       const angle = Math.random() * Math.PI * 2;
       const radius = 40 + Math.random() * 130;
@@ -450,8 +287,6 @@ export class NpcShipSprite {
       );
       return;
     }
-    // Last resort: random ring point (reached only when no provider is set and
-    // no anchor exists — should not happen in normal play after wiring).
     const angle = Math.random() * Math.PI * 2;
     const radius =
       this.bounds.rInner +
@@ -462,24 +297,11 @@ export class NpcShipSprite {
     );
   }
 
-  /**
-   * Set the final destination and, if the straight leg from the ship's current
-   * position would cut through the star's exclusion ring, queue the bypass
-   * waypoints {@link avoidStarPath} plots around it — the same star-avoidance
-   * the player's route planner uses, so a wandering NPC never flies into the
-   * sun (only a hard block via `beginDeparture`'s separate radial-outward path
-   * is exempt, since that direction never approaches the star).
-   */
   private setDestination(x: number, y: number): void {
     this.targetX = x;
     this.targetY = y;
     const distToStar = Math.hypot(x - this.bounds.cx, y - this.bounds.cy);
     if (distToStar < SUN_EXCLUSION_RADIUS) {
-      // The destination itself sits inside the exclusion ring — never the case
-      // for a real planet/lane point (SYSTEM_GEOMETRY.innerRadius already
-      // clears SUN_EXCLUSION_RADIUS), so go straight rather than let
-      // avoidStarPath's destination clamp silently retarget the ship away from
-      // where it was told to go.
       this.waypoints = [];
       return;
     }
@@ -495,29 +317,15 @@ export class NpcShipSprite {
     this.waypoints = path.slice(0, -1);
   }
 
-  /**
-   * Inject a role-driven destination provider so `pickNewTarget` uses
-   * purposeful targets instead of random ring points.  Called by
-   * `NpcShipManager` after construction.  Immediately picks the first
-   * purposeful waypoint so pirates never use the random-ring fallback.
-   */
   setTargetProvider(fn: (seq: number) => { x: number; y: number }): void {
     this.targetProvider = fn;
     this.pickNewTarget();
   }
 
-  /** Register a callback fired when this (non-departing) ship arrives at its
-   *  target. `NpcShipManager` uses this to re-anchor the sprite to a planet on
-   *  every visit — not just the first one. */
   setArrivalCallback(fn: () => void): void {
     this.arrivalCallback = fn;
   }
 
-  /**
-   * Flag (or clear) garrison-aggressor pursuit. Turning it on breaks any planet
-   * orbit so the ship leaves its station to chase the player; turning it off
-   * clears the live pursuit target.
-   */
   setAggressive(on: boolean): void {
     this.aggressive = on;
     if (on) {
@@ -529,23 +337,12 @@ export class NpcShipSprite {
     }
   }
 
-  /**
-   * Live pursuit target (the player ship's world position + current speed),
-   * refreshed each frame by {@link NpcShipManager}. The speed feeds the
-   * over-matched break-off check in {@link decideManeuver} — a stationary player
-   * (speed 0) is never treated as out-running the aggressor.
-   */
   setPursuitTarget(x: number, y: number, targetSpeed = 0): void {
     this.pursuitX = x;
     this.pursuitY = y;
     this.pursuitTargetSpeed = targetSpeed;
   }
 
-  /**
-   * Set/clear the NPC-vs-NPC engagement target (a hostile NPC's world position),
-   * refreshed each frame by {@link NpcShipManager}. Ignored while this ship is a
-   * player-aggressor — the player chase ({@link aggressive}) takes priority.
-   */
   setNpcCombatTarget(x: number, y: number): void {
     this.npcCombatX = x;
     this.npcCombatY = y;
@@ -555,13 +352,6 @@ export class NpcShipSprite {
     this.npcCombatY = null;
   }
 
-  /**
-   * Close on + strafe a world point with the shared combat maneuver model
-   * ({@link decideManeuver}: CLOSE to weapon range, then ORBIT; BREAK_OFF when
-   * over-matched/badly hurt). Shared by the player chase and the NPC-vs-NPC
-   * engagement so both move identically. `targetSpeed` feeds the over-matched
-   * break-off check (a stationary quarry is never treated as out-running).
-   */
   private maneuverToward(
     targetX: number,
     targetY: number,
@@ -582,12 +372,6 @@ export class NpcShipSprite {
       orbitDir: this.aggressorOrbitDir,
     });
 
-    // A BREAK_OFF flee has no target to hold position against, so it would
-    // otherwise run outward forever. Once this frame's step would carry the
-    // ship past the system boundary, route it through the existing scripted
-    // departure path instead — same outward-radial target math and `gone`
-    // transition a cross-system move uses — rather than letting it move
-    // unbounded (it would become permanently unreachable past the edge).
     if (decision.mode === ManeuverMode.BREAK_OFF) {
       const step = this.speed * deltaTime;
       const nextDist = Math.hypot(
@@ -600,8 +384,6 @@ export class NpcShipSprite {
       }
     }
 
-    // While closing, don't jitter when essentially on top of the target;
-    // orbiting/breaking off always move (they steer sideways/away, not onto it).
     if (decision.mode !== ManeuverMode.CLOSE || range > 6) {
       const step = this.speed * deltaTime;
       this.x += Math.cos(decision.heading) * step;
@@ -612,22 +394,15 @@ export class NpcShipSprite {
     }
   }
 
-  /** Orbit a fixed point (a planet) instead of wandering the whole band. */
   setAnchor(x: number, y: number): void {
     this.anchorX = x;
     this.anchorY = y;
-    // Deterministic per ship id so orbit radius and direction are stable across
-    // multiple visits to the same planet.
     const h = hashStr(this.npc.id);
     this.orbitRadius = 50 + (h % 46);
     this.orbitDir = (h >>> 16) & 1 ? 1 : -1;
-    // Start the orbit angle at the ship's current bearing from the planet so it
-    // eases on without a jump.
     this.orbitAngle = Math.atan2(this.y - y, this.x - x);
   }
 
-  /** Update only the orbit center each frame as the planet moves. Does not
-   *  reset orbit radius or direction. */
   updateAnchorPosition(x: number, y: number): void {
     this.anchorX = x;
     this.anchorY = y;
@@ -639,51 +414,29 @@ export class NpcShipSprite {
     const g = this.graphics;
     g.clear();
 
-    // Soft faction-coloured halo so the ship reads even when the camera is
-    // zoomed out over the (large) system. Also serves as the click hit-area
-    // (the hull sprite is non-interactive).
     g.circle(0, 0, 22).fill({ color: hull, alpha: 0.12 });
     g.circle(0, 0, 16).fill({ color: hull, alpha: 0.14 });
     g.circle(0, 0, 11).fill({ color: hull, alpha: 0.22 });
 
-    // Hull: when art is loaded the sprite is the hull — skip the procedural
-    // triangle (US-070 #8). Otherwise draw the arrow pointing along +X.
     if (!this.shipSprite) {
       g.poly([14, 0, -10, -8, -10, 8]);
       g.fill({ color: hull });
       g.stroke({ width: 1.5, color: 0xffffff, alpha: 0.85 });
     }
 
-    // Intent indicator: a dot above the hull (hostile / trade / neutral).
     g.circle(0, -22, 4);
     g.fill({ color: intent });
     g.stroke({ width: 1, color: 0x000000, alpha: 0.5 });
 
-    // Threat ring: an NPC that has turned openly hostile (a standing garrison,
-    // or a neutral the player attacked) gets a red outline so friend and foe
-    // read apart at a glance.
     if (this.npc.hostile) {
       g.circle(0, 0, 24).stroke({ width: 2, color: 0xff2020, alpha: 0.9 });
     }
   }
 
-  /**
-   * Re-render so the threat ring reflects the current {@link NpcShip.hostile}
-   * state. Called by {@link NpcShipManager} when a ship turns hostile mid-flight
-   * (the player attacked it or one of its faction-mates).
-   */
   refreshThreat(): void {
     this.render();
   }
 
-  /**
-   * Re-apply the active colourblind palette to this ship's hull + radar dot
-   * (accessibility pass / playtest bug pass 2 Task 4). The hull halo/arrow read
-   * {@link factionColor} live inside {@link render}, but {@link mapColor} is a
-   * one-shot constructor read; both are refreshed here so a ПАЛИТРА change made
-   * while the player is in flight recolours the *already-rendered* ships
-   * immediately (the "palette does nothing" fix), with no scene rebuild.
-   */
   refreshPaletteColors(): void {
     this.mapColor = factionColor(this.npc.faction);
     this.render();

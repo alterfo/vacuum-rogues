@@ -8,7 +8,6 @@ import {
 } from "@/systems/device/mobileGateState";
 import type { DeviceEnv } from "@/systems/device/isMobileDevice";
 
-/** In-memory Storage subset for the persistence tests. */
 function fakeStore(initial: Record<string, string> = {}): MobileGateStore & {
   map: Map<string, string>;
 } {
@@ -22,7 +21,6 @@ function fakeStore(initial: Record<string, string> = {}): MobileGateStore & {
   };
 }
 
-/** Phone-class env (coarse + small + phone UA) used by the decision tests. */
 const PHONE_ENV: DeviceEnv = {
   userAgent:
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
@@ -31,7 +29,6 @@ const PHONE_ENV: DeviceEnv = {
   innerHeight: 844,
 };
 
-/** Desktop env (fine pointer + large + desktop UA). */
 const DESKTOP_ENV: DeviceEnv = {
   userAgent:
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",

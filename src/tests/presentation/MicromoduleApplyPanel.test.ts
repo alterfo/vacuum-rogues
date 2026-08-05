@@ -6,15 +6,6 @@ import type { Renderer } from "@/presentation/Renderer";
 import type { Player } from "@/domain/Player";
 import type { MicroModule } from "@/types";
 
-/**
- * The shared micromodule-apply modal (click path) opened from a fitted hangar
- * slot in BOTH StationScene and the EquipmentShopScene АНГАР tab. These tests
- * drive the panel directly (no scene): they assert it lists only the owned
- * micromodules whose targetCategory matches the fitted item, applies the chosen
- * one onto the exact slot through the canonical ShipLoadout, consumes it from
- * inventory, and bails cleanly when the fitted item has vanished.
- */
-
 interface FakeNode {
   text: string;
   handlers: Record<string, (e: unknown) => void>;
@@ -138,7 +129,6 @@ describe("MicromoduleApplyPanel — shared apply modal", () => {
 
     const labels = created.map((n) => n.text);
     expect(labels.some((t) => t.includes("Усилитель урона ур.1"))).toBe(true);
-    // The ENGINE micromodule must NOT be offered for a WEAPON slot.
     expect(labels.some((t) => t.includes("Форсаж"))).toBe(false);
   });
 

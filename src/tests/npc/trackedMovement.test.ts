@@ -44,11 +44,6 @@ function makeNpc(
   });
 }
 
-/**
- * Single connection-less system: a present ship can never travel out (no warp
- * target), so it stays in-system every tick — isolating the tracked-position
- * advance from the departure machinery.
- */
 function makeGalaxy(npcs: NpcShip[]): Galaxy {
   const sys = new StarSystem(
     "sys_x",
@@ -75,9 +70,7 @@ describe("NpcSimulator tracked in-system movement", () => {
     const expected = advanceNpcOrbit(before, step);
     expect(npc.worldX).toBeCloseTo(expected.x, 6);
     expect(npc.worldY).toBeCloseTo(expected.y, 6);
-    // It actually moved…
     expect(npc.worldX).not.toBeCloseTo(before.x, 6);
-    // …and a rotation preserves the orbital radius (stays in its band).
     expect(Math.hypot(npc.worldX!, npc.worldY!)).toBeCloseTo(
       Math.hypot(before.x, before.y),
       6,
@@ -142,8 +135,6 @@ describe("NpcSimulator tracked in-system movement", () => {
 
     new NpcSimulator().tick(galaxy, new SeededRNG("rng"));
 
-    // daysToArrival ticked down (it is in transit), but the stale in-system
-    // offset is NOT advanced — a traveling ship has no spot to orbit.
     expect(npc.worldX).toBe(50);
     expect(npc.worldY).toBe(-50);
   });
@@ -155,16 +146,10 @@ describe("NpcSimulator tracked in-system movement", () => {
 
     new NpcSimulator().tick(galaxy, new SeededRNG("rng"));
 
-    // A destroyed ship is skipped by advanceTrackedPositions — its stored
-    // offset must not orbit (it is no longer a live in-system presence).
     expect(npc.worldX).toBe(50);
     expect(npc.worldY).toBe(-50);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Presentation write-back: the live in-flight position persists to the domain
-// ---------------------------------------------------------------------------
 
 const STAR_CENTER = { x: 400, y: 300 };
 
@@ -222,12 +207,10 @@ describe("NpcShipManager live-position write-back", () => {
     const { manager, sprites } = makeHarness([npc]);
     manager.initialize();
 
-    // The ship drifts in flight to a new spot…
     sprites[0].x = STAR_CENTER.x + 210;
     sprites[0].y = STAR_CENTER.y - 130;
     manager.persistLivePositions();
 
-    // …which is written back as an offset from the star centre.
     expect(npc.worldX).toBeCloseTo(210, 6);
     expect(npc.worldY).toBeCloseTo(-130, 6);
 
@@ -246,7 +229,6 @@ describe("NpcShipManager live-position write-back", () => {
     expect(npc.worldX).toBeCloseTo(55, 6);
     expect(npc.worldY).toBeCloseTo(88, 6);
 
-    // Re-enter: the ship respawns exactly where it was left, not re-scattered.
     const { manager: m2, sprites: s2 } = makeHarness([npc]);
     m2.initialize();
     expect(s2[0].x).toBeCloseTo(STAR_CENTER.x + 55, 6);

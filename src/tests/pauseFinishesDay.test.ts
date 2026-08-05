@@ -1,22 +1,5 @@
-/**
- * Playtest 3 F1 (2026-06-10): pressing Pause must let the ship FINISH the day
- * segment it is currently travelling, then stop — it must NOT cut the day off
- * mid-segment. This deliberately REVERSES the sprint-3 "immediate stop" contract
- * (see the deleted playPauseImmediate.test.ts).
- *
- * Contract:
- *  - onPlayPause() while flying a route → does NOT stop now; latches a deferred
- *    pause (pauseAtDayBoundary) and keeps the turn running. The ship halts and
- *    the turn ends only when the next whole-day boundary is crossed in
- *    updateShip()/advanceWaitTime().
- *  - A combat auto-follow (followNpcId set) has no advancing day, so an abort
- *    there still stops immediately.
- *  - The low-HP auto-stop (separate path) also remains an immediate hard-stop.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock pixi.js and all presentation helpers that import it (mirrors
-// routeOnlyInPause.test.ts so SpaceFlightScene can be constructed in jsdom).
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -210,10 +193,6 @@ function makeMockRenderer(): Renderer {
   } as unknown as Renderer;
 }
 
-/**
- * A controllable ShipPhysics stand-in that walks +stepPerUpdate px along X on
- * each update() (so updateShip() accumulates distanceTraveled deterministically).
- */
 function makeMovingPhysics() {
   return {
     shipX: 0,
@@ -278,7 +257,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
 
     onPlayPause();
 
-    // Pause is latched, NOT applied: the ship keeps flying, turn still running.
     expect(s.pauseAtDayBoundary).toBe(true);
     expect(s.isTurnRunning).toBe(true);
     expect(phys.stop).not.toHaveBeenCalled();
@@ -300,8 +278,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
 
     onPlayPause(); // deferred pause requested mid-day
 
-    // Three 100px updates (200 + 3×100 = 500): still short of the boundary on
-    // the first two (300, 400); the day commits on the third (500).
     updateShip(16); // 300
     expect(s.isTurnRunning).toBe(true);
     expect(advanceGalaxyDay).not.toHaveBeenCalled();
@@ -309,8 +285,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
     expect(s.isTurnRunning).toBe(true);
     updateShip(16); // 500 → crosses the day boundary
 
-    // Exactly one day committed, then the turn ends at the boundary (endTurn
-    // halts the ship — isMoving false — without a separate stop() call).
     expect(advanceGalaxyDay).toHaveBeenCalledTimes(1);
     expect(s.isTurnRunning).toBe(false);
     expect(s.pauseAtDayBoundary).toBe(false);
@@ -333,7 +307,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
     onPlayPause();
     updateShip(16); // moves 1600px (>= 3 days) in one frame
 
-    // The deferred pause halts on the FIRST completed day — one day, not three.
     expect(advanceGalaxyDay).toHaveBeenCalledTimes(1);
     expect(s.isTurnRunning).toBe(false);
   });
@@ -346,7 +319,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
 
     onPlayPause();
 
-    // Combat abort still stops now — no deferral (endTurn halts the ship).
     expect(s.isTurnRunning).toBe(false);
     expect(s.pauseAtDayBoundary).toBe(false);
     expect(phys.isMoving).toBe(false);
@@ -363,8 +335,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
 
     onPlayPause();
 
-    // Pause halts the turn now: the deferred-pause latch would never fire while
-    // the calendar is frozen during combat, leaving the player stuck.
     expect(s.isTurnRunning).toBe(false);
     expect(s.pauseAtDayBoundary).toBe(false);
   });
@@ -386,9 +356,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
 
     updateShip(16);
 
-    // The low-HP safety stop fires immediately — it does NOT wait for the day
-    // boundary the deferred pause would have waited for. endTurn() clears the
-    // latch and no day is committed (the ship halted before the boundary).
     expect(s.isTurnRunning).toBe(false);
     expect(s.pauseAtDayBoundary).toBe(false);
     expect(phys.isMoving).toBe(false);
@@ -396,18 +363,12 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
   });
 
   it("clears the deferred-pause latch when the ship arrives at an open-space destination (no leak to the next turn)", () => {
-    // Pause is pressed mid-flight (latch set), then the ship reaches its
-    // open-space waypoint BEFORE the next day boundary — so the turn ends on
-    // arrival, not on the latch. The latch must NOT survive into the next turn;
-    // otherwise the next executed route is aborted after one day with no Pause.
     s.gameEngine = {
       player: { ship: { hullHP: 100, maxHull: 100 } },
       galaxy: { gameDays: 0 },
       advanceGalaxyDay: vi.fn(),
     };
     const phys = makeMovingPhysics();
-    // Arrive this frame: update() stops the ship without advancing distance, so
-    // no day boundary is crossed (the latch's own day-tick path never fires).
     phys.update = function (this: typeof phys) {
       this.isMoving = false;
       this.currentSpeed = 0;
@@ -420,8 +381,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
 
     updateShip(16); // ship arrives at the open-space destination this frame
 
-    // The turn ends on arrival, and the latch is consumed — a freshly executed
-    // route next turn must not inherit it and stop itself after one day.
     expect(s.isTurnRunning).toBe(false);
     expect(s.pauseAtDayBoundary).toBe(false);
   });
@@ -440,9 +399,6 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
     expect(s.pauseAtDayBoundary).toBe(false);
   });
 
-  // In-flight combat freezes the ship (isMoving=false) but the turn it began in
-  // is still running. Without a guard the course-less "wait turn" path would burn
-  // game-days through the modal fight; combat must pause the calendar.
   it("does NOT advance the calendar while in-flight combat is active", () => {
     const advanceGalaxyDay = vi.fn();
     s.gameEngine = {

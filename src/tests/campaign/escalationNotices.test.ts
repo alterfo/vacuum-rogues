@@ -1,14 +1,3 @@
-/**
- * Escalation notices — adaptive difficulty made *felt* (three-year-campaign
- * plan, Task 5).
- *
- * Pure stage derivation + fire-once tracker: as the ratcheted campaign power
- * and the Overmind share cross defined bands, the game emits one-shot news
- * notices ("the Overmind has noticed you", "front hardening", "final push
- * available"). Each stage fires at most once per run; stages already crossed
- * when a run is first observed (a loaded mid-game save) stay silent instead of
- * spamming retroactive news.
- */
 import { describe, it, expect } from "vitest";
 import {
   activeEscalationStages,
@@ -128,7 +117,6 @@ describe("EscalationNoticeTracker (fire-once)", () => {
     });
     expect(tracker.observe("g1", midGame)).toEqual([]); // pre-crossed ⇒ silent
     expect(tracker.observe("g1", midGame)).toEqual([]);
-    // A NEW crossing after the seed still fires.
     expect(
       tracker.observe("g1", { ...midGame, arcStatus: "contained" }),
     ).toEqual(["FINAL_PUSH"]);
@@ -143,7 +131,6 @@ describe("EscalationNoticeTracker (fire-once)", () => {
         inputs({ overmindShare: WARNING, arcStatus: "advancing" }),
       ),
     ).toEqual(["HARDENING"]);
-    // Player liberates below the band, then the front grows back over it.
     tracker.observe("g1", inputs({ overmindShare: 0.1 }));
     expect(
       tracker.observe(
@@ -159,7 +146,6 @@ describe("EscalationNoticeTracker (fire-once)", () => {
     expect(tracker.observe("g1", inputs({ peakPower: 1 }))).toEqual([
       "NOTICED",
     ]);
-    // New run: baseline seed again, then its own single fire.
     expect(tracker.observe("g2", inputs())).toEqual([]);
     expect(tracker.observe("g2", inputs({ peakPower: 1 }))).toEqual([
       "NOTICED",

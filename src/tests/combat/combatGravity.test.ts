@@ -9,10 +9,8 @@ import {
 } from "@/presentation/flight/combatGravity";
 import { GRAVITY_ASSIST } from "@/config/balance";
 
-// A representative planet: rendered disc radius stands in for mass.
 const planet: GravityBody = { x: 0, y: 0, radius: 120 };
 
-// A ship cruising in +x at a starter-ish speed.
 function shipAt(x: number, y: number, vx = 0.11, vy = 0): GravityShipState {
   return { pos: { x, y }, vel: { x: vx, y: vy } };
 }
@@ -63,7 +61,6 @@ describe("gravityAssistDelta — slingshot vector/magnitude (Task 4)", () => {
   });
 
   it("boost points along the ship's heading, not toward the planet", () => {
-    // Ship above the planet moving in +x: a pull-toward-planet would have a -y component.
     const d = gravityAssistDelta(shipAt(0, reach * 0.4, 0.11, 0), planet, 16);
     expect(d.y).toBeCloseTo(0, 9);
     expect(d.x).toBeGreaterThan(0);
@@ -72,7 +69,6 @@ describe("gravityAssistDelta — slingshot vector/magnitude (Task 4)", () => {
   it("boost direction follows a diagonal heading (unit velocity)", () => {
     const ship = shipAt(reach * 0.5, 0, 0.08, 0.06); // heading up-right
     const d = gravityAssistDelta(ship, planet, 16);
-    // delta is parallel to velocity: cross product ~ 0, same sign components.
     const cross = d.x * ship.vel.y - d.y * ship.vel.x;
     expect(cross).toBeCloseTo(0, 9);
     expect(d.x).toBeGreaterThan(0);
@@ -94,7 +90,6 @@ describe("gravityAssistDelta — slingshot vector/magnitude (Task 4)", () => {
   it("a more massive planet slings harder at the same distance", () => {
     const small = { x: 0, y: 0, radius: 120 };
     const big = { x: 0, y: 0, radius: 240 };
-    // Compare at the same absolute distance well inside both reaches.
     const d = 150;
     const nSmall = mag(gravityAssistDelta(shipAt(d, 0), small, 16));
     const nBig = mag(gravityAssistDelta(shipAt(d, 0), big, 16));

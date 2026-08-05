@@ -2,20 +2,12 @@ import { describe, it, expect } from "vitest";
 import { Market } from "@/domain/Market";
 import { ResourceType } from "@/types";
 
-/**
- * Unit coverage for Market.advanceMarketDay — the daily mean-reversion of the
- * dynamic price multiplier toward the neutral 1.0. The livePricing integration
- * suite only ever drives a multiplier DOWN (after a BUY); these cases pin the
- * opposite (UP) direction, the no-overshoot guard, and the [0.4, 2.5] clamp, so
- * a sign error in the up-branch can't slip through unnoticed.
- */
 function singleResourceMarket(startMultiplier: number): Market {
   const m = new Market([ResourceType.METALS], [1.0], [1.0]);
   m.priceMultipliers[0] = startMultiplier;
   return m;
 }
 
-// Deterministic rng in (0,1) so driftMag is a fixed 2–8% step.
 const fixedRng = (v: number) => () => v;
 
 describe("Market.advanceMarketDay drift", () => {

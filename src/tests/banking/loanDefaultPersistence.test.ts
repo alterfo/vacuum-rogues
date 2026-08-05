@@ -18,14 +18,6 @@ import {
   LoanDefaultSnapshotSchema,
 } from "@/validation/schemas";
 
-/**
- * Task 5 — the loan-default arrears state must survive a save/reload verbatim
- * (a defaulted loan stays defaulted after restore), old saves that predate the
- * field must migrate to "not in debt, not defaulted" (re-seeding lazily at the
- * next EOD), and the borrow gate must block a defaulted player from taking a new
- * loan, with the block + penalty surfaced in the (pure) loan panel.
- */
-
 const PLAYER = "cur:player";
 const LOAN = "loan:player";
 const LOAN_RATE = 0.02;
@@ -65,7 +57,6 @@ function balanced(service: BankingService): boolean {
   return Math.abs(service.getLedger().totalBalance()) <= BALANCE_EPSILON;
 }
 
-/** Disburse a loan, drain the proceeds, then EOD past the default threshold. */
 function makeDefaultedService(): Harness {
   const h = makeHarness();
   h.bus.dispatch({
@@ -82,7 +73,6 @@ function makeDefaultedService(): Harness {
     amount: 5000,
     reason: "Траты",
   });
-  // Day 1 is before the first due; the threshold-th miss lands on day 1+threshold.
   for (let i = 0; i <= LOAN_DEFAULT_THRESHOLD; i++) eod(h);
   return h;
 }
@@ -117,12 +107,10 @@ describe("loan-default persistence — snapshot/restore round-trip", () => {
 
     const owedBefore = -fresh.balanceOf(LOAN);
     bus.dispatch({ kind: "RunEndOfDay" });
-    // Still overdue & unpaid → accrues at the penalty rate, not the base rate.
     expect(-fresh.balanceOf(LOAN)).toBeCloseTo(
       owedBefore * (1 + PENALTY_RATE),
       6,
     );
-    // Already defaulted → no fresh LoanDefaulted event (the flag survived).
     expect(events.filter((e) => e.kind === "LoanDefaulted")).toHaveLength(0);
     expect(balanced(fresh)).toBe(true);
   });
@@ -140,7 +128,6 @@ describe("loan-default persistence — snapshot/restore round-trip", () => {
 describe("loan-default persistence — old-save migration", () => {
   it("a snapshot without loanDefaults restores with no tracked state, then re-seeds lazily (current, not defaulted)", () => {
     const full = makeDefaultedService().service.toSnapshot();
-    // Strip the field the way a pre-Task-5 save would lack it.
     const old = JSON.parse(JSON.stringify(full)) as Record<string, unknown>;
     delete old.loanDefaults;
 
@@ -150,10 +137,8 @@ describe("loan-default persistence — old-save migration", () => {
     const fresh = new BankingService(bus, { loanDailyRate: LOAN_RATE });
     fresh.restore(old as unknown as BankingSnapshot);
 
-    // No arrears state survives a pre-field save…
     expect(fresh.loanDefaultStateOf(LOAN)).toBeUndefined();
 
-    // …and the outstanding loan re-seeds itself current (not defaulted) at EOD.
     bus.dispatch({ kind: "RunEndOfDay" });
     const state = fresh.loanDefaultStateOf(LOAN)!;
     expect(state).toBeDefined();
@@ -210,9 +195,6 @@ describe("loan-default — borrow gate", () => {
   });
 
   it("allows borrowing once a defaulted loan is fully repaid (stale flag must not lock out)", () => {
-    // A defaulted loan paid down to zero keeps its `defaulted` flag (the EOD
-    // recovery path skips a zero-balance loan), but with no outstanding debt the
-    // borrow gate must not permanently block the player.
     expect(
       borrowBlockReason(0, { penaltyActive: true, defaulted: true }),
     ).toBeNull();

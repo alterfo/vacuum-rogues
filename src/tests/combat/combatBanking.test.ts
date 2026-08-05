@@ -31,7 +31,6 @@ describe("shipTurnRate — signed turn rate from two headings", () => {
   });
 
   it("wraps across ±π to the shortest rotation (no spurious huge turn)", () => {
-    // heading crosses from just under +π to just over -π: a tiny turn, not ~2π.
     const rate = shipTurnRate(Math.PI - 0.05, -(Math.PI - 0.05), 10);
     expect(Math.abs(rate)).toBeCloseTo(0.1 / 10, 10);
   });
@@ -60,7 +59,6 @@ describe("bankingAngle — turn rate → roll, clamped (Task 11)", () => {
       small * CFG.rollPerTurnRate,
       10,
     );
-    // double the turn rate → double the roll (still under the clamp)
     expect(bankingAngle(2 * small, CFG)).toBeCloseTo(
       2 * bankingAngle(small, CFG),
       10,
@@ -80,7 +78,6 @@ describe("bankingAngle — turn rate → roll, clamped (Task 11)", () => {
   });
 
   it("a full-rate ShipPhysics turn lands right at the clamp", () => {
-    // ShipPhysics.rotationSpeed = (π/2)/300 rad/ms — the max per-frame turn rate.
     const maxTurnRate = Math.PI / 2 / 300;
     expect(bankingAngle(maxTurnRate, CFG)).toBeCloseTo(CFG.maxRollAngle, 6);
     expect(bankingAngle(maxTurnRate, CFG)).toBeLessThanOrEqual(
@@ -112,12 +109,10 @@ describe("approachRoll — smooth roll-in / roll-out easing", () => {
 
   it("snaps to the target (no overshoot) when within one step", () => {
     const target = 0.001;
-    // one 100ms step covers 0.4 rad ≫ 0.001, so it lands exactly on target
     expect(approachRoll(0, target, 100, CFG)).toBe(target);
   });
 
   it("eases both up and down toward the target", () => {
-    // rolling back toward level from a full bank
     const next = approachRoll(CFG.maxRollAngle, 0, 10, CFG);
     expect(next).toBeLessThan(CFG.maxRollAngle);
     expect(next).toBeGreaterThan(0);

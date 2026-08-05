@@ -1,12 +1,3 @@
-/**
- * Tests for the domain-field scaffolder.
- *
- * Each test builds a minimal fixture tree in a temp directory that mirrors the
- * real file layout (src/domain, src/validation, src/data), runs the generator
- * against it, and asserts all three lockstep files are correctly edited. We
- * verify idempotency (running twice does not duplicate anything) and the
- * documented error cases (missing entity, missing schema).
- */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -130,11 +121,9 @@ describe("scaffoldDomainField — happy path", () => {
       ]),
     );
 
-    // 1. domain class — field inserted as a readonly class property
     const player = read("src/domain/Player.ts");
     expect(player).toContain("readonly techResearch: number = 0;");
 
-    // 2. schema — inserted inside PlayerSchema, NOT StationSchema/SaveStateSchema
     const schemas = read("src/validation/schemas.ts");
     expect(schemas).toContain("techResearch: z.number().default(0),");
     const playerBlock = schemas.slice(
@@ -145,13 +134,11 @@ describe("scaffoldDomainField — happy path", () => {
     const stationBlock = schemas.slice(0, schemas.indexOf("export const PlayerSchema"));
     expect(stationBlock).not.toContain("techResearch");
 
-    // 3. migration — CURRENT_VERSION bumped, new migration keyed at old version
     const mig = read("src/data/MigrationPipeline.ts");
     expect(mig).toContain("CURRENT_VERSION = 23");
     expect(mig).toContain("22: (state: SaveState) =>");
     expect(mig).toContain("player.techResearch = 0;");
 
-    // a non-empty checklist of manual follow-ups is always returned
     expect(res.checklist.length).toBeGreaterThan(0);
   });
 
@@ -209,7 +196,6 @@ describe("scaffoldDomainField — idempotency", () => {
       root,
     );
 
-    // second run is all skips, no changes
     expect(second.changed).toEqual([]);
     expect(second.skipped).toEqual(
       expect.arrayContaining([
@@ -223,13 +209,10 @@ describe("scaffoldDomainField — idempotency", () => {
     const schemas = read("src/validation/schemas.ts");
     const mig = read("src/data/MigrationPipeline.ts");
 
-    // exactly one occurrence everywhere
     expect((player.match(/techResearch/g) ?? []).length).toBe(1);
     expect((schemas.match(/techResearch:/g) ?? []).length).toBe(1);
-    // version bumped exactly once (no 24), only one new migration entry added
     expect(mig).toContain("CURRENT_VERSION = 23");
     expect(mig).not.toContain("CURRENT_VERSION = 24");
-    // the backfill assignment is the per-entry sentinel — exactly one entry
     expect((mig.match(/player\.techResearch = 0;/g) ?? []).length).toBe(1);
     expect((mig.match(/22: \(state: SaveState\) =>/g) ?? []).length).toBe(1);
   });
@@ -253,7 +236,6 @@ describe("scaffoldDomainField — error cases", () => {
       { entity: "Ghost", field: "x", type: "number", default: "0" },
       root,
     );
-    // Ghost.ts and GhostSchema both missing → two warnings, no schema edit
     expect(res.warnings.some((w) => w.includes("entity file not found"))).toBe(true);
     expect(res.warnings.some((w) => w.includes("schema not found"))).toBe(true);
     expect(read("src/validation/schemas.ts")).not.toContain("x:");
@@ -275,9 +257,6 @@ describe("scaffoldDomainField — error cases", () => {
 describe("scaffoldDomainField — multi-class files (regression)", () => {
   it("inserts into the target class even when a sibling class declares the same field", () => {
     writeFixtures();
-    // Mirrors real multi-class files (GalacticEvent.ts, ShipModule.ts): a sibling
-    // class already declares `severity`. The field-existence check must be scoped
-    // to the TARGET class body, not the whole file, or the target is false-skipped.
     const MULTI = `export class GalacticEvent {
 }
 
@@ -304,9 +283,6 @@ export class InvasionEvent extends GalacticEvent {
 describe("scaffoldDomainField — migration idempotency (regression)", () => {
   it("writes the migration when the field name only appears in an unrelated comment", () => {
     writeFixtures();
-    // The migration block's COMMENT mentions the word "level", but no backfill for
-    // a Player `level` field exists. A bare `\\blevel\\b` idempotency check would
-    // wrongly skip the migration (leaving schema/class edited — broken lockstep).
     const MIG = `import type { SaveState } from "@/domain/SaveState";
 
 export class MigrationPipeline {

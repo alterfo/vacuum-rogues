@@ -1,21 +1,3 @@
-/**
- * Task 5 regression: the hangar/refit executors
- * (repair / buy-gear / upgrade-hull / buy-module) now drive the docked scene's
- * real `HangarPanel` via the `e2eOpenHangar`/`e2eCloseHangar` seams when the
- * current scene exposes them — the same "drive the real button, not a silent
- * bypass" shape as `takeQuest`'s job-board seams — falling back to the unchanged
- * domain-only mutation on a headless double without the seams
- * (docs/plans/20260727-autopilot-ui-parity-fixes.md).
- *
- * Two axes per action:
- *  - seams present  ⇒  both are invoked (open BEFORE the mutation, close after)
- *                      AND the real domain effect still lands.
- *  - seams absent   ⇒  the domain effect lands with the seams never touched
- *                      (backward compatibility for every headless caller/test).
- *
- * Plus one end-to-end pass against a REAL `StationScene` (docked via `goTo`) to
- * prove the seam renders the hangar view and returns to «main» without throwing.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { GameScene } from "@/presentation/GameScene";
 import { RealEngineHarness } from "../realEngineHarness";
@@ -38,7 +20,6 @@ import {
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** A minimal scene double exposing the two hangar seams as ordered spies. */
 function seamScene() {
   const calls: string[] = [];
   const open = vi.fn(() => {
@@ -66,8 +47,6 @@ describe("hangar-panel seam wiring (Task 5)", () => {
     harness = await RealEngineHarness.boot({ seed: "HANGAR-SEAM-TEST" });
     await harness.newGame();
 
-    // Shoppable system: CRAFT_CENTER (micromodules) + high tech (hull listings),
-    // mirroring newActions.test.ts / liveEconomyHeads.test.ts.
     const sys = currentSystem(harness.engine)!;
     sys.techLevel = 5;
     sys.stations.push(
@@ -94,8 +73,6 @@ describe("hangar-panel seam wiring (Task 5)", () => {
     vi.clearAllMocks();
     localStorage.clear();
   });
-
-  // ── seams present: watchable open → mutate → close ────────────────────────
 
   it("executeRepair drives open/close around the real hull repair", () => {
     const engine = harness.engine;
@@ -172,12 +149,9 @@ describe("hangar-panel seam wiring (Task 5)", () => {
     expect(harness.errors()).toHaveLength(0);
   });
 
-  // ── seams present but nothing to do: no panel flicker for a no-op ──────────
-
   it("does NOT open the hangar when the refit is a no-op (nothing affordable)", () => {
     const engine = harness.engine;
     const player = engine.player!;
-    // Drain the wallet so no gear/hull/module is affordable and the hull is full.
     adjustPlayerCredits(
       engine.bank,
       player,
@@ -198,15 +172,12 @@ describe("hangar-panel seam wiring (Task 5)", () => {
     expect(harness.errors()).toHaveLength(0);
   });
 
-  // ── seams absent: unchanged domain-only path (headless doubles) ───────────
-
   it("falls back to the domain mutation when the scene has no hangar seams", () => {
     const engine = harness.engine;
     const player = engine.player!;
     const listing = bestAffordableGear(engine)!;
     const creditsBefore = player.credits;
     const ownedBefore = player.inventory.ownedGearIds.length;
-    // A scene double WITHOUT the seams (the headless/pre-Task-5 shape).
     engine.currentScene = {} as unknown as GameScene;
 
     expect(() => executeBuyBestGear(engine)).not.toThrow();
@@ -230,8 +201,6 @@ describe("hangar-panel seam wiring (Task 5)", () => {
     expect(harness.errors()).toHaveLength(0);
   });
 
-  // ── end-to-end against a REAL StationScene ────────────────────────────────
-
   it("routes a real repair through a docked StationScene's hangar view", async () => {
     const engine = harness.engine;
     const sys = currentSystem(engine)!;
@@ -244,7 +213,6 @@ describe("hangar-panel seam wiring (Task 5)", () => {
 
     executeRepair(engine);
 
-    // The seam opened the hangar view then returned to the main service menu.
     const view = (engine.currentScene as unknown as { view: string }).view;
     expect(view).toBe("main");
     expect(player.ship.hullHP).toBeGreaterThan(hullBefore);

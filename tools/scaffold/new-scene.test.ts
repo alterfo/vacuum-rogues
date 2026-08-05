@@ -1,13 +1,3 @@
-/**
- * Tests for the new-scene scaffolder.
- *
- * Each test builds a minimal fixture tree in a temp directory that mirrors the
- * real file layout (src/presentation, src/types, src/core/services,
- * src/systems, e2e/page-objects), runs the generator against it, and asserts
- * all five registration outputs are correctly created/edited. We verify
- * idempotency (running twice does not duplicate anything), the
- * --context-dependent opt-in, and the documented error cases.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -127,7 +117,6 @@ describe("insertion helpers", () => {
     );
     expect(r.content).toContain("case SceneType.RESEARCH_UPGRADE:");
     expect(r.content).toContain("return new ResearchUpgradeScene(renderer);");
-    // the new case sits before the default case
     expect(r.content.indexOf("SceneType.RESEARCH_UPGRADE")).toBeLessThan(
       r.content.indexOf("default:"),
     );
@@ -156,19 +145,16 @@ describe("scaffoldScene — happy path", () => {
       ]),
     );
 
-    // 1. scene class file
     const scene = read("src/presentation/ResearchUpgradeScene.ts");
     expect(scene).toContain("export class ResearchUpgradeScene extends GameScene");
     expect(scene).toContain("initialize(context?: object): void");
     expect(scene).toContain("update(_deltaTime: number): void");
     expect(scene).toContain("destroy(): void");
 
-    // 2. SceneType enum
     expect(read("src/types/index.ts")).toContain(
       'RESEARCH_UPGRADE = "RESEARCH_UPGRADE",',
     );
 
-    // 3. SceneFactory import + case
     const factory = read("src/core/services/SceneFactory.ts");
     expect(factory).toContain(
       'import { ResearchUpgradeScene } from "@/presentation/ResearchUpgradeScene";',
@@ -176,10 +162,8 @@ describe("scaffoldScene — happy path", () => {
     expect(factory).toContain("case SceneType.RESEARCH_UPGRADE:");
     expect(factory).toContain("return new ResearchUpgradeScene(renderer);");
 
-    // 4. contextDependentScenes (because --context-dependent)
     expect(read("src/systems/GameEngine.ts")).toContain("SceneType.RESEARCH_UPGRADE,");
 
-    // 5. Page Object stub
     const page = read("e2e/page-objects/ResearchUpgradeScenePage.ts");
     expect(page).toContain("export class ResearchUpgradeScenePage extends GamePageBase");
 
@@ -192,7 +176,6 @@ describe("scaffoldScene — happy path", () => {
     expect(res.warnings).toEqual([]);
     expect(read("src/systems/GameEngine.ts")).not.toContain("SceneType.RESEARCH_UPGRADE");
     expect(res.changed).not.toContain("src/systems/GameEngine.ts");
-    // checklist nudges the developer toward the opt-in
     expect(res.checklist.some((c) => c.includes("--context-dependent"))).toBe(true);
   });
 

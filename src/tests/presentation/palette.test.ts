@@ -54,7 +54,6 @@ describe("palette — colorblind-safe faction colours", () => {
     for (const mode of colourblind) {
       expect(FACTION_PALETTES[mode]).not.toEqual(DEFAULT_FACTION_PALETTE);
     }
-    // The three colourblind modes are distinct from one another too.
     expect(FACTION_PALETTES.deuteranopia).not.toEqual(
       FACTION_PALETTES.protanopia,
     );
@@ -96,7 +95,6 @@ describe("palette — persistence + resolution", () => {
     expect(factionColor(Faction.SYNDICATE)).toBe(
       FACTION_PALETTES.deuteranopia[Faction.SYNDICATE],
     );
-    // The remapped Syndicate colour is no longer the original pure green.
     expect(factionColor(Faction.SYNDICATE)).not.toBe(0x00ff00);
   });
 

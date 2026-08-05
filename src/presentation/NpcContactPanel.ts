@@ -12,12 +12,10 @@ import { bindModalKeys } from "./ui/bindModalKeys";
 import { roleLabel } from "./npcLabels";
 import { t } from "@/i18n/i18n";
 
-/** Localized button label per context-driven comms option (live per language). */
 function optionLabel(opt: CommsOption): string {
   return t(`comms.option.${opt}`);
 }
 
-/** Button colour per comms option. */
 const OPTION_COLORS: Record<CommsOption, number> = {
   trade: 0x885500,
   hire: 0x556600,
@@ -27,12 +25,10 @@ const OPTION_COLORS: Record<CommsOption, number> = {
   flee: 0x444466,
 };
 
-/** Localized faction (singular type) label, e.g. «Окраинник» / "Outlander". */
 function factionTypeLabel(race: FactionType): string {
   return t(`factionType.${race}`);
 }
 
-/** Localized alliance (plural) label, e.g. «Окраинники» / "Outlanders". */
 function factionLabel(faction: Faction): string {
   return t(`faction.${faction}`);
 }
@@ -43,24 +39,17 @@ export interface NpcContactCallbacks {
   onAttack: () => void;
   onApproach: () => void;
   onClose: () => void;
-  /** Context-driven options of the universal hail; wired by later tasks. A
-   *  comms option only renders a button once its handler is supplied. */
   onHire?: () => void;
   onAlly?: () => void;
   onPayTribute?: () => void;
   onFlee?: () => void;
 }
 
-/**
- * Contact panel for an NPC ship in the player's system (Feature 8, slice 2).
- */
 export class NpcContactPanel {
   public readonly container: Container;
   private readonly callbacks: NpcContactCallbacks;
 
   private static readonly W = 240;
-  // First action button sits below the stat readout; the panel grows to fit the
-  // number of context-driven buttons it actually renders.
   private static readonly BTN_TOP = 162;
   private static readonly BTN_STEP = 30;
   private static readonly H_OUT = 230;
@@ -69,12 +58,7 @@ export class NpcContactPanel {
   private readonly playerScanPower: number;
   private readonly context: CommsContext;
   private scanResultLabel: Text | null = null;
-  // Y where the scan readout is mounted — set after buttons so it never overlaps.
   private scanResultY = 284;
-  // Esc closes the hail window via the shared modal-key convention. This is a
-  // multi-button panel (the helper is intentionally not for multi-button forms),
-  // so it wires only Esc→close — there is no single Enter primary among
-  // talk/trade/attack/scan. Detached in destroy() so the listener never leaks.
   private readonly detachKeys: () => void;
 
   constructor(
@@ -99,11 +83,6 @@ export class NpcContactPanel {
     });
   }
 
-  /**
-   * Map a comms option to its wired callback (if any). An option without a
-   * handler is simply not rendered — this is how later tasks (hire/ally/tribute/
-   * flee) light up their buttons additively without changing this renderer.
-   */
   private optionHandler(opt: CommsOption): (() => void) | undefined {
     switch (opt) {
       case "trade":
@@ -121,18 +100,10 @@ export class NpcContactPanel {
     }
   }
 
-  /**
-   * Build the in-range action button set for this hail: talk/scan standing
-   * affordances bracketing the context-driven {@link commsOptionsFor} options.
-   * An option whose handler is not yet wired is silently skipped, so the neutral
-   * panel renders the familiar Связаться/Торговать/Атаковать/Сканировать set.
-   */
   private buildActionButtons(
     npc: NpcShip,
   ): { label: string; color: number; onClick: () => void }[] {
     const out: { label: string; color: number; onClick: () => void }[] = [];
-    // Talk + scan frame a normal hail; a forced pirate shakedown or a futile
-    // Overmind hail (gibberish — Task 5) drops them.
     const showStanding =
       this.context !== "pirate-shakedown" && this.context !== "overmind";
     if (showStanding) {
@@ -153,12 +124,6 @@ export class NpcContactPanel {
         onClick,
       });
     }
-    // A hostile or Overmind contact must always expose "Атаковать" in range: the
-    // Overmind answers a hail with gibberish ({@link commsOptionsFor} → []), which
-    // would otherwise strip the only meaningful action and leave an enemy that can
-    // never be engaged. The neutral panel already lists attack via commsOptionsFor
-    // (so it is untouched), and a hostile-other / pirate-shakedown context already
-    // carries it — the guard only adds the missing button for the Overmind.
     const hostileContact =
       this.context === "overmind" ||
       this.context === "hostile-other" ||
@@ -181,8 +146,6 @@ export class NpcContactPanel {
   }
 
   private render(npc: NpcShip): void {
-    // Compute the in-range action buttons first so the panel can size itself to
-    // the number it actually renders (the universal hail varies by context).
     const buttons = this.inRange ? this.buildActionButtons(npc) : [];
     const h = this.inRange
       ? NpcContactPanel.BTN_TOP + buttons.length * NpcContactPanel.BTN_STEP + 70
@@ -195,7 +158,6 @@ export class NpcContactPanel {
     bg.on("pointerdown", (e) => e.stopPropagation());
     this.container.addChild(bg);
 
-    // Truncate long names so they never run under the corner ✕.
     const name = npc.name.length > 20 ? npc.name.slice(0, 19) + "…" : npc.name;
     this.addLabel(name, 12, 12, 14, 0x00ffff, true);
     this.addLabel(
@@ -231,8 +193,6 @@ export class NpcContactPanel {
     );
 
     if (this.inRange) {
-      // Within radar range: detailed scan readout, then the context-driven action
-      // set (US-070 #3 — more is known about a ship once it is on the scanner).
       this.addLabel(
         t("comms.shieldsLine", { n: Math.round(npc.shields) }),
         12,
@@ -269,9 +229,6 @@ export class NpcContactPanel {
       }
       this.scanResultY = y + 4;
     } else {
-      // Beyond radar range (US-070 #3): no hail/trade — the ship can only close
-      // the distance to firing range, after which the panel offers them. Attack
-      // is still allowed (the ship auto-closes and opens fire).
       this.addLabel(t("comms.outOfRange"), 12, 128, 12, 0xffaa00);
       this.addButton(
         t("comms.approach"),
@@ -289,14 +246,10 @@ export class NpcContactPanel {
       );
     }
 
-    // Close via the corner "✕" (or by clicking outside the panel — handled by
-    // the scene). A full-width button used to overflow the frame.
     this.addCloseX();
   }
 
-  /** Small "✕" close affordance (with its own backing) in the top-right corner. */
   private addCloseX(): void {
-    // Dark backing so the ✕ stays legible over the title/name text.
     const bg = new Graphics();
     bg.roundRect(NpcContactPanel.W - 28, 6, 22, 22, 4);
     bg.fill({ color: 0x000000, alpha: 0.85 });
@@ -392,7 +345,6 @@ export class NpcContactPanel {
     this.container.addChild(t);
   }
 
-  /** Handle the "Сканировать" button: compare scan power vs NPC shield power. */
   private onScan(npc: NpcShip): void {
     if (this.scanResultLabel) {
       this.container.removeChild(this.scanResultLabel);
@@ -434,10 +386,7 @@ export class NpcContactPanel {
   }
 
   destroy(): void {
-    // Detach the Esc listener first (idempotent) so it can't outlive the panel.
     this.detachKeys();
-    // Idempotent: the panel may be torn down both by a deferred close and by the
-    // scene's clearUILayer(); destroying an already-destroyed container throws.
     if (!this.container.destroyed) {
       this.container.destroy({ children: true });
     }

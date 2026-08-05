@@ -107,7 +107,6 @@ export class MonkeyTester {
     const errors: string[] = [];
     let actions = 0;
 
-    // Cache bounds once to avoid per-action async locator lookups
     const cachedBounds = bounds ?? (await this.getCanvasBounds());
 
     for (let i = 0; i < n; i++) {

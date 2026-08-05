@@ -8,22 +8,8 @@ import {
 import { solveInterceptPoint } from "@/utils/intercept";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Task 2 — the pure pieces of the smooth-chase fix: a lead-point smoother and a
- * re-aim hysteresis gate. The smoother converges monotonically toward a steady
- * lead and hard-bounds the per-frame aim delta; the gate blocks sub-threshold
- * jitter and throttles re-plots to a minimum interval. Task 3 wires these into
- * `NpcShipManager`/`SpaceFlightScene`; here they are proven in isolation.
- */
-
-/**
- * The Task 1 characterization smoothness bound (`chaseSteering.characterize.test`
- * `SMOOTH_BOUND_PX`) — kept in sync here as a literal so this suite stays
- * self-contained (importing the characterize module would re-register its tests).
- */
 const SMOOTH_BOUND_PX = 8;
 
-/** Deterministic [-1,1] noise — mirrors the Task 1 characterization. */
 function lcgNoise(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
@@ -32,7 +18,6 @@ function lcgNoise(seed: number): () => number {
   };
 }
 
-/** Raw lead exactly as `npcLeadPoint` / the characterization computes it. */
 function rawLeadPoint(
   shooterX: number,
   shooterY: number,
@@ -69,8 +54,6 @@ describe("smoothLeadPoint — lead-point smoother", () => {
     for (let f = 0; f < 200; f++) {
       smoothed = smoothLeadPoint(smoothed, target, SMOOTHER);
       const dist = Math.hypot(smoothed.x - target.x, smoothed.y - target.y);
-      // Distance to the fixed lead strictly decreases each step — no oscillation,
-      // no overshoot past the target.
       expect(dist).toBeLessThanOrEqual(prevDist + 1e-9);
       prevDist = dist;
     }
@@ -116,8 +99,6 @@ describe("smoothLeadPoint — lead-point smoother", () => {
       last = smoothed;
     }
 
-    // The Task 1 RED metric (≈72px raw) is now under the smoothness bound: the
-    // clamp guarantees the smoothed aim never moves more than maxStepPx/frame.
     expect(maxJump).toBeLessThanOrEqual(SMOOTHER.maxStepPx + 1e-9);
     expect(maxJump).toBeLessThanOrEqual(SMOOTH_BOUND_PX);
   });
@@ -175,9 +156,6 @@ describe("shouldReplotRoute — re-aim hysteresis gate", () => {
         gate = { endpoint: { ...lead }, lastReplotMs: now };
       }
     }
-    // The Task 1 RED metric (~15 re-plots/sec) collapses to one per interval:
-    // every consecutive re-plot is at least `minInterval` apart, and the total
-    // can't exceed one per interval window.
     for (let i = 1; i < replotTimes.length; i++) {
       expect(replotTimes[i] - replotTimes[i - 1]).toBeGreaterThanOrEqual(
         minInterval,

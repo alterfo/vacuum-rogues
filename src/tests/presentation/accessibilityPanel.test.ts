@@ -1,15 +1,3 @@
-/**
- * Accessibility pass Task 4: the Accessibility settings group surfaced by the ♿
- * HUD button — palette mode / reduced-motion / key remap. These drive the
- * `AccessibilityPanel` component directly with mocked pixi.js (no WebGL/texture
- * context). They pin that the panel:
- *   • reads the current settings (palette default, reduced-motion OFF, default
- *     key bindings),
- *   • writes each change through the pure seams (`setPaletteMode` /
- *     `setReducedMotion` / `rebind`+`setKeymap`) and fans the live effect out,
- *   • captures a rebind, rejects a conflicting key, and aborts on Escape,
- *   • is closable through its «Закрыть» cell.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("pixi.js", () => {
@@ -84,7 +72,6 @@ import { currentKeymap } from "@/presentation/input/keymap";
 
 type KeyEvt = { key: string; code?: string };
 
-/** A capture installer that records handlers + a disposer spy (no real DOM). */
 function makeCapture(): {
   install: ReturnType<
     typeof vi.fn<(handler: (e: KeyEvt) => void) => () => void>
@@ -119,7 +106,6 @@ function makeDeps(
   };
 }
 
-/** All pixi Graphics pointerdown handlers, in creation order. */
 function graphicsPointerdownHandlers(): Array<
   (e: { stopPropagation: () => void }) => void
 > {
@@ -136,7 +122,6 @@ function graphicsPointerdownHandlers(): Array<
     );
 }
 
-/** Texts created so far, by their string content. */
 function allTexts(): string[] {
   return vi
     .mocked(Text)
@@ -156,10 +141,8 @@ describe("AccessibilityPanel", () => {
     expect(texts).toContain("ПАЛИТРА");
     expect(texts).toContain("МЕНЬШЕ ДВИЖЕНИЯ");
     expect(texts).toContain("УПРАВЛЕНИЕ");
-    // Palette defaults to "Обычная"; reduced-motion defaults OFF (ВЫКЛ).
     expect(texts).toContain("Обычная");
     expect(texts).toContain("ВЫКЛ");
-    // Default key bindings are shown.
     expect(texts).toContain("Esc");
     expect(texts).toContain("Пробел");
     expect(texts).toContain("J");
@@ -226,7 +209,6 @@ describe("AccessibilityPanel", () => {
 
     panel.beginRebind("journal");
     capture.fire({ key: "i" }); // 'i' is the inventory binding
-    // Rejected: binding unchanged, conflict surfaced, capture stays open.
     expect(currentKeymap().journal).toBe("j");
     expect(panel.isRebinding("journal")).toBe(true);
     expect(panel.rebindConflict()).toBe("inventory");
@@ -264,7 +246,6 @@ describe("AccessibilityPanel", () => {
   it("the first two hit areas cycle the palette and toggle reduced motion", () => {
     const panel = new AccessibilityPanel(makeDeps());
     const handlers = graphicsPointerdownHandlers();
-    // palette, motion, 4 action rows, reset, close = 8 cells.
     expect(handlers.length).toBe(8);
 
     handlers[0]({ stopPropagation: vi.fn() }); // palette cycle

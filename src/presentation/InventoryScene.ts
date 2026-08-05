@@ -20,50 +20,24 @@ import { SceneType, type ResourceType } from "@/types";
 import { t } from "@/i18n/i18n";
 import { scaledFont } from "@/utils/fontScale";
 
-/** A jettison action awaiting its second confirmation click. */
 interface PendingJettison {
   readonly kind: "gear" | "resource";
   readonly id: string;
 }
 
-/**
- * Inventory Scene — the ship's canonical GearCatalog loadout (hull + installed
- * gear + derived stats), the owned-but-uninstalled warehouse, and cargo.
- *
- * The `ShipLoadout` is the canonical fitting: shop purchases, combat loot and
- * micromodule crafting all install into `gameEngine.playerLoadout` (dual-hull
- * unification, 2026-06-16). The legacy `inventory.modules` bag only survives as
- * a residual store for unfitted gear and is deliberately NOT rendered here —
- * only the canonical `ownedGearIds` warehouse (Bug 2) is. Accessible via "I"
- * key from SpaceFlightScene or StarMapScene.
- *
- * Actions (install / uninstall-to-hold / jettison) route through the shared
- * `GearBridge`/`Inventory` mutation seams — never fork fit logic here. A
- * jettison is a two-step confirm (mirrors `SaveLoadScene`'s destructive-action
- * pattern) and grants no credits; selling stays in the equipment shop/hangar.
- */
 export class InventoryScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private mainContainer: Container | null = null;
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
-  /** Jettison action armed and awaiting its second confirmation click. */
   private pendingJettison: PendingJettison | null = null;
-  /** Auto-dismiss handle for the blocked-install toast; mounted on `renderer.stage`
-   * (not `mainContainer`) so it survives the `refresh()` teardown/rebuild cycle. */
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so it sits above the panel and survives the
-   * scene's `render()` UI rebuilds.
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -83,7 +57,6 @@ export class InventoryScene extends GameScene {
 
     this.render();
 
-    // Add keyboard listener for closing inventory
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
 
@@ -103,13 +76,11 @@ export class InventoryScene extends GameScene {
       clearTimeout(this.toastTimeout);
       this.toastTimeout = null;
     }
-    // Remove keyboard listener
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
     }
 
-    // Destroy containers
     if (this.mainContainer) {
       this.mainContainer.destroy({ children: true });
       this.mainContainer = null;
@@ -120,23 +91,18 @@ export class InventoryScene extends GameScene {
     logger.info("InventoryScene destroyed");
   }
 
-  /**
-   * Render the entire inventory UI
-   */
   private render(): void {
     if (!this.mainContainer || !this.gameEngine) return;
 
     const screenWidth = this.renderer.app.screen.width;
     const screenHeight = this.renderer.app.screen.height;
 
-    // Semi-transparent backdrop
     const backdrop = new Graphics();
     backdrop.rect(0, 0, screenWidth, screenHeight);
     backdrop.fill({ color: 0x000000, alpha: 0.8 });
     backdrop.eventMode = "static"; // Block clicks behind
     this.mainContainer.addChild(backdrop);
 
-    // Main panel — grown from 600 to fit the warehouse/cargo action rows (Bug 2).
     const panelWidth = 900;
     const panelHeight = 700;
     const panelX = (screenWidth - panelWidth) / 2;
@@ -148,7 +114,6 @@ export class InventoryScene extends GameScene {
     panel.stroke({ color: 0x00ffff, width: 3 });
     this.mainContainer.addChild(panel);
 
-    // Title
     const title = new Text({
       text: "ИНВЕНТАРЬ И ОБОРУДОВАНИЕ",
       style: {
@@ -162,30 +127,17 @@ export class InventoryScene extends GameScene {
     title.y = panelY + 15;
     this.mainContainer.addChild(title);
 
-    // Close button
     this.createCloseButton(panelX + panelWidth - 40, panelY + 15);
 
-    // Ship stats panel (left side)
     this.renderShipStats(panelX + 20, panelY + 60);
 
-    // Installed gear from the canonical loadout, with a [В трюм] uninstall
-    // action per fitted item (right side)
     this.renderLoadoutGear(panelX + 330, panelY + 60);
 
-    // Warehouse: owned-but-uninstalled gear, [Установить]/[Выбросить] (left,
-    // below ship stats)
     this.renderWarehouse(panelX + 20, panelY + 300);
 
-    // Resources display with per-stack [Выбросить] (bottom, full width)
     this.renderResources(panelX + 20, panelY + panelHeight - 140);
   }
 
-  /**
-   * Render ship statistics. Hull capacity, shields, speed and slot usage come
-   * from the canonical loadout's derived stats; live values (current HP,
-   * shields, energy, evasion) come from the ship state. GameEngine initializes
-   * a loadout on both new game and load, so it is always present here.
-   */
   private renderShipStats(x: number, y: number): void {
     if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
       return;
@@ -210,13 +162,9 @@ export class InventoryScene extends GameScene {
     const lines = [
       `Название: ${ship.name}`,
       ``,
-      // Live HP/shields can't exceed the loadout-derived capacities (the
-      // legacy ship fields may carry stale values from before the gear was
-      // canonical).
       `Корпус: ${Math.min(ship.hullHP, stats.maxHull)}/${stats.maxHull}`,
       `Щиты: ${Math.min(ship.shields, stats.shields)}/${stats.shields}`,
       `Энергия: ${ship.energy}/${ship.maxEnergy}`,
-      // px/ms, same unit and format as the NPC contact panel
       `Скорость: ${stats.speed.toFixed(2)}`,
       `Уворот: ${ship.evasion}`,
       `Слоты: ${stats.slotsUsed}/${stats.slotsTotal}`,
@@ -240,10 +188,6 @@ export class InventoryScene extends GameScene {
     }
   }
 
-  /**
-   * Render the hull and installed gear from the canonical GearCatalog loadout
-   * (read-only — gear is managed in the equipment shop).
-   */
   private renderLoadoutGear(x: number, y: number): void {
     if (!this.gameEngine || !this.mainContainer) return;
 
@@ -263,10 +207,6 @@ export class InventoryScene extends GameScene {
     const loadout = this.gameEngine.playerLoadout;
     if (!loadout) return; // unreachable: GameEngine always initializes a loadout
 
-    // Hull card first (not uninstallable — slotIndex null), then each
-    // installed gear item at its loadout slot index (installedGearIds() and
-    // installedSlots() share the same order, so the index doubles as the
-    // uninstallToOwned slot argument).
     const items: { gear: Gear; slotIndex: number | null }[] = [
       { gear: loadout.hull, slotIndex: null },
     ];
@@ -275,9 +215,6 @@ export class InventoryScene extends GameScene {
       if (gear) items.push({ gear, slotIndex });
     });
 
-    // At most 5 cards fit between the section title and the resources row at
-    // the panel bottom (cards are 60px on a 70px step); large hulls hold up to
-    // 9 items, so show an explicit overflow count instead of silent truncation.
     const MAX_CARDS = 5;
     let yOffset = y + 35;
     for (const { gear, slotIndex } of items.slice(0, MAX_CARDS)) {
@@ -312,12 +249,6 @@ export class InventoryScene extends GameScene {
     this.mainContainer.addChild(hint);
   }
 
-  /**
-   * Render a single gear card (name, kind, tech level). Non-hull items
-   * (`slotIndex` set) get a `[В трюм]` uninstall action back into the owned
-   * warehouse (Bug 2); the hull (`slotIndex` null) stays read-only — it isn't
-   * something you carry to the hold.
-   */
   private renderGearCard(
     x: number,
     y: number,
@@ -382,13 +313,6 @@ export class InventoryScene extends GameScene {
     this.mainContainer.addChild(card);
   }
 
-  /**
-   * Render the owned-but-uninstalled gear warehouse (canonical
-   * `Inventory.ownedGearIds`, read through `ownedUninstalledGear` — the same
-   * accessor the station hangar/equipment-shop ТРЮМ views use). Each row gets
-   * `[Установить]` (install into the loadout) and `[Выбросить]` (jettison,
-   * two-step confirm, no refund — that's what selling in the shop is for).
-   */
   private renderWarehouse(x: number, y: number): void {
     if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
       return;
@@ -416,7 +340,6 @@ export class InventoryScene extends GameScene {
       return;
     }
 
-    // At most 3 rows fit the ~230px column budget above the resources row.
     const MAX_ROWS = 3;
     for (const gearId of ownedIds.slice(0, MAX_ROWS)) {
       yOffset = this.renderWarehouseRow(x, yOffset, gearId, loadout);
@@ -434,7 +357,6 @@ export class InventoryScene extends GameScene {
     }
   }
 
-  /** One warehouse row: name + [Установить]/[Выбросить] (or the confirm pair). Returns the next row's y. */
   private renderWarehouseRow(
     x: number,
     y: number,
@@ -444,11 +366,6 @@ export class InventoryScene extends GameScene {
     if (!this.mainContainer) return y;
     const gear = gearById(gearId);
     const rowW = 280;
-    // Vertical gap between the two stacked «Установить»/«Выбросить» (or
-    // «Отмена»/подтверждение) actions — sized for the "M" line height (16 px
-    // cleared the ~14 px text) but that margin shrinks to zero at "L"; grow it
-    // with the font scale so the two buttons never overlap (Task 3, mirrors
-    // HangarPanel.renderWarehouseAndCargo's `btnGap`).
     const btnGap = Math.max(16, lineStepFor(scaledFont(11)) + 4);
     const rowH = 12 + btnGap + 8;
 
@@ -505,7 +422,6 @@ export class InventoryScene extends GameScene {
     return y + rowH + 8;
   }
 
-  /** One right-anchored text action button, appended directly to `mainContainer`. */
   private addRowButton(
     label: string,
     color: number,
@@ -527,10 +443,6 @@ export class InventoryScene extends GameScene {
     this.mainContainer.addChild(btn);
   }
 
-  /**
-   * Render cargo (credits + per-stack resources), each stack with a
-   * `[Выбросить]` jettison action (two-step confirm, no refund).
-   */
   private renderResources(x: number, y: number): void {
     if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
       return;
@@ -583,7 +495,6 @@ export class InventoryScene extends GameScene {
     }
   }
 
-  /** One cargo resource row: label ×amount + [Выбросить] (or the confirm pair). Returns the next row's y. */
   private renderResourceRow(
     x: number,
     y: number,
@@ -636,9 +547,6 @@ export class InventoryScene extends GameScene {
     return y + rowH;
   }
 
-  /**
-   * Create close button
-   */
   private createCloseButton(x: number, y: number): void {
     if (!this.mainContainer) return;
 
@@ -685,7 +593,6 @@ export class InventoryScene extends GameScene {
     this.mainContainer.addChild(closeBtn);
   }
 
-  /** Rebuild the panel after a mutating action (install/uninstall/jettison). */
   private refresh(): void {
     if (!this.mainContainer) return;
     this.mainContainer.destroy({ children: true });
@@ -694,13 +601,10 @@ export class InventoryScene extends GameScene {
     this.render();
   }
 
-  /** Install an owned warehouse item into the loadout (public: unit-testable without pointer events). */
   installFromWarehouse(gearId: string): void {
     const player = this.gameEngine?.player;
     const loadout = this.gameEngine?.playerLoadout;
     if (!player || !loadout) return;
-    // Same fit check the HangarPanel's install row uses, so a full category or
-    // an over-mass fit tells the player why instead of silently doing nothing.
     const blocked = explainInstallBlock(loadout, gearId);
     if (blocked) {
       this.showToast(blocked, 0xff6644);
@@ -710,7 +614,6 @@ export class InventoryScene extends GameScene {
     this.refresh();
   }
 
-  /** Transient bottom-of-screen message (e.g. a blocked install's reason). */
   private showToast(text: string, color: number): void {
     if (this.toastTimeout) {
       clearTimeout(this.toastTimeout);
@@ -740,7 +643,6 @@ export class InventoryScene extends GameScene {
     }, 2200);
   }
 
-  /** Uninstall a fitted loadout slot back into the owned warehouse. */
   uninstallGear(slotIndex: number): void {
     const player = this.gameEngine?.player;
     const loadout = this.gameEngine?.playerLoadout;
@@ -749,19 +651,16 @@ export class InventoryScene extends GameScene {
     this.refresh();
   }
 
-  /** Arm a two-step jettison confirmation for a gear id or resource type. */
   requestJettisonConfirm(kind: "gear" | "resource", id: string): void {
     this.pendingJettison = { kind, id };
     this.refresh();
   }
 
-  /** Cancel an armed jettison confirmation. */
   cancelJettisonConfirm(): void {
     this.pendingJettison = null;
     this.refresh();
   }
 
-  /** Carry out the armed jettison — no credit refund (selling is the paid path). */
   confirmJettison(): void {
     const pending = this.pendingJettison;
     this.pendingJettison = null;
@@ -783,9 +682,6 @@ export class InventoryScene extends GameScene {
     this.refresh();
   }
 
-  /**
-   * Close inventory and return to previous scene
-   */
   private async closeInventory(): Promise<void> {
     if (!this.gameEngine) return;
 
@@ -797,9 +693,6 @@ export class InventoryScene extends GameScene {
     );
   }
 
-  /**
-   * Handle keyboard input
-   */
   private onKeyDown(event: KeyboardEvent): void {
     if (event.key === "i" || event.key === "I" || event.key === "Escape") {
       this.closeInventory();

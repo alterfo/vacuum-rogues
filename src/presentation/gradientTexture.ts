@@ -1,18 +1,5 @@
 import { Texture } from "pixi.js";
 
-/**
- * Soft-glow texture for the flight scene's nebula / sun halo / absorption
- * pillars (per-instance planet/star variety + FPS work, 2026-06-12).
- *
- * A single white radial-gradient texture (bright centre → transparent edge) is
- * baked ONCE via Canvas2D and shared by every soft element: tint + scale + alpha
- * + blendMode a `Sprite` of it to get a smooth glow with **zero per-frame cost**
- * — replacing the per-frame `BlurFilter`s that dragged the flight scene to ~15
- * FPS. (A stacked-`Graphics` fallback handles the no-canvas case, but it bands.)
- *
- * Returns `null` when no 2D canvas context is available (jsdom / unit tests) so
- * callers fall back to a `Graphics` approximation instead of crashing.
- */
 let cached: Texture | null | undefined;
 
 export function softGlowTexture(): Texture | null {
@@ -30,8 +17,6 @@ export function softGlowTexture(): Texture | null {
 
   const r = size / 2;
   const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
-  // Bright concentrated centre fading smoothly to nothing — the falloff a
-  // strength-72/80 blur produced, baked once.
   grad.addColorStop(0.0, "rgba(255,255,255,1)");
   grad.addColorStop(0.2, "rgba(255,255,255,0.6)");
   grad.addColorStop(0.45, "rgba(255,255,255,0.28)");
@@ -44,14 +29,6 @@ export function softGlowTexture(): Texture | null {
   return cached;
 }
 
-/**
- * Soft dust-mote texture for the comet particle tail (natural-comet rework,
- * 2026-06-20). A small, very diffuse white radial dot — no hard core — baked
- * ONCE so a `ParticleContainer` of tinted/scaled/faded `Sprite`s of it reads as
- * a soft volumetric dust trail with **zero per-frame cost** (no `BlurFilter`,
- * per `feedback-no-blur-filters-flight`). Returns `null` with no 2D context
- * (jsdom / unit tests) so callers fall back without crashing.
- */
 let dustCached: Texture | null | undefined;
 
 export function dustParticleTexture(): Texture | null {
@@ -69,8 +46,6 @@ export function dustParticleTexture(): Texture | null {
 
   const r = size / 2;
   const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
-  // No bright core — a faint, soft mote that fully fades by the edge so many
-  // overlapping copies accumulate into a smooth diffuse cloud, not hard dots.
   grad.addColorStop(0.0, "rgba(255,255,255,0.55)");
   grad.addColorStop(0.35, "rgba(255,255,255,0.22)");
   grad.addColorStop(0.7, "rgba(255,255,255,0.06)");
@@ -82,18 +57,6 @@ export function dustParticleTexture(): Texture | null {
   return dustCached;
 }
 
-/**
- * Baked, tintable star-point texture for the background twinkle stars
- * (space-visual-cleanup, 2026-07-08). Replaces the runtime `Graphics`
- * 4-point diffraction-spike stroke (a crisp vector plus-sign) with a
- * Canvas2D-baked tight bright core + smooth falloff; when `hero` is true, two
- * soft, tapered, low-alpha glints are baked directly into the gradient canvas
- * as anti-aliased linear-gradient strokes, so they read as a photographic
- * lens glint rather than a hard-edged cross. Callers tint a `Sprite` of this
- * per-star (white base, like `softGlowTexture`), so one texture serves every
- * star colour. Cached per `hero` value (baked once). Returns `null` with no 2D
- * context (jsdom / unit tests) so callers fall back to a plain `Graphics` dot.
- */
 let starPointCachedNormal: Texture | null | undefined;
 let starPointCachedHero: Texture | null | undefined;
 
@@ -135,9 +98,6 @@ export function starPointTexture(hero: boolean): Texture | null {
     drawGlint(0, armLen);
   }
 
-  // Tight bright core with smooth falloff — the point-light look a real star
-  // photographs with, drawn over the glint tails so the core stays the
-  // brightest, sharpest feature.
   const coreR = size * 0.5;
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
   grad.addColorStop(0.0, "rgba(255,255,255,1)");
@@ -154,11 +114,6 @@ export function starPointTexture(hero: boolean): Texture | null {
   return tex;
 }
 
-/**
- * Deterministic small PRNG (mulberry32) so a given rock `seed` always bakes the
- * same rock — distinct seeds give distinct rocks, identical seeds reuse the
- * cached texture.
- */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -169,19 +124,6 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/**
- * Baked comet-head texture (space-visual-cleanup, 2026-07-08). Replaces
- * `setupCometVisuals`' reuse of the generic `softGlowTexture` glow — a
- * symmetric blob with no distinct centre, giving comets the same shapeless,
- * muddy look as the nebula clouds — with a texture built for a comet nucleus:
- * a sharp, bright pinpoint core (tighter falloff than `softGlowTexture`'s)
- * plus a softer coma offset toward one side (solar-heating asymmetry) instead
- * of a perfectly round halo, so the head reads as a coherent object with a
- * clear bright centre. Baked ONCE and cached (like `softGlowTexture`/
- * `dustParticleTexture`) so callers tint/scale a `Sprite` of it with zero
- * per-frame cost. Returns `null` with no 2D context (jsdom / unit tests) so
- * callers fall back to the existing minimal drawn nucleus.
- */
 let cometHeadCached: Texture | null | undefined;
 
 export function cometHeadTexture(): Texture | null {
@@ -200,8 +142,6 @@ export function cometHeadTexture(): Texture | null {
   const cx = size / 2;
   const cy = size / 2;
 
-  // Asymmetric coma: offset toward one side (away from the sun-facing edge)
-  // rather than a perfectly centred halo, so the head isn't a uniform circle.
   const comaOffsetX = size * 0.1;
   const comaR = size * 0.46;
   const comaGrad = ctx.createRadialGradient(
@@ -219,8 +159,6 @@ export function cometHeadTexture(): Texture | null {
   ctx.fillStyle = comaGrad;
   ctx.fillRect(0, 0, size, size);
 
-  // Sharp, bright pinpoint nucleus — a tighter falloff than softGlowTexture's
-  // generic core, so the centre stays a distinct hot point, not a blur.
   const coreR = size * 0.22;
   const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
   coreGrad.addColorStop(0.0, "rgba(255,255,255,1)");
@@ -234,22 +172,9 @@ export function cometHeadTexture(): Texture | null {
   return cometHeadCached;
 }
 
-/** How many distinct rock textures are baked; seeds wrap onto this set. */
 export const ROCK_VARIANT_COUNT = 16;
 const rockCache = new Map<number, Texture | null>();
 
-/**
- * Baked, shaded rock-texture sprite for the foreground asteroids (natural-comet
- * /asteroid rework, 2026-06-20; redesigned 2026-07-08 for more silhouette
- * variety + a rim-light pass, `20260708-space-visual-cleanup` Task 5). Replaces
- * the flat `poly`+crater `Graphics` rocks with an irregular grey rock lit from
- * the top-left (radial gradient), speckled with noise, a varied set of craters,
- * and a bright-to-dark rim-light stroke along the silhouette edge so the shape
- * reads as a faceted 3D chunk rather than a jittered circle — baked ONCE per
- * variant and cached so each asteroid is just a tinted/rotated `Sprite` (no
- * per-frame redraw). The `seed` wraps onto {@link ROCK_VARIANT_COUNT} variants
- * to bound memory. Returns `null` with no 2D context (jsdom / unit tests).
- */
 export function rockTexture(seed: number): Texture | null {
   const variant =
     ((Math.trunc(seed) % ROCK_VARIANT_COUNT) + ROCK_VARIANT_COUNT) %
@@ -272,8 +197,6 @@ export function rockTexture(seed: number): Texture | null {
   const cy = size / 2;
   const baseR = size * 0.4;
 
-  // Irregular rock silhouette — a variable side-count + wide per-vertex jitter
-  // so variants read as differently-shaped chunks, not a jittered near-circle.
   const sides = 7 + Math.floor(rng() * 5); // 7..11
   const pts: Array<[number, number]> = [];
   for (let i = 0; i < sides; i++) {
@@ -288,8 +211,6 @@ export function rockTexture(seed: number): Texture | null {
   ctx.closePath();
   ctx.clip();
 
-  // Shaded body: a radial gradient offset toward the top-left light gives a lit
-  // highlight fading to a dark shadowed rim — the 3D read the flat fill lacked.
   const lightX = cx - baseR * 0.45;
   const lightY = cy - baseR * 0.45;
   const tone = 88 + Math.floor(rng() * 46); // grey base 88..134
@@ -309,7 +230,6 @@ export function rockTexture(seed: number): Texture | null {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
-  // Surface speckle — fine light/dark grit breaks the smooth gradient.
   for (let i = 0; i < 70; i++) {
     const x = rng() * size;
     const y = rng() * size;
@@ -323,8 +243,6 @@ export function rockTexture(seed: number): Texture | null {
     ctx.fill();
   }
 
-  // Craters — a dark bowl with a light rim catching the top-left light. Varied
-  // count/size/depth so craters don't read as a repeated stamp.
   const craters = 2 + Math.floor(rng() * 5); // 2..6
   for (let i = 0; i < craters; i++) {
     const x = cx + (rng() - 0.5) * baseR * 1.3;
@@ -343,9 +261,6 @@ export function rockTexture(seed: number): Texture | null {
   }
   ctx.restore();
 
-  // Rim-light pass — a bright-to-dark gradient stroke along the silhouette
-  // edge (outside the clip, so it isn't cropped) gives the outline a
-  // faceted, lit-edge read instead of a flat gradient-filled blob.
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(pts[0][0], pts[0][1]);
@@ -370,21 +285,9 @@ export function rockTexture(seed: number): Texture | null {
   return tex;
 }
 
-/** How many distinct nebula-cloud textures are baked; seeds wrap onto this set. */
 export const NEBULA_VARIANT_COUNT = 8;
 const nebulaCache = new Map<number, Texture | null>();
 
-/**
- * Baked, wispy nebula-cloud texture (space-visual-cleanup, 2026-07-08).
- * Replaces the 4 perfectly concentric, uniformly-smooth `softGlowTexture`
- * rings `createNebulae` used to stack — which read as one flat, muddy blob —
- * with a single white (tintable, like `softGlowTexture`) canvas compositing
- * many randomly-offset/-sized soft blobs plus a denser core and fine alpha
- * speckle, so the silhouette has real internal structure. The `seed` wraps
- * onto {@link NEBULA_VARIANT_COUNT} variants to bound memory, cached like
- * `rockTexture`. Returns `null` with no 2D context (jsdom / unit tests) so
- * callers fall back to the existing stacked-`Graphics` approximation.
- */
 export function nebulaCloudTexture(seed: number): Texture | null {
   const variant =
     ((Math.trunc(seed) % NEBULA_VARIANT_COUNT) + NEBULA_VARIANT_COUNT) %
@@ -407,8 +310,6 @@ export function nebulaCloudTexture(seed: number): Texture | null {
   const cy = size / 2;
   const spread = size * 0.34;
 
-  // Wispy structure: many randomly offset/sized soft blobs at varied alpha —
-  // an irregular, non-concentric cloud silhouette instead of stacked rings.
   const blobCount = 10 + Math.floor(rng() * 6);
   for (let i = 0; i < blobCount; i++) {
     const ang = rng() * Math.PI * 2;
@@ -427,8 +328,6 @@ export function nebulaCloudTexture(seed: number): Texture | null {
     ctx.fill();
   }
 
-  // Bright core — denser and tighter than any single haze blob, giving the
-  // cloud a clear luminous centre rather than uniform density throughout.
   const coreR = size * 0.16;
   const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
   coreGrad.addColorStop(0.0, "rgba(255,255,255,0.9)");
@@ -439,8 +338,6 @@ export function nebulaCloudTexture(seed: number): Texture | null {
   ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
   ctx.fill();
 
-  // Fine alpha-noise speckle — same technique as `rockTexture`'s surface
-  // speckle — breaks up any remaining smooth gradient banding.
   for (let i = 0; i < 140; i++) {
     const x = rng() * size;
     const y = rng() * size;

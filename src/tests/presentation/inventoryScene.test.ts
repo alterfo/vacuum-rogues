@@ -136,11 +136,7 @@ describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
     scene.initialize({ gameEngine: makeEngine(loadout) });
 
     const all = renderedTexts().join("\n");
-    // Full lines, not bare numbers — `toContain("0")` would match almost any
-    // rendered text and verify nothing.
     expect(all).toContain(`Корпус: 80/${stats.maxHull}`); // live HP / loadout max
-    // Current shields are capped at the loadout-derived capacity (0 here —
-    // the mock ship's legacy `shields: 10` must NOT leak through).
     expect(all).toContain(`Щиты: 0/${stats.shields}`);
     expect(all).toContain(`Скорость: ${stats.speed.toFixed(2)}`); // px/ms format
     expect(all).toContain("Уворот: 5"); // evasion from live ship state
@@ -150,9 +146,6 @@ describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
   });
 
   it("clamps live hull HP to the loadout-derived maximum", () => {
-    // Legacy ship fields can carry values stale relative to the canonical
-    // loadout (e.g. hullHP from a larger legacy maxHull) — same staleness the
-    // shields line already guards against.
     const loadout = new ShipLoadout("hull_corvette");
     const stats = loadout.derivedStats();
     const engine = makeEngine(loadout);
@@ -183,7 +176,6 @@ describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
   });
 
   it("shows an overflow count instead of silently dropping gear past 5 cards", () => {
-    // 9-slot hull with 6 installed items → 7 cards worth of gear, 5 rendered.
     const loadout = new ShipLoadout("hull_bastion");
     for (const id of [
       "eq_engine_i",

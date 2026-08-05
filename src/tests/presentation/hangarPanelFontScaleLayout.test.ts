@@ -1,21 +1,3 @@
-/**
- * Task 3 (font-scale layout bug-fix pack,
- * `docs/plans/20260708-font-scale-and-faction-bugs.md`): GREEN regression
- * test for the `HangarPanel.ts` fix already landed in this pack (fitted-slot
- * box height + unfit-button/micromodule-row offsets via `fittedSlotHeight()`,
- * and the warehouse-row `btnGap`/`warehouseRowH`) — there was no dedicated
- * test pinning that fix yet.
- *
- * At the real "L" scale (1.25×) the historical hardcoded gaps (20 px for the
- * warehouse row, 11/20/26 px offsets for the fitted slot) happen to coincide
- * almost exactly with `lineStepFor`'s output for this panel's font sizes —
- * so a plain "does it still look right at L" assertion can't tell the fixed
- * code apart from the original hardcoded one. Instead this test partially
- * mocks `lineStepFor` (from `ui/questCardLayout`) to a distinctive, easily
- * recognisable value and asserts the panel's rendered offsets actually
- * derive from it — proving the geometry is WIRED to the font-scale helper
- * rather than a hardcoded literal (the class of bug this whole pack fixes).
- */
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { Player } from "@/domain/Player";
@@ -25,8 +7,6 @@ import { setFontScale } from "@/utils/fontScale";
 
 afterEach(() => setFontScale("M")); // never leak a scale into other tests
 
-// Deliberately far from any historical literal (20/26/34 px), but small
-// enough that the panel's overflow-clip guards don't hide the row entirely.
 const MOCK_LINE_STEP = 60;
 
 vi.mock("@/presentation/ui/questCardLayout", async (importOriginal) => {
@@ -124,7 +104,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mocks so the panel + scaledText see the fakes.
 import { Container } from "pixi.js";
 import { HangarPanel } from "@/presentation/ui/HangarPanel";
 
@@ -159,8 +138,6 @@ function makePlayer(ownedGearIds: string[] = []) {
       if (stack) stack.amount -= amount;
     },
   };
-  // Effectively-infinite hull pool so the СЕРВИСНЫЙ ЦЕНТР block always syncs
-  // to a healthy/perfect status regardless of which hull is under test.
   const ship = { hullHP: 1_000_000_000, maxHull: 1_000_000_000 };
   return { credits: 1000, inventory, ship } as unknown as Player;
 }
@@ -188,15 +165,6 @@ describe("HangarPanel fitted-slot box wired to the font-scale line step", () => 
     createdGraphics = [];
   });
 
-  /**
-   * The fitted-slot box's own drawn height (`fittedSlotHeight()`) is
-   * `4 + nameStep + mmStep + 4` — with both steps mocked to
-   * {@link MOCK_LINE_STEP} that is a distinctive, easily-identified height
-   * (128) among the panel's Graphics rects (empty slots stay a hardcoded 24).
-   * Its `rect(x, y, w, h)` call's `y` is the row's absolute top, letting every
-   * offset below be checked RELATIVE to the row (not the panel's absolute
-   * layout, which the mock doesn't otherwise affect).
-   */
   function findSlotRowTop(): number {
     const expectedH = 4 + MOCK_LINE_STEP + MOCK_LINE_STEP + 4;
     const slotRect = createdGraphics
@@ -216,10 +184,6 @@ describe("HangarPanel fitted-slot box wired to the font-scale line step", () => 
     const rowTop = findSlotRowTop();
     const unfitBtn = created.find((n) => n.text === "[снять]");
     expect(unfitBtn, "expected the [снять] button").toBeTruthy();
-    // Pre-fix this was a hardcoded `y + 11` regardless of scale — with
-    // `lineStepFor` mocked to a distinctive 60, the fixed formula
-    // (`4 + nameStep / 2`) puts the button far past that, proving it is
-    // actually wired to the helper.
     expect(unfitBtn!.y - rowTop).toBeCloseTo(4 + MOCK_LINE_STEP / 2, 0);
   });
 
@@ -232,10 +196,6 @@ describe("HangarPanel fitted-slot box wired to the font-scale line step", () => 
     new HangarPanel(renderer).render(ctx);
 
     const rowTop = findSlotRowTop();
-    // The micromodule "apply" button (no micromodule fitted, none owned)
-    // renders at `mmRowY + mmStep / 2`, where `mmRowY = rowTop + 4 +
-    // nameStep` — with `lineStepFor` mocked to 60 this is far past the
-    // historical hardcoded `y + 26`.
     const mmBtn = created.find((n) => n.text === "[нет микромодулей]");
     expect(mmBtn, "expected the micromodule apply button").toBeTruthy();
     const expectedMmY = rowTop + 4 + MOCK_LINE_STEP + MOCK_LINE_STEP / 2;
@@ -259,10 +219,6 @@ describe("HangarPanel warehouse-row buttons wired to the font-scale line step", 
     expect(install, "expected the [Установить] button").toBeTruthy();
     expect(sell, "expected the [Продать] button").toBeTruthy();
 
-    // Pre-fix this gap was a hardcoded 20 px regardless of scale — with
-    // `lineStepFor` mocked to 500, the fixed formula
-    // (`Math.max(20, lineStepFor(...) + 4)`) pushes the gap far past 20,
-    // proving it is actually wired to the helper.
     expect(sell!.y - install!.y).toBeGreaterThanOrEqual(MOCK_LINE_STEP);
   });
 });

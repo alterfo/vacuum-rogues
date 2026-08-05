@@ -6,13 +6,6 @@ import type {
   QuestTransition,
 } from "./QuestScript";
 
-/**
- * Stable, RNG-free string hash (Math.imul FNV-style, same family as
- * `SeededRNG.hashSeed`). Used to pick a text-pool variant deterministically
- * from `(seed, locationId)` WITHOUT touching the VM's `SeededRNG` stream — so
- * adding/removing text variants never shifts an already-shipped quest's
- * `random(min,max)` rolls (which depend on call order into `this.rng`).
- */
 export function questTextHash(key: string): number {
   let h = 2166136261 ^ key.length;
   for (let i = 0; i < key.length; i++) {
@@ -24,11 +17,6 @@ export function questTextHash(key: string): number {
   return (h ^ (h >>> 16)) >>> 0;
 }
 
-/**
- * Resolve a location's `text` (scalar or variance pool) to a single string,
- * given the run's `seed`. Pure — exported for direct testing. An empty pool
- * resolves to "".
- */
 export function resolveLocationText(
   text: string | string[],
   seed: string,
@@ -72,11 +60,6 @@ export class QuestVM {
     return loc;
   }
 
-  /**
-   * The current location's narration text with a variance pool resolved to one
-   * deterministic variant. Renderers should call this (then `interpolate`)
-   * rather than reading `loc.text` directly, which may be a `string[]`.
-   */
   currentLocationText(): string {
     const loc = this.currentLocation();
     return resolveLocationText(loc.text, this.seed, loc.id);
@@ -104,7 +87,6 @@ export class QuestVM {
   }
 
   private checkCriticalThresholds(): void {
-    // Terminal locations must not be interrupted by critical thresholds
     const current = this.script.locations.find(
       (l) => l.id === this.currentLocationId,
     );
@@ -149,7 +131,6 @@ export class QuestVM {
   }
 
   applyEffect(expr: string): void {
-    // random(min,max) assignment: name = random(min,max)
     const randAssign = expr.match(/^(\w+)\s*=\s*random\((\d+),(\d+)\)$/);
     if (randAssign) {
       const [, name, min, max] = randAssign;
@@ -157,7 +138,6 @@ export class QuestVM {
       return;
     }
 
-    // compound assignment: name op= value  (e.g. money -= 100)
     const compound = expr.match(/^(\w+)\s*([+\-*/])=\s*(-?\d+)$/);
     if (compound) {
       const [, name, op, val] = compound;
@@ -166,7 +146,6 @@ export class QuestVM {
       return;
     }
 
-    // simple assignment: name = number
     const simple = expr.match(/^(\w+)\s*=\s*(-?\d+)$/);
     if (simple) {
       const [, name, val] = simple;
@@ -174,7 +153,6 @@ export class QuestVM {
       return;
     }
 
-    // expression assignment: name = param op value  (e.g. money = money * 2)
     const exprAssign = expr.match(/^(\w+)\s*=\s*(\w+)\s*([+\-*/])\s*(-?\d+)$/);
     if (exprAssign) {
       const [, target, srcName, op, val] = exprAssign;
@@ -208,8 +186,6 @@ export class QuestVM {
   }
 
   interpolate(text: string | string[]): string {
-    // Tolerate a variance pool for callers that pass `loc.text` verbatim; the
-    // pool is resolved against the current location (which owns that array).
     const src =
       typeof text === "string"
         ? text

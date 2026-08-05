@@ -13,72 +13,19 @@ import {
 } from "@/systems/settings/gameSettings";
 import type { FontSizeKey } from "@/utils/fontScale";
 
-/**
- * The unified in-flight settings panel surfaced by the ⚙ HUD button
- * (`docs/plans/20260625-settings-interface-speed-font-neural.md`): one screen
- * with four controls — **СКОРОСТЬ** (game speed), **ШРИФТ** (S/M/L font),
- * **ЯЗЫК** (RU/EN language, `docs/plans/20260625-localization-i18n.md`), and a
- * **НЕЙРОСЕТЬ (ИИ)** on/off toggle (experimental, off by default).
- *
- * Each control writes through the shared {@link gameSettings} store (no new
- * save-state field) and fans the *live* effect out to the host via the
- * {@link SettingsPanelDeps} callbacks:
- *   • a font pick calls {@link SettingsPanelDeps.applyFont} (the scene restyles
- *     in place) and then {@link SettingsPanelDeps.onRequestClose} — a font change
- *     rebuilds the whole HUD, so the panel closes (preserving the historical
- *     ⚙-panel contract / playtest4 A);
- *   • a speed pick calls {@link SettingsPanelDeps.applySpeed} (HUD label +
- *     physics `timeScale`) and re-renders so the active step updates;
- *   • the neural toggle flips `setNeuralEnabled` and calls
- *     {@link SettingsPanelDeps.onNeuralToggle} (the gate Task 2 consults) then
- *     re-renders so the ВКЛ/ВЫКЛ label flips.
- *
- * The component is self-contained (builds into {@link container}); the host only
- * mounts/tears down the container and positions it. The control actions are
- * public methods ({@link selectFont}/{@link selectSpeed}/{@link selectLanguage}/
- * {@link toggleNeural}) so the behaviour is unit-testable without driving PixiJS
- * pointer events.
- */
 export interface SettingsPanelDeps {
-  /** The game-speed sink (carries `gameSpeedMultiplier`) — the GameEngine satisfies it. */
   speedTarget: SpeedTarget;
-  /** Selectable speed steps (`GAME_BALANCE.gameSpeedMultipliers`). */
   speedSteps: readonly number[];
-  /** Apply a chosen speed live: the HUD label + physics `timeScale`. */
   applySpeed: (scale: number) => void;
-  /** Apply a font change live: the scene restyles its text-bearing modules. */
   applyFont: () => void;
-  /**
-   * Apply a language change live: re-localize the HUD. The same in-place text
-   * restyle a font change uses re-reads `t(...)` at text-creation time, so the
-   * host satisfies this with that same path.
-   */
   applyLanguage?: () => void;
-  /** Fired when the neural flag flips (the gate hook; no heavy runtime — pure-TS MLP). */
   onNeuralToggle?: (on: boolean) => void;
-  /**
-   * Show the experimental НЕЙРОСЕТЬ (ИИ) row. Defaults to `import.meta.env.DEV`,
-   * so it is **hidden in prod**: the only consumers of the neural flag (the dev
-   * autopilot + letsplay) are dev-only (`main.ts` gates the autopilot on
-   * `import.meta.env.DEV`), so a prod toggle would be inert — a dead switch.
-   * Injectable so a test can exercise the prod (hidden) path under Vitest (where
-   * `import.meta.env.DEV` is `true`).
-   */
   showNeural?: boolean;
-  /**
-   * Ask the host to close the panel. Called after a font pick (a font change
-   * rebuilds the HUD, so the panel can't stay meaningfully open).
-   */
   onRequestClose?: () => void;
-  /** Injectable feature-flag store (defaults to live `localStorage`). */
   store?: SettingsStore;
 }
 
-/** Fixed panel geometry (the host positions the whole panel by these). */
 export const SETTINGS_PANEL_WIDTH = 220;
-// Full = four control rows (font / speed / language / neural) at a 66 px step
-// from PAD+30, plus the neural "experimental" hint beneath the last row. Compact
-// drops the dev-only neural row (prod), ending after the language row.
 export const SETTINGS_PANEL_HEIGHT_FULL = 320;
 export const SETTINGS_PANEL_HEIGHT_COMPACT = 248;
 
@@ -97,7 +44,6 @@ const ON_COLOR = 0x44ff88;
 const OFF_COLOR = 0x99a8ba;
 
 const FONT_KEYS: readonly FontSizeKey[] = ["S", "M", "L"];
-// The three "A" glyphs grow S→M→L so the size control reads at a glance.
 const FONT_GLYPH_PX: Readonly<Record<FontSizeKey, number>> = {
   S: 12,
   M: 16,
@@ -105,26 +51,16 @@ const FONT_GLYPH_PX: Readonly<Record<FontSizeKey, number>> = {
 };
 
 const LANGUAGES: readonly Language[] = ["ru", "en"];
-// Each button shows the language's own autonym (Русский / English) regardless of
-// the active language — the dictionary holds identical values for these keys, so
-// `t(...)` here keeps SettingsPanel free of inline Cyrillic literals.
 const LANGUAGE_LABEL_KEYS: Readonly<Record<Language, string>> = {
   ru: "lang.ru",
   en: "lang.en",
 };
 
 export class SettingsPanel {
-  /** The mounted panel container (stable across re-renders). */
   readonly container: Container;
   private content: Container | null = null;
-  /** Whether to build the experimental НЕЙРОСЕТЬ row (dev-only; hidden in prod). */
   private readonly showNeural: boolean;
 
-  /**
-   * The panel's drawn height — the single source of truth for both the
-   * background ({@link render}) and the host's centring, so the two can't
-   * desync when the dev-only neural row is hidden (compact) vs shown (full).
-   */
   get heightPx(): number {
     return this.showNeural
       ? SETTINGS_PANEL_HEIGHT_FULL
@@ -135,58 +71,36 @@ export class SettingsPanel {
     this.showNeural = deps.showNeural ?? import.meta.env.DEV;
     this.container = new Container();
     this.container.eventMode = "static";
-    // Swallow clicks so the scene's outside-click handler doesn't close the
-    // panel from under the player while they interact with it.
     this.container.on("pointerdown", (e) => e.stopPropagation());
     this.render();
   }
 
-  /** Tear down the panel container (children included). */
   destroy(): void {
     this.container.destroy({ children: true });
   }
 
-  // -------------------------------------------------------------------------
-  // Control actions (public so the behaviour is testable without PixiJS events)
-  // -------------------------------------------------------------------------
-
-  /**
-   * Pick a font size: persist it, restyle live, then ask the host to close (a
-   * font change rebuilds the HUD — keeping the panel open would show a stale
-   * copy). Created/wired first so it stays the historical ⚙-panel action.
-   */
   selectFont(key: FontSizeKey): void {
     setFontKey(key);
     this.deps.applyFont();
     this.deps.onRequestClose?.();
   }
 
-  /** Pick a game speed: persist it through the store, apply live, re-render. */
   selectSpeed(scale: number): void {
     setSpeed(this.deps.speedTarget, scale);
     this.deps.applySpeed(scale);
     this.render();
   }
 
-  /**
-   * Pick a UI language: persist it (`localStorage("language")`), re-localize the
-   * HUD live, then ask the host to close — a language switch flips every label,
-   * so (like a font change) the panel rebuilds rather than showing a half-stale
-   * mix. Persists even when no live-apply hook is wired (the choice is restored
-   * on the next open).
-   */
   selectLanguage(lang: Language): void {
     setLanguage(lang);
     this.deps.applyLanguage?.();
     this.deps.onRequestClose?.();
   }
 
-  /** The active UI language (reads the live i18n `localStorage` store). */
   currentLanguage(): Language {
     return getLanguage();
   }
 
-  /** Flip the (experimental) neural-AI flag, notify the gate, re-render. */
   toggleNeural(): void {
     const next = !isNeuralEnabled(this.deps.store);
     setNeuralEnabled(next, this.deps.store);
@@ -194,16 +108,10 @@ export class SettingsPanel {
     this.render();
   }
 
-  /** True while the neural-AI flag is on (reads the live/injected store). */
   isNeuralOn(): boolean {
     return isNeuralEnabled(this.deps.store);
   }
 
-  // -------------------------------------------------------------------------
-  // Rendering
-  // -------------------------------------------------------------------------
-
-  /** Rebuild the panel content to reflect the current settings. */
   private render(): void {
     if (this.content) this.content.destroy({ children: true });
     const content = new Container();
@@ -231,19 +139,12 @@ export class SettingsPanel {
     title.eventMode = "none";
     content.addChild(title);
 
-    // The font control is built FIRST so its hit areas precede the others — the
-    // historical ⚙-panel "first font button" contract (playtest4 A) relies on it.
-    // The neural toggle is built LAST so it stays the final hit area (the
-    // "neural is the last cell" contract); the language row slots in before it.
     this.renderFontRow(content, PAD + 30);
     this.renderSpeedRow(content, PAD + 96);
     this.renderLanguageRow(content, PAD + 162);
-    // The neural toggle is dev-only — its consumers (autopilot/letsplay) are
-    // dev-only, so in prod it would be a dead switch. Hidden when !showNeural.
     if (this.showNeural) this.renderNeuralRow(content, PAD + 228);
   }
 
-  /** Section label above a control row. */
   private addSectionLabel(parent: Container, text: string, y: number): void {
     const lbl = scaledText(text, 12, LABEL_COLOR);
     lbl.x = PAD;
@@ -252,7 +153,6 @@ export class SettingsPanel {
     parent.addChild(lbl);
   }
 
-  /** ШРИФТ: three "A" glyphs (S/M/L), the active one highlighted. */
   private renderFontRow(parent: Container, y: number): void {
     this.addSectionLabel(parent, t("settings.font"), y);
     const rowY = y + 22;
@@ -274,7 +174,6 @@ export class SettingsPanel {
     });
   }
 
-  /** СКОРОСТЬ: the speed steps (1×/2×/4×), the active one highlighted. */
   private renderSpeedRow(parent: Container, y: number): void {
     this.addSectionLabel(parent, t("settings.speed"), y);
     const rowY = y + 22;
@@ -298,7 +197,6 @@ export class SettingsPanel {
     });
   }
 
-  /** ЯЗЫК: the supported UI languages (РУС/ENG autonyms), the active one highlighted. */
   private renderLanguageRow(parent: Container, y: number): void {
     this.addSectionLabel(parent, t("settings.language"), y);
     const rowY = y + 22;
@@ -321,7 +219,6 @@ export class SettingsPanel {
     });
   }
 
-  /** НЕЙРОСЕТЬ (ИИ): a full-width ВКЛ/ВЫКЛ toggle + an "experimental" hint. */
   private renderNeuralRow(parent: Container, y: number): void {
     this.addSectionLabel(parent, t("settings.neuralAi"), y);
     const rowY = y + 22;
@@ -348,12 +245,6 @@ export class SettingsPanel {
     parent.addChild(hint);
   }
 
-  /**
-   * A single highlightable cell button: rounded background (accent-bordered when
-   * active), a centred label, and a transparent `static` hit area that runs
-   * `onTap`. The label/background are `eventMode:"none"` so the hit area owns the
-   * click (PixiJS-8 layered-hit pattern).
-   */
   private addCellButton(
     parent: Container,
     x: number,
@@ -377,9 +268,6 @@ export class SettingsPanel {
     bg.eventMode = "none";
     parent.addChild(bg);
 
-    // No `rawColor`: the dim idle `LABEL_COLOR` must lift to the legible floor
-    // (like `addSectionLabel`); the active accent/on colors are already above
-    // the floor, so `readableFill` passes them through unchanged.
     const lbl = scaledText(
       label,
       labelPx,

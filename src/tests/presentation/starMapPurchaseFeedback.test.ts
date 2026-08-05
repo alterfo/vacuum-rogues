@@ -1,16 +1,7 @@
-/**
- * Bug 7: the star-map purchase deducted credits from the domain immediately,
- * but the planet-scene credits HUD is a one-shot `Text` snapshot built once in
- * `createUI()` and never refreshed, so the balance looked unchanged on
- * screen. The purchase toast also only said «Открыто систем: N» with no price
- * confirmation, so a `0`-systems-revealed purchase looked like nothing
- * happened at all.
- */
 import { describe, it, expect } from "vitest";
 import { Container, Text } from "pixi.js";
 import { PlanetScene } from "@/presentation/PlanetScene";
 
-// scaledFont() reads localStorage; ensure it exists (Node 26 shadows jsdom's).
 if (typeof globalThis.localStorage === "undefined") {
   const store = new Map<string, string>();
   globalThis.localStorage = {
@@ -28,7 +19,6 @@ interface StubGalaxy {
   revealSystemsWithinHops: (systemId: string, hops: number) => number;
 }
 
-/** Build an openStarMap-ready PlanetScene without its constructor/initialize. */
 function makeScene(credits: number, revealed: number) {
   const scene = Object.create(PlanetScene.prototype) as PlanetScene;
   const uiLayer = new Container();
@@ -57,7 +47,6 @@ function makeScene(credits: number, revealed: number) {
   };
 }
 
-/** Find the button Container whose label Text matches `label`. */
 function findButton(modal: Container, label: string): Container | undefined {
   return modal.children.find(
     (c): c is Container =>
@@ -76,8 +65,6 @@ describe("refreshCreditsHud", () => {
   it("updates the stored credits Text in place from the live player balance", () => {
     const { creditsHudText, refresh } = makeScene(5000, 0);
     (creditsHudText as unknown as { text: string }).text = "stale";
-    // Mutate credits directly (bypassing the purchase flow) to isolate the
-    // refresh helper itself.
     refresh();
     expect(creditsHudText.text).toBe(`${(5000).toLocaleString("ru")} ₡`);
   });

@@ -54,7 +54,6 @@ function makeGalaxy(
   );
 }
 
-/** Advance galaxy gameDays to a target day by calling advanceTech after each increment. */
 function advanceToDay(galaxy: Galaxy, targetDay: number): void {
   while (galaxy.gameDays < targetDay) {
     galaxy.simulateDay();

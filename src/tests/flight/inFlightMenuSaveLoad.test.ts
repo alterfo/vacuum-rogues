@@ -1,13 +1,3 @@
-/**
- * Task 3 (save-slots UI): the in-flight system menu gains a «Сохранения» entry
- * that opens the full save/load screen (named manual slots). This proves the
- * HUD exposes the button and that clicking it (real pointer path) fans out
- * through {@link wireFlightSystemMenu} into a transition to
- * {@link SceneType.SAVE_LOAD} with `returnTo: SPACE_FLIGHT` — so closing the
- * screen drops the player back into flight.
- *
- * Built against a REAL PixiJS scene graph (mirrors inFlightMenuActions.test.ts).
- */
 import { describe, it, expect, afterEach, vi, type Mock } from "vitest";
 import { Container, Text } from "pixi.js";
 
@@ -56,7 +46,6 @@ function build(): {
   return { hud, uiLayer, transitionTo, gameEngine };
 }
 
-/** Recursively collect every PixiJS Text node under a display object. */
 function allTexts(node: Container): Text[] {
   const out: Text[] = [];
   if (node instanceof Text) out.push(node);
@@ -86,7 +75,6 @@ describe("FlightHud — in-flight «Сохранения» entry", () => {
     hud.toggleSystemMenu();
 
     expect(hasLabel(uiLayer, "Сохранения")).toBe(true);
-    // The existing actions are unchanged.
     expect(hasLabel(uiLayer, "Продолжить")).toBe(true);
     expect(hasLabel(uiLayer, "Загрузить сохранение")).toBe(true);
     expect(hasLabel(uiLayer, "В главное меню")).toBe(true);

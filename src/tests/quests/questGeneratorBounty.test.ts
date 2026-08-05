@@ -84,13 +84,11 @@ describe("BOUNTY quest ship name", () => {
   });
 
   it("pickBountyDesc result contains the ship name (via board generation)", () => {
-    // Generate multiple seeds to hit all 5 description templates.
     for (let s = 0; s < 10; s++) {
       const board = bountyBoard(`pickBountyDesc-seed-${s}`);
       const bounty = board.find((q) => q.template.type === QuestType.BOUNTY);
       if (!bounty) continue;
       const shipName = bounty.targetNpcName as string;
-      // The template text (before the appended Цель: line) must contain the ship name.
       const [templatePart] = bounty.template.description.split("\nЦель:");
       expect(templatePart).toContain(shipName);
     }

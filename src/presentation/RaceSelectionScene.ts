@@ -11,37 +11,20 @@ import { factionColor } from "./ui/palette";
 import { FACTION_STATS } from "@/config/factionConfig";
 import { t } from "@/i18n/i18n";
 
-/**
- * Difficulty modes offered on the new-game screen, in display order. Default is
- * Средний (NORMAL), reproducing today's behaviour; God floors hull + downs the
- * ship until repair; Hard adds hostiles. The chosen mode is passed into new-game
- * player creation. Their titles/descriptions are localized through
- * `race.mode.<mode>.{title,desc}` keys (resolved at render so a language switch
- * re-reads them).
- */
 const GAME_MODE_OPTIONS: readonly GameMode[] = ["GOD", "NORMAL", "HARD"];
 
-/**
- * Faction Selection Scene - allows player to choose their faction before starting the game
- */
 export class RaceSelectionScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private mainContainer: Container | null = null;
   private selectedFaction: FactionType = FactionType.OUTLANDERS;
   private selectedMode: GameMode = "NORMAL";
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
-  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
   }
 
-  /**
-   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
-   * Mounted on `renderer.stage` so the «?»/panel survive the scene's own
-   * `refresh()` UI rebuilds (which recreate `mainContainer`).
-   */
   private mountHelp(): void {
     this.helpTeardown?.();
     this.helpTeardown = mountSceneHelp(
@@ -99,22 +82,17 @@ export class RaceSelectionScene extends GameScene {
     });
   }
 
-  /**
-   * Render the faction selection UI
-   */
   private render(): void {
     if (!this.mainContainer) return;
 
     const screenWidth = this.renderer.app.screen.width;
     const screenHeight = this.renderer.app.screen.height;
 
-    // Background
     const background = new Graphics();
     background.rect(0, 0, screenWidth, screenHeight);
     background.fill({ color: 0x000510 });
     this.mainContainer.addChild(background);
 
-    // Title
     const title = new Text({
       text: t("race.title"),
       style: {
@@ -130,7 +108,6 @@ export class RaceSelectionScene extends GameScene {
     title.y = 60;
     this.mainContainer.addChild(title);
 
-    // Render faction cards in a grid
     const factions = Object.values(FactionType);
     const cardWidth = 300;
     const cardHeight = 230;
@@ -148,9 +125,6 @@ export class RaceSelectionScene extends GameScene {
       this.renderFactionCard(faction, x, y, cardWidth, cardHeight);
     }
 
-    // The difficulty selector fills the next grid cell after the last faction
-    // card (with 5 factions that's the empty bottom-right slot — no overlap with
-    // the cards or the Start button).
     const modeSlot = factions.length;
     const modeRow = Math.floor(modeSlot / 3);
     const modeCol = modeSlot % 3;
@@ -161,7 +135,6 @@ export class RaceSelectionScene extends GameScene {
       cardHeight,
     );
 
-    // Back button (top-left)
     const backBtn = new Text({
       text: t("race.back"),
       style: {
@@ -186,15 +159,9 @@ export class RaceSelectionScene extends GameScene {
     });
     this.mainContainer.addChild(backBtn);
 
-    // Start button
     this.renderStartButton(screenWidth / 2, screenHeight - 80);
   }
 
-  /**
-   * Render the difficulty-mode selector (Бог / Средний / Сложный) inside a
-   * card-sized box. The chosen mode is carried into new-game player creation by
-   * {@link startGame}.
-   */
   private renderModeSelector(
     x: number,
     y: number,
@@ -207,7 +174,6 @@ export class RaceSelectionScene extends GameScene {
     panel.x = x;
     panel.y = y;
 
-    // Faint backing panel so the box reads as part of the grid.
     const bg = new Graphics();
     bg.rect(0, 0, width, height);
     bg.fill({ color: 0x0a1a2a, alpha: 0.6 });
@@ -215,7 +181,6 @@ export class RaceSelectionScene extends GameScene {
     bg.eventMode = "none";
     panel.addChild(bg);
 
-    // Header
     const header = new Text({
       text: t("race.difficulty"),
       style: {
@@ -234,7 +199,6 @@ export class RaceSelectionScene extends GameScene {
 
     this.mainContainer.addChild(panel);
 
-    // Three full-width chips stacked vertically below the header.
     const inset = 10;
     const headerH = 38;
     const chipGap = 10;
@@ -247,10 +211,6 @@ export class RaceSelectionScene extends GameScene {
     }
   }
 
-  /**
-   * Render a single difficulty chip; the currently-selected mode is highlighted.
-   * Title/description are localized via the `race.mode.<mode>.*` keys.
-   */
   private renderModeChip(
     mode: GameMode,
     x: number,
@@ -331,16 +291,12 @@ export class RaceSelectionScene extends GameScene {
     this.mainContainer.addChild(chip);
   }
 
-  /** Select a difficulty mode and re-render to reflect the choice. */
   private selectMode(mode: GameMode): void {
     this.selectedMode = mode;
     logger.info(`Selected game mode: ${mode}`);
     this.refresh();
   }
 
-  /**
-   * Render a single faction card
-   */
   private renderFactionCard(
     faction: FactionType,
     x: number,
@@ -354,7 +310,6 @@ export class RaceSelectionScene extends GameScene {
     cardContainer.x = x;
     cardContainer.y = y;
 
-    // Card background
     const isSelected = faction === this.selectedFaction;
     const cardBg = new Graphics();
     cardBg.rect(0, 0, width, height);
@@ -367,7 +322,6 @@ export class RaceSelectionScene extends GameScene {
     cardBg.cursor = "pointer";
     cardContainer.addChild(cardBg);
 
-    // Faction portrait (left column). Clicks pass through to the card below.
     const portraitW = 104;
     const portraitX = 8;
     const portraitY = 34;
@@ -381,11 +335,9 @@ export class RaceSelectionScene extends GameScene {
       portraitH,
     );
 
-    // Text column sits to the right of the portrait.
     const textX = portraitX + portraitW + 10;
     const textW = width - textX - 10;
 
-    // Faction name
     const factionName = new Text({
       text: t(`race.faction.${faction}.title`),
       style: {
@@ -400,7 +352,6 @@ export class RaceSelectionScene extends GameScene {
     factionName.eventMode = "none";
     cardContainer.addChild(factionName);
 
-    // Faction description
     const description = t(`race.faction.${faction}.desc`);
     const descText = new Text({
       text: description,
@@ -418,7 +369,6 @@ export class RaceSelectionScene extends GameScene {
     descText.eventMode = "none";
     cardContainer.addChild(descText);
 
-    // Unique bonus
     const bonusText = new Text({
       text: t(`race.faction.${faction}.bonus`),
       style: {
@@ -434,7 +384,6 @@ export class RaceSelectionScene extends GameScene {
     bonusText.eventMode = "none";
     cardContainer.addChild(bonusText);
 
-    // Stats
     const stats = this.getFactionStatsText(faction);
     const statsText = new Text({
       text: stats,
@@ -450,12 +399,10 @@ export class RaceSelectionScene extends GameScene {
     statsText.eventMode = "none";
     cardContainer.addChild(statsText);
 
-    // Click handler
     cardBg.on("pointerdown", () => {
       this.selectFaction(faction);
     });
 
-    // Hover effect
     cardBg.on("pointerover", () => {
       if (faction !== this.selectedFaction) {
         cardBg.clear();
@@ -477,12 +424,6 @@ export class RaceSelectionScene extends GameScene {
     this.mainContainer.addChild(cardContainer);
   }
 
-  /**
-   * Render the faction's character portrait into a framed box on the card.
-   * Cover-fits the art (top-anchored so the face shows) and crops to the box
-   * with a mask. Falls back to a tinted silhouette plate when art is missing
-   * (e.g. in unit tests where textures aren't preloaded).
-   */
   private renderPortrait(
     container: Container,
     faction: FactionType,
@@ -493,7 +434,6 @@ export class RaceSelectionScene extends GameScene {
   ): void {
     const color = factionColor(faction);
 
-    // Backing plate (also shows through if the art has transparency).
     const plate = new Graphics();
     plate.rect(x, y, w, h);
     plate.fill({ color: 0x05111c });
@@ -503,8 +443,6 @@ export class RaceSelectionScene extends GameScene {
     const texture = pickVariant("portraits", faction.toLowerCase(), faction);
     if (texture) {
       const sprite = new Sprite(texture);
-      // Cover-fit: fill the box, anchored to the top so the head/face stays in
-      // view while the lower body is cropped off the bottom.
       const scale = Math.max(w / texture.width, h / texture.height);
       sprite.scale.set(scale);
       sprite.anchor.set(0.5, 0);
@@ -521,7 +459,6 @@ export class RaceSelectionScene extends GameScene {
       container.addChild(sprite);
     }
 
-    // Frame around the portrait.
     const frame = new Graphics();
     frame.rect(x, y, w, h);
     frame.stroke({ color, width: 1, alpha: 0.8 });
@@ -529,9 +466,6 @@ export class RaceSelectionScene extends GameScene {
     container.addChild(frame);
   }
 
-  /**
-   * Get formatted stats text for faction
-   */
   private getFactionStatsText(faction: FactionType): string {
     const stats = FACTION_STATS[faction];
     const lines = [
@@ -543,20 +477,13 @@ export class RaceSelectionScene extends GameScene {
     return lines.join("\n");
   }
 
-  /**
-   * Select a faction
-   */
   private selectFaction(factionType: FactionType): void {
     this.selectedFaction = factionType;
     logger.info(`Selected faction: ${factionType}`);
 
-    // Re-render to update selection
     this.refresh();
   }
 
-  /**
-   * Render start game button
-   */
   private renderStartButton(x: number, y: number): void {
     if (!this.mainContainer) return;
 
@@ -567,14 +494,12 @@ export class RaceSelectionScene extends GameScene {
     const buttonWidth = 300;
     const buttonHeight = 50;
 
-    // Button background
     const btnBg = new Graphics();
     btnBg.rect(-buttonWidth / 2, -buttonHeight / 2, buttonWidth, buttonHeight);
     btnBg.fill({ color: 0x004488, alpha: 0.9 });
     btnBg.stroke({ color: 0x00ffff, width: 2 });
     buttonContainer.addChild(btnBg);
 
-    // Button text
     const btnText = new Text({
       text: t("race.start"),
       style: {
@@ -588,14 +513,12 @@ export class RaceSelectionScene extends GameScene {
     btnText.y = 0;
     buttonContainer.addChild(btnText);
 
-    // Make button interactive
     buttonContainer.eventMode = "static";
     buttonContainer.cursor = "pointer";
     buttonContainer.on("pointerdown", () => {
       this.startGame();
     });
 
-    // Hover effects
     buttonContainer.on("pointerover", () => {
       btnBg.clear();
       btnBg.rect(
@@ -623,9 +546,6 @@ export class RaceSelectionScene extends GameScene {
     this.mainContainer.addChild(buttonContainer);
   }
 
-  /**
-   * Start the game with selected faction
-   */
   private async startGame(): Promise<void> {
     if (!this.gameEngine) return;
 
@@ -633,7 +553,6 @@ export class RaceSelectionScene extends GameScene {
       `Starting game with faction: ${this.selectedFaction}, mode: ${this.selectedMode}`,
     );
 
-    // Pass selected faction + difficulty mode to GameEngine for player creation
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       selectedFaction: this.selectedFaction,
@@ -641,10 +560,6 @@ export class RaceSelectionScene extends GameScene {
     });
   }
 
-  /**
-   * E2E hook: select a faction by name string.
-   * Accepts a FactionType value (case-insensitive); defaults to OUTLANDERS.
-   */
   e2eSelectFaction(faction: string): void {
     if (!__DEBUG__) return;
     const upper = faction.toUpperCase() as FactionType;
@@ -652,10 +567,6 @@ export class RaceSelectionScene extends GameScene {
     this.selectFaction(valid ? upper : FactionType.OUTLANDERS);
   }
 
-  /**
-   * E2E hook: select a difficulty mode by name string.
-   * Accepts a GameMode value (case-insensitive); defaults to NORMAL.
-   */
   e2eSelectMode(mode: string): void {
     if (!__DEBUG__) return;
     const upper = mode.toUpperCase() as GameMode;
@@ -663,17 +574,11 @@ export class RaceSelectionScene extends GameScene {
     this.selectMode(valid ? upper : "NORMAL");
   }
 
-  /**
-   * E2E hook: trigger the "НАЧАТЬ ИГРУ" button programmatically.
-   */
   e2eConfirmSelection(): void {
     if (!__DEBUG__) return;
     void this.startGame();
   }
 
-  /**
-   * Refresh the UI
-   */
   private refresh(): void {
     if (this.mainContainer) {
       this.mainContainer.destroy({ children: true });

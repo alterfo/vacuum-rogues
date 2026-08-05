@@ -1,7 +1,3 @@
-/**
- * Task 29: Star map fog of war and faction home systems.
- * Tests visitedSystems tracking, home system assignment, and fog-of-war rendering logic.
- */
 import { describe, it, expect } from "vitest";
 import { Player } from "@/domain/Player";
 import { StarSystem } from "@/domain/StarSystem";
@@ -10,8 +6,6 @@ import { generateQuestBoard } from "@/systems/quests/QuestGenerator";
 import type { SkillTree } from "@/domain/SkillTree";
 import type { PlayerShip } from "@/domain/PlayerShip";
 import type { Inventory } from "@/domain/Inventory";
-
-// ── visitedSystems ───────────────────────────────────────────────────────────
 
 function makePlayer(): Player {
   return new Player(
@@ -69,8 +63,6 @@ describe("Player.visitedSystems", () => {
   });
 });
 
-// ── StarSystem.isFactionHome ─────────────────────────────────────────────────
-
 describe("StarSystem faction home fields", () => {
   it("defaults to isFactionHome=false, homeFactionId=null", () => {
     const sys = new StarSystem(
@@ -103,14 +95,11 @@ describe("StarSystem faction home fields", () => {
   });
 });
 
-// ── Home systems assigned deterministically ──────────────────────────────────
-
 describe("GalaxySimulator faction home systems", () => {
   it("assigns exactly 5 home systems for a galaxy with >= 10 systems", async () => {
     const sim = new GalaxySimulator();
     const galaxy = await sim.generateGalaxy("test-seed-home", 12);
     const homes = galaxy.systems.filter((s) => s.isFactionHome);
-    // 5 factions, so exactly 5 home systems (assuming enough non-OVERMIND systems)
     expect(homes.length).toBe(5);
   });
 
@@ -184,14 +173,10 @@ describe("GalaxySimulator faction home systems", () => {
     ).length;
     const avgNpcsPerHome = npcCountInHome / totalHomeSystems;
 
-    // Non-home systems have NPCS_PER_SYSTEM = 4 on average;
-    // home systems get an extra NPCS_PER_SYSTEM spawn so at least 4 extra total.
     expect(npcCountInHome).toBeGreaterThanOrEqual(totalHomeSystems * 4);
     expect(avgNpcsPerHome).toBeGreaterThan(0);
   });
 });
-
-// ── Fog-of-war rendering logic ────────────────────────────────────────────────
 
 describe("fog-of-war logic (unvisited → name hidden)", () => {
   it("system not in visitedSystems is unvisited", () => {
@@ -215,8 +200,6 @@ describe("fog-of-war logic (unvisited → name hidden)", () => {
     expect(player.hasVisited("sys_c")).toBe(false);
   });
 });
-
-// ── QuestGenerator home faction prefix ───────────────────────────────────────
 
 describe("QuestGenerator faction home prefix", () => {
   const SYSTEMS = [
@@ -285,7 +268,6 @@ describe("QuestGenerator faction home prefix", () => {
       textRatio: 0,
       chainRatio: 0,
       eliteRatio: 0,
-      // No homeFactionId
     });
     for (const q of board) {
       expect(q.template.title).not.toContain("[ПРОГРЕССОРЫ]");

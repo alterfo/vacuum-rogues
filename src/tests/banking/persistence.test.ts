@@ -17,20 +17,10 @@ import { SaveState } from "@/domain/SaveState";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { Player } from "@/domain/Player";
 
-/**
- * Task 8 — persistence. The АБС book of record (accounts + journal + EOD
- * cursors) must survive a save/reload verbatim: a `toSnapshot()` round-tripped
- * through `restore()` reproduces every balance and keeps the books balanced.
- * Old saves (no banking snapshot) migrate by re-seeding the player current
- * account from `player.credits` — exercised by `openPlayerCurrentAccount`
- * elsewhere; here we prove the snapshot path is faithful and well-validated.
- */
-
 const PLAYER = "cur:player";
 const SAVINGS = "sav:player";
 const LOAN = "loan:player";
 
-/** A bank with a current + savings + loan account and a few posted moves on it. */
 function makePopulatedService(): { bus: BankBus; service: BankingService } {
   const bus = new BankBus();
   const service = new BankingService(bus, {
@@ -160,10 +150,8 @@ describe("banking persistence — snapshot/restore round-trip", () => {
     fresh.restore(snapshot);
     bus.dispatch({ kind: "RunEndOfDay" });
 
-    // Next day's interest compounds on the restored savings balance.
     expect(fresh.balanceOf(SAVINGS)).toBeCloseTo(savingsBefore * 1.01, 6);
     expect(balanced(fresh)).toBe(true);
-    // Re-running the already-closed prior date is still a no-op (lastEodDate kept).
     const after = fresh.balanceOf(SAVINGS);
     bus.dispatch({ kind: "RunEndOfDay", date: snapshot.businessDate - 1 });
     expect(fresh.balanceOf(SAVINGS)).toBeCloseTo(after, 6);
@@ -204,7 +192,6 @@ describe("restoreLedger — integrity on load", () => {
       }),
     );
     const snap = ledger.snapshot();
-    // Corrupt one leg so the entry no longer nets to zero.
     const tampered = {
       accounts: snap.accounts,
       entries: snap.entries.map((e) => ({
@@ -225,7 +212,6 @@ describe("banking snapshot — schema validation", () => {
   it("validates a real snapshot against BankingSnapshotSchema", () => {
     const { service } = makePopulatedService();
     const snapshot: BankingSnapshot = service.toSnapshot();
-    // Round-trip through JSON the way the save flow does.
     const json = JSON.parse(JSON.stringify(snapshot));
     expect(() => BankingSnapshotSchema.parse(json)).not.toThrow();
   });
@@ -248,8 +234,6 @@ describe("SaveState — banking field survives serialize/deserialize", () => {
   it("round-trips the banking snapshot through the save payload", () => {
     const { service } = makePopulatedService();
     const snapshot = service.toSnapshot();
-    // SaveState.serialize only JSON-stringifies galaxy/player, so minimal stubs
-    // are enough to prove the banking field rides along unchanged.
     const state = new SaveState(
       23,
       {} as Galaxy,
@@ -281,7 +265,6 @@ describe("SaveState — banking field survives serialize/deserialize", () => {
 
 describe("BankingService.resetLedger — pre-banking save load is leak-free", () => {
   it("discards a prior game's ledger so the re-seed reflects only the loaded credits", () => {
-    // An earlier game in the same page session left accounts + journal behind.
     const bus = new BankBus();
     const service = new BankingService(bus, { startDate: 5 });
     bus.dispatch({
@@ -302,16 +285,12 @@ describe("BankingService.resetLedger — pre-banking save load is leak-free", ()
     });
     expect(service.getLedger().listEntries().length).toBeGreaterThan(0);
 
-    // Loading a pre-banking save (no snapshot) resets the book of record first.
     service.resetLedger();
     expect(service.businessDate).toBe(0);
     expect(service.getLedger().listEntries()).toHaveLength(0);
     expect(service.getLedger().hasAccount(PLAYER)).toBe(false);
-    // The internal GL accounts are re-seeded, so the migration re-seed can post.
     expect(service.getLedger().hasAccount(INTERNAL_ACCOUNTS.CASH)).toBe(true);
 
-    // Re-seeding from the loaded player now reflects only that player's credits —
-    // none of the previous game's 9999 leaks through.
     const player = {
       id: "player",
       credits: 1000,
@@ -322,7 +301,6 @@ describe("BankingService.resetLedger — pre-banking save load is leak-free", ()
   });
 });
 
-/** A minimal but schema-valid pre-banking save (version 1, no `banking` field). */
 function makeOldSaveWithoutBanking(): Record<string, unknown> {
   return {
     version: 1,
@@ -378,10 +356,7 @@ describe("SaveStateSchema — banking is optional (old saves validate)", () => {
     const migrated = MigrationPipeline.migrate(
       makeOldSaveWithoutBanking() as never,
     );
-    // The migration deliberately does NOT add a banking snapshot (those saves
-    // re-seed from `credits` on load), so the validated shape must still lack it…
     expect((migrated as { banking?: unknown }).banking).toBeUndefined();
-    // …and the production save schema must accept it (banking is `.optional()`).
     expect(() => validateSaveState(migrated)).not.toThrow();
   });
 

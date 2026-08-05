@@ -1,16 +1,3 @@
-/**
- * Task 3 (font-scale layout bug-fix pack,
- * `docs/plans/20260708-font-scale-and-faction-bugs.md`): regression test for
- * two `StationScene` row renderers whose two-line stack used fixed pixel
- * offsets independent of `scaledFont`'s taller line height at "L" scale:
- *  - `renderShop`'s gear-listing row (kind badge above the name line), and
- *  - `renderMicromoduleShop`'s micromodule-listing row (tier badge above the
- *    name line).
- *
- * Mirrors the lightweight `pixi.js` mock convention already established for
- * this scene in `gearBuyParity.test.ts` (plain mutable `Graphics`/`Text`
- * objects, so the source's real `x`/`y` assignments are directly inspectable).
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { gearById } from "@/systems/equipment/GearCatalog";
@@ -100,7 +87,6 @@ vi.mock("pixi.js", () => {
   };
 });
 
-// Imported AFTER the mock so the scene sees the fake pixi.
 import { StationScene } from "@/presentation/StationScene";
 
 const renderer = {
@@ -187,15 +173,10 @@ describe("StationScene equipment shop rows at L font scale", () => {
       0,
     );
     const name = created[nameIdx];
-    // The kind badge is the row's first Text (then tech, then name), sharing
-    // the name's x column.
     const badge = created[nameIdx - 2]; // kindBadge, then tech, then name
     expect(badge.x).toBe(name.x);
 
     const badgeStep = lineStepFor(scaledFont(11));
-    // The bug: the name line used to sit at a fixed +18 offset from the badge
-    // line regardless of scale; at "L" the badge line's own height exceeds
-    // that gap and the name line bleeds into it.
     expect(name.y).toBeGreaterThanOrEqual(badge.y + badgeStep);
     scene.destroy();
   });
@@ -227,9 +208,6 @@ describe("StationScene micromodule shop rows at L font scale", () => {
     expect(badge.x).toBe(name.x);
 
     const badgeStep = lineStepFor(scaledFont(11));
-    // The bug: the name line used to sit at a fixed +18 offset from the tier
-    // badge regardless of scale; at "L" the badge's own height exceeds that
-    // gap and the name line bleeds into it.
     expect(name.y).toBeGreaterThanOrEqual(badge.y + badgeStep);
     scene.destroy();
   });

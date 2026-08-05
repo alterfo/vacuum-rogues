@@ -1,32 +1,17 @@
 import { type Page, expect } from '@playwright/test';
 
-/**
- * Base page class with common utilities for game E2E testing
- */
 export class GamePageBase {
   constructor(protected page: Page) {}
 
-  /**
-   * Wait for game canvas to be ready
-   */
   async waitForGameCanvas(timeout = 10000) {
     await this.page.waitForSelector('canvas', { timeout });
   }
 
-  /**
-   * Get canvas bounding box
-   */
   async getCanvasBox() {
     const canvas = this.page.locator('canvas');
     return await canvas.boundingBox();
   }
 
-  /**
-   * Click on canvas at relative position
-   * @deprecated TECH DEBT: координатные клики ломаются при любом изменении UI.
-   * Используй семантические методы через page.evaluate() или data-testid.
-   * См. docs/CODING_RULES.md RULE-E2E-01.
-   */
   async clickCanvas(x: number, y: number) {
     const box = await this.getCanvasBox();
     expect(box, 'Canvas should be present for clickCanvas').toBeTruthy();
@@ -35,12 +20,6 @@ export class GamePageBase {
     });
   }
 
-  /**
-   * Click on canvas at relative percentage position
-   * @deprecated TECH DEBT: процентные клики — всё ещё координатная магия.
-   * Используй семантические методы через page.evaluate() или data-testid.
-   * См. docs/CODING_RULES.md RULE-E2E-01.
-   */
   async clickCanvasPercent(xPercent: number, yPercent: number) {
     const box = await this.getCanvasBox();
     expect(box, 'Canvas should be present for clickCanvasPercent').toBeTruthy();
@@ -52,17 +31,11 @@ export class GamePageBase {
     });
   }
 
-  /**
-   * Wait for game to initialize
-   */
   async waitForGameInitialization(waitTime = 3000) {
     await this.waitForGameCanvas();
     await this.page.waitForTimeout(waitTime);
   }
 
-  /**
-   * Check for console errors
-   */
   async collectConsoleErrors(): Promise<string[]> {
     const errors: string[] = [];
     this.page.on('console', (msg) => {
@@ -73,9 +46,6 @@ export class GamePageBase {
     return errors;
   }
 
-  /**
-   * Check for critical errors in console
-   */
   async expectNoCriticalErrors(
     excludedPatterns: string[] = []
   ): Promise<void> {

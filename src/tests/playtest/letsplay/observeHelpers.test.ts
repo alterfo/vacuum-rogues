@@ -14,12 +14,6 @@ import {
   systemShopPrices,
 } from "./observeHelpers";
 
-/**
- * Task 1 of the letsplay expansion plan: pure unit tests for each new
- * observation signal, isolated from `observe()`/`GameEngine` so they run fast
- * and cover edge cases directly.
- */
-
 describe("hasStationOfType", () => {
   it("true when a station of the given type is present", () => {
     expect(
@@ -211,7 +205,6 @@ describe("systemShopPrices", () => {
     const result = systemShopPrices(ctx);
     expect(result.cheapestGearPrice).toBe(604);
     expect(result.bestHullPrice).toBe(1235);
-    // Deterministic: a second read of the same state is identical.
     expect(systemShopPrices(ctx)).toEqual(result);
   });
 

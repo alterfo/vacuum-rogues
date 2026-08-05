@@ -5,10 +5,7 @@ import { Renderer } from "@/presentation/Renderer";
 import { GameScene } from "@/presentation/GameScene";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 
-// Mock PixiJS
 vi.mock("pixi.js", () => ({
-  // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
-  // module load, so the partial mock must expose a constructable Filter.
   Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
     init: vi.fn().mockResolvedValue(undefined),
@@ -33,8 +30,6 @@ vi.mock("pixi.js", () => ({
     on: vi.fn(),
     destroy: vi.fn(),
   })),
-  // Rectangle backs UiButton's explicit hitArea (used by the «?» help button the
-  // onboarding layer mounts on scene init).
   Rectangle: vi.fn().mockImplementation(() => ({})),
   Graphics: vi.fn().mockImplementation(() => ({
     clear: vi.fn().mockReturnThis(),
@@ -46,7 +41,6 @@ vi.mock("pixi.js", () => ({
     poly: vi.fn().mockReturnThis(),
     moveTo: vi.fn().mockReturnThis(),
     lineTo: vi.fn().mockReturnThis(),
-    // PixiJS v8 Graphics extends Container, so it supports child management.
     addChild: vi.fn(),
     addChildAt: vi.fn(),
     removeChild: vi.fn(),
@@ -99,7 +93,6 @@ describe("Renderer and Scenes", () => {
     it('GameEngine.transitionTo("MAIN_MENU") instantiates MainMenuScene', async () => {
       const engine = new GameEngine();
 
-      // Mock renderer initialization
       const mockRenderer = {
         app: {
           screen: { width: 800, height: 600 },
@@ -156,7 +149,6 @@ describe("Renderer and Scenes", () => {
 
       engine.renderer = mockRenderer;
 
-      // Create a mock scene to track destroy calls
       let destroyCalled = false;
       const mockScene = new (class extends GameScene {
         initialize(_context?: object): void {}
@@ -202,7 +194,6 @@ describe("Renderer and Scenes", () => {
       const scene = new MainMenuScene(mockRenderer);
       scene.initialize({ gameEngine: {} as GameEngine });
 
-      // Type for accessing private properties in tests
       interface MainMenuSceneInternal {
         background: { destroy: () => void } | null;
         buttonsContainer: { destroy: () => void } | null;
@@ -210,7 +201,6 @@ describe("Renderer and Scenes", () => {
         gameEngine: GameEngine | null;
       }
 
-      // Manually set internal references for testing
       const sceneInternal = scene as unknown as MainMenuSceneInternal;
       sceneInternal.background = { destroy: vi.fn() };
       sceneInternal.buttonsContainer = { destroy: vi.fn() };
@@ -219,7 +209,6 @@ describe("Renderer and Scenes", () => {
 
       scene.destroy();
 
-      // Verify cleanup
       expect(sceneInternal.background).toBeNull();
       expect(sceneInternal.buttonsContainer).toBeNull();
       expect(sceneInternal.title).toBeNull();
@@ -253,16 +242,11 @@ describe("Renderer and Scenes", () => {
 
       engine.renderer = mockRenderer;
 
-      // Start at MAIN_MENU
       await engine.transitionTo(SceneType.MAIN_MENU, { gameEngine: engine });
       expect(engine.currentScene).toBeInstanceOf(MainMenuScene);
 
-      // Transition to STAR_MAP
       await engine.transitionTo(SceneType.STAR_MAP, { gameEngine: engine });
       expect(engine.currentScene).not.toBeInstanceOf(MainMenuScene);
     });
-
-    // (Removed: the hex CombatScene no longer exists — combat is real-time
-    // in-flight only, so there is no SceneType.COMBAT transition to assert.)
   });
 });

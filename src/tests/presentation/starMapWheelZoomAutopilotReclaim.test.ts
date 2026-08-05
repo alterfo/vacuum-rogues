@@ -1,18 +1,3 @@
-/**
- * Task 1 (docs/plans/20260711-autopilot-reliability-fixes.md, Issue 1): a
- * routine mouse-wheel zoom gesture on the star map used to bubble all the way
- * to `window`, where the dev autopilot's reclaim-on-input listener treats any
- * `wheel` event as "a human took back control" and disengages — even though
- * `handleWheel()` already fully handled the gesture. `handleWheel()` now calls
- * `stopPropagation()` so the event never reaches a `window`-level listener.
- *
- * `canvas` is a genuine DOM descendant of `window` here (unlike
- * `SpaceFlightScene.onWheel`, which is itself registered directly on
- * `window` — see `spaceFlightWheelZoomAutopilotReclaim.test.ts` for that
- * same-node case), so a plain `stopPropagation()` on the canvas listener is
- * sufficient and order-independent: the event simply never bubbles up to
- * `window` regardless of when a `window`-level listener was registered.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Renderer } from "@/presentation/Renderer";
 

@@ -14,16 +14,6 @@ import { gearMicromoduleCategory } from "@/systems/equipment/GearBridge";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import { ModuleCategory } from "@/types";
 
-/**
- * Dual-hull Task 3: gear purchases and crafted micromodules must land in the
- * canonical ShipLoadout, not the legacy `ship.modules`/`inventory.modules`
- * representation. These tests pin the two seams the shop & hangar scenes drive
- * — EquipmentSystem.installGear (purchase → loadout) and
- * ShipLoadout.applyMicromodule via the GearCatalog-bridged micromoduleById
- * (craft → loadout) — so the UI code that calls them is exercised without a
- * PixiJS scene.
- */
-
 describe("EquipmentSystem.installGear — purchases land in the loadout", () => {
   it("installs a purchased weapon into a free loadout slot", () => {
     const eq = new EquipmentSystem();
@@ -62,8 +52,6 @@ describe("EquipmentSystem.installGear — purchases land in the loadout", () => 
     const eq = new EquipmentSystem();
     const loadout = new ShipLoadout("hull_corvette");
     const slots = loadout.hull.slots;
-    // Fill every bank in a valid SR-canon mix: 2 weapons + engine + radar +
-    // 1 additional equipment fills the corvette's 5 slots, weapon bank included.
     const fill = [
       "wpn_pulse",
       "wpn_pulse",
@@ -75,7 +63,6 @@ describe("EquipmentSystem.installGear — purchases land in the loadout", () => 
       expect(loadout.install(id)).toBe(true);
     }
 
-    // Weapon bank is full → a purchased weapon cannot be force-installed.
     expect(eq.installGear(loadout, "wpn_railgun")).toBe(false);
     expect(loadout.installedGearIds().length).toBe(slots);
   });

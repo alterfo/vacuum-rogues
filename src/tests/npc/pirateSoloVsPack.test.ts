@@ -9,13 +9,6 @@ import { pirateCoordination } from "@/systems/npc/factionHostility";
 import { StarType, NpcState, NpcRole, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 
-// ---------------------------------------------------------------------------
-// Solo vs pack behaviour
-// (docs/plans/20260620-faction-hostility-pirate-overmind-ai.md, Task 3):
-// pirates swarm as a pack in systems they have captured (galaxy.pirateSystems),
-// and act as lone raiders (solo) in any foreign system.
-// ---------------------------------------------------------------------------
-
 describe("pirateCoordination — pure pack/solo decision", () => {
   it("pirates swarm as a pack only in a pirate-captured system", () => {
     expect(pirateCoordination("pirate")).toBe("pack");
@@ -106,11 +99,8 @@ describe("NpcSimulator off-screen — pack engagement in a captured system", () 
     );
 
     const sim = new NpcSimulator();
-    // One tick: both pirates act before any standing garrison is topped up.
     sim.tick(galaxy, new SeededRNG("pack"), "player_elsewhere");
 
-    // The whole pack concentrated on the weakest mark; the stronger one is
-    // untouched — group focus fire, not a spread of independent raids.
     expect(strong.hullHP).toBe(500);
     expect(weak.hullHP).toBeLessThan(500);
   });
@@ -120,9 +110,6 @@ describe("NpcSimulator off-screen — solo engagement in a foreign system", () =
   it("lone raiders in a foreign system spread fire across marks (the stronger is also hit)", () => {
     const galaxy = makeSingleSystemGalaxy(); // not captured → solo coordination
 
-    // Equal-strength marks so neither is a forced focus; only random per-pirate
-    // selection (solo) can land hits on both. Fat hulls so neither dies and the
-    // marks stay co-located for the whole run.
     const a = makeVictim("mark_a", { hullHP: 1000, damage: 5 });
     const b = makeVictim("mark_b", { hullHP: 1000, damage: 5 });
     galaxy.npcShips.push(makePirate("pir_a"), makePirate("pir_b"), a, b);
@@ -131,8 +118,6 @@ describe("NpcSimulator off-screen — solo engagement in a foreign system", () =
     const rng = new SeededRNG("solo");
     for (let i = 0; i < 20; i++) sim.tick(galaxy, rng, "player_elsewhere");
 
-    // Independent lone-raider targeting spreads damage across both marks — in a
-    // captured system the pack would have left one pristine.
     expect(a.hullHP).toBeLessThan(1000);
     expect(b.hullHP).toBeLessThan(1000);
   });

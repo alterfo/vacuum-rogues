@@ -1,12 +1,3 @@
-/**
- * TEMP diagnostic — NOT a committed test. Runs the autopilot brain
- * (MemoryHeuristicPolicy) across many fresh games headlessly and categorizes
- * behavioral problems, with a focus on the land↔take-off oscillation the user
- * reported live. Inert unless DIAG_SESSIONS is set. Delete after use.
- *
- * Run: DIAG_SESSIONS=100 DIAG_STEPS=60 npx vitest --run \
- *   src/tests/playtest/letsplay/_autopilotDiag.run.test.ts
- */
 import { writeFileSync } from "node:fs";
 import { describe, it, expect, vi } from "vitest";
 import { SceneType } from "@/types";
@@ -32,7 +23,6 @@ interface Diag {
   overmindWon: boolean;
   finalShare: number;
   hadPresence: boolean;
-  // land↔take-off oscillation: PLANET→(SPACE_FLIGHT)→PLANET transitions
   landTakeoffCycles: number;
   pureMoveReland: number;
   earnLandActions: number;
@@ -43,13 +33,7 @@ interface Diag {
   attackActions: number;
   fleeActions: number;
   warpActions: number;
-  // The genuine "сел-взлетел" symptom: a `land` immediately followed by a
-  // take-off (`move`) — the ship touched down and left with nothing productive
-  // (trade/take-quest/arm-up/sell) done in between. Distinct from the noisy
-  // `landTakeoffCycles` (which also counts busy PLANET↔TRADE trading bounces).
   barrenLandings: number;
-  // Task 2 gate: the ship reached "battle-ready" (maxHull + weaponDamage both
-  // clear the thresholds) at some point this session.
   reachedBattleReady: boolean;
   peakMaxHull: number;
   peakWeaponDamage: number;
@@ -62,7 +46,6 @@ function diagnose(s: SessionReport): Diag {
   const first = t[0]?.vitals;
   const finalV = t[t.length - 1]?.vitals;
 
-  // Count PLANET→...→PLANET returns (land, leave, land again = a cycle).
   let landTakeoffCycles = 0;
   let lastPlanetIdx = -Infinity;
   const sceneSeq = t.map((st) => st.scene);
@@ -73,13 +56,6 @@ function diagnose(s: SessionReport): Diag {
     }
   }
 
-  // DEBUG-ONLY (not part of the committed gate): the literal "сел-взлетел"
-  // symptom — a PLANET re-entry whose ENTIRE gap since the last PLANET
-  // occurrence was pure `move` (no `trade`/`take-quest` in between), i.e. a
-  // genuine no-op land→take-off→land loop rather than an active multi-trade
-  // stay. Kept separate from `landTakeoffCycles` (which also counts a busy
-  // trading stay bouncing PLANET↔TRADE) to isolate whether the warp-reject
-  // counter actually kills the reported bug.
   let pureMoveReland = 0;
   let lastPlanetIdx2 = -Infinity;
   for (let i = 0; i < sceneSeq.length; i++) {
@@ -92,8 +68,6 @@ function diagnose(s: SessionReport): Diag {
     }
   }
 
-  // Longest consecutive run where every scene is PLANET or SPACE_FLIGHT (the
-  // oscillation window) — a big number means "stuck bouncing planet↔flight".
   let longest = 0;
   let cur = 0;
   for (const sc of sceneSeq) {
@@ -103,8 +77,6 @@ function diagnose(s: SessionReport): Diag {
     } else cur = 0;
   }
 
-  // Task 2 battle-ready progression: did the ship ever clear BOTH capability
-  // thresholds this session, and how strong did it get?
   const peakMaxHull = s.samples.length
     ? Math.max(...s.samples.map((sm) => sm.maxHull ?? 0))
     : 0;
@@ -121,7 +93,6 @@ function diagnose(s: SessionReport): Diag {
   const maxShare = shares.length ? Math.max(...shares) : 0;
   const finalShare = shares.length ? shares[shares.length - 1] : 0;
   const hadPresence = shares.some((v) => v > 0);
-  // Win proxy: the Overmind had a presence and it was driven to zero share.
   const overmindWon = hadPresence && (shares[shares.length - 1] ?? 1) === 0;
 
   return {
@@ -175,8 +146,6 @@ describe("autopilot diagnostic (temp)", () => {
       const hist: Record<string, number> = {};
       for (const x of d) hist[x.endScene] = (hist[x.endScene] ?? 0) + 1;
 
-      // Histogram of the REASON behind each barren landing (land→take-off, no
-      // productive action between) — pinpoints which land tier churns.
       const barrenReasons: Record<string, number> = {};
       for (const s of report.sessions) {
         const tr = s.transcript;
@@ -271,7 +240,6 @@ describe("autopilot diagnostic (temp)", () => {
           `- [${x.seed}] cycles=${x.landTakeoffCycles} land=${x.landActions} move=${x.moveActions} trade=${x.tradeActions} scenes=${x.distinctScenes} end=${x.endScene} Δcr=${x.creditsDelta} q=${x.questsCompleted}`,
         );
 
-      // Decision trace of the worst oscillator — see WHY it re-lands.
       const worst = [...d].sort(
         (a, b) => b.landTakeoffCycles - a.landTakeoffCycles,
       )[0];
@@ -290,11 +258,10 @@ describe("autopilot diagnostic (temp)", () => {
       } catch {
         /* scratch dir may not exist in all envs */
       }
-      // eslint-disable-next-line no-console
+       
       console.log("\n" + text + "\n");
       expect(n).toBe(SESSIONS);
     },
-    // 1000×300 win-rate gate (~20 min) needs headroom over the default 600 s.
     1_800_000,
   );
 });

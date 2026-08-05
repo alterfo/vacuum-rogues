@@ -1,13 +1,7 @@
 import type { ModuleCategory, ModuleEffect } from "@/types";
 
 export class ShipModule {
-  /** Id of an applied MicroModule; undefined means no micromodule attached yet. */
   micromoduleId?: string;
-  /**
-   * Artifact-upgrade count carried while the item sits unfitted in the bag, so a
-   * research-upgraded item that is unequipped in the hangar and re-fitted keeps
-   * its upgrade levels (mirrors the loadout slot's `upgrades`). Undefined/0 = none.
-   */
   upgrades?: number;
 
   constructor(

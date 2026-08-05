@@ -17,14 +17,6 @@ export const BUTTON_ACCENT_COLORS: Record<ButtonAccent, number> = {
   neutral: 0x667788,
 };
 
-/**
- * Themed UI button: rounded-rect background, left accent strip, optional Unicode
- * icon and text label. Supports hover (lighten) and active (darken) states.
- * Always calls event.stopPropagation() to prevent clicks reaching global handlers.
- *
- * Uses composition (not inheritance) so it works cleanly in test mocks.
- * Add to parent via btn.container; position via btn.x / btn.y.
- */
 export class UiButton {
   public readonly container: Container;
   private bg: Graphics;
@@ -89,34 +81,11 @@ export class UiButton {
 
     this.container.eventMode = "static";
     this.container.cursor = "pointer";
-    // CRITICAL: every child has eventMode='none' (so labels never swallow
-    // clicks — CLAUDE.md Rule 3), which in PixiJS 8 leaves the Container with
-    // NO hit-test geometry at all: hitTestRecursive prunes 'none' children and
-    // a bare Container has no bounds of its own. Without an explicit hitArea
-    // the button is mouse-dead (real-pointer regression, 2026-06-10 playtest —
-    // Ход/pause, speed, gear and every planet-menu button were unclickable).
-    // On touch-primary devices the rectangle grows to a comfortable min target
-    // (re-centred on the visual button); on desktop/Node it is exactly
-    // {0,0,btnW,btnH} — byte-for-byte unchanged (see responsiveLayout).
     const ha = touchHitArea(btnW, btnH);
     this.container.hitArea = new Rectangle(ha.x, ha.y, ha.width, ha.height);
 
     this.container.on("pointerdown", (event: FederatedPointerEvent) => {
       event.stopPropagation();
-      // `stopPropagation()` above only stops Pixi's own internal scene-graph
-      // dispatch (parent Containers) — it does NOT touch the underlying
-      // native DOM PointerEvent, which still bubbles past the canvas all the
-      // way to `window` regardless. The live dev autopilot's reclaim-on-input
-      // listener (`AutopilotController.ts`'s `makeDefaultInputSource`) listens
-      // for exactly that native `pointerdown` on `window` with no target
-      // filtering, so — despite this docstring's stated intent — clicking ANY
-      // button (confirmed live: the flight HUD's speed-x4 control) silently
-      // disengaged the autopilot. Stopping the native event here is the same
-      // fix already applied to the wheel-zoom gesture
-      // (`SpaceFlightScene.onWheel`'s `stopImmediatePropagation()`).
-      // `nativeEvent` is typed as `MouseEvent | PointerEvent | PixiTouch`;
-      // `PixiTouch` extends the plain DOM `Touch` point data, which carries no
-      // `stopPropagation` — guard rather than assume every union member has it.
       const native = event.nativeEvent as
         | { stopPropagation?: () => void }
         | undefined;
@@ -151,18 +120,15 @@ export class UiButton {
     this.container.visible = v;
   }
 
-  /** Forward event listeners to the inner container (e.g. for pointerover audio hooks). */
   on(event: string, handler: (...args: unknown[]) => void): this {
     this.container.on(event, handler);
     return this;
   }
 
-  /** Update the text label without recreating the button. Used for speed/play-pause labels. */
   setLabel(text: string): void {
     this.labelTxt.text = text;
   }
 
-  /** Change accent color and redraw — used when button state changes (e.g. play→pause). */
   setAccentColor(color: number): void {
     this._accent = color;
     this.iconTxt.style.fill = color;
@@ -175,16 +141,13 @@ export class UiButton {
     const hasLabel = this.labelTxt.text.length > 0;
 
     if (hasIcon && !hasLabel) {
-      // Icon-only: center in button
       this.iconTxt.x = this.btnW / 2;
       this.iconTxt.y = this.btnH / 2;
       this.labelTxt.visible = false;
     } else if (!hasIcon && hasLabel) {
-      // Label only: left-align after strip
       this.labelTxt.x = 10;
       this.iconTxt.visible = false;
     } else {
-      // Icon + label
       this.iconTxt.x = 16;
       this.iconTxt.y = this.btnH / 2;
       this.labelTxt.x = 32;

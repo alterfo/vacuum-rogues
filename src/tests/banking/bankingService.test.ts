@@ -12,12 +12,6 @@ import {
 import { BankingService } from "@/systems/banking/BankingService";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 
-/**
- * Task 2 — the typed command/event bus + the BankingService core. Each command
- * must become a balanced double-entry posting and announce itself via events;
- * the global Σ(postings) invariant must hold across every command.
- */
-
 const PLAYER = "cur:player";
 const NPC = "cur:npc";
 const SAVINGS = "sav:player";
@@ -29,7 +23,6 @@ interface Harness {
   events: BankEvent[];
 }
 
-/** Fresh bus + service (seeded GL) with a player + npc current account open. */
 function makeHarness(startDate = 1): Harness {
   const bus = new BankBus();
   const service = new BankingService(bus, { startDate });
@@ -73,7 +66,6 @@ describe("BankingService — Transfer", () => {
   });
 
   it("debits the from-account and credits the to-account (balanced)", () => {
-    // Seed the player from the bank's cash so there is money to move.
     h.bus.dispatch({
       kind: "Transfer",
       fromAccountId: INTERNAL_ACCOUNTS.CASH,
@@ -271,7 +263,6 @@ describe("BankingService — RunEndOfDay", () => {
     if (cut.kind === "StatementCut") {
       expect(cut.accountIds).toContain(PLAYER);
       expect(cut.accountIds).toContain(NPC);
-      // GL internal accounts are the bank's own — never on a customer statement.
       expect(cut.accountIds).not.toContain(INTERNAL_ACCOUNTS.CASH);
     }
   });

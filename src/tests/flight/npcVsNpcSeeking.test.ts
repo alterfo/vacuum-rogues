@@ -13,14 +13,6 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Playtest 2026-06-27 #6 follow-up: hostile factions must visibly FIGHT in-flight,
- * not coexist. After the garrison-aggro fix a pirate no longer ganged up on the
- * player in an Overmind system — but it then just wandered. Now a ship that is NOT
- * hunting the player actively closes on its nearest mutually-hostile NPC (scoped
- * to Overmind-involving pairs, which have a damage path) so the two engage.
- */
-
 function renderer(): Renderer {
   return {
     app: { screen: { width: 800, height: 600 } },
@@ -117,7 +109,6 @@ describe("NPC-vs-NPC seeking (hostile factions close in to fight)", () => {
     for (let i = 0; i < 20; i++) manager.update(100, 0);
     const after = Math.hypot(pir.x - ovm.x, pir.y - ovm.y);
 
-    // The two converge — at least one side actively closed the gap.
     expect(after).toBeLessThan(before);
     manager.destroy();
   });
@@ -133,7 +124,6 @@ describe("NPC-vs-NPC seeking (hostile factions close in to fight)", () => {
 
     manager.update(100, 0);
 
-    // Same hive (overmind↔overmind not mutually hostile) → no engagement target.
     for (const id of ["ovm_1", "ovm_2"]) {
       expect(npcCombatTargetOf(manager, id)).toBeNull();
     }
@@ -167,13 +157,11 @@ describe("NPC-vs-NPC seeking (hostile factions close in to fight)", () => {
 
     manager.update(100, 0);
 
-    // The pirate is now steering at the Overmind (a concrete target was set).
     expect(npcCombatTargetOf(manager, "prt_1")).not.toBeNull();
     manager.destroy();
   });
 });
 
-/** White-box read of a sprite's private NPC-vs-NPC engagement target. */
 function npcCombatTargetOf(
   manager: NpcShipManager,
   id: string,

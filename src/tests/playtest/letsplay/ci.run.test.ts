@@ -13,23 +13,8 @@ import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import type { PlayerActionKind } from "./observe";
 import type { VitalsSample } from "./sessionMetrics";
 
-/**
- * Task 2 of the letsplay CI oracle: the deterministic multi-session gate.
- *
- * Two tiers in one file:
- *  - the **pure verdict** tests ({@link evaluateLetsplayRun} / {@link formatCiResult})
- *    prove the gate's pass/fail logic on hand-built reports — a clean run passes,
- *    an injected crash / soft-lock / corrupt-vital / out-of-band balance fails —
- *    with no engine boot, so they stay fast and deterministic.
- *  - the **real-engine** tests boot the actual harness through {@link runLetsplayCi}
- *    and show the gate flagging a deliberately broken build (an always-`wait`
- *    policy that strands the player) while passing a healthy heuristic run.
- *
- * The pixi mock is what lets the real harness boot headlessly under Vitest.
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** Build a transcript step carrying just the action `kind` the metrics read. */
 function mkStep(kind: PlayerActionKind, index = 0): AgentStep {
   return {
     index,
@@ -38,7 +23,6 @@ function mkStep(kind: PlayerActionKind, index = 0): AgentStep {
   };
 }
 
-/** A synthetic played session — every field overridable for the scenario. */
 function mkSession(over: Partial<SessionReport> = {}): SessionReport {
   return {
     index: 0,
@@ -53,7 +37,6 @@ function mkSession(over: Partial<SessionReport> = {}): SessionReport {
   };
 }
 
-/** Wrap synthetic sessions in a {@link LetsplayReport} the gate can score. */
 function mkReport(sessions: SessionReport[]): LetsplayReport {
   const failures = sessions.flatMap((s) => [
     ...s.errors.map((e) => ({
@@ -79,7 +62,6 @@ function mkReport(sessions: SessionReport[]): LetsplayReport {
   };
 }
 
-/** Two samples spanning `days` with `netCredits` earned and an optional upgrade. */
 function risingSamples(
   netCredits: number,
   days: number,
@@ -110,7 +92,6 @@ describe("evaluateLetsplayRun — pure verdict over a played report", () => {
     expect(result.reasons).toEqual([]);
     expect(run.totalErrors).toBe(0);
     expect(run.totalSoftLocks).toBe(0);
-    // Balance signals are aggregated even when unscored.
     expect(run.avgCreditsPerDay).toBe(400);
   });
 
@@ -172,7 +153,6 @@ describe("evaluateLetsplayRun — pure verdict over a played report", () => {
   });
 
   it("flags an out-of-band balance metric (a profit printer)", () => {
-    // 1600 credits over 2 days ⇒ 800/day, above the band ceiling.
     const report = mkReport([mkSession({ samples: risingSamples(1600, 2) })]);
     const { result } = evaluateLetsplayRun(report, {
       ...DEFAULT_CI_THRESHOLDS,
@@ -213,9 +193,6 @@ describe("formatCiResult — readable gate report", () => {
   });
 
   it("renders n/a for balance signals that produced no value (the real CI path)", () => {
-    // The real headless run never advances a galaxy day, so every passing CI run
-    // prints `credits/day=n/a days-to-upgrade=n/a` — the `num(null)` branch that
-    // actually ships. A bug here (NaN / null / throw) would surface only in CI.
     const report = mkReport([mkSession({ transcript: [mkStep("land")] })]); // no samples
     const { run, result } = evaluateLetsplayRun(report);
     expect(run.avgCreditsPerDay).toBeNull();
@@ -258,9 +235,6 @@ describe("runLetsplayCi — real engine, broken vs healthy build", () => {
   });
 
   it("is deterministic — the same seed reproduces identical run metrics", async () => {
-    // The gate's core promise ("a CI failure reproduces locally from the same
-    // seed") is only real if a seeded run is reproducible. Re-run the same seed
-    // and assert the scored aggregate is byte-identical.
     const opts = { sessions: 1, steps: 10, seedPrefix: "CI_DET" } as const;
     const a = await runLetsplayCi(opts);
     const b = await runLetsplayCi(opts);
@@ -269,21 +243,8 @@ describe("runLetsplayCi — real engine, broken vs healthy build", () => {
   });
 });
 
-/**
- * The full CI gate, opt-in via `LETSPLAY_CI` so the always-on playtest tier stays
- * fast. `npm run letsplay:ci` sets it: plays `K` sessions × `N` steps, logs the
- * readable gate report, and turns any threshold breach into a non-zero exit.
- * `LETSPLAY_CI_SESSIONS` / `LETSPLAY_CI_STEPS` override the K/N defaults.
- */
 const CI = !!process.env.LETSPLAY_CI;
 
-/**
- * Parse a positive-integer K/N override, falling back to `fallback` for a
- * missing, zero, negative, or non-numeric value — so a typo'd
- * `LETSPLAY_CI_SESSIONS=0` (or `=abc`) can't silently run zero sessions and let
- * the gate pass vacuously. (`evaluate` also reds a zero-session run as a
- * backstop; this keeps the gate playing its real budget rather than failing.)
- */
 function positiveIntEnv(raw: string | undefined, fallback: number): number {
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : fallback;
@@ -299,7 +260,7 @@ describe.runIf(CI)("npm run letsplay:ci — full deterministic gate", () => {
       steps,
       seedPrefix: "LETSPLAY_CI",
     });
-    // eslint-disable-next-line no-console
+     
     console.log(formatCiResult(r));
 
     expect(r.result.reasons, formatCiResult(r)).toEqual([]);

@@ -2,34 +2,13 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
-/**
- * Dependency guard for the "drop onnxruntime-web" change
- * (`docs/plans/20260625-pure-ts-mlp-drop-onnx.md`, Task 3).
- *
- * The only neural nets this game needs are tiny feature-vector MLPs, now run by a
- * hand-written pure-TS forward pass (`src/tests/playtest/letsplay/mlp.ts`) over
- * weights shipped as a small JSON array. The heavyweight `onnxruntime-web` runtime
- * (wasm + Web Worker + IndexedDB model cache) and all the dead ONNX scaffolding
- * (`ONNXModelRegistry`, the inference worker, the adapters, the `IOnnxService`
- * port) were removed. This guard keeps them gone:
- *
- *  1. **No `src/**` module imports `onnxruntime-web`** — statically *or*
- *     dynamically. If this stays green, the runtime can never re-enter the bundle.
- *  2. **The removed ONNX modules stay deleted**, and `FallbackEngine` — the
- *     canonical rule-based engine — stays. The dialogue/quest-narration path runs
- *     on pure templates (`TemplateQuestNarrator`), not an ONNX session.
- */
-
 const SRC_ROOT = resolve(__dirname, "..", "..");
 
-/** This guard file + the letsplay dev-only guard both embed the literal
- *  "onnxruntime-web" in assertion text / test fixtures, not as real imports. */
 const SCAN_EXCLUDE = new Set([
   resolve(__dirname, "noOnnxRuntime.test.ts"),
   resolve(__dirname, "letsplayDevOnly.test.ts"),
 ]);
 
-/** Recursively collect every `.ts` file under `dir`, skipping `.d.ts`. */
 function collectTsFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -43,22 +22,12 @@ function collectTsFiles(dir: string): string[] {
   return out;
 }
 
-/**
- * Extract every module specifier from a real import/export/require: static
- * `import ... from "x"`, bare `import "x"`, dynamic `import("x")`, and
- * `require("x")`. Comment mentions (`* onnxruntime-web …`) are not import
- * statements, so they never match.
- */
 function importSpecifiers(source: string): string[] {
   const specs: string[] = [];
   const patterns = [
-    // import ... from "x" / export ... from "x" (clause may span newlines)
     /(?:^|[\n;])\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']/g,
-    // bare side-effect import "x"
     /(?:^|[\n;])\s*import\s*["']([^"']+)["']/g,
-    // dynamic import("x")
     /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
-    // require("x")
     /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,
   ];
   for (const re of patterns) {

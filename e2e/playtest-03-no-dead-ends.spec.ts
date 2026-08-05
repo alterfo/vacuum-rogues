@@ -20,7 +20,6 @@ test.describe('Playtest 03: No dead-ends', () => {
     await page.goto('/');
     await waitForEngine(page);
 
-    // Start a new game so we have player + galaxy context
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       await engine.transitionTo('RACE_SELECTION', { gameEngine: engine });
@@ -40,7 +39,6 @@ test.describe('Playtest 03: No dead-ends', () => {
   test('every scene has a way back', async ({ page }) => {
     const errorCollector = new ErrorCollector(page);
 
-    // Helper: get first system context (planet + station)
     const getCtx = () =>
       page.evaluate(() => {
         const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
@@ -51,7 +49,6 @@ test.describe('Playtest 03: No dead-ends', () => {
         };
       });
 
-    // Helper: transition to scene and verify current scene name
     const goTo = async (sceneType: string, extraCtx: Record<string, unknown> = {}) => {
       await page.evaluate(
         async ({ scene, ctx }) => {
@@ -62,7 +59,6 @@ test.describe('Playtest 03: No dead-ends', () => {
       );
     };
 
-    // Helper: call scene's goBack() private method via bracket notation
     const callGoBack = async () => {
       await page.evaluate(async () => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
@@ -75,7 +71,6 @@ test.describe('Playtest 03: No dead-ends', () => {
       });
     };
 
-    // Helper: wait for scene to be different from given name
     const waitForSceneChange = async (fromScene: string, timeout = 10_000) => {
       await page.waitForFunction(
         (s) => {
@@ -89,14 +84,11 @@ test.describe('Playtest 03: No dead-ends', () => {
       );
     };
 
-    // ── StarMapScene ──
     await goTo('STAR_MAP');
     await waitForScene(page, 'StarMapScene', 10_000);
-    // StarMapScene has a "[Назад]" button that calls transitionTo(SPACE_FLIGHT)
     await goTo('SPACE_FLIGHT');
     await waitForScene(page, 'SpaceFlightScene', 10_000);
 
-    // ── PlanetScene ──
     const { planetId, stationId } = await getCtx();
     if (planetId) {
       await page.evaluate(
@@ -112,12 +104,10 @@ test.describe('Playtest 03: No dead-ends', () => {
         { pid: planetId }
       );
       await waitForScene(page, 'PlanetScene', 10_000);
-      // PlanetScene "[Назад]" button → SPACE_FLIGHT
       await goTo('SPACE_FLIGHT');
       await waitForScene(page, 'SpaceFlightScene', 10_000);
     }
 
-    // ── TradeScene ──
     if (planetId) {
       await page.evaluate(
         async ({ pid }) => {
@@ -132,12 +122,10 @@ test.describe('Playtest 03: No dead-ends', () => {
         { pid: planetId }
       );
       await waitForScene(page, 'TradeScene', 10_000);
-      // TradeScene: Escape key closes it back to planet
       await page.keyboard.press('Escape');
       await waitForSceneChange('TradeScene');
     }
 
-    // ── InventoryScene ──
     await goTo('SPACE_FLIGHT');
     await waitForScene(page, 'SpaceFlightScene', 10_000);
     await goTo('INVENTORY');
@@ -145,7 +133,6 @@ test.describe('Playtest 03: No dead-ends', () => {
     await page.keyboard.press('Escape');
     await waitForSceneChange('InventoryScene');
 
-    // ── InfoCenterScene ──
     if (planetId) {
       await page.evaluate(
         async ({ pid }) => {
@@ -164,7 +151,6 @@ test.describe('Playtest 03: No dead-ends', () => {
       await waitForSceneChange('InfoCenterScene');
     }
 
-    // ── GovernmentScene ──
     if (planetId) {
       await page.evaluate(
         async ({ pid }) => {
@@ -183,7 +169,6 @@ test.describe('Playtest 03: No dead-ends', () => {
       await waitForSceneChange('GovernmentScene');
     }
 
-    // ── StationScene ──
     if (stationId) {
       await page.evaluate(
         async ({ sid }) => {
@@ -202,7 +187,6 @@ test.describe('Playtest 03: No dead-ends', () => {
       await waitForSceneChange('StationScene');
     }
 
-    // ── DialogueScene ──
     await goTo('SPACE_FLIGHT');
     await waitForScene(page, 'SpaceFlightScene', 10_000);
     await goTo('DIALOGUE');
@@ -210,7 +194,6 @@ test.describe('Playtest 03: No dead-ends', () => {
     await callGoBack();
     await waitForSceneChange('DialogueScene');
 
-    // ── EquipmentShopScene ──
     if (planetId) {
       await page.evaluate(
         async ({ pid }) => {
@@ -229,7 +212,6 @@ test.describe('Playtest 03: No dead-ends', () => {
       await waitForSceneChange('EquipmentShopScene');
     }
 
-    // ── TextQuestScene ──
     if (planetId) {
       await page.evaluate(
         async ({ pid }) => {
@@ -255,10 +237,8 @@ test.describe('Playtest 03: No dead-ends', () => {
       await waitForSceneChange('TextQuestScene');
     }
 
-    // ── WinScene ──
     await goTo('WIN_SCREEN');
     await waitForScene(page, 'WinScene', 10_000);
-    // WinScene has a button → MAIN_MENU; call its handler directly
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       await engine.transitionTo('MAIN_MENU', { gameEngine: engine });
@@ -271,7 +251,6 @@ test.describe('Playtest 03: No dead-ends', () => {
   test('main menu continue without save shows disabled button', async ({ page }) => {
     const errorCollector = new ErrorCollector(page);
 
-    // Clear any existing save slots from IndexedDB via SaveManager
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const slots = await engine.saveManager.hasSave
@@ -282,27 +261,23 @@ test.describe('Playtest 03: No dead-ends', () => {
       }
     });
 
-    // Navigate to main menu
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       await engine.transitionTo('MAIN_MENU', { gameEngine: engine });
     });
     await waitForScene(page, 'MainMenuScene', 10_000);
 
-    // Wait for the scene to check save availability (async check inside the scene)
     await page.waitForFunction(
       () => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
           currentScene: Record<string, unknown> | null;
         };
         const scene = engine?.currentScene;
-        // If saveAvailable is false, continueBtn is disabled (alpha 0.5)
         return scene !== null && scene['saveAvailable'] === false;
       },
       { timeout: 10_000 }
     );
 
-    // Verify the button container's second child (continue button) has alpha < 1
     const continueBtnAlpha = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -311,7 +286,6 @@ test.describe('Playtest 03: No dead-ends', () => {
       const buttonsContainer = scene?.['buttonsContainer'] as {
         children: Array<{ alpha: number }>;
       } | null;
-      // Index 0 = newGameBtn, index 1 = continueBtn
       return buttonsContainer?.children[1]?.alpha ?? 1;
     });
 
@@ -347,7 +321,6 @@ test.describe('Playtest 03: No dead-ends', () => {
     );
     await waitForScene(page, 'InfoCenterScene', 10_000);
 
-    // Run gear search via private method access
     await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -358,7 +331,6 @@ test.describe('Playtest 03: No dead-ends', () => {
       }
     });
 
-    // Wait a tick for synchronous results
     await page.waitForFunction(
       () => {
         const engine = (window as Record<string, unknown>).__gameEngine as {

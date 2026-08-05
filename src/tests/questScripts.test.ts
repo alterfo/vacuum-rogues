@@ -7,7 +7,6 @@ import { cargoSortScript } from "@/systems/quests/scripts/cargo-sort";
 import { reactorScript } from "@/systems/quests/scripts/reactor";
 import { auctionScript } from "@/systems/quests/scripts/auction";
 
-// Advance through all autoExecute transitions until a manual decision or finished state
 function advanceAuto(vm: QuestVM): void {
   while (!vm.isFinished()) {
     const avail = vm.availableTransitions();
@@ -17,7 +16,6 @@ function advanceAuto(vm: QuestVM): void {
   }
 }
 
-// Run optimal strategy: scan only when suspicion >= 7 (certain smuggler)
 function runOptimalStrategy(vm: QuestVM): void {
   const MAX_STEPS = 500; // guard against infinite loops
   let steps = 0;
@@ -61,7 +59,6 @@ describe("Customs quest", () => {
   it("pass does not cost money and advances to next ship", () => {
     const vm = new QuestVM(customsScript, 1);
     vm.execute("pass");
-    // now at next_ship (autoExecute)
     advanceAuto(vm);
     expect(vm.currentLocation().id).toBe("inspect_decision");
     expect(vm.getParam("money")).toBe(0);
@@ -71,7 +68,6 @@ describe("Customs quest", () => {
   it("scan deducts 200 credits immediately", () => {
     const vm = new QuestVM(customsScript, 1);
     vm.execute("scan");
-    // deduction happens on transition, before arriving at scan_check_high
     expect(vm.getParam("money")).toBe(-200);
   });
 
@@ -80,7 +76,6 @@ describe("Customs quest", () => {
     vm.setParam("suspicion", 9);
     vm.execute("scan");
     advanceAuto(vm); // scan_check_high → found_smuggler → (money += 1000) → next_ship
-    // net: -200 + 1000 = +800, then advance shipNum
     expect(vm.getParam("money")).toBe(800);
     advanceAuto(vm); // next_ship autoExecute → inspect_decision
     expect(vm.currentLocation().id).toBe("inspect_decision");
@@ -101,7 +96,6 @@ describe("Customs quest", () => {
     vm.setParam("suspicion", 2);
     vm.execute("scan");
     advanceAuto(vm);
-    // rating dropped to -400 < 0 → critical → quest_failure_rating
     expect(vm.isFinished()).toBe(true);
     expect(vm.isSuccess()).toBe(false);
     expect(vm.currentLocation().id).toBe("quest_failure_rating");
@@ -142,13 +136,11 @@ describe("Customs quest", () => {
 
   it("quest ends in failure when money < 5000 after 20 ships", () => {
     const vm = new QuestVM(customsScript, 1);
-    // Force all 20 ships to pass (no money earned)
     for (let ship = 1; ship <= 20; ship++) {
       expect(vm.currentLocation().id).toBe("inspect_decision");
       vm.execute("pass");
       advanceAuto(vm); // next_ship → inspect_decision (or check_final on ship 20)
     }
-    // After 20 passes, critMax fires → check_final → fail (money = 0 < 5000)
     advanceAuto(vm); // execute check_final autoExecute transition
     expect(vm.isFinished()).toBe(true);
     expect(vm.isSuccess()).toBe(false);
@@ -160,7 +152,6 @@ describe("Customs quest", () => {
     vm.setParam("money", 4800);
     vm.setParam("shipNum", 20);
     vm.setParam("suspicion", 9);
-    // Scan ship 20 (suspicion 9 = certain smuggler): -200 + 1000 = +800 → total 5600
     vm.execute("scan");
     advanceAuto(vm); // found_smuggler (+1000) → next_ship → check_final (shipNum becomes 21)
     advanceAuto(vm); // check_final autoExecute → quest_success
@@ -170,7 +161,6 @@ describe("Customs quest", () => {
   });
 
   it("optimal strategy (scan all suspicion>=7) wins with seed 1", () => {
-    // Seed 1 generates 8 high-suspicion ships → 8 × 800 = 6400 credits
     const vm = new QuestVM(customsScript, 1);
     runOptimalStrategy(vm);
     expect(vm.isFinished()).toBe(true);
@@ -201,8 +191,6 @@ describe("Customs quest", () => {
     expect(text).toContain("75");
   });
 
-  // ── Task 18 (quest-and-hub-polish-pass) ─────────────────────────────────────
-
   it("a caught smuggler is dispatched via the distinct next_ship_caught beat (B)", () => {
     const vm = new QuestVM(customsScript, 1);
     vm.setParam("suspicion", 9);
@@ -230,7 +218,6 @@ describe("Customs quest", () => {
     expect(caught).toBeDefined();
     expect(waved).toBeDefined();
     expect(caught!.text).not.toBe(waved!.text);
-    // Both still advance the shift identically (shipNum += 1, suspicion re-roll).
     for (const node of [caught!, waved!]) {
       const adv = node.transitions[0];
       expect(adv.autoExecute).toBe(true);
@@ -243,11 +230,8 @@ describe("Customs quest", () => {
     const clean = customsScript.locations.find((l) => l.id === "found_clean")!;
     const text =
       typeof clean.text === "string" ? clean.text : clean.text.join(" ");
-    // The old text promised «ещё пара таких досмотров» while a single false
-    // inspection actually ends the shift — that contradiction is now gone.
     expect(text).not.toContain("Ещё пара");
     expect(text).toMatch(/второго шанса не будет|одной такой ошибки/);
-    // ...and the data matches: the clean path routes straight to failure.
     const scandal = clean.transitions.find((t) => t.id === "accept_scandal")!;
     expect(scandal.toLocation).toBe("quest_failure_rating");
   });
@@ -309,7 +293,6 @@ describe("Gravity Slalom quest", () => {
 
   it("four consecutive direct moves exhaust fuel and trigger failure", () => {
     const vm = new QuestVM(gravitySlalomScript, 1);
-    // Path: a1→a2→a3→b3→c3 (4×26=104 total, last move pushes fuel negative)
     vm.execute("a1_to_a2"); // 74
     vm.execute("a2_to_a3"); // 48
     vm.execute("a3_to_b3"); // 22
@@ -342,7 +325,6 @@ describe("Gravity Slalom quest", () => {
     vm.execute("a1_grav1_open");
     expect(vm.currentLocation().id).toBe("cell_b2");
     vm.execute("b2_grav4_open");
-    // arrives at cell_c3, autoExecute fires
     const avail = vm.availableTransitions();
     expect(avail[0].autoExecute).toBe(true);
     vm.execute(avail[0].id);
@@ -413,10 +395,8 @@ describe("Gravity Slalom quest", () => {
   it("quest results are deterministic for the same seed", () => {
     const vm1 = new QuestVM(gravitySlalomScript, 42);
     const vm2 = new QuestVM(gravitySlalomScript, 42);
-    // Same window values → same path strategy
     expect(vm1.getParam("window_1")).toBe(vm2.getParam("window_1"));
     expect(vm1.getParam("window_4")).toBe(vm2.getParam("window_4"));
-    // Execute same moves on both
     vm1.execute("a1_to_a2");
     vm2.execute("a1_to_a2");
     expect(vm1.getParam("fuel")).toBe(vm2.getParam("fuel"));
@@ -430,7 +410,6 @@ describe("Gravity Slalom quest", () => {
       const key = `${vm.getParam("window_1")}${vm.getParam("window_2")}${vm.getParam("window_3")}${vm.getParam("window_4")}`;
       configs.add(key);
     }
-    // Should see at least 4 distinct configurations across 50 seeds
     expect(configs.size).toBeGreaterThanOrEqual(4);
   });
 
@@ -440,8 +419,6 @@ describe("Gravity Slalom quest", () => {
     const text = vm.interpolate(vm.currentLocation().text);
     expect(text).toContain("74");
   });
-
-  // --- Task 22: funnel-cell coast gambles + honest seed-variance ---
 
   it("hidden coast rolls exist, start at 0 and are not shown in the UI", () => {
     const vm = new QuestVM(gravitySlalomScript, 7);
@@ -455,11 +432,6 @@ describe("Gravity Slalom quest", () => {
   });
 
   it("the coast rolls do not consume the constructor RNG (window rolls unchanged)", () => {
-    // Same seed, read the seed-determined windows — adding coast_* params with
-    // initial:0 must not shift the four window_* rolls off their old values.
-    // The golden configs below are the pre-coast-param values: if the coast
-    // rolls ever consume the constructor RNG, the window order shifts and these
-    // literals go red (a bare 0/1 range check could never catch that).
     const golden: Record<number, string> = { 1: "0011", 7: "1100", 42: "0000" };
     for (const seed of [1, 7, 42]) {
       const vm = new QuestVM(gravitySlalomScript, seed);
@@ -574,7 +546,6 @@ describe("Gravity Slalom quest", () => {
   });
 });
 
-// Helper: advance all auto-execute transitions until a manual choice or finished
 function advanceAutoInvestigation(vm: QuestVM): void {
   const MAX = 20;
   let steps = 0;
@@ -586,9 +557,7 @@ function advanceAutoInvestigation(vm: QuestVM): void {
   }
 }
 
-// Helper: do a full correct playthrough (interview all 4, examine 5 clues, accuse correctly)
 function solveInvestigation(vm: QuestVM): void {
-  // Interview all 4 suspects
   const interviewBtns = [
     "go_interview_mechanic",
     "go_interview_pilot",
@@ -606,7 +575,6 @@ function solveInvestigation(vm: QuestVM): void {
     vm.execute(doneBtns[i]);
   }
 
-  // Examine the first 5 clues
   const clueIds = [
     "examine_clue_0",
     "examine_clue_1",
@@ -626,12 +594,10 @@ function solveInvestigation(vm: QuestVM): void {
     vm.execute(backIds[i]);
   }
 
-  // Navigate through accusation gate
   vm.execute("go_accuse");
   advanceAutoInvestigation(vm); // gate_interviews_pass → accuse_gate_clues
   advanceAutoInvestigation(vm); // gate_clues_pass → accuse
 
-  // Accuse the correct suspect
   const murderer = vm.getParam("murderer");
   const accuseBtns = [
     "accuse_mechanic",
@@ -716,7 +682,6 @@ describe("Investigation quest", () => {
     vm.setParam("interviewed_1", 1);
     vm.setParam("interviewed_2", 1);
     vm.setParam("interviewed_3", 1);
-    // examine only 4 clues
     for (let i = 0; i < 4; i++) {
       vm.execute(`examine_clue_${i}`);
       vm.execute(`back_from_e${i}`);
@@ -758,7 +723,6 @@ describe("Investigation quest", () => {
     const vm = new QuestVM(investigationScript, 1);
     vm.setParam("interviews_done", 4);
     vm.setParam("clues_examined", 5);
-    // Force murderer to 0 (mechanic), then accuse pilot (wrong)
     vm.setParam("murderer", 0);
     vm.execute("go_accuse");
     advanceAutoInvestigation(vm);
@@ -780,17 +744,14 @@ describe("Investigation quest", () => {
     vm.execute("go_accuse");
     advanceAutoInvestigation(vm);
     advanceAutoInvestigation(vm);
-    // Wrong 1: accuse pilot (500 → 300)
     vm.execute("accuse_pilot");
     advanceAutoInvestigation(vm);
     vm.execute("retry_accusation");
     expect(vm.getParam("rating")).toBe(300);
-    // Wrong 2: accuse trader2 (300 → 100)
     vm.execute("accuse_trader2");
     advanceAutoInvestigation(vm);
     vm.execute("retry_accusation");
     expect(vm.getParam("rating")).toBe(100);
-    // Wrong 3: accuse guard (100 → -100 → critMin fires)
     vm.execute("accuse_guard");
     advanceAutoInvestigation(vm);
     vm.execute("retry_accusation"); // rating = -100, critMin triggers failure
@@ -831,8 +792,6 @@ describe("Investigation quest", () => {
     expect(vm1.getParam("murderer")).toBe(vm2.getParam("murderer"));
   });
 
-  // ── Task 24: real deduction (voice-log branches on the actual murderer) ──
-  // Surnames appear verbatim (nominative) in every voice_match node.
   const suspectName = ["Хенце", "Жанхуэй", "Коваль", "Сааведр"];
 
   it("voice-log deduction branches on the real murderer and names them", () => {
@@ -841,7 +800,6 @@ describe("Investigation quest", () => {
       vm.setParam("murderer", m);
       vm.execute("examine_clue_4");
       expect(vm.currentLocation().id).toBe("examine_evidence_4");
-      // The examine screen offers the biometric analysis path, not just a log.
       expect(vm.availableTransitions().map((t) => t.id)).toContain(
         "deduce_voice",
       );
@@ -863,19 +821,14 @@ describe("Investigation quest", () => {
     expect(vm.currentLocation().id).toBe("warehouse");
     expect(vm.getParam("examined_4")).toBe(1);
     expect(vm.getParam("clues_examined")).toBe(1);
-    // The clue button is gone, so it can never be double-counted.
     expect(vm.availableTransitions().map((t) => t.id)).not.toContain(
       "examine_clue_4",
     );
   });
 
-  // Fix for defect E: with the deduction real, perfect play identifies the
-  // killer from the clues and accuses correctly on the FIRST attempt — no wrong
-  // guesses, so rating never drops. Elimination-by-guessing is no longer forced.
   it("deducing via the voice log yields a first-try win with zero rating loss", () => {
     for (let seed = 0; seed < 20; seed++) {
       const vm = new QuestVM(investigationScript, seed);
-      // Interview all 4 suspects.
       const interviewBtns = [
         "go_interview_mechanic",
         "go_interview_pilot",
@@ -892,20 +845,16 @@ describe("Investigation quest", () => {
         vm.execute(interviewBtns[i]);
         vm.execute(doneBtns[i]);
       }
-      // Examine 4 physical clues normally.
       for (let i = 0; i < 4; i++) {
         vm.execute(`examine_clue_${i}`);
         vm.execute(`back_from_e${i}`);
       }
-      // Run the voice log through biometrics — this is the deduction and logs
-      // the 5th clue. Learn the killer's identity from the branch we land on.
       vm.execute("examine_clue_4");
       vm.execute("deduce_voice");
       advanceAutoInvestigation(vm);
       const matchId = vm.currentLocation().id; // voice_match_N
       const deduced = Number(matchId.slice("voice_match_".length));
       vm.execute(`voice_logged_${deduced}`);
-      // Accuse the deduced suspect (not read from the murderer param directly).
       vm.execute("go_accuse");
       advanceAutoInvestigation(vm);
       const accuseBtns = [
@@ -921,16 +870,13 @@ describe("Investigation quest", () => {
     }
   });
 
-  // ── Task 24: guard's key confession usable in the interrogation ──
   it("guard confront is offered only after the arsenal-key clue is examined", () => {
     const vm = new QuestVM(investigationScript, 1);
-    // Before examining the key clue, the confront option is hidden.
     vm.execute("go_interview_guard");
     expect(vm.availableTransitions().map((t) => t.id)).not.toContain(
       "confront_key",
     );
     vm.execute("done_guard");
-    // Fresh run: examine the key clue (Улика 7) first, then interview the guard.
     const vm2 = new QuestVM(investigationScript, 1);
     vm2.execute("examine_clue_6");
     vm2.execute("back_from_e6");
@@ -948,18 +894,15 @@ describe("Investigation quest", () => {
     vm.execute("confront_key");
     expect(vm.currentLocation().id).toBe("guard_key_admission");
     expect(vm.currentLocation().text).toContain("приманк");
-    // The confront does NOT finalise the interview…
     expect(vm.getParam("interviewed_3")).toBe(0);
     vm.execute("guard_back_to_interview");
     expect(vm.currentLocation().id).toBe("interview_guard");
-    // …the player still records the statement to complete it.
     vm.execute("done_guard");
     expect(vm.getParam("interviewed_3")).toBe(1);
     expect(vm.getParam("interviews_done")).toBe(1);
   });
 });
 
-// Greedy dock assignment: always pick the dock with the lowest current load
 function assignGreedy(vm: QuestVM): number {
   const d1 = vm.getParam("dock1_load");
   const d2 = vm.getParam("dock2_load");
@@ -969,7 +912,6 @@ function assignGreedy(vm: QuestVM): number {
   return 3;
 }
 
-// Advance through init_breakdown (autoExecute) and any subsequent auto steps
 function advanceAutoCS(vm: QuestVM): void {
   const MAX = 30;
   let steps = 0;
@@ -981,7 +923,6 @@ function advanceAutoCS(vm: QuestVM): void {
   }
 }
 
-// Full greedy playthrough: init → assign all 5 transports → final verdict
 function runGreedyCargoSort(vm: QuestVM): void {
   advanceAutoCS(vm); // init_breakdown → dispatch_hub
   const ships = ["A", "B", "C", "D", "E"];
@@ -992,7 +933,6 @@ function runGreedyCargoSort(vm: QuestVM): void {
     vm.execute(`assign_${ship}_dock${dock}`);
     advanceAutoCS(vm); // assign_to_dockN → check_progress → dispatch_hub (or final checks)
   }
-  // After the 5th assignment, advanceAutoCS continues through dock checks → final_verdict → result
 }
 
 describe("Cargo Sort quest", () => {
@@ -1006,7 +946,6 @@ describe("Cargo Sort quest", () => {
   it("transport times are in range 1-4 before breakdown (raw init)", () => {
     for (let seed = 0; seed < 20; seed++) {
       const vm = new QuestVM(cargoSortScript, seed);
-      // Before init_breakdown fires, times are raw random(1,4)
       for (const ship of ["A", "B", "C", "D", "E"]) {
         const t = vm.getParam(`time_${ship}`);
         expect(t).toBeGreaterThanOrEqual(1);
@@ -1054,7 +993,6 @@ describe("Cargo Sort quest", () => {
         expect(vm.getParam("assigned_count")).toBe(i + 1);
       }
     }
-    // After 5th assignment, quest finishes (all in dock1 → overload)
     expect(vm.isFinished()).toBe(true);
   });
 
@@ -1107,7 +1045,6 @@ describe("Cargo Sort quest", () => {
   it("dock overloaded (>12h) increments overtime", () => {
     const vm = new QuestVM(cargoSortScript, 1);
     advanceAutoCS(vm);
-    // Force all 5 to dock1 — guaranteed overload since 5 × min(2h with breakdown) = 10-22h
     vm.setParam("time_A", 4);
     vm.setParam("time_B", 4);
     vm.setParam("time_C", 4);
@@ -1119,7 +1056,6 @@ describe("Cargo Sort quest", () => {
       vm.execute(`assign_${ship}_dock1`);
       advanceAutoCS(vm);
     }
-    // dock1_load = 20 > 12 → overtime = 1; dock2 = 0, dock3 = 0
     expect(vm.getParam("overtime")).toBe(1);
     expect(vm.isFinished()).toBe(true);
     expect(vm.isSuccess()).toBe(false);
@@ -1129,13 +1065,11 @@ describe("Cargo Sort quest", () => {
   it("no dock overloaded → overtime == 0 → quest success", () => {
     const vm = new QuestVM(cargoSortScript, 1);
     advanceAutoCS(vm);
-    // Set controlled times: 4,4,4 → dock1; 3,3 → dock2; none → dock3
     vm.setParam("time_A", 4);
     vm.setParam("time_B", 4);
     vm.setParam("time_C", 4);
     vm.setParam("time_D", 3);
     vm.setParam("time_E", 3);
-    // Assign A+D to dock1 (7h), B+E to dock2 (7h), C to dock3 (4h) — all under 12
     vm.execute("go_select_A");
     vm.execute("assign_A_dock1");
     advanceAutoCS(vm);
@@ -1194,10 +1128,6 @@ describe("Cargo Sort quest", () => {
     expect(text).toContain("7");
   });
 
-  // Task 17: tightened budget (porog 12h → 8h) + distinct-outcome endings.
-  // Helper: fire breakdown, override the 5 transport times, then assign each
-  // ship to a chosen dock. Overriding times AFTER breakdown makes the dock
-  // loads fully deterministic regardless of seed.
   function forceRun(vm: QuestVM, times: number[], docks: number[]): void {
     advanceAutoCS(vm); // init_breakdown → dispatch_hub
     const ships = ["A", "B", "C", "D", "E"];
@@ -1211,7 +1141,6 @@ describe("Cargo Sort quest", () => {
 
   it("porog tightened to 8h: a dock at 9h now overloads (was safe under the old 12h)", () => {
     const vm = new QuestVM(cargoSortScript, 1);
-    // dock1 = A(4)+B(4)+C(1) = 9 > 8; dock2 = D(2); dock3 = E(2) → exactly 1 over.
     forceRun(vm, [4, 4, 1, 2, 2], [1, 1, 1, 2, 3]);
     expect(vm.getParam("dock1_load")).toBe(9);
     expect(vm.getParam("overtime")).toBe(1);
@@ -1221,7 +1150,6 @@ describe("Cargo Sort quest", () => {
 
   it("a comfortable clean shift (every dock below porog) ends at quest_success", () => {
     const vm = new QuestVM(cargoSortScript, 1);
-    // dock1 = A(3)+B(3) = 6, dock2 = C(2)+D(3) = 5, dock3 = E(4) = 4 — all < 8.
     forceRun(vm, [3, 3, 2, 3, 4], [1, 1, 2, 2, 3]);
     expect(vm.getParam("dock1_load")).toBe(6);
     expect(vm.getParam("dock2_load")).toBe(5);
@@ -1233,7 +1161,6 @@ describe("Cargo Sort quest", () => {
 
   it("a razor-thin clean shift (a dock at exactly 8h) ends at the distinct quest_success_tight", () => {
     const vm = new QuestVM(cargoSortScript, 1);
-    // dock1 = A(4)+B(4) = 8 (exactly at porog, not over), dock2/3 low → overtime 0.
     forceRun(vm, [4, 4, 2, 2, 3], [1, 1, 2, 3, 3]);
     expect(vm.getParam("dock1_load")).toBe(8);
     expect(vm.getParam("overtime")).toBe(0);
@@ -1256,27 +1183,23 @@ describe("Cargo Sort quest", () => {
 
   it("one overloaded dock is a light failure; two+ overloaded is the distinct severe terminal", () => {
     const light = new QuestVM(cargoSortScript, 1);
-    // dock1 = 4+4+1 = 9 (>8); dock2/3 low → exactly 1 over.
     forceRun(light, [4, 4, 1, 2, 2], [1, 1, 1, 2, 3]);
     expect(light.getParam("overtime")).toBe(1);
     expect(light.currentLocation().id).toBe("quest_failure_overtime");
 
     const severe = new QuestVM(cargoSortScript, 1);
-    // dock1 = A(4)+B(4)+C(4) = 12 (>8); dock2 = D(4)+E(5) = 9 (>8) → 2 over.
     forceRun(severe, [4, 4, 4, 4, 5], [1, 1, 1, 2, 2]);
     expect(severe.getParam("dock1_load")).toBe(12);
     expect(severe.getParam("dock2_load")).toBe(9);
     expect(severe.getParam("overtime")).toBe(2);
     expect(severe.isSuccess()).toBe(false);
     expect(severe.currentLocation().id).toBe("quest_failure_severe");
-    // Light and severe failures read differently.
     expect(light.interpolate(light.currentLocation().text)).not.toBe(
       severe.interpolate(severe.currentLocation().text),
     );
   });
 
   it("every seed 0-29 remains winnable with an optimal packing (never unlosable-only)", () => {
-    // Brute-force: for each seed there exists an assignment achieving overtime 0.
     const minOvertime = (times: number[], thr: number): number => {
       let best = 3;
       const rec = (i: number, d: number[]): void => {
@@ -1315,12 +1238,10 @@ describe("Cargo Sort quest", () => {
       }
       if (!vm.isSuccess()) failures++;
     }
-    // Dumping all five in one dock (>= 5h min) always blows the 8h porog.
     expect(failures).toBe(30);
   });
 });
 
-// Advance through all autoExecute transitions (init + check chain) until reactor_control or finished
 function advanceAutoReactor(vm: QuestVM): void {
   const MAX = 20;
   let steps = 0;
@@ -1328,9 +1249,6 @@ function advanceAutoReactor(vm: QuestVM): void {
     steps++;
     const avail = vm.availableTransitions();
     if (avail.length === 0) break;
-    // Auto-execute transitions advance automatically; a lone manual transition
-    // (e.g. the init "begin" button) is also stepped through by the helper so
-    // tests don't need to replicate the user click.
     if (avail[0].autoExecute || avail.length === 1) {
       vm.execute(avail[0].id);
     } else {
@@ -1339,8 +1257,6 @@ function advanceAutoReactor(vm: QuestVM): void {
   }
 }
 
-// Greedy solver: move each rod one step toward its target (A=3 B=4 C=4 D=2).
-// After each manual move, advance through the autoExecute check chain.
 function solveReactor(vm: QuestVM): void {
   const MAX_STEPS = 30;
   let steps = 0;
@@ -1382,10 +1298,8 @@ describe("Reactor quest", () => {
   });
 
   it("after init advances to reactor_control (when not already solved)", () => {
-    // Use seed that gives a non-solution start (overwhelmingly likely)
     const vm = new QuestVM(reactorScript, 7);
     advanceAutoReactor(vm);
-    // Either at reactor_control (unsolved) or at stable (lucky solution start)
     expect(["reactor_control", "stable"]).toContain(vm.currentLocation().id);
   });
 
@@ -1433,7 +1347,6 @@ describe("Reactor quest", () => {
     vm.setParam("time_left", 5);
     vm.setParam("rod_a", 1); // ensure not at solution
     vm.execute("a_up");
-    // time_left = 0 → critMin:1 → reactor_explosion
     expect(vm.isFinished()).toBe(true);
     expect(vm.isSuccess()).toBe(false);
     expect(vm.currentLocation().id).toBe("reactor_explosion");
@@ -1446,8 +1359,6 @@ describe("Reactor quest", () => {
     vm.setParam("rod_b", 4);
     vm.setParam("rod_c", 4);
     vm.setParam("rod_d", 2);
-    // Trigger check by making any valid move then undoing it, or by directly verifying
-    // Simulate adjusting d_up then d_down to trigger the check chain at solution
     vm.setParam("rod_d", 1); // temporarily break solution
     vm.execute("d_up"); // d_d = 2 again, time -= 5; goes to check_stable
     advanceAutoReactor(vm); // check chain → stable
@@ -1481,7 +1392,6 @@ describe("Reactor quest", () => {
     for (let seed = 0; seed < 20; seed++) {
       const vm = new QuestVM(reactorScript, seed);
       solveReactor(vm);
-      // Quest is solvable within the 24-move time budget (max Manhattan distance ≤ 14)
       expect(vm.isSuccess()).toBe(true);
       expect(vm.getParam("time_left")).toBeGreaterThan(0);
     }
@@ -1532,17 +1442,13 @@ describe("Reactor quest", () => {
     expect(text).toContain("2"); // rod_a was 1, now 2 after a_up
   });
 
-  // --- Task 30: single-sweep check + emergency steam-vent beat ---
-
   it("the check chain is a single sweep node, not the old 4-node chain", () => {
     const ids = new Set(reactorScript.locations.map((l) => l.id));
-    // The old check_b/check_c/check_d nodes are gone — one node resolves all four.
     expect(ids.has("check_stable")).toBe(true);
     expect(ids.has("check_b")).toBe(false);
     expect(ids.has("check_c")).toBe(false);
     expect(ids.has("check_d")).toBe(false);
     const sweep = reactorScript.locations.find((l) => l.id === "check_stable")!;
-    // Four mismatch guards (A→B→C→D) + one unconditional fallback, all auto-executing.
     expect(sweep.transitions.length).toBe(5);
     expect(sweep.transitions.every((t) => t.autoExecute)).toBe(true);
     const last = sweep.transitions[sweep.transitions.length - 1];
@@ -1561,7 +1467,6 @@ describe("Reactor quest", () => {
     expect(vm.currentLocation().id).toBe("check_stable");
     const avail = vm.availableTransitions();
     expect(avail.every((t) => t.autoExecute)).toBe(true);
-    // First available mismatch is D (A,B,C already in tolerance).
     expect(avail[0].id).toBe("check_d_fail");
     vm.execute(avail[0].id); // single beat lands back at the panel
     expect(vm.currentLocation().id).toBe("reactor_control");
@@ -1576,7 +1481,6 @@ describe("Reactor quest", () => {
     vm.setParam("rod_d", 1);
     vm.execute("d_up"); // rod_d = 2 → all four match → check_stable
     const avail = vm.availableTransitions();
-    // No mismatch guard fires; only the fallback remains.
     expect(avail.map((t) => t.id)).toEqual(["check_all_ok"]);
     vm.execute("check_all_ok");
     expect(vm.currentLocation().id).toBe("stable");
@@ -1620,12 +1524,10 @@ describe("Reactor quest", () => {
     vm.setParam("vents_left", 0);
     const ids = vm.availableTransitions().map((t) => t.id);
     expect(ids).not.toContain("vent_steam");
-    // The precise ±1 nudges are still there — only the panic button is gated.
     expect(ids).toContain("a_up");
   });
 });
 
-// Advance all autoExecute transitions until manual choice or finished
 function advanceAutoAuction(vm: QuestVM): void {
   const MAX = 30;
   let steps = 0;
@@ -1637,7 +1539,6 @@ function advanceAutoAuction(vm: QuestVM): void {
   }
 }
 
-// Aggressive strategy: always bid_low if budget allows, else bid_high if possible, else skip
 function runAggressive(vm: QuestVM): void {
   const MAX_STEPS = 500;
   let steps = 0;
@@ -1662,7 +1563,6 @@ function runAggressive(vm: QuestVM): void {
   }
 }
 
-// High-value only strategy: bid_high on class >= 3 lots, skip otherwise
 function runSelectiveHigh(vm: QuestVM): void {
   const MAX_STEPS = 500;
   let steps = 0;
@@ -1743,7 +1643,6 @@ describe("Auction quest", () => {
     advanceAutoAuction(vm);
     vm.execute("bid_high");
     expect(vm.getParam("budget")).toBe(550);
-    // lands on player_wins, then autoExecute chain runs
     advanceAutoAuction(vm);
     expect(vm.getParam("lots_won")).toBe(1);
   });
@@ -1752,9 +1651,7 @@ describe("Auction quest", () => {
     const vm = new QuestVM(auctionScript, 1);
     advanceAutoAuction(vm);
     vm.execute("bid_low");
-    // bot_agg_budget starts at 600 >= 200 → bot wins
     advanceAutoAuction(vm);
-    // player refunded 100, bot spent 200; budget back to 800
     expect(vm.getParam("budget")).toBe(800);
     expect(vm.getParam("bot_agg_budget")).toBe(400);
     expect(vm.getParam("lots_won")).toBe(0);
@@ -1763,7 +1660,6 @@ describe("Auction quest", () => {
   it("aggressive bot is exhausted after 3 wins (bot_agg_budget == 0)", () => {
     const vm = new QuestVM(auctionScript, 1);
     advanceAutoAuction(vm);
-    // Force random_bot_roll = 0 so only aggressive bot competes
     for (let lot = 1; lot <= 3; lot++) {
       vm.setParam("random_bot_roll", 0);
       vm.execute("bid_low");
@@ -1775,12 +1671,10 @@ describe("Auction quest", () => {
   it("after aggressive bot is broke, bid_low outcome depends on random_bot_roll", () => {
     const vm = new QuestVM(auctionScript, 1);
     advanceAutoAuction(vm);
-    // Exhaust aggressive bot
     vm.setParam("bot_agg_budget", 0);
     vm.setParam("random_bot_roll", 0); // random bot passes
     vm.execute("bid_low");
     advanceAutoAuction(vm);
-    // Player should have won the lot
     expect(vm.getParam("lots_won")).toBe(1);
   });
 
@@ -1792,7 +1686,6 @@ describe("Auction quest", () => {
     const budgetBefore = vm.getParam("budget");
     vm.execute("bid_low");
     advanceAutoAuction(vm);
-    // Player refunded, random bot wins
     expect(vm.getParam("budget")).toBe(budgetBefore); // refunded
     expect(vm.getParam("lots_won")).toBe(0);
   });
@@ -1859,9 +1752,7 @@ describe("Auction quest", () => {
     vm.execute("skip_lot");
     advanceAutoAuction(vm);
     const class2 = vm.getParam("lot_class_current");
-    // Classes are independently randomised; they could be equal but current_lot changed
     expect(vm.getParam("current_lot")).toBe(2);
-    // Verify class2 came from lot_2_class
     expect(class2).toBe(vm.getParam("lot_2_class"));
     expect(class1).toBe(vm.getParam("lot_1_class"));
   });
@@ -1905,8 +1796,6 @@ describe("Auction quest", () => {
     const vm = new QuestVM(auctionScript, 1);
     runSelectiveHigh(vm);
     expect(vm.isFinished()).toBe(true);
-    // With class>=3 lots (value 300/400) bid at 250, profit per win = 50/150
-    // At least 4 such lots with seed 1 expected
     const profit = vm.getParam("profit");
     expect(profit).toBeGreaterThanOrEqual(0);
     expect(vm.getParam("lots_won")).toBeGreaterThanOrEqual(0);
@@ -1922,22 +1811,18 @@ describe("Auction quest", () => {
     expect(text).toContain("200");
   });
 
-  // --- Task 15 rebalance coverage -------------------------------------------
-
   const locText = (id: string): string => {
     const loc = auctionScript.locations.find((l) => l.id === id)!;
     return typeof loc.text === "string" ? loc.text : loc.text.join("\n");
   };
 
   it("lot_screen no longer reveals the exact resale value before bidding", () => {
-    // The pre-bid screen must not leak the value — bidding is a real gamble now.
     const text = locText("lot_screen");
     expect(text).not.toContain("перепродаже");
     expect(text).toContain("мешковиной");
   });
 
   it("the resale value is revealed only on the post-win screens", () => {
-    // Decoupled reveal: the class value first appears when the player wins.
     expect(locText("pw_bid_c2")).toContain("200");
     expect(locText("pw_bid_c3")).toContain("300");
     expect(locText("pw_bid_c4")).toContain("400");
@@ -1946,7 +1831,6 @@ describe("Auction quest", () => {
   it("losing bid_low to the aggressive bot forfeits a 50cr fee (profit -= 50)", () => {
     const vm = new QuestVM(auctionScript, 1);
     advanceAutoAuction(vm);
-    // agg bot starts at 600 >= 200 → it outbids; player loses the lot.
     vm.execute("bid_low");
     advanceAutoAuction(vm);
     expect(vm.getParam("lots_won")).toBe(0);
@@ -1978,8 +1862,6 @@ describe("Auction quest", () => {
   });
 
   it("skip_lot is non-dominated: skipping beats bid_low while the aggressive bot is solvent", () => {
-    // Skip yields 0; bidding low against a solvent aggressive bot is a
-    // guaranteed −50. So skip strictly dominates bid_low in this regime.
     const skipVm = new QuestVM(auctionScript, 1);
     advanceAutoAuction(skipVm);
     skipVm.execute("skip_lot");
@@ -2040,7 +1922,6 @@ describe("Auction quest", () => {
   });
 
   it("success text no longer promises the barysh as a payout", () => {
-    // C-fix: the fixed guild fee is the reward; the barysh is a scorecard.
     const success = locText("quest_success");
     expect(success).not.toContain("хватит на славный апгрейд");
     expect(success).toContain("{profit}");

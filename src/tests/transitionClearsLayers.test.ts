@@ -5,8 +5,6 @@ import type { Renderer } from "@/presentation/Renderer";
 import { GameScene } from "@/presentation/GameScene";
 
 vi.mock("pixi.js", () => ({
-  // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
-  // module load, so the partial mock must expose a constructable Filter.
   Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
     init: vi.fn().mockResolvedValue(undefined),
@@ -124,13 +122,10 @@ describe("transitionTo central layer-clear safety net", () => {
     const renderer = makeMockRenderer(2, 3);
     engine.renderer = renderer;
 
-    // Place a previous scene that does NOT clean up layers (simulates incomplete destroy)
     const previousScene = new NoOpScene(renderer);
     engine.currentScene = previousScene;
 
-    // Register a no-op target scene so transitionTo succeeds
     const nextScene = new NoOpScene(renderer);
-    // Patch SceneFactory via the engine's internal factory (duck-patch for the test)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (engine as any).sceneFactory = {
       createScene: () => nextScene,

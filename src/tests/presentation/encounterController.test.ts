@@ -17,18 +17,7 @@ import {
 } from "@/systems/encounters/encounterGenerator";
 import { ENCOUNTER_CONFIG } from "@/config/balance";
 
-/**
- * Focused unit tests for the exploration-encounter cluster extracted from
- * {@link NpcShipManager} (plan Task 3). The controller is exercised directly
- * against a fake {@link EncounterControllerDeps} bundle — no real GameEngine —
- * so the entry-roll gate, prompt open/close and choice-outcome routing are
- * verified in isolation. The real-engine suite `playtest/encounters.test.ts`
- * remains the integration oracle (banking/cargo/rep + a genuine CombatModule).
- */
-
 const SYSTEM_ID = "sys1";
-
-// --- fakes -------------------------------------------------------------
 
 function fakeGalaxy(
   opts: { overmind?: boolean; pirate?: boolean; day?: number } = {},
@@ -161,7 +150,6 @@ function makeHarness(
   };
 }
 
-/** Find a (systemId, day) pair the deterministic generator actually fires on. */
 function findFiringDay(danger = 0): number {
   for (let day = 0; day < 500; day++) {
     const enc = rollEncounter(
@@ -174,8 +162,6 @@ function findFiringDay(danger = 0): number {
   }
   return -1;
 }
-
-// --- entry roll gate ---------------------------------------------------
 
 describe("EncounterController.maybeShowEntryEncounter", () => {
   it("does not roll while a fight is already underway", () => {
@@ -216,8 +202,6 @@ describe("EncounterController.maybeShowEntryEncounter", () => {
     expect(h.ctrl.isOpen).toBe(false); // deduped via offeredEncounterIds
   });
 });
-
-// --- prompt open/close ---------------------------------------------------
 
 describe("EncounterController prompt open/close", () => {
   it("showEncounterPrompt opens, closeEncounterPrompt closes", () => {
@@ -264,8 +248,6 @@ describe("EncounterController prompt open/close", () => {
   });
 });
 
-// --- refreshFontScale ------------------------------------------------------
-
 describe("EncounterController.refreshFontScale", () => {
   it("rebuilds the open prompt in place", () => {
     const h = makeHarness();
@@ -289,8 +271,6 @@ describe("EncounterController.refreshFontScale", () => {
     expect(h.ctrl.isOpen).toBe(false);
   });
 });
-
-// --- choice outcomes ---------------------------------------------------
 
 describe("EncounterController.applyEncounterChoice", () => {
   it("a salvage choice pays out credits (no combat spawn)", () => {
@@ -343,7 +323,6 @@ describe("EncounterController.applyEncounterChoice", () => {
       rewardScale: 1,
     };
 
-    // danger 1 ⇒ badChance 0.7; a zero roll forces the ambush branch.
     const outcome = h.ctrl.applyEncounterChoice(enc, "engage", () => 0);
 
     expect(outcome.kind).toBe("ambush");

@@ -17,18 +17,8 @@ import {
   type LegalActionContext,
 } from "./observe";
 
-/**
- * Task 1 of the dev-only letsplay engine: the observation + legal-action surface.
- *
- * Two layers, mirroring the plan's TDD split:
- *  - the **pure** `legalActionsForScene` is unit-tested exhaustively (every scene
- *    maps to the right action set; "trade" only where a market exists, etc.);
- *  - `observe(engine)` is tested over the **real** booted harness for a
- *    deterministic, well-formed snapshot.
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** A baseline location context (a quiet system with one planet + one station). */
 function ctx(over: Partial<LegalActionContext> = {}): LegalActionContext {
   return {
     hasPlayer: true,
@@ -46,7 +36,6 @@ describe("legalActionsForScene (pure)", () => {
     expect(
       legalActionsForScene(SceneType.MAIN_MENU, ctx({ hasPlayer: false })),
     ).toEqual(["wait"]);
-    // Even on a gameplay scene, a missing player collapses to wait-only.
     expect(
       legalActionsForScene(SceneType.SPACE_FLIGHT, ctx({ hasPlayer: false })),
     ).toEqual(["wait"]);
@@ -59,9 +48,7 @@ describe("legalActionsForScene (pure)", () => {
     expect(actions).toContain("land");
     expect(actions).toContain("dock");
     expect(actions).toContain("wait");
-    // The canonical "no trade outside a market" invariant.
     expect(actions).not.toContain("trade");
-    // No hostile in range ⇒ no attack/flee.
     expect(actions).not.toContain("attack");
     expect(actions).not.toContain("flee");
   });
@@ -146,7 +133,6 @@ describe("legalActionsForScene (pure)", () => {
     expect(none).toContain("trade");
     expect(none).toContain("move");
     expect(none).not.toContain("take-quest");
-    // …and never a combat action while landed.
     expect(none).not.toContain("attack");
 
     const offered = legalActionsForScene(
@@ -186,7 +172,6 @@ describe("legalActionsForScene (pure)", () => {
     const a = legalActionsForScene(SceneType.SPACE_FLIGHT, ctx());
     const b = legalActionsForScene(SceneType.SPACE_FLIGHT, ctx());
     expect(a).toEqual(b);
-    // move precedes warp precedes land precedes dock precedes wait.
     expect(a).toEqual(["move", "warp", "land", "dock", "wait"]);
   });
 });
@@ -223,8 +208,6 @@ describe("observe(engine) over the real harness", () => {
     expect(obs.scene).toBe(SceneType.SPACE_FLIGHT);
     expect(obs.hasPlayer).toBe(true);
 
-    // Player vitals are well-formed: a fresh ship is at full hull, fuel within
-    // [0, max], credits projected from the seeded ledger.
     const p = obs.player!;
     expect(p.credits).toBe(harness.credits());
     expect(p.hull).toBe(p.maxHull);
@@ -236,13 +219,11 @@ describe("observe(engine) over the real harness", () => {
     expect(p.cargoUsed).toBe(0); // starter hold is empty
     expect(p.systemId).toBe(harness.player()!.currentSystemId);
 
-    // The current system resolves with its planets/stations/connections.
     expect(obs.system).not.toBeNull();
     expect(obs.system!.id).toBe(p.systemId);
     expect(Array.isArray(obs.system!.planets)).toBe(true);
     expect(Array.isArray(obs.system!.stations)).toBe(true);
 
-    // Flight action set: move/wait always; trade never in space.
     expect(obs.legalActions).toContain("move");
     expect(obs.legalActions).toContain("wait");
     expect(obs.legalActions).not.toContain("trade");
@@ -273,12 +254,9 @@ describe("observe(engine) over the real harness", () => {
   it("is egocentric: only the landed planet exposes a market; no prices in space", async () => {
     await harness.newGame();
 
-    // In flight, before landing: nothing is "landed", so no market is visible
-    // anywhere — not on the current system's planets either.
     const flightObs = observe(harness.engine);
     expect(flightObs.currentPlanet).toBeNull();
     for (const p of flightObs.system!.planets) {
-      // The system view is name-only; prices are never leaked from orbit.
       expect(p).not.toHaveProperty("market");
       expect(p).not.toHaveProperty("buy");
       expect(p).not.toHaveProperty("sell");
@@ -300,7 +278,6 @@ describe("observe(engine) over the real harness", () => {
     await harness.goTo(SceneType.PLANET, { planet });
     const obs = observe(harness.engine);
 
-    // The landed planet's market is now perceivable.
     expect(obs.currentPlanet).not.toBeNull();
     expect(obs.currentPlanet!.id).toBe(planet.id);
     const market = obs.currentPlanet!.market;
@@ -308,12 +285,9 @@ describe("observe(engine) over the real harness", () => {
     for (const good of market) {
       expect(good.buy).toBeGreaterThan(0);
       expect(good.sell).toBeGreaterThan(0);
-      // Same-planet spread invariant: you can never instantly resell at a profit.
       expect(good.sell).toBeLessThan(good.buy);
     }
 
-    // The *other* (unvisited) planets in the same system still carry no prices —
-    // the player would have to fly there to learn them.
     for (const p of obs.system!.planets) {
       expect(p).not.toHaveProperty("market");
     }
@@ -449,11 +423,8 @@ describe("observe(engine): Task 1 bank/equipment/Overmind/quest signals", () => 
     const galaxy = harness.galaxy()!;
     const sys = harness.player()!.currentSystemId;
 
-    // Not yet captured: liberate is illegal.
     expect(observe(harness.engine).legalActions).not.toContain("liberate");
 
-    // A freshly generated galaxy may already place a few hostiles in-system —
-    // clear them first so only the staged garrison below controls the assertion.
     for (const n of galaxy.npcShips) {
       if (n.currentSystemId !== sys) continue;
       if (n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE) {
@@ -461,7 +432,6 @@ describe("observe(engine): Task 1 bank/equipment/Overmind/quest signals", () => 
       }
     }
 
-    // Captured but with a live defender still present: still illegal.
     galaxy.overmindSystems = [sys];
     galaxy.npcShips.push(
       new NpcShip({
@@ -486,7 +456,6 @@ describe("observe(engine): Task 1 bank/equipment/Overmind/quest signals", () => 
     );
     expect(observe(harness.engine).legalActions).not.toContain("liberate");
 
-    // Garrison cleared: liberate becomes legal.
     galaxy.npcShips[galaxy.npcShips.length - 1].state = NpcState.DEAD;
     expect(observe(harness.engine).legalActions).toContain("liberate");
   });
@@ -494,7 +463,6 @@ describe("observe(engine): Task 1 bank/equipment/Overmind/quest signals", () => 
   it("questDeliveryHere is true when a carried quest targets the current system", async () => {
     await harness.newGame();
     const obs = observe(harness.engine);
-    // No quests yet — the signal must be present and false, not throw.
     expect(obs.questDeliveryHere).toBe(false);
   });
 

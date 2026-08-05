@@ -5,16 +5,8 @@ import type { PlayerPolicy, Action } from "./PlayerPolicy";
 import type { Observation } from "./observe";
 import { SceneType } from "@/types";
 
-/**
- * Task 7 of the smart-autopilot plan (game oddity): landing on a planet
- * refuels the ship to max (`SpaceFlightScene.onLandOnPlanet`), but docking at
- * a station did nothing to `ship.energy` — an inconsistent, player-visible
- * oddity the letsplay agent surfaced. This pins the fix: docking restores
- * energy to max exactly like landing does.
- */
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
-/** A scripted policy that always issues the given action kind (legal-filtered). */
 function scripted(kind: Action["kind"]): PlayerPolicy {
   return {
     name: "scripted",
@@ -31,7 +23,6 @@ describe("PlayerAgent — station dock refuels (Task 7)", () => {
     try {
       await harness.newGame();
       const ship = harness.engine.player!.ship;
-      // The starting system has both a planet and a station (see movement.test.ts).
       ship.energy = Math.max(1, Math.floor(ship.maxEnergy * 0.2));
 
       const agent = new PlayerAgent(harness, scripted("dock"));

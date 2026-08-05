@@ -1,17 +1,3 @@
-/**
- * FlightTouchController (mobile adaptation Phase 2, Task 3) — the seam between
- * PixiJS touch pointer events and the pure gesture interpreter. These tests prove
- * the wiring without a renderer:
- *
- *   - a two-finger pinch drives `camera.zoomByFactor` (spread = zoom-in factor
- *     > 1, pinch = factor < 1) about the finger midpoint;
- *   - the *second* finger flips it into "pinch mode" (onDown ⇒ true) so the scene
- *     suppresses the route the first finger planned;
- *   - **mouse** events and a **non-touch layout** are ignored (every method
- *     early-returns) so the desktop path is untouched;
- *   - single-finger moves are passed through (onMove ⇒ false) — taps stay on the
- *     scene's existing route path.
- */
 import { describe, it, expect, vi } from "vitest";
 import {
   FlightTouchController,
@@ -21,7 +7,6 @@ import {
 function touch(id: number, x: number, y: number): TouchPointerEvent {
   return { pointerId: id, pointerType: "touch", global: { x, y } };
 }
-/** A fresh first-contact touch (PixiJS sets `isPrimary` on the first finger down). */
 function primaryTouch(id: number, x: number, y: number): TouchPointerEvent {
   return {
     pointerId: id,
@@ -135,19 +120,11 @@ describe("FlightTouchController — two-finger pinch", () => {
 
 describe("FlightTouchController — self-heal on a fresh primary contact", () => {
   it("a finger leaked by an unseen lift/cancel does not stick a phantom pinch", () => {
-    // Regression: the browser fires `pointercancel` instead of `pointerup` when it
-    // hijacks a touch, and PixiJS registers no pointercancel listener — so a finger
-    // can leak into the interpreter map, leaving isPinching stuck true and voiding
-    // every later tap-to-route. Simulate the leak (a pinch whose lifts never
-    // arrive), then prove the next interaction's primary contact clears it and the
-    // tap is treated as a first finger (onDown ⇒ false, not a pinch).
     const { ctrl } = build();
     ctrl.onDown(primaryTouch(1, 100, 100));
     ctrl.onDown(touch(2, 200, 100)); // 2nd finger (not primary) ⇒ pinch
     expect(ctrl.isPinching).toBe(true);
-    // ...both lifts are lost (no onUp) — fingers leak into the interpreter.
     expect(ctrl.isPinching).toBe(true);
-    // Next gesture begins with a primary contact → self-heal drops the stale state.
     expect(ctrl.onDown(primaryTouch(3, 50, 50))).toBe(false);
     expect(ctrl.isPinching).toBe(false);
   });
@@ -163,7 +140,6 @@ describe("FlightTouchController — self-heal on a fresh primary contact", () =>
     const { ctrl } = build();
     ctrl.onDown(touch(1, 100, 100));
     ctrl.onDown(touch(2, 200, 100));
-    // A mouse "primary" down must never touch the touch gesture state.
     expect(ctrl.onDown({ ...mouse(3, 0, 0), isPrimary: true })).toBe(false);
     expect(ctrl.isPinching).toBe(true);
   });

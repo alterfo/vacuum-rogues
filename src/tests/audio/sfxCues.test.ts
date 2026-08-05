@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { HullAlarm, type SfxSink } from "@/systems/audio/sfxCues";
 import type { SfxKey } from "@/systems/AudioManager";
 
-/** Fake AudioManager: records every SFX it is asked to play. */
 function fakeSink(): SfxSink & { plays: SfxKey[] } {
   const plays: SfxKey[] = [];
   return {

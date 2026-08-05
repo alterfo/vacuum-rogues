@@ -12,8 +12,6 @@ import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import { generateQuestBoard } from "@/systems/quests/QuestGenerator";
 import type { StarSystem } from "@/domain/StarSystem";
 
-// ── kill points ───────────────────────────────────────────────────────────────
-
 describe("RANK_THRESHOLDS", () => {
   it("has 8 entries (ranks 0–7)", () => {
     expect(RANK_THRESHOLDS).toHaveLength(8);
@@ -29,8 +27,6 @@ describe("RANK_THRESHOLDS", () => {
     expect(RANK_LABELS).toHaveLength(RANK_THRESHOLDS.length);
   });
 });
-
-// ── CombatSystem.resolveVictory ───────────────────────────────────────────────
 
 describe("CombatSystem.resolveVictory", () => {
   const makeEnemy = (techLevel: number) =>
@@ -51,7 +47,6 @@ describe("CombatSystem.resolveVictory", () => {
     const system = new CombatSystem(new AdaptiveQualityProfile());
     const enemies = [makeEnemy(2), makeEnemy(3)];
     const rewards = system.resolveVictory(enemies);
-    // 2×10 + 3×10 = 50
     expect(rewards.killPointsGained).toBe(50);
   });
 
@@ -69,8 +64,6 @@ describe("CombatSystem.resolveVictory", () => {
     vi.restoreAllMocks();
   });
 });
-
-// ── rank promotion logic ──────────────────────────────────────────────────────
 
 describe("rank promotion", () => {
   it("promotes when killPoints >= threshold for next rank", () => {
@@ -93,8 +86,6 @@ describe("rank promotion", () => {
     expect(atMax).toBe(true);
   });
 });
-
-// ── elite quest rank gate ─────────────────────────────────────────────────────
 
 describe("QuestGenerator elite quest minRank", () => {
   const SYSTEMS = [
@@ -131,7 +122,6 @@ describe("QuestGenerator elite quest minRank", () => {
   ] as unknown as StarSystem[];
 
   it("elite quests have minRank >= ELITE_QUEST_MIN_RANK", () => {
-    // Generate a large board to catch at least one elite quest
     const board = generateQuestBoard({
       systems: SYSTEMS,
       originSystemId: "s1",
@@ -173,8 +163,6 @@ describe("QuestGenerator elite quest minRank", () => {
     }
   });
 });
-
-// ── trade discount ────────────────────────────────────────────────────────────
 
 describe("rank trade discount constants", () => {
   it("discount threshold is 5", () => {

@@ -100,7 +100,6 @@ describe("QuestVM", () => {
   it("random param with different seeds may differ", () => {
     const vm1 = new QuestVM(basicScript, "seed-A");
     const vm2 = new QuestVM(basicScript, "seed-B");
-    // Values are in range
     expect(vm1.getParam("luck")).toBeGreaterThanOrEqual(1);
     expect(vm1.getParam("luck")).toBeLessThanOrEqual(6);
     expect(vm2.getParam("luck")).toBeGreaterThanOrEqual(1);
@@ -109,7 +108,6 @@ describe("QuestVM", () => {
 
   it("filters transitions by condition", () => {
     const vm = new QuestVM(basicScript, 42);
-    // money=500, so both transitions available
     const ids = vm.availableTransitions().map((t) => t.id);
     expect(ids).toContain("buy");
     expect(ids).toContain("skip");
@@ -195,7 +193,6 @@ describe("QuestVM", () => {
 
   it("evaluate handles all comparison operators", () => {
     const vm = new QuestVM(basicScript, 42);
-    // money = 500
     expect(vm.evaluate("money >= 500")).toBe(true);
     expect(vm.evaluate("money >= 501")).toBe(false);
     expect(vm.evaluate("money <= 500")).toBe(true);

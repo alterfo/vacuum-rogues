@@ -17,8 +17,6 @@ import { Overmind } from "@/domain/Overmind";
 import { StarType, ResourceType, PlanetType } from "@/types";
 import { Faction } from "@/types/faction";
 
-// GameEngine pulls in pixi.js at module load; stub it so the headless test env
-// never touches WebGL (mirrors GameEngine.market-rehydration.test.ts).
 vi.mock("pixi.js", () => ({
   Filter: class {},
   Rectangle: class {
@@ -64,12 +62,6 @@ vi.mock("pixi.js", () => ({
   BlurFilter: vi.fn().mockImplementation(() => ({})),
 }));
 
-/**
- * Build a planet whose only market resource is METALS, with the dynamic price
- * multiplier seeded so a deliberate cross-system spread exists. The drift layer
- * dominates the deterministic per-planet factor ([0.7,1.3)), so `pmMetals` alone
- * decides which planet is cheap vs dear.
- */
 function makePlanet(id: string, pmMetals: number): Planet {
   const market = new Market([ResourceType.METALS], [1], [1]);
   market.priceMultipliers = [pmMetals];
@@ -122,7 +114,6 @@ describe("GameEngine.advanceGalaxyDay — trade-route rumors", () => {
   beforeEach(() => {
     localStorage.clear();
     engine = makeEngine();
-    // Don't let the (improbable) game-over path try to swap scenes.
     vi.spyOn(engine, "transitionTo").mockResolvedValue(undefined);
   });
 
@@ -132,7 +123,6 @@ describe("GameEngine.advanceGalaxyDay — trade-route rumors", () => {
   });
 
   it("publishes a TRADE_OPPORTUNITY rumor when a seeded cross-system spread exists", () => {
-    // Cheap METALS in S1, dear METALS in S2 → a wide buy-low/sell-high route.
     const cheap = makeSystem("S1", [makePlanet("S1p", 0.4)]);
     const dear = makeSystem("S2", [makePlanet("S2p", 2.5)]);
     connect(cheap, dear);
@@ -152,16 +142,11 @@ describe("GameEngine.advanceGalaxyDay — trade-route rumors", () => {
     expect(metalsRumor).toBeDefined();
     expect(metalsRumor!.fromSystemId).toBe("S1");
     expect(metalsRumor!.toSystemId).toBe("S2");
-    expect(metalsRumor!.marginPct).toBeGreaterThan(
-      // Comfortably above the open threshold; the seeded ~6× spread can't be
-      // erased by one day of ≤8% drift or the [0.7,1.3) per-planet factor.
-      25,
-    );
+    expect(metalsRumor!.marginPct).toBeGreaterThan(25);
   });
 
   it("does not crash and opens no rumors for a galaxy with fewer than two market systems", () => {
     const only = makeSystem("S1", [makePlanet("S1p", 0.4)]);
-    // A second system with no planets/markets → still only one market-bearing system.
     const barren = makeSystem("S2", []);
     connect(only, barren);
     const galaxy = new Galaxy(
@@ -181,9 +166,6 @@ describe("GameEngine.advanceGalaxyDay — trade-route rumors", () => {
   });
 
   it("expires the rumor once the spread closes across days", () => {
-    // Both planets share a planet id so the deterministic per-planet factor
-    // cancels — the dynamic multiplier alone decides the spread, so collapsing
-    // both to 1.0 reliably drives the margin to exactly 0 (no residual gap).
     const cheap = makeSystem("S1", [makePlanet("Pmet", 0.4)]);
     const dear = makeSystem("S2", [makePlanet("Pmet", 2.5)]);
     connect(cheap, dear);
@@ -193,7 +175,6 @@ describe("GameEngine.advanceGalaxyDay — trade-route rumors", () => {
     engine.advanceGalaxyDay();
     expect(galaxy.activeRumors.length).toBeGreaterThanOrEqual(1);
 
-    // Collapse the spread: both planets back to neutral pricing → margin 0.
     cheap.planets[0].market.priceMultipliers[0] = 1.0;
     dear.planets[0].market.priceMultipliers[0] = 1.0;
     engine.advanceGalaxyDay();

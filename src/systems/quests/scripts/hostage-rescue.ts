@@ -1,28 +1,5 @@
 import type { QuestScript } from "../QuestScript";
 
-// Design: Pirates hold 4 hostages on station «Терновник». Pick an approach:
-//   - pay_ransom : pay 2000 cr, then either simply trust the pirates (a roll
-//                  decides honor) OR mark the ransom — a higher-variance gamble
-//                  that recovers the money and pays a bounty on a win, but turns
-//                  the exchange into a bloodbath on a loss.
-//   - stealth    : sneak in (roll-based) or work methodically (slow but sure)
-//   - assault    : storm the station; outcome scales with the guard count. The
-//                  player SEES {guards} before choosing. Sniping first removes 2
-//                  guards for a guaranteed-clean assault, but at a real price
-//                  (lost bounty + standing) — so it is only worth it when the
-//                  raw breach would be costly/fatal, not a free risk-eraser.
-// `guards` is randomised 2–4, so the raw assault outcome varies by seed.
-// Outcomes (credits = bounty, rating = reputation, hostages = survivors):
-//   - ending_ransom_good          all freed, money gone, small rep      SUCCESS
-//   - ending_ransom_betrayed      pirates renege, hostages die          FAILURE
-//   - ending_ransom_marked_good   marked ransom pays off, big net gain  SUCCESS
-//   - ending_ransom_marked_botched tag detected, exchange turns bloody  FAILURE
-//   - ending_stealth_clean        all freed quietly, big bounty + rep   SUCCESS
-//   - ending_stealth_partial      spotted, grabbed 2, modest reward     SUCCESS
-//   - ending_stealth_methodical   all freed slowly, solid reward        SUCCESS
-//   - ending_assault_clean        all freed, big bounty + rep           SUCCESS
-//   - ending_assault_costly       2 lost, some bounty, rep hit          SUCCESS
-//   - ending_assault_fail         assault collapses, hostages die       FAILURE
 export const hostageRescueScript: QuestScript = {
   id: "hostage-rescue",
   title: "Спасение заложников",
@@ -94,7 +71,6 @@ export const hostageRescueScript: QuestScript = {
         },
       ],
     },
-    // ── RANSOM ─────────────────────────────────────────────────────────────
     {
       id: "ransom_path",
       text: "Счёт уходит: 2000 кр перетекают на анонимный кошелёк пиратов. Главарь усмехается в эфир: «Разумный выбор, рейнджер. Ждём, пока звёзды сойдутся». Ваши деньги у них — но заложники по-прежнему за их шлюзом. Слово пирата не стоит и ломаного болта.",
@@ -168,7 +144,6 @@ export const hostageRescueScript: QuestScript = {
         },
       ],
     },
-    // ── STEALTH ────────────────────────────────────────────────────────────
     {
       id: "stealth_approach",
       text: "Скафандр гасит шум шагов. Через грузовой шлюз вы просачиваетесь в брюхо станции. Впереди — залитый красным дежурным светом пост охраны, а за ним прямой коридор к камерам, где ждут четверо. Один часовой дремлет над пультом; второй мерит переборку неспешными шагами.",
@@ -210,7 +185,6 @@ export const hostageRescueScript: QuestScript = {
         },
       ],
     },
-    // ── ASSAULT ────────────────────────────────────────────────────────────
     {
       id: "assault_prep",
       text: "Сканер термооптики размечает станцию красными метками: часовых на борту — {guards}, каждый при тяжёлом стволе, и все между вами и заложниками. Чем больше стволов, тем выше шанс, что в горячке боя пуля достанется не пирату. Это будет кроваво.\nГлаварь ловит ваш подход на радаре и выходит в эфир: «Слышу, как ты греешь движки, рейнджер. Ну давай, врывайся. Посмотрим, кто первым ляжет — ты или те четверо».",
@@ -271,7 +245,6 @@ export const hostageRescueScript: QuestScript = {
         },
       ],
     },
-    // ── TERMINALS ──────────────────────────────────────────────────────────
     {
       id: "ending_ransom_good",
       text: "Из шлюза, щурясь на свет, выходят все четверо — целые, живые, ошалевшие от свободы. Пираты, как ни странно, сдержали слово и растворились в темноте с вашими деньгами. Кошелёк пуст, зато все заложники дома, и флот это оценил.\nЗаложники: {hostages} | Кредиты: {credits} | Репутация: {rating}",

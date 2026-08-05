@@ -16,16 +16,6 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-// ---------------------------------------------------------------------------
-// Task 3: Automatic mutual pursuit during combat.
-//
-// While a fight is engaged BOTH sides must close the gap on their own — the
-// player ship auto-tracks the selected target in real time (no fresh "Ход"),
-// and every engaged enemy auto-closes to weapon range and holds it (instead of
-// orbiting its planet / drifting). The captured-system garrison gate must not
-// clear an active combatant's aggression out from under the fight.
-// ---------------------------------------------------------------------------
-
 const WR = GAME_BALANCE.weaponRange; // 240
 
 function renderer(): Renderer {
@@ -59,7 +49,6 @@ function makeNpc(id: string, role: NpcRole, faction: Faction): NpcShip {
   });
 }
 
-/** Sprites are private; expose the first one for white-box positioning. */
 function spriteOf(manager: NpcShipManager): NpcShipSprite & {
   x: number;
   y: number;
@@ -77,9 +66,6 @@ function spriteOf(manager: NpcShipManager): NpcShipSprite & {
 
 describe("Real-time mutual pursuit during combat (Task 3)", () => {
   it("an engaged player auto-tracks the target and closes the gap each tick", () => {
-    // Player parked at the origin; a fight is engaged against a target sitting
-    // well outside weapon range. updateCombat must drive the ship toward it in
-    // real time — no manual "Ход" — until it holds weapon range.
     const physics = new ShipPhysics(0, 0, 0.5);
     const routeCalls: Array<{ x: number; y: number }> = [];
 
@@ -106,7 +92,6 @@ describe("Real-time mutual pursuit during combat (Task 3)", () => {
       },
       clearRouteTarget: () => {},
       endTurn: () => {},
-      // A live fight against trd_1, frozen by nothing.
       isInCombat: () => true,
       getCombatTargetId: () => "trd_1",
       isPaused: () => false,
@@ -152,10 +137,6 @@ describe("Real-time mutual pursuit during combat (Task 3)", () => {
   });
 
   it("a player-engaged enemy stays aggressive across the garrison gate and reaches weapon range", () => {
-    // A trader in a NEUTRAL system (no garrison aggro of its own). The player
-    // attacks it → it becomes an active combatant and must auto-close on the
-    // player, holding range — and a later captured-system refresh in the still
-    // neutral system must NOT clear its aggression out from under the fight.
     const physics = new ShipPhysics(0, 0, 0.3); // parked player at the origin
 
     const npc = makeNpc("trd_1", NpcRole.TRADER, Faction.INDEPENDENT);
@@ -212,7 +193,6 @@ describe("Real-time mutual pursuit during combat (Task 3)", () => {
     sprite.y = 0;
     expect(sprite.aggressive).toBe(false); // a neutral trader isn't an aggressor
 
-    // Player attacks → engage in-flight combat.
     (
       manager as unknown as { launchCombatWithNpc(n: NpcShip): void }
     ).launchCombatWithNpc(npc);
@@ -221,13 +201,9 @@ describe("Real-time mutual pursuit during combat (Task 3)", () => {
       true,
     );
 
-    // A captured-system refresh in the STILL-neutral system must not stand the
-    // combatant down (the regression — without the engaged-combatant exemption
-    // this clears aggression and the enemy stops chasing).
     manager.checkGarrisonAggro("sys_a", false);
     expect(sprite.aggressive).toBe(true);
 
-    // It now auto-closes on the parked player and reaches weapon range.
     for (let i = 0; i < 120; i++) manager.update(100, 0);
 
     const dist = Math.hypot(sprite.x - physics.shipX, sprite.y - physics.shipY);

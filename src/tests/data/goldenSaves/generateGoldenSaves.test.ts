@@ -1,25 +1,3 @@
-/**
- * Golden-save GENERATOR (dev-only, opt-in).
- *
- * Boots the *real* {@link GameEngine} with the real game-logic services and
- * freezes a couple of representative, progressed saves to disk as committed JSON
- * fixtures. Those frozen fixtures are the corpus the safety-net load test
- * (`goldenSaveCompat.test.ts`) replays against the *current* code on every CI
- * run — so a future schema/balance change that would brick a beta-tester's save
- * fails the gate.
- *
- * It is deliberately **skipped** unless `GEN_GOLDEN=1` is set, so a normal test
- * run never regenerates (and thus never silently re-freezes the fixtures to the
- * current code shape — that would defeat the point of a frozen corpus). To add
- * or refresh the engine-generated fixtures:
- *
- *   GEN_GOLDEN=1 npm test -- --run src/tests/data/goldenSaves/generateGoldenSaves.test.ts
- *
- * then commit the emitted `*.json`. Older-version fixtures are hand-pinned JSON
- * checked in alongside (see `legacy-v1.json` / `progressed-v23.json`) — they
- * predate features the current engine cannot produce, so they are authored by
- * hand rather than generated.
- */
 import { describe, it, vi } from "vitest";
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -44,8 +22,6 @@ import {
 } from "@/systems/banking/products";
 import { FactionType, SceneType } from "@/types";
 
-// GameEngine → scenes → PlanetRotationFilter extends Filter at module load, so a
-// constructable Filter must exist even though no scene is rendered here.
 vi.mock("pixi.js", () => ({
   Filter: class {},
   Container: class {
@@ -81,7 +57,6 @@ function buildEngine(): {
   return { engine: new GameEngine(diDeps), save, galaxy, players };
 }
 
-/** Serialize the engine's current state to the on-disk save payload object. */
 async function freeze(
   engine: GameEngine,
   save: MockSaveService,
@@ -90,9 +65,6 @@ async function freeze(
   await engine.saveGame("golden");
   const state = (await save.read("golden"))!;
   const payload = JSON.parse(state.serialize().payload);
-  // MockSaveService has no `currentVersion`, so the engine stamps `undefined`;
-  // a real save carries CURRENT_VERSION. Freeze the fixture at the current
-  // version (these are "made by today's engine" saves).
   payload.version = MigrationPipeline.CURRENT_VERSION;
   writeFileSync(join(HERE, filename), JSON.stringify(payload, null, 2) + "\n");
 }
@@ -128,7 +100,6 @@ describe.skipIf(!process.env.GEN_GOLDEN)(
       engine.player.currentSystemId = engine.galaxy.systems[2].id;
       engine.currentSceneType = SceneType.SPACE_FLIGHT;
 
-      // A frigate kitted out the way a progressed player would have it.
       const lo = new ShipLoadout("hull_warden");
       lo.install("eq_engine_iii");
       lo.install("eq_tank");
@@ -137,9 +108,6 @@ describe.skipIf(!process.env.GEN_GOLDEN)(
       engine.playerLoadout = lo;
 
       setupPlayerBanking(engine.bankBus, engine.bankingService, engine.player);
-      // A late-game pile of credits, booked through the ledger so the persisted
-      // banking snapshot and the `credits` projection agree (they must, or the
-      // re-derived balance on load would not match the frozen credits).
       adjustPlayerCredits(
         engine.bank,
         engine.player,
@@ -147,7 +115,6 @@ describe.skipIf(!process.env.GEN_GOLDEN)(
         GL_COUNTERPARTY.REWARDS,
         "Накопленные трофеи",
       );
-      // Stash a chunk in savings — exercises a non-trivial ledger snapshot.
       openSavings(engine.bankBus, engine.bankingService, engine.player.id);
       deposit(
         engine.bankBus,
@@ -157,7 +124,6 @@ describe.skipIf(!process.env.GEN_GOLDEN)(
         "Депозит",
       );
 
-      // Late-progress markers (these are not tied to the ledger).
       engine.player.experience = 50_000;
       engine.player.level = 18;
       engine.player.adjustReputation(FactionType.BASTIONS, 60);

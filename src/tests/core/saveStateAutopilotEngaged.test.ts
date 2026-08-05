@@ -1,15 +1,3 @@
-/**
- * `SaveState.autopilotEngaged` — the optional additive field persisting whether
- * the DEV-only live autopilot was engaged at save time
- * (plan 20260713-autosave-autopilot-resume, Task 3).
- *
- * Three angles:
- *   1. `SaveState` serialize/deserialize round-trip (true / false / absent).
- *   2. `SaveStateSchema` accepts a boolean or absence, rejects a non-boolean —
- *      old saves (no field) must still validate (no migration, no version bump).
- *   3. `GameEngine.saveGame` reads the injected `IAutopilotStateProvider` and
- *      writes its current engagement flag into the built `SaveState`.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SaveState } from "@/domain/SaveState";
 import { SaveStateSchema } from "@/validation/schemas";
@@ -28,7 +16,6 @@ import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { Player } from "@/domain/Player";
 
-// Broad PixiJS mock — GameEngine transitively pulls in SceneFactory/scenes.
 vi.mock("pixi.js", () => ({
   Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
@@ -80,7 +67,6 @@ vi.mock("pixi.js", () => ({
 }));
 
 describe("SaveState.autopilotEngaged round-trip", () => {
-  // serialize()/deserialize() only JSON-stringify these — plain stubs suffice.
   const galaxy = {} as Galaxy;
   const player = {} as Player;
 

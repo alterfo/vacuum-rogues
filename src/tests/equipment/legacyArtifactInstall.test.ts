@@ -14,18 +14,6 @@ import { MigrationPipeline } from "@/data/MigrationPipeline";
 import { InventorySchema } from "@/validation/schemas";
 import type { SaveState } from "@/domain/SaveState";
 
-/**
- * Task 2 (Equipment overhaul): the dual-hull unification left pre-loadout
- * ShipModules in the legacy `inventory.modules` bag whose ids are NOT catalog
- * gear ids — the new-game starter trio "Лазер МК-1" / "Базовый щит" / "Быстрый
- * двигатель" (weapon_laser_1 / shield_basic_1 / engine_fast_1). With no
- * `gearById` match the hangar never offered an install button and they sat
- * stranded in the hold. These tests pin the conversion (legacyModuleToGearId /
- * convertLegacyBagToOwnedGear) and the one-time save migration (v24→v25) that
- * turn them into installable owned gear.
- */
-
-/** Minimal Player stand-in — the equipment seams only touch `.inventory`. */
 function playerWith(inventory: Inventory): Player {
   return { inventory } as unknown as Player;
 }
@@ -35,7 +23,6 @@ describe("legacyModuleToGearId — map a bag artifact to catalog gear", () => {
     expect(legacyModuleToGearId({ id: "weapon_laser_1" })).toBe("wpn_pulse");
     expect(legacyModuleToGearId({ id: "shield_basic_1" })).toBe("eq_shield");
     expect(legacyModuleToGearId({ id: "engine_fast_1" })).toBe("eq_engine_i");
-    // The mapped ids are real, installable catalog gear (not hulls).
     for (const id of ["wpn_pulse", "eq_shield", "eq_engine_i"]) {
       expect(gearById(id)).toBeDefined();
     }
@@ -51,11 +38,9 @@ describe("legacyModuleToGearId — map a bag artifact to catalog gear", () => {
   });
 
   it("leaves a catalog-id spare untouched (already installable) and unmappable ids alone", () => {
-    // A real catalog id in the bag is a legit spare, not a stranded artifact.
     expect(
       legacyModuleToGearId({ id: "wpn_railgun", category: "WEAPON" }),
     ).toBeUndefined();
-    // No explicit map entry and no usable category → no conversion.
     expect(legacyModuleToGearId({ id: "mystery_widget" })).toBeUndefined();
   });
 });
@@ -122,7 +107,6 @@ describe("convertLegacyBagToOwnedGear — drain stranded artifacts into owned ge
     convertLegacyBagToOwnedGear(player);
     expect(ownedUninstalledGear(player, loadout)).toEqual(["wpn_pulse"]);
 
-    // The stranded artifact is now installable owned gear (the bug: it never was).
     expect(installOwnedGear(player, loadout, "wpn_pulse")).toBe(true);
     expect(loadout.installedGearIds()).toContain("wpn_pulse");
     expect(ownedUninstalledGear(player, loadout)).toEqual([]);
@@ -130,7 +114,6 @@ describe("convertLegacyBagToOwnedGear — drain stranded artifacts into owned ge
 
   it("keeps catalog-id spares in the bag and is idempotent", () => {
     const inv = new Inventory();
-    // A legit catalog-id spare (already installable via the legacy path) stays put.
     inv.addItem(
       new WeaponModule(
         "wpn_railgun",
@@ -157,13 +140,11 @@ describe("convertLegacyBagToOwnedGear — drain stranded artifacts into owned ge
     expect(convertLegacyBagToOwnedGear(player)).toBe(1);
     expect(inv.modules.map((m) => m.id)).toEqual(["wpn_railgun"]);
     expect(inv.ownedGearIds).toEqual(["eq_engine_i"]);
-    // Re-run drains nothing more.
     expect(convertLegacyBagToOwnedGear(player)).toBe(0);
     expect(inv.modules.map((m) => m.id)).toEqual(["wpn_railgun"]);
   });
 });
 
-/** A legacy bag module as it appears in an un-rehydrated v24 save (plain JSON). */
 function bagModule(id: string, category: string): Record<string, unknown> {
   return {
     id,
@@ -174,7 +155,6 @@ function bagModule(id: string, category: string): Record<string, unknown> {
   };
 }
 
-/** A minimal v24 save so only the v24→v25 step runs. */
 function makeV24Save(
   modules: Array<Record<string, unknown>>,
   ownedGearIds?: string[],

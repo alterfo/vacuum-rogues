@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AudioManager } from "@/systems/AudioManager";
 
-// AudioContext is not available in jsdom — mock the whole thing.
 class MockGainNode {
   gain = {
     value: 1,
@@ -34,10 +33,8 @@ class MockAudioContext {
   }
 }
 
-// Stub global AudioContext
 vi.stubGlobal("AudioContext", MockAudioContext);
 
-// Stub global fetch so loadBuffer returns a valid buffer
 vi.stubGlobal(
   "fetch",
   vi.fn(async (_url: string) => ({
@@ -55,14 +52,9 @@ describe("AudioManager", () => {
 
   it("plays a track and remembers currentTrackKey", async () => {
     await mgr.playTrack("menu_main");
-    // The AudioContext was created and a buffer source was started —
-    // the internal current track key should be set.
-    // We verify indirectly: calling playTrack again with the same key is a no-op
-    // (does not call fetch a second time for the same resource).
     const fetchFn = vi.mocked(fetch);
     const callsBefore = fetchFn.mock.calls.length;
     await mgr.playTrack("menu_main");
-    // Same key → early return, no new fetch
     expect(fetchFn.mock.calls.length).toBe(callsBefore);
   });
 
@@ -86,8 +78,6 @@ describe("AudioManager", () => {
     const fetchFn = vi.mocked(fetch);
     fetchFn.mockClear();
     await mgr.playTrack("menu_main");
-    // When muted, getContext returns but the early-return guard fires after
-    // checking muted — no fetch should happen.
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
@@ -103,8 +93,6 @@ describe("AudioManager", () => {
     const ctxInstance = MockAudioContext.lastInstance!;
     ctxInstance.createBufferSource.mockClear();
     mgr.stopTrack();
-    // After stopTrack, the key is cleared — playing the same track again
-    // must call createBufferSource (not early-return due to same-key guard).
     await mgr.playTrack("planet_hub");
     expect(ctxInstance.createBufferSource).toHaveBeenCalled();
   });
@@ -112,7 +100,6 @@ describe("AudioManager", () => {
   it("negative-caches a missing track so repeated playTrack does not re-fetch", async () => {
     const fetchFn = vi.mocked(fetch);
     const prevImpl = fetchFn.getMockImplementation();
-    // Every fetch for this track 404s (the common "no audio file yet" state).
     fetchFn.mockImplementation(
       async () =>
         ({
@@ -126,13 +113,10 @@ describe("AudioManager", () => {
     const afterFirst = fetchFn.mock.calls.length;
     expect(afterFirst).toBeGreaterThan(0); // first attempt does fetch
 
-    // The per-frame music driver calls playTrack every tick; a missing file must
-    // not re-fetch (and re-warn) each time — the negative cache short-circuits it.
     await mgr.playTrack("combat");
     await mgr.playTrack("combat");
     expect(fetchFn.mock.calls.length).toBe(afterFirst);
 
-    // Restore the shared global fetch mock for the remaining tests.
     if (prevImpl) fetchFn.mockImplementation(prevImpl);
   });
 
@@ -141,7 +125,6 @@ describe("AudioManager", () => {
       ok: false,
       arrayBuffer: async () => new ArrayBuffer(0),
     } as Response);
-    // Should not throw
     await expect(mgr.playSfx("buy")).resolves.toBeUndefined();
   });
 

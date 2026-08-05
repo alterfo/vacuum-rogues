@@ -7,13 +7,6 @@ import { EnemyShip } from "@/domain/EnemyShip";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import type { EnemyType, AIProfile } from "@/types";
 
-/**
- * Dual-hull Task 2: combat loot must become installable Gear in the canonical
- * ShipLoadout, not legacy `ship.modules` entries. These tests pin the loot →
- * loadout seam (EquipmentSystem.installLoot) and prove a real loot drop is
- * installable via ShipLoadout.
- */
-
 function makeEnemy(techLevel = 4): EnemyShip {
   return new EnemyShip(
     `enemy_${techLevel}`,
@@ -68,8 +61,6 @@ describe("EquipmentSystem.installLoot — feed combat loot into the loadout", ()
   it("returns false (never replaces fitted gear) when the loadout is full", () => {
     const eq = new EquipmentSystem();
     const loadout = new ShipLoadout("hull_corvette");
-    // Corvette has 5 slots — fill every bank in a valid SR-canon mix:
-    // 2 weapons + engine + radar + 1 additional equipment.
     const slots = loadout.hull.slots;
     const fill = [
       "wpn_pulse",
@@ -83,7 +74,6 @@ describe("EquipmentSystem.installLoot — feed combat loot into the loadout", ()
     }
     expect(loadout.installedGearIds().length).toBe(slots);
 
-    // Weapon bank full → a looted weapon cannot be slotted.
     expect(eq.installLoot(loadout, "wpn_railgun")).toBe(false);
     expect(loadout.installedGearIds().length).toBe(slots);
   });
@@ -107,7 +97,6 @@ describe("CombatSystem loot drop is installable via ShipLoadout", () => {
       expect(gear).toBeDefined();
       expect(gear!.kind).not.toBe(GearKind.HULL);
 
-      // A fresh loadout with free slots accepts the drop.
       const loadout = new ShipLoadout("hull_corvette");
       expect(eq.installLoot(loadout, drop.id)).toBe(true);
       expect(loadout.installedGearIds()).toContain(drop.id);

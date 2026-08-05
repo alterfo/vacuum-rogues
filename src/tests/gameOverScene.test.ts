@@ -1,17 +1,6 @@
-/**
- * GAME_OVER scene — register + render (plan 20260619, Task 3).
- *
- * Locks two things:
- *   1. The SceneFactory builds a GameOverScene for SceneType.GAME_OVER (the
- *      5-file scene registration is wired).
- *   2. The scene exposes its two recovery actions — «Загрузить сохранение» and
- *      «Начать заново» — via the e2e seam, so a page object / test can find them
- *      without pixel-clicking. Action wiring (load / start over) is Task 4.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SceneType } from "@/types";
 
-// Minimal PixiJS mock — GameOverScene only touches Container/Graphics/Text.
 vi.mock("pixi.js", () => ({
   Filter: class {},
   Container: vi.fn().mockImplementation(() => ({
@@ -98,9 +87,6 @@ describe("GameOverScene render + actions (Task 3)", () => {
   });
 
   it("«Начать заново» resets to a fresh game via restartNewGame", () => {
-    // Must route through restartNewGame (which nulls the dead player + regenerates
-    // the galaxy) — NOT a bare transitionTo(RACE_SELECTION), which would carry the
-    // destroyed ship into the "new" game (engine new-game guard never fires).
     const restartNewGame = vi.fn().mockResolvedValue(undefined);
     scene.initialize({
       gameEngine: { restartNewGame } as unknown as GameEngine,

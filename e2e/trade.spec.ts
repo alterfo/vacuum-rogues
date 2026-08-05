@@ -5,7 +5,6 @@ test.describe('Trade System', () => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 10000 });
     
-    // Navigate to star map
     const canvas = page.locator('canvas');
     const box = await canvas.boundingBox();
     
@@ -26,7 +25,6 @@ test.describe('Trade System', () => {
     const box = await canvas.boundingBox();
     
     if (box) {
-      // Click on a trade station or market
       await canvas.click({
         position: {
           x: box.width / 2,
@@ -37,7 +35,6 @@ test.describe('Trade System', () => {
 
     await page.waitForTimeout(1000);
     
-    // Trade interface should appear
     await expect(canvas).toBeVisible();
   });
 
@@ -45,7 +42,6 @@ test.describe('Trade System', () => {
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
     
-    // Market data is rendered in canvas
     const box = await canvas.boundingBox();
     expect(box?.width).toBeGreaterThan(0);
   });

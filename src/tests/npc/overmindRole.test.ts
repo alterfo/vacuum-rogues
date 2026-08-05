@@ -12,11 +12,6 @@ import { SeededRNG } from "@/utils/seededRNG";
 import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
 
-/**
- * Task 1 of 20260709-overmind-ship-identity-and-balance: Overmind ships carry
- * their own `NpcRole.OVERMIND` (not a borrowed PATROL role) with distinct base
- * stats, and every exhaustive per-role map has an entry for it.
- */
 describe("NpcRole.OVERMIND — distinct Overmind ship identity", () => {
   it("spawnOvermindInSystem produces role OVERMIND, not PATROL", () => {
     const sim = new NpcSimulator();
@@ -35,15 +30,10 @@ describe("NpcRole.OVERMIND — distinct Overmind ship identity", () => {
     const patrol = ROLE_STATS[NpcRole.PATROL];
     expect(overmind).toBeDefined();
     expect(overmind).not.toEqual(patrol);
-    // A hostile-faction hull reads tougher than the law's patrol ship. Damage
-    // intentionally matches PATROL for now — the seeded letsplay campaign
-    // gates stall on any garrison +damage (see the ROLE_STATS comment) — so
-    // toughness comes from hull/shields/shield tech.
     expect(overmind.hull).toBeGreaterThan(patrol.hull);
     expect(overmind.shields).toBeGreaterThan(patrol.shields);
     expect(overmind.shieldPower).toBeGreaterThan(patrol.shieldPower);
     expect(overmind.damage).toBeGreaterThanOrEqual(patrol.damage);
-    // But the base tier stays well under the boss override's 450-hull ceiling.
     expect(overmind.hull).toBeLessThan(450);
   });
 

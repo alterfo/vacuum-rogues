@@ -12,7 +12,6 @@ import { firstContactScript } from "@/systems/quests/scripts/first-contact";
 import { plagueCrisisScript } from "@/systems/quests/scripts/plague-crisis";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 
-// Advance through all autoExecute transitions until a manual choice or finished.
 function advanceAuto(vm: QuestVM): void {
   const MAX = 50;
   let steps = 0;
@@ -24,13 +23,9 @@ function advanceAuto(vm: QuestVM): void {
   }
 }
 
-// Generic reachability check: from the start, BFS over every transition target
-// and verify there are no unreachable locations and every terminal is reachable.
 function reachableLocationIds(script: QuestScript): Set<string> {
   const byId = new Map(script.locations.map((l) => [l.id, l]));
   const seen = new Set<string>();
-  // Seed with the start plus every critTarget — crit thresholds can redirect
-  // execution to those locations from anywhere (e.g. checkpoint critMax → arrival).
   const critTargets = script.params
     .map((p) => p.critTarget)
     .filter((t): t is string => !!t);
@@ -188,7 +183,6 @@ describe("Derelict Salvage quest", () => {
     expect(text).toContain("3000");
   });
 
-  // Task 19 — defect C: the catastrophic ending now carries a real credit penalty.
   it("outbreak catastrophe now docks credits, not just reputation", () => {
     const vm = new QuestVM(derelictSalvageScript, 1);
     vm.execute("dock_careful");
@@ -203,7 +197,6 @@ describe("Derelict Salvage quest", () => {
     expect(vm.getParam("credits")).toBe(1000); // 4000 - 3000 dezact bill
   });
 
-  // Task 19 — defect B: the boarding method (breach) surfaces in a distinct ending.
   it("forced entry + clean report reaches a breach-specific ending", () => {
     const vm = new QuestVM(derelictSalvageScript, 1);
     vm.execute("force_entry"); // forced = 1
@@ -216,7 +209,6 @@ describe("Derelict Salvage quest", () => {
     expect(vm.isSuccess()).toBe(true);
     expect(vm.getParam("credits")).toBe(3000); // 2000 + 1000 bounty
     expect(vm.getParam("rating")).toBe(140);
-    // The ending text must actually acknowledge how we boarded.
     expect(vm.currentLocationText()).toContain("резак");
   });
 
@@ -231,8 +223,6 @@ describe("Derelict Salvage quest", () => {
     expect(vm.currentLocation().id).toBe("ending_report");
   });
 
-  // Task 19 — defect I: `sealed` is now read — sealing then fencing the intact
-  // container is a distinct, higher-payout (but reputation-wrecking) branch.
   it("sealed container on the black market fetches a premium (sealed flag is read)", () => {
     const vm = new QuestVM(derelictSalvageScript, 1);
     vm.execute("dock_careful");
@@ -284,7 +274,6 @@ describe("Smuggling Run quest", () => {
     const vm = new QuestVM(smugglingRunScript, 1);
     vm.setParam("heat", 0);
     vm.execute("bluff");
-    // bluff_check (heat < 3) → after_checkpoint (+2 heat)
     expect(vm.availableTransitions()[0].id).toBe("bluff_safe");
     vm.execute("bluff_safe");
     expect(vm.getParam("heat")).toBe(2);
@@ -374,15 +363,11 @@ describe("Smuggling Run quest", () => {
     expect(vm1.getParam("credits")).toBe(vm2.getParam("credits"));
   });
 
-  // --- Task 33: bluff de-domination (A), tier-branched success (B), a
-  // differentiating checkpoint-2 beat (F). New coverage only. ---
-
   it("a low-heat bluff on the worst roll (roll 0) still gets you caught (A)", () => {
     const vm = new QuestVM(smugglingRunScript, 1);
     vm.setParam("heat", 0);
     vm.execute("bluff"); // roll randomised
     vm.setParam("roll", 0); // force the worst beat
-    // bluff_nervous (roll <= 0) fires before bluff_safe → caught
     expect(vm.availableTransitions()[0].id).toBe("bluff_nervous");
     advanceAuto(vm);
     expect(vm.currentLocation().id).toBe("quest_failure_caught");
@@ -402,11 +387,9 @@ describe("Smuggling Run quest", () => {
 
   it("the corrupt-officer deal exists only at checkpoint 2 and wipes heat (F)", () => {
     const vm = new QuestVM(smugglingRunScript, 1);
-    // Checkpoint 1: no officer option.
     expect(vm.availableTransitions().map((t) => t.id)).not.toContain(
       "officer_deal",
     );
-    // Advance to checkpoint 2 by bribing once.
     vm.execute("bribe");
     advanceAuto(vm);
     expect(vm.getParam("checkpoint")).toBe(2);
@@ -422,7 +405,6 @@ describe("Smuggling Run quest", () => {
     vm.execute("officer_deal"); // -400, heat = 0
     expect(vm.getParam("heat")).toBe(0);
     expect(vm.getParam("credits")).toBe(-550); // -150 bribe - 400 deal
-    // The narrated beat then auto-advances to the next checkpoint.
     advanceAuto(vm);
     expect(vm.getParam("checkpoint")).toBe(3);
     expect(vm.currentLocation().id).toBe("checkpoint_decision");
@@ -435,10 +417,8 @@ describe("Smuggling Run quest", () => {
     const mid = byId.get("payout_mid");
     expect(full && high && mid).toBeTruthy();
     const texts = [full!.text, high!.text, mid!.text];
-    // All three are scalar strings, and all three differ from one another.
     for (const t of texts) expect(typeof t).toBe("string");
     expect(new Set(texts as string[]).size).toBe(3);
-    // Each beat auto-executes into the shared success coda.
     for (const beat of [full!, high!, mid!]) {
       expect(beat.transitions).toHaveLength(1);
       expect(beat.transitions[0].autoExecute).toBe(true);
@@ -452,10 +432,7 @@ describe("Smuggling Run quest", () => {
     advanceAuto(vm);
     vm.execute("dump"); // cargo 2
     advanceAuto(vm);
-    // Bribe the last checkpoint, then step to the payout gate manually so we can
-    // observe the tier beat before it auto-advances into quest_success.
     vm.execute("bribe");
-    // Walk the auto-chain up to (but not through) the payout beat.
     while (
       !vm.isFinished() &&
       vm.availableTransitions()[0]?.autoExecute &&
@@ -475,8 +452,6 @@ describe("Smuggling Run quest", () => {
     )!;
     expect(Array.isArray(start.text)).toBe(true);
     expect((start.text as string[]).length).toBeGreaterThanOrEqual(2);
-    // Different seeds can surface different framings while staying deterministic
-    // per seed (the resolver keys on (seed, locationId), not the RNG stream).
     const a1 = new QuestVM(smugglingRunScript, 1).currentLocationText();
     const a2 = new QuestVM(smugglingRunScript, 1).currentLocationText();
     expect(a1).toBe(a2);
@@ -631,20 +606,17 @@ describe("Hostage Rescue quest", () => {
     }
   });
 
-  // ── Task 23: sniping is no longer a free risk-eraser ──────────────────────
   it("sniping first now carries a real cost (lost bounty + standing)", () => {
     const vm = new QuestVM(hostageRescueScript, 1);
     vm.execute("assault");
     vm.setParam("guards", 4);
     vm.execute("snipe_first");
-    // guaranteed -2 guards still holds (locked elsewhere), but it is now paid for
     expect(vm.getParam("guards")).toBe(2);
     expect(vm.getParam("credits")).toBe(-2500);
     expect(vm.getParam("rating")).toBe(80);
   });
 
   it("snipe→clean nets LESS than a raw clean breach — snipe no longer dominates at low guard counts", () => {
-    // Raw breach against 2 guards: full 3500 bounty, +25 rep, all saved.
     const raw = new QuestVM(hostageRescueScript, 1);
     raw.execute("assault");
     raw.setParam("guards", 2);
@@ -654,9 +626,6 @@ describe("Hostage Rescue quest", () => {
     expect(raw.getParam("credits")).toBe(3500);
     expect(raw.getParam("rating")).toBe(125);
 
-    // Snipe→clean against the same 2 guards: same ending, but strictly worse
-    // credits and rating because sniping was paid for — so a player who sees a
-    // low guard count has a real reason to breach instead of snipe.
     const snipe = new QuestVM(hostageRescueScript, 1);
     snipe.execute("assault");
     snipe.setParam("guards", 2);
@@ -669,7 +638,6 @@ describe("Hostage Rescue quest", () => {
     expect(snipe.getParam("hostages")).toBe(4); // still a guaranteed rescue
   });
 
-  // ── Task 23: pay_ransom gains a real, higher-variance upside ───────────────
   it("marking the ransom offers a distinct branch from simply trusting", () => {
     const vm = new QuestVM(hostageRescueScript, 1);
     vm.execute("pay_ransom");
@@ -705,8 +673,6 @@ describe("Hostage Rescue quest", () => {
     expect(marked.isSuccess()).toBe(false);
     expect(marked.getParam("hostages")).toBe(0);
 
-    // Plain betrayal leaves rating untouched; the botched tag also costs standing,
-    // so the clever line genuinely has a worse floor than naive trust.
     const plain = new QuestVM(hostageRescueScript, 1);
     plain.execute("pay_ransom");
     plain.execute("trust");
@@ -715,7 +681,6 @@ describe("Hostage Rescue quest", () => {
     expect(marked.getParam("rating")).toBeLessThan(plain.getParam("rating"));
   });
 
-  // ── Task 23: antagonist gets more than one line before vanishing ───────────
   it("the pirate leader speaks again on the marked-ransom and assault paths", () => {
     const byId = new Map(hostageRescueScript.locations.map((l) => [l.id, l]));
     const marked = byId.get("ransom_marked")!.text as string;
@@ -852,8 +817,6 @@ describe("Sabotage Heist quest", () => {
     }
   });
 
-  // Task 31: give the hack roll its own text (D), name the partner (H), and make
-  // slip_out with a partner actually differ from going alone (I).
   it("hacking clean routes through its own narrated beat before entering (D)", () => {
     const vm = new QuestVM(sabotageHeistScript, 1);
     vm.execute("hack_grid");
@@ -1049,8 +1012,6 @@ describe("First Contact quest", () => {
     }
   });
 
-  // Task 21 (A): scan is no longer strictly worse than broadcast — a curious
-  // roll yields sellable xeno-intel (+credits) instead of a diplomatic edge.
   it("a curious scan yields a material intel windfall (+credits) but no trust", () => {
     const vm = new QuestVM(firstContactScript, 1);
     vm.execute("scan");
@@ -1079,7 +1040,6 @@ describe("First Contact quest", () => {
     expect(scanned.getParam("credits")).toBe(800 + 1500);
   });
 
-  // Task 21 (B): the exchange scene branches per how the player got there.
   it("the exchange scene has a distinct beat per generosity/taking/extortion/de-escalation", () => {
     const texts = new Set<unknown>();
     const cases: Array<{ pre: string[]; choice: string; node: string }> = [
@@ -1113,7 +1073,6 @@ describe("First Contact quest", () => {
     }
   });
 
-  // Task 21 (C): the alliance ending grounds its reward in the real payout.
   it("the alliance ending ties its reward to the credited payout, not an untracked trophy", () => {
     const vm = new QuestVM(firstContactScript, 1);
     vm.execute("broadcast");
@@ -1122,7 +1081,6 @@ describe("First Contact quest", () => {
     expect(vm.currentLocation().id).toBe("ending_alliance");
     const text = vm.currentLocation().text as string;
     expect(text).toContain("на вашем счету");
-    // no longer promises star-maps "no human expedition ever knew" as a separate item
     expect(text).not.toContain(
       "которых не знала ни одна человеческая экспедиция",
     );
@@ -1207,9 +1165,6 @@ describe("Plague Crisis quest", () => {
     }
   });
 
-  // Task 28 (A): the fast shortcut is a genuine gamble, not strictly dominant —
-  // a bad field crossing now costs a repair bill (credits/rating) the safe route
-  // never pays, so the slow way is the risk-averse floor with a real niche.
   it("a clean steady crossing pays no repair bill", () => {
     const vm = new QuestVM(plagueCrisisScript, 1);
     vm.execute("fast_route");
@@ -1241,8 +1196,6 @@ describe("Plague Crisis quest", () => {
     expect(vm.getParam("rating")).toBe(100);
   });
 
-  // Task 28 (D): the reckless full-burn is a genuine player decision — a third,
-  // higher-variance route the player picks, not a hidden coin flip.
   it("the briefing offers three genuinely distinct routes", () => {
     const vm = new QuestVM(plagueCrisisScript, 1);
     const ids = vm.availableTransitions().map((t) => t.id);
@@ -1284,14 +1237,11 @@ describe("Plague Crisis quest", () => {
     advanceAuto(reckless);
     const safe = new QuestVM(plagueCrisisScript, 1);
     safe.execute("safe_route");
-    // Same arrival time, but the gamble's downside carries a cost the safe road avoids.
     expect(reckless.getParam("time")).toBe(safe.getParam("time"));
     expect(reckless.getParam("credits")).toBeLessThan(safe.getParam("credits"));
     expect(reckless.getParam("rating")).toBeLessThan(safe.getParam("rating"));
   });
 
-  // Task 28 (D): each field crossing narrates its roll through a distinct beat
-  // node rather than a silent auto-jump straight to arrival.
   it("the steady crossing routes through distinct clear/hit narration beats", () => {
     const clear = new QuestVM(plagueCrisisScript, 1);
     clear.execute("fast_route");
