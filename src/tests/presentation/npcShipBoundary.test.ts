@@ -14,20 +14,6 @@ import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 
-// ---------------------------------------------------------------------------
-// Task 7/8 (font-scale-and-faction-bugs plan): a fleeing (BREAK_OFF) NPC's
-// real-time position had no boundary check anywhere, so it could run to any
-// distance past the system edge and become permanently unreachable — unlike a
-// scripted departure (`beginDeparture`), which heads straight to
-// `bounds.boundary` and sets `gone` once it arrives. Fixed by having
-// `maneuverToward` detect when a BREAK_OFF step would carry the ship past
-// `bounds.boundary` and route it into `beginDeparture()` instead. This must
-// hold for BOTH the player-chase (`aggressive`) branch and the NPC-vs-NPC
-// engagement branch, since both route through the same `maneuverToward` —
-// only the player-chase path is exercised here (it is the
-// reachable-from-gameplay case: a garrison aggressor engaging the player).
-// ---------------------------------------------------------------------------
-
 function makeNpc(id: string, hullHP: number, maxHull: number): NpcShip {
   return new NpcShip({
     id,
@@ -60,9 +46,6 @@ const BOUNDS: SystemBounds = {
 
 describe("NpcShipSprite boundary containment (Task 7/8)", () => {
   it("a BREAK_OFF flee never carries the ship past the system boundary", () => {
-    // Low hull ratio (< BREAK_OFF_HULL_RATIO = 0.3) forces BREAK_OFF regardless
-    // of range/speed. Pursuit target sits at +x, so the flee heading points -x
-    // — a straight run away from the system centre.
     const sprite = new NpcShipSprite(makeNpc("flee_1", 10, 100), 0, 0, BOUNDS);
     sprite.setAggressive(true);
     sprite.setPursuitTarget(50, 0, 0);
@@ -79,18 +62,12 @@ describe("NpcShipSprite boundary containment (Task 7/8)", () => {
       maxDist = Math.max(maxDist, d);
     }
 
-    // Either the ship transitions to `gone` at/near the boundary, or its
-    // distance from centre never exceeds the boundary — both are acceptable
-    // "contained" outcomes; running past it unbounded is the bug.
     if (!wentGone) {
       expect(maxDist).toBeLessThanOrEqual(BOUNDS.boundary + 1);
     }
   });
 
   it("a normal in-bounds aggressive pursuit is unaffected (no regression to ordinary chase)", () => {
-    // Full hull, target close by and within weapon range — CLOSE/ORBIT only,
-    // never BREAK_OFF, so the ship should behave exactly as before: it moves,
-    // stays inside the boundary, and never goes `gone`.
     const sprite = new NpcShipSprite(
       makeNpc("chase_1", 100, 100),
       0,
@@ -113,42 +90,31 @@ describe("NpcShipSprite boundary containment (Task 7/8)", () => {
     expect(moved).toBe(true);
   });
 
-  it("an outmatched (full-hull, out-run) BREAK_OFF is also bounded", () => {
-    // Full hull but the pursuit target is faster and still outside weapon
-    // range — decideManeuver's other BREAK_OFF trigger (`outmatched`).
+  it("a full-hull pursuer keeps chasing a faster out-of-range target, bounded and never departing", () => {
+    const targetX = GAME_BALANCE.weaponRange + 50;
     const sprite = new NpcShipSprite(makeNpc("flee_2", 100, 100), 0, 0, BOUNDS);
     sprite.setAggressive(true);
-    sprite.setPursuitTarget(
-      GAME_BALANCE.weaponRange + 50,
-      0,
-      sprite.cruiseSpeed + 0.5,
-    );
+    sprite.setPursuitTarget(targetX, 0, sprite.cruiseSpeed + 0.5);
 
+    const startGap = Math.hypot(targetX - sprite.x, 0 - sprite.y);
     let maxDist = 0;
-    let wentGone = false;
-    for (let i = 0; i < 3000; i++) {
+    for (let i = 0; i < 200; i++) {
       sprite.update(16);
-      if (sprite.isGone()) {
-        wentGone = true;
-        break;
-      }
+      expect(sprite.isGone()).toBe(false);
       maxDist = Math.max(
         maxDist,
         Math.hypot(sprite.x - BOUNDS.cx, sprite.y - BOUNDS.cy),
       );
     }
 
-    if (!wentGone) {
-      expect(maxDist).toBeLessThanOrEqual(BOUNDS.boundary + 1);
-    } else {
-      expect(wentGone).toBe(true);
-    }
+    const endGap = Math.hypot(targetX - sprite.x, 0 - sprite.y);
+    expect(endGap).toBeLessThan(startGap);
+    expect(maxDist).toBeLessThanOrEqual(BOUNDS.boundary + 1);
   });
 
   it("a diagonal BREAK_OFF flee is bounded regardless of heading angle", () => {
     const sprite = new NpcShipSprite(makeNpc("flee_3", 10, 100), 0, 0, BOUNDS);
     sprite.setAggressive(true);
-    // Pursuer to the upper-right ⇒ flee heads toward the lower-left.
     sprite.setPursuitTarget(80, 80, 0);
 
     let maxDist = 0;
