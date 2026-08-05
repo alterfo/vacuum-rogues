@@ -18,18 +18,6 @@ import { FactionType, NpcGoalKind } from "@/types";
 import { PIRATE_FACTION_ID } from "@/systems/galaxy/landingAccess";
 import { GAME_BALANCE } from "@/config/balance";
 
-/**
- * Focused unit tests for the interaction cluster extracted from
- * {@link NpcShipManager} (plan Task 1). The controller is exercised directly
- * against a fake {@link NpcInteractionDeps} bundle — no PixiJS — so its
- * click-gate, attack/approach and pirate-shakedown flows are verified in
- * isolation. Existing manager-level suites (`pirateTributeRep`,
- * `pirateSalvageCredits`, `npcShipManager`, `overmindCombat`) remain the
- * integration oracle.
- */
-
-// --- fakes -----------------------------------------------------------------
-
 function makeNpc(
   id: string,
   opts: Partial<{
@@ -222,8 +210,6 @@ function makeHarness(
   } as Harness;
 }
 
-// --- onNpcClick gate -------------------------------------------------------
-
 describe("NpcInteractionController.onNpcClick", () => {
   it("opens the contact panel (in range) when idle and not in combat", () => {
     const npc = makeNpc("t1");
@@ -236,7 +222,6 @@ describe("NpcInteractionController.onNpcClick", () => {
     h.ctrl.onNpcClick(npc);
     expect(h.panels.openCount).toBe(1);
     expect(h.panels.lastOpen?.inRange).toBe(true);
-    // The panel wiring surfaces the seven idle actions.
     const cb = h.panels.lastOpen?.callbacks;
     expect(cb?.onHail).toBeTypeOf("function");
     expect(cb?.onAttack).toBeTypeOf("function");
@@ -255,7 +240,7 @@ describe("NpcInteractionController.onNpcClick", () => {
     expect(h.panels.lastOpen?.inRange).toBe(false);
   });
 
-  it("does NOT open the panel while a turn is running", () => {
+  it("opens the panel while a turn is running (continuous flight keeps ships clickable)", () => {
     const npc = makeNpc("t3");
     const h = makeHarness({
       sprites: [makeSprite(npc, 10, 0)],
@@ -263,7 +248,8 @@ describe("NpcInteractionController.onNpcClick", () => {
       turnRunning: true,
     });
     h.ctrl.onNpcClick(npc);
-    expect(h.panels.openCount).toBe(0);
+    expect(h.panels.openCount).toBe(1);
+    expect(h.panels.lastOpen?.inRange).toBe(true);
   });
 
   it("retargets combat and drops the break-off when clicked mid-fight", () => {
@@ -281,8 +267,6 @@ describe("NpcInteractionController.onNpcClick", () => {
     expect(h.set.pursuitSuspended).toBe(false);
   });
 });
-
-// --- onAttackNpc -----------------------------------------------------------
 
 describe("NpcInteractionController.onAttackNpc", () => {
   it("escalates hostility and engages immediately when in weapon range", () => {
@@ -310,8 +294,6 @@ describe("NpcInteractionController.onAttackNpc", () => {
     expect(h.msgs.some((m) => m.text.includes("Перехват"))).toBe(true);
   });
 });
-
-// --- approach / hail / trade (via captured panel callbacks) ----------------
 
 describe("NpcInteractionController panel actions", () => {
   it("«Приблизиться» plots a lead course without engaging", () => {
@@ -357,11 +339,8 @@ describe("NpcInteractionController panel actions", () => {
   });
 });
 
-// --- pirate shakedown: flee ------------------------------------------------
-
 describe("NpcInteractionController.onFleeShakedown", () => {
   it("escapes a slow pirate (chance 1) and disengages it", () => {
-    // pirateSpeed 0 ⇒ fleeEscapeChance === 1 ⇒ always escapes, RNG-independent.
     const npc = makeNpc("f1", { name: "Бандит", speed: 0, aggressive: true });
     const sprite = makeSprite(npc, 100, 0);
     const h = makeHarness({ sprites: [sprite], physics: makePhysics(80) });
@@ -372,7 +351,6 @@ describe("NpcInteractionController.onFleeShakedown", () => {
   });
 
   it("is caught by a fast pirate (chance 0) and drops into combat", () => {
-    // playerSpeed 0 ⇒ fleeEscapeChance === 0 ⇒ always caught, RNG-independent.
     const npc = makeNpc("f2", {
       name: "Налётчик",
       speed: 60,
@@ -388,8 +366,6 @@ describe("NpcInteractionController.onFleeShakedown", () => {
     expect(h.msgs.some((m) => m.text.includes("атакует"))).toBe(true);
   });
 });
-
-// --- pirate shakedown: pay tribute routes through the bank -----------------
 
 describe("NpcInteractionController.onPayTribute", () => {
   it("moves credits through the bank bus and raises pirate rep on a real payoff", () => {
@@ -409,7 +385,6 @@ describe("NpcInteractionController.onPayTribute", () => {
 
     const npc = makeNpc("pay1", { name: "Рэкетир" });
     const sprite = makeSprite(npc, 100, 0);
-    // credits field is read when the bank seeds the pirate's account.
     (npc as unknown as { credits: number }).credits = 200;
     const h = makeHarness({ sprites: [sprite], engine });
 
@@ -419,9 +394,6 @@ describe("NpcInteractionController.onPayTribute", () => {
     h.ctrl.onPayTribute(npc);
 
     expect(player.credits).toBeLessThan(creditsBefore); // paid — via the bank bus
-    // Double-entry: the pirate's ledger balance must rise by exactly what the
-    // player lost — proves the transfer routed through the bank, not a raw
-    // `player.credits -=` that a regression could get away with.
     const tribute = creditsBefore - player.credits;
     expect(npc.credits).toBe(pirateCreditsBefore + tribute);
     expect(player.getReputation(PIRATE_FACTION_ID)).toBeGreaterThan(repBefore);
@@ -459,8 +431,6 @@ describe("NpcInteractionController.onPayTribute", () => {
   });
 });
 
-// --- hire/ally contract: no charge for an undeliverable contract -----------
-
 describe("NpcInteractionController.offerHireContract (via onHire/onAlly callbacks)", () => {
   it("accepts a contract against a hostile target without charging the player", () => {
     const player = new PlayerService().createPlayer({
@@ -471,7 +441,6 @@ describe("NpcInteractionController.offerHireContract (via onHire/onAlly callback
     const engine = { player } as unknown as GameEngine;
     const npc = makeNpc("merc1", { faction: "traders", aggressive: false });
     const hostile = makeNpc("mark1", { faction: "pirates", aggressive: true });
-    // hireFee() needs combat stats to compute a finite risk premium.
     Object.assign(hostile, { hullHP: 10, shields: 0, damage: 5 });
     const h = makeHarness({
       sprites: [makeSprite(npc, 10, 0), makeSprite(hostile, 20, 0)],
@@ -483,9 +452,6 @@ describe("NpcInteractionController.offerHireContract (via onHire/onAlly callback
     const creditsBefore = player.credits;
     h.panels.lastOpen?.callbacks.onHire?.();
 
-    // Known limitation: NPC-vs-NPC combat isn't simulated yet, so the contract
-    // can't be delivered — the player must NOT be charged for it (this used to
-    // be a money-loss bug: the fee was taken for an inert contract).
     expect(player.credits).toBe(creditsBefore);
     expect(npc.goal).toEqual({
       kind: NpcGoalKind.HUNT,
@@ -510,8 +476,6 @@ describe("NpcInteractionController.offerHireContract (via onHire/onAlly callback
     expect(npc.goal).toBeUndefined();
   });
 });
-
-// --- pure helpers ----------------------------------------------------------
 
 describe("NpcInteractionController helpers", () => {
   it("npcLeadPoint falls back to the sprite position with no physics", () => {

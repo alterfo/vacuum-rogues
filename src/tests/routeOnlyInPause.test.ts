@@ -1,13 +1,5 @@
-/**
- * Verifies that route building and NPC/planet panel interactions are blocked
- * while a turn is running (isTurnRunning=true).
- *
- * Task 2 guard logic: PlanetManager.handlePlanetClick and NpcShipManager.onNpcClick
- * return early when isTurnRunning=true so plannedRoute is never changed mid-turn.
- */
 import { describe, it, expect, vi } from "vitest";
 
-// Mock pixi.js and all presentation helpers that import it.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -223,8 +215,6 @@ function makeMockPlanet(id = "planet-1"): Planet {
 }
 
 describe("routeOnlyInPause: route blocked while turn is running", () => {
-  // Planet click handling moved to PlanetManager. handlePlanetClick requests a
-  // route (delegated to the scene via onPlanetRouteRequested) only when paused.
   function makePlanetManager(
     turnRunning: boolean,
     onRoute?: (id: string, x: number, y: number) => void,
@@ -285,8 +275,6 @@ describe("routeOnlyInPause: route blocked while turn is running", () => {
     expect(routed).toBe(false);
   });
 
-  // NPC click handling moved to NpcShipManager. The turn-running guard and the
-  // contact-panel open path are exercised directly against the module.
   function makeNpcManager(turnRunning: boolean): NpcShipManager {
     const renderer = makeMockRenderer();
     const deps: NpcShipManagerDeps = {
@@ -316,14 +304,13 @@ describe("routeOnlyInPause: route blocked while turn is running", () => {
     );
   }
 
-  it("onNpcClick is blocked when turn is running", () => {
+  it("onNpcClick opens the contact panel even while the turn is running", () => {
     const mgr = makeNpcManager(true);
     const npc = { id: "npc-1", role: "TRADER", name: "NPC" };
 
     (mgr as unknown as { onNpcClick(n: unknown): void }).onNpcClick(npc);
 
-    // Early-return mid-turn: no contact panel opens.
-    expect(mgr.isContactPanelOpen).toBe(false);
+    expect(mgr.isContactPanelOpen).toBe(true);
   });
 
   it("onNpcClick proceeds normally when turn is paused", () => {
