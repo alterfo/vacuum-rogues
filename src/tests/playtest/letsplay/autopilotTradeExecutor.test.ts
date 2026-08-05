@@ -1,19 +1,3 @@
-/**
- * Task 4 regression (docs/plans/20260727-autopilot-ui-parity-fixes.md):
- * the live autopilot's TRADE step drives the REAL market UI.
- *
- * Before this task `openTrade` executed the buy/sell through a domain bypass
- * and the live `executeTrade()` seam was a stub no-op — so if the real TRADE
- * scene were opened, the policy would loop PLANET→TRADE→FLIGHT→PLANET without
- * ever acquiring cargo. This suite proves the closed loop: `openTrade` opens
- * the real {@link TradeScene}, and the next tick's `executeTrade()` realises
- * the buy/sell through the scene's `e2eBuyItem`/`e2eSellItem` seams — the same
- * decision + reserve-cap math as the old bypass, now visible in the real UI.
- *
- * Real-engine tier: boots the real GameEngine, navigates to the real TRADE
- * scene, and drives `createLiveSceneController(...).executeTrade()`, asserting
- * observable engine state (cargo/credits actually change through the seam).
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
 import { SceneType, ResourceType } from "@/types";
@@ -38,7 +22,6 @@ describe("letsplay live trade executor (Task 4)", () => {
     localStorage.clear();
   });
 
-  /** Total units of cargo the player currently holds. */
   function totalCargo(): number {
     return (
       harness.engine.player?.inventory.resources.reduce(
@@ -49,8 +32,6 @@ describe("letsplay live trade executor (Task 4)", () => {
   }
 
   it("the real TRADE scene exposes both e2e seams the live executor drives", async () => {
-    // Fixed seed ⇒ deterministic galaxy: a silent early return here would mean
-    // the seed regressed to a market-less system, so fail loudly instead.
     expect.hasAssertions();
     const engine = harness.engine;
     const planet = currentSystem(engine)?.planets[0];
@@ -65,8 +46,6 @@ describe("letsplay live trade executor (Task 4)", () => {
   });
 
   it("executeTrade() buys the preferred good through the real TradeScene seam (round trip changes cargo/credits)", async () => {
-    // Fixed seed ⇒ this suite must actually drive the buy path; a silent skip
-    // (no market / nothing affordable) is a regression, not a pass.
     expect.hasAssertions();
     const engine = harness.engine;
     const sys = currentSystem(engine);
@@ -87,9 +66,6 @@ describe("letsplay live trade executor (Task 4)", () => {
 
     const good = affordable[0].r;
 
-    // Seed a known cross-planet margin so THIS planet is the cheap BUY planet
-    // for `good` — the exact belief state `executeTrade`'s margin branch reads
-    // (`bestKnownMargin(getMemory()).buyPlanet === planet.id`).
     const memory = createMemory();
     memory.priceBook.set(
       planet.id,
@@ -116,15 +92,28 @@ describe("letsplay live trade executor (Task 4)", () => {
 
     await createLiveSceneController(engine, () => memory).executeTrade();
 
-    // A real buy happened through the seam: cargo up, credits down.
     expect(totalCargo()).toBeGreaterThan(cargoBefore);
     expect(engine.player.credits).toBeLessThan(creditsBefore);
     expect(harness.errors()).toHaveLength(0);
   });
 
+  it("executeTrade() lands back on the PLANET hub so the next tick can take quests (live/headless parity)", async () => {
+    expect.hasAssertions();
+    const engine = harness.engine;
+    const sys = currentSystem(engine);
+    const planet = sys?.planets.find(
+      (p) => (p.market?.availableResources?.length ?? 0) >= 1,
+    );
+    if (!planet || !planet.market || !engine.player) return;
+
+    await harness.goTo(SceneType.TRADE, { planet });
+    await createLiveSceneController(engine).executeTrade();
+
+    expect(engine.currentSceneType).toBe(SceneType.PLANET);
+    expect(harness.errors()).toHaveLength(0);
+  });
+
   it("TradeScene.e2eSellItem sells qty units, mirroring e2eBuyItem", async () => {
-    // Fixed seed ⇒ the buy-then-sell round trip must run; a silent skip is a
-    // regression in the deterministic market, so fail loudly.
     expect.hasAssertions();
     const engine = harness.engine;
     const sys = currentSystem(engine);
@@ -165,8 +154,6 @@ describe("letsplay live trade executor (Task 4)", () => {
   });
 
   it("executeTrade() sells held cargo through the real TradeScene seam when no margin is known (sell-only)", async () => {
-    // Fixed seed ⇒ the sell-only path must actually run; a silent skip means the
-    // deterministic market regressed, so fail loudly instead of passing green.
     expect.hasAssertions();
     const engine = harness.engine;
     const sys = currentSystem(engine);
@@ -177,7 +164,6 @@ describe("letsplay live trade executor (Task 4)", () => {
 
     await harness.goTo(SceneType.TRADE, { planet });
 
-    // Stock some cargo directly through the real scene seam first.
     const { TradeSystem } = await import("@/systems/TradeSystem");
     const ts = new TradeSystem();
     const affordable = planet.market.availableResources
@@ -194,7 +180,6 @@ describe("letsplay live trade executor (Task 4)", () => {
     if (cargoMid === 0) return; // buy didn't stock anything (price/hold guard)
     const creditsMid = engine.player.credits;
 
-    // Default memory ⇒ no known margin ⇒ sell-only: every held lot is sold.
     await createLiveSceneController(engine).executeTrade();
 
     expect(totalCargo()).toBeLessThan(cargoMid);

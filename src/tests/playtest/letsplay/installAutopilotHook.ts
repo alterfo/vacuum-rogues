@@ -269,7 +269,7 @@ export function createLiveSceneController(
         executor,
       );
     }
-    await goTo(SceneType.SPACE_FLIGHT);
+    await goTo(SceneType.PLANET, { planet });
   };
 
   return {
@@ -379,6 +379,7 @@ export function createLiveSceneController(
       );
     },
     land(planetId) {
+      confirmPlanningIfOpen(engine.currentScene);
       const scene = engine.currentScene as {
         planetManager?: {
           planetSprites: Array<{
@@ -431,6 +432,7 @@ export function createLiveSceneController(
       void goTo(SceneType.PLANET, { planet: resolved });
     },
     async dock(stationId) {
+      confirmPlanningIfOpen(engine.currentScene);
       const sys = currentSystem(engine);
       const station =
         sys?.stations.find((s) => s.id === stationId) ?? sys?.stations[0];
@@ -501,7 +503,7 @@ export function createLiveSceneController(
       ) {
         pauseScene.combatPause.resume();
       }
-      confirmPlanningIfOpen(pauseScene, { assignWeapons: false });
+      confirmPlanningIfOpen(pauseScene);
       const sys = currentSystem(engine);
       const prevId = sys?.id ?? null;
       const connections = reachableNeighbors(
@@ -692,7 +694,7 @@ export function createLiveSceneController(
         );
         scene.executeRouteTo(edge.x, edge.y);
       }
-      confirmPlanningIfOpen(scene, { assignWeapons: false });
+      confirmPlanningIfOpen(scene);
     },
     repair() {
       if (engine.player?.ship) executeRepair(engine);
