@@ -147,7 +147,7 @@ Full details: `.claude/docs/systems/overmind.md`. Critical invariants:
 
 ## Money System (key rules only)
 
-Full details: `.claude/docs/systems/banking.md`. Critical rule: **NEVER write `player.credits ±= x` directly.** Use `adjustPlayerCredits`/`creditNpc`/`transfer` from `src/systems/banking/economy.ts`. `player.credits` is whole-number currency.
+Full details: `.claude/docs/systems/banking.md`. Critical rule: **NEVER write `player.credits ±= x` directly.** Use `adjustPlayerCredits`/`creditNpc`/`transfer` from `src/systems/banking/economy.ts`. `player.credits` is whole-number currency. **Every ledger posting is whole-credit at the bank level (2026-08-06):** EOD interest rounds half-away-from-zero (`BankingService.accrueDailyInterest`) and the annuity schedule is integer per period with the final payment retiring the debt exactly (`products.loanPayment`/`amortizationSchedule`) — never reintroduce fractional postings; the seizure residual write-off survives only as a defensive no-op.
 
 ## Errors & Logging
 
@@ -175,6 +175,8 @@ Every bug follows this order — no exceptions:
 ### Letsplay engine (key facts)
 
 Full details: `.claude/docs/systems/letsplay.md`. `src/tests/playtest/letsplay/` plays the real engine (dev-only). Loop: `observe → decide → apply → tick`. Live autopilot: `` ` `` (Backquote) in `npm run dev`. Default policy: `MemoryHeuristicPolicy`. First human input reclaims control.
+
+**Two appliers, one contract (2026-08-06):** the shared policy's verbs are applied by BOTH the live hook (`installAutopilotHook`/`createLiveSceneController`) and the headless `PlayerAgent` — keep them semantically in lockstep (found divergences: live trade exited to flight and skipped the quest board; live land/dock didn't confirm the combat-planning freeze; headless wait didn't advance the day off-flight → the campaign calendar wedge). Invariant: **every verb must either progress the sim or unblock a freeze** — "wait" advances a day in ANY scene (`waitOnPlanet.test.ts`), any handler reachable during PLANNING confirms the turn first (`autopilotCombatPlanningTick.test.ts`). When touching a verb, patch and pin both appliers.
 
 **F9 (live `land()` re-targeting freeze): RESOLVED 2026-07-13** (`e76260b`) — the rAF-throttling hypothesis was confirmed live 2026-07-12: `gameLoop`'s `requestAnimationFrame` stalls under tab-backgrounding while the autopilot's `setInterval` keeps ticking. Fixed by a `document.hidden`-gated 500 ms background fallback loop in `GameEngine` (`startGameLoop`/`backgroundIntervalId`) plus a `dismissBlockingModal`-before-decide gate in `AutopilotController.tickOnce`. Known limitation: browsers clamp hidden-tab intervals (≥1 s, Chrome intensive throttling up to 1/min) and `ShipPhysics` clamps dt at 100 ms, so a hidden tab advances world time slower than real time — acceptable for the freeze fix, not a full background simulation.
 
