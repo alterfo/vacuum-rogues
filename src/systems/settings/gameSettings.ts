@@ -7,6 +7,8 @@ import { GAME_BALANCE } from "@/config/balance";
 
 export const NEURAL_ENABLED_KEY = "neuralEnabled";
 
+export const AUTO_COMBAT_ENABLED_KEY = "autoCombatEnabled";
+
 export interface SettingsStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -43,10 +45,11 @@ export function setSpeed(target: SpeedTarget, value: number): void {
     : GAME_BALANCE.gameSpeedDefault;
 }
 
-export type FeatureFlag = "neural";
+export type FeatureFlag = "neural" | "autoCombat";
 
 export const FEATURE_FLAG_KEYS: Readonly<Record<FeatureFlag, string>> = {
   neural: NEURAL_ENABLED_KEY,
+  autoCombat: AUTO_COMBAT_ENABLED_KEY,
 };
 
 export function isFeatureEnabled(
@@ -85,4 +88,17 @@ export function setNeuralEnabled(
   store: SettingsStore | undefined = liveStore(),
 ): void {
   setFeatureEnabled("neural", on, store);
+}
+
+export function isAutoCombatEnabled(
+  store: SettingsStore | undefined = liveStore(),
+): boolean {
+  return isFeatureEnabled("autoCombat", store);
+}
+
+export function setAutoCombatEnabled(
+  on: boolean,
+  store: SettingsStore | undefined = liveStore(),
+): void {
+  setFeatureEnabled("autoCombat", on, store);
 }

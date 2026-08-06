@@ -441,6 +441,9 @@ export const en: Dict = {
     "“{weapon}” → {target} — out of range, fires on closing",
   "combat.planning.afterburner": "Afterburner",
 
+  "combat.auto.on": "AUTO-BATTLE: ON",
+  "combat.auto.off": "AUTO-BATTLE: OFF",
+
   "combat.execution.afterburnerEngaged":
     "🔥 Afterburner! Engine integrity: {integrity}%",
   "combat.execution.afterburnerSpent":

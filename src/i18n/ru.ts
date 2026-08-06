@@ -442,6 +442,9 @@ export const ru: Dict = {
     "«{weapon}» → {target} — вне досягаемости, огонь при сближении",
   "combat.planning.afterburner": "Форсаж",
 
+  "combat.auto.on": "АВТОБОЙ: ВКЛ",
+  "combat.auto.off": "АВТОБОЙ: ВЫКЛ",
+
   "combat.execution.afterburnerEngaged":
     "🔥 Форсаж! Ресурс двигателя: {integrity}%",
   "combat.execution.afterburnerSpent": "Двигатель изношен — форсаж недоступен",

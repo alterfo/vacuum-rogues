@@ -35,6 +35,12 @@ import { buildCombatExecutionDeps } from "./flight/combatExecutionDeps";
 import { plotPlannedRoute, navigateToQuestTarget } from "./flight/routePlot";
 import { updateFlightMiniMap } from "./flight/miniMapUpdate";
 import { orbitBump } from "./flight/combatOrbitClock";
+import {
+  autoConfirmCombatTurn,
+  combatRouteClickAllowed,
+} from "./flight/combatAutoPlan";
+import { CombatAutoToggle } from "./flight/combatAutoToggle";
+import { isAutoCombatEnabled } from "@/systems/settings/gameSettings";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
 import { CameraController } from "./flight/CameraController";
@@ -90,12 +96,20 @@ export class SpaceFlightScene extends GameScene {
     showMessage: (text, color) => this.hud.showMessage(text, color),
     onConfirmPlan: (plan) => this.combatExecution?.beginWindow(plan),
     breakOffPursuit: () => this.npcManager?.breakOffCombatPursuit(),
+    isAutoCombat: () => isAutoCombatEnabled(),
     onFightEnd: () => {
       this.combatExecution?.endFight(); // wrecks/flashes keep drifting past the end
       if (this.destroyed) return; // mid-teardown — clearPlannedRoute() handles it
       if (this.plannedRoute) this.plotRoute();
       else this.routeRenderer.clearRoute(); // restored the pre-combat course line above, else drop the last combat course preview
     },
+  });
+  private autoCombatToggle = new CombatAutoToggle({
+    getUiLayer: () => this.renderer.uiLayer,
+    getScreenSize: () => ({
+      width: this.renderer.app.screen.width,
+      height: this.renderer.app.screen.height,
+    }),
   });
   private lowHullStopped = false;
   private destroyed = false;
@@ -573,6 +587,7 @@ export class SpaceFlightScene extends GameScene {
     this.warpFx.update(deltaTime);
     this.updateShip(deltaTime);
     this.combatPlanning.tickExecute(deltaTime); // no-op outside EXECUTING (14.5a)
+    this.maybeAutoConfirmCombat();
     const frozen = this.combatPause.paused || this.combatPlanning.isPlanning;
     if (!frozen) this.playerShip.update(deltaTime, this.bgElapsed);
     if (!frozen) this.npcManager.updateCombat(deltaTime);
@@ -672,6 +687,7 @@ export class SpaceFlightScene extends GameScene {
     this.combatModule?.destroy(); // Clear in-flight combat target + active flag.
     this.combatExecution?.destroy(); // Execute-window entities + overlays (14.5c).
     this.combatPlanningUi?.destroy(); // Planning bar + range rings (14.5b).
+    this.autoCombatToggle.destroy();
     this.combatPlanning.endCombat(); // Reset the pause-and-plan loop too (Task 14.5a).
 
     this.starRenderer?.destroy();
@@ -845,7 +861,14 @@ export class SpaceFlightScene extends GameScene {
     };
     if (routePlanningClick(event, planningCtx)) return;
 
-    if (this.isTurnRunning && !isPanButton) {
+    if (
+      this.isTurnRunning &&
+      !isPanButton &&
+      !combatRouteClickAllowed({
+        combatActive: this.combatModule?.isActive === true,
+        autoCombat: isAutoCombatEnabled(),
+      })
+    ) {
       if (!this.turnHintShown) {
         this.turnHintShown = true;
         this.hud.showMessage(
@@ -1332,6 +1355,20 @@ export class SpaceFlightScene extends GameScene {
       },
       showMessage: (text, color) => this.hud.showMessage(text, color),
     });
+  }
+
+  private maybeAutoConfirmCombat(): void {
+    this.autoCombatToggle.sync(this.combatModule?.isActive === true);
+    if (this.destroyed || !this.combatPlanning.isPlanning) return;
+    if (!isAutoCombatEnabled()) return;
+    const physics = this.shipPhysics;
+    autoConfirmCombatTurn(
+      this.combatPlanning,
+      this.combatModule.fittedWeapons(),
+      [...this.combatModule.combatants],
+      physics ? { x: physics.shipX, y: physics.shipY } : null,
+      this.combatModule.selectedTarget,
+    );
   }
 
   private endTurn(): void {

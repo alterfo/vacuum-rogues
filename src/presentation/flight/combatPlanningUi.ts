@@ -319,6 +319,7 @@ export interface CombatPlanningHost {
   onFightEnd(): void;
   onConfirmPlan?(plan: PlannedTurn<NpcShipSprite, WeaponSpec>): void;
   breakOffPursuit?(): void;
+  isAutoCombat?(): boolean;
 }
 
 export function createCombatPlanningController(
@@ -327,6 +328,7 @@ export function createCombatPlanningController(
   return new CombatPlanningController<NpcShipSprite, WeaponSpec>({
     roundMs: COMBAT_ROUND_MS,
     onEnterPlanning: () => {
+      if (host.isAutoCombat?.()) return;
       host.getUi()?.enterPlanning();
       host.showMessage(t("combat.planning.enter"), PLANNING_TINT);
     },
@@ -337,6 +339,7 @@ export function createCombatPlanningController(
     },
     onEnterExecuting: () => {
       host.getUi()?.exitPlanning();
+      if (host.isAutoCombat?.()) return;
       host.showMessage(t("combat.planning.executing"), PLANNING_TINT);
     },
     onCombatEnd: () => {
