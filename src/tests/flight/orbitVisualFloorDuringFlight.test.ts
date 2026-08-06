@@ -113,7 +113,7 @@ describe("planet orbit visuals keep pace while the ship is genuinely moving", ()
     expect(currentDay()).toBeGreaterThan(dayBefore);
   });
 
-  it("settles the boost to 0 on endTurn, same as the existing waitDayAccum/distanceTraveled settle", () => {
+  it("settles the boost to 0 on endTurn without snapping the drawn orbits backward", () => {
     const physics = {
       shipX: 0,
       shipY: 0,
@@ -125,14 +125,16 @@ describe("planet orbit visuals keep pace while the ship is genuinely moving", ()
       }),
       setTarget: vi.fn(),
     };
-    const { updateShip, orbitalVisualDay, currentDay, endTurn } =
+    const { s, updateShip, orbitalVisualDay, currentDay, endTurn } =
       buildScene(physics);
 
     for (let i = 0; i < 60; i++) updateShip(16);
     expect(orbitalVisualDay()).toBeGreaterThan(currentDay());
 
+    const visualBefore = orbitalVisualDay();
     endTurn();
-    expect(orbitalVisualDay()).toBe(currentDay());
+    expect(s.visualOrbitBoost).toBe(0);
+    expect(orbitalVisualDay()).toBeGreaterThanOrEqual(visualBefore);
   });
 
   it("freezes the top-up while the combat active-pause is up (pause freezes orbits with movement)", () => {

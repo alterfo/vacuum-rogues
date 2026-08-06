@@ -328,9 +328,14 @@ letsplay campaign gate (`longGameCompetence` (c)), because the boosted day moves
 **live geometry** (`screenX/screenY`) that landing/lead/click reads consume, and slowing it
 reroutes a whole 200-day agent trajectory. Known accepted consequences: a fast engine's visual
 orbit rate slightly exceeds the wait rate (up to ~1.6×), a moving combat orbit stacks with the
-whole-day `waitDayAccum` routing, and the boost accrues ~1 day per real second of flight, so the
-`endTurn()` settle to 0 (same as `waitDayAccum`/`distanceTraveled`, "orbits settle to gameDays")
-is a **visible backward snap after a long flight**. Changing any of this is a game-feel/design
+whole-day `waitDayAccum` routing, and the boost accrues ~1 day per real second of flight.
+**The old "orbits settle to gameDays" backward snap at `endTurn()` is fixed (2026-08-06,
+user-reported: planets jumped at combat start / follow break-off):** `endTurn()` now folds the
+dropped sub-day remainder (`waitDayAccum` + distance fraction + `visualOrbitBoost`) into a
+purely-visual `orbitDayCarry`, added only inside the `orbitalVisualDay` getter, so the drawn
+orbital day is monotonic across turn ends (`orbitContinuityOnTurnEnd.test.ts`). The carry never
+touches `currentDay`/the HUD date/the calendar, and resets only in `destroy()` — i.e. behind a
+scene transition where a reposition is invisible. Changing any of this is a game-feel/design
 decision — re-run the letsplay campaign gates, don't just eyeball it. The boost never feeds
 `gameDays`, the HUD date, or any economy/quest/NPC-sim pacing (those still use the untouched
 `currentDay`), so a trip still takes exactly as many in-game days as its distance/speed

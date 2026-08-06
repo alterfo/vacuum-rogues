@@ -119,10 +119,11 @@ export class SpaceFlightScene extends GameScene {
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070); must equal MS_PER_ORBITAL_DAY
   private visualOrbitBoost: number = 0; // orbit-visual day top-up while moving (additive, NOT a floor) — flight/CLAUDE.md
+  private orbitDayCarry: number = 0;
   private orbitTopUp = (dt: number): number =>
     orbitBump(this.combatPause.paused, dt, this.shipPhysics?.timeScale ?? 1);
   private get orbitalVisualDay(): number {
-    return this.currentDay + this.visualOrbitBoost;
+    return this.currentDay + this.orbitDayCarry + this.visualOrbitBoost;
   }
   private get currentDay(): number {
     const days = this.gameEngine?.galaxy?.gameDays ?? 0;
@@ -704,6 +705,7 @@ export class SpaceFlightScene extends GameScene {
     this.shipPhysics = null;
     this.distanceTraveled = 0;
     this.visualOrbitBoost = 0;
+    this.orbitDayCarry = 0;
     this.clearPlannedRoute(); // Clean up route line
     logger.info("SpaceFlightScene destroyed");
   }
@@ -1335,7 +1337,11 @@ export class SpaceFlightScene extends GameScene {
   private endTurn(): void {
     this.isTurnRunning = false;
     this.pauseAtDayBoundary = false; // deferred pause consumed (or turn ended)
-    this.waitDayAccum = 0; // also drops any combat-orbit offset: orbits settle to gameDays
+    this.orbitDayCarry +=
+      this.waitDayAccum +
+      this.distanceTraveled / this.DISTANCE_PER_DAY +
+      this.visualOrbitBoost;
+    this.waitDayAccum = 0;
     this.distanceTraveled = 0;
     this.visualOrbitBoost = 0;
     this.turnHintShown = false;
