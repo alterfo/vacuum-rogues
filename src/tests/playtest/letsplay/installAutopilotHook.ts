@@ -361,6 +361,19 @@ export function createLiveSceneController(
       if (
         engine.currentSceneType === SceneType.SPACE_FLIGHT &&
         scene?.pendingWarp == null &&
+        scene?.plannedRoute != null &&
+        typeof scene.executeRouteTo === "function" &&
+        !scene.shipPhysics?.isMoving &&
+        !scene.isTurnRunning &&
+        !scene.combatModule?.isActive
+      ) {
+        scene.executeRouteTo(scene.plannedRoute.x, scene.plannedRoute.y);
+        return;
+      }
+
+      if (
+        engine.currentSceneType === SceneType.SPACE_FLIGHT &&
+        scene?.pendingWarp == null &&
         !scene?.plannedRoute &&
         !scene?.shipPhysics?.isMoving &&
         !scene?.isTurnRunning &&

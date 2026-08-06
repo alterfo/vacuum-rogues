@@ -728,6 +728,8 @@ export class SpaceFlightScene extends GameScene {
 
   private readonly DOCKING_RANGE = 55;
 
+  private readonly WARP_EDGE_ARRIVAL_RANGE = 60;
+
   private async onDockAtStation(station: Station): Promise<void> {
     if (!this.gameEngine) return;
     logger.info(`Docking at station: ${station.name}`);
@@ -1081,8 +1083,21 @@ export class SpaceFlightScene extends GameScene {
       logger.info("🎯 Ship arrived at destination.");
 
       if (this.pendingWarp && !this.warpInProgress) {
-        this.clearPlannedRoute();
-        void this.performWarp();
+        const exit = this.pendingWarpExitPoint;
+        const atExit =
+          !exit ||
+          Math.hypot(
+            exit.x - this.shipPhysics.shipX,
+            exit.y - this.shipPhysics.shipY,
+          ) <= this.WARP_EDGE_ARRIVAL_RANGE;
+        if (atExit) {
+          this.clearPlannedRoute();
+          void this.performWarp();
+          return;
+        }
+        this.plannedRoute = { x: exit.x, y: exit.y };
+        this.routePath = this.flightPathTo(exit.x, exit.y);
+        this.plotRoute();
         return;
       }
 

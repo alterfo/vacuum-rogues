@@ -37,6 +37,7 @@ function makeHostile(id: string, x: number, y: number): NpcShipSprite {
     setNpcCombatTarget: () => {},
     clearNpcCombatTarget: () => {},
     setPursuitTarget: () => {},
+    beginDeparture: () => {},
   };
   return sprite as unknown as NpcShipSprite;
 }
