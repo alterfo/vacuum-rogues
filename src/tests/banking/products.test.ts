@@ -94,8 +94,8 @@ describe("products — savings", () => {
     h.bus.dispatch({ kind: "RunEndOfDay" }); // 1000 → +1 % → 1010
     expect(h.service.balanceOf(sav)).toBeCloseTo(1010, 6);
 
-    h.bus.dispatch({ kind: "RunEndOfDay" }); // 1010 → +1 % → 1020.1 (compounded)
-    expect(h.service.balanceOf(sav)).toBeCloseTo(1020.1, 6);
+    h.bus.dispatch({ kind: "RunEndOfDay" }); // 1010 → +1 % → 1020 (10.1 rounds to 10)
+    expect(h.service.balanceOf(sav)).toBe(1020);
     expect(balanced(h.service)).toBe(true);
   });
 
@@ -120,10 +120,11 @@ describe("products — savings", () => {
 });
 
 describe("products — amortization schedule (pure)", () => {
-  it("loanPayment matches the closed-form annuity formula", () => {
+  it("loanPayment is the closed-form annuity rounded to whole credits", () => {
     const factor = Math.pow(1.02, 5);
-    const expected = (1000 * 0.02 * factor) / (factor - 1);
-    expect(loanPayment(1000, 0.02, 5)).toBeCloseTo(expected, 9);
+    const expected = Math.round((1000 * 0.02 * factor) / (factor - 1));
+    expect(loanPayment(1000, 0.02, 5)).toBe(expected);
+    expect(Number.isInteger(loanPayment(1000, 0.02, 5))).toBe(true);
   });
 
   it("falls back to straight-line payments at a zero rate", () => {
@@ -205,19 +206,19 @@ describe("products — loan lifecycle through the bus", () => {
     expect(balanced(h.service)).toBe(true);
   });
 
-  it("forgiveLoanResidual closes a sub-credit residual no whole-credit repayment can clear", () => {
+  it("EOD interest on an odd principal stays whole-credit, so plain repayments retire the loan exactly", () => {
     const h = makeHarness(10000);
     const loanId = openLoanAccount(h.bus, h.service, "player");
     h.bus.dispatch({
       kind: "DisburseLoan",
       loanAccountId: loanId,
       toAccountId: PLAYER,
-      amount: 4321, // odd principal so EOD interest accrues fractional dust
+      amount: 4321,
       reason: "Loan",
     });
 
     h.bus.dispatch({ kind: "RunEndOfDay" });
-    expect(Number.isInteger(h.service.balanceOf(loanId))).toBe(false);
+    expect(Number.isInteger(h.service.balanceOf(loanId))).toBe(true);
 
     for (let i = 0; i < 20; i++) {
       const owed = -h.service.balanceOf(loanId);
@@ -226,16 +227,9 @@ describe("products — loan lifecycle through the bus", () => {
       repayLoan(h.bus, PLAYER, loanId, whole);
     }
 
-    const residual = -h.service.balanceOf(loanId);
-    expect(residual).toBeGreaterThan(0);
-    expect(residual).toBeLessThan(1);
+    expect(h.service.balanceOf(loanId)).toBe(0);
 
-    forgiveLoanResidual(
-      h.bus,
-      loanId,
-      INTERNAL_ACCOUNTS.INTEREST_INCOME,
-      residual,
-    );
+    forgiveLoanResidual(h.bus, loanId, INTERNAL_ACCOUNTS.INTEREST_INCOME, 0);
     expect(h.service.balanceOf(loanId)).toBe(0);
     expect(balanced(h.service)).toBe(true);
   });

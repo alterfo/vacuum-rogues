@@ -155,7 +155,7 @@ describe("economy projection — re-seeding on reload is idempotent", () => {
 });
 
 describe("economy projection — interest never leaves credits fractional (save-safe)", () => {
-  it("withdrawing after compounding EOD interest keeps player.credits a whole number", () => {
+  it("compounded EOD interest stays whole-credit end-to-end, and a full withdrawal keeps credits integral", () => {
     const h = makeHarness(5000);
     const sav = openSavings(h.bus, h.service, h.player.id);
     deposit(h.bus, h.player.currentAccountId, sav, 3000);
@@ -163,9 +163,11 @@ describe("economy projection — interest never leaves credits fractional (save-
       h.bus.dispatch({ kind: "RunEndOfDay", date: day });
     }
     const savBal = h.service.balanceOf(sav);
-    expect(Number.isInteger(savBal)).toBe(false); // interest made it fractional
+    expect(Number.isInteger(savBal)).toBe(true);
+    expect(savBal).toBeGreaterThan(3000);
 
     const amount = wholeCreditsToCurrent(savBal);
+    expect(amount).toBe(savBal);
     withdraw(h.bus, sav, h.player.currentAccountId, amount);
 
     expect(Number.isInteger(h.player.credits)).toBe(true);

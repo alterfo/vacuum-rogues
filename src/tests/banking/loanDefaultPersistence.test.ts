@@ -107,9 +107,8 @@ describe("loan-default persistence — snapshot/restore round-trip", () => {
 
     const owedBefore = -fresh.balanceOf(LOAN);
     bus.dispatch({ kind: "RunEndOfDay" });
-    expect(-fresh.balanceOf(LOAN)).toBeCloseTo(
-      owedBefore * (1 + PENALTY_RATE),
-      6,
+    expect(-fresh.balanceOf(LOAN)).toBe(
+      owedBefore + Math.round(owedBefore * PENALTY_RATE),
     );
     expect(events.filter((e) => e.kind === "LoanDefaulted")).toHaveLength(0);
     expect(balanced(fresh)).toBe(true);

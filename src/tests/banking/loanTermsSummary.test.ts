@@ -16,15 +16,19 @@ describe("loanTermsSummary (pure)", () => {
     expect(s.periods).toBe(5);
   });
 
-  it("per-period payment matches the annuity payment and retires the loan over N periods", () => {
+  it("per-period payment matches the annuity payment and retires the loan over N periods in whole credits", () => {
     const s = loanTermsSummary(POSITIVE);
-    expect(s.perPeriodPayment).toBeCloseTo(loanPayment(1000, 0.02, 5), 9);
+    expect(s.perPeriodPayment).toBe(loanPayment(1000, 0.02, 5));
+    expect(Number.isInteger(s.perPeriodPayment)).toBe(true);
 
     let balance = POSITIVE.principal;
-    for (let i = 0; i < POSITIVE.periods; i++) {
-      balance = balance * (1 + POSITIVE.dailyRate) - s.perPeriodPayment;
+    for (const row of s.schedule) {
+      expect(Number.isInteger(row.payment)).toBe(true);
+      expect(Number.isInteger(row.interest)).toBe(true);
+      balance =
+        balance + Math.round(balance * POSITIVE.dailyRate) - row.payment;
     }
-    expect(balance).toBeCloseTo(0, 6);
+    expect(balance).toBe(0);
 
     expect(s.schedule).toHaveLength(5);
     expect(s.schedule[s.schedule.length - 1].remaining).toBe(0);

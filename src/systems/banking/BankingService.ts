@@ -255,8 +255,9 @@ export class BankingService {
       } else {
         continue;
       }
-      const interest = this.ledger.balanceOf(account.id, date) * rate;
-      if (Math.abs(interest) <= BALANCE_EPSILON) continue;
+      const raw = this.ledger.balanceOf(account.id, date) * rate;
+      const interest = Math.sign(raw) * Math.round(Math.abs(raw));
+      if (interest === 0) continue;
       this.bus.dispatch({
         kind: "AccrueInterest",
         accountId: account.id,

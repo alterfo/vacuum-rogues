@@ -150,7 +150,9 @@ describe("banking persistence — snapshot/restore round-trip", () => {
     fresh.restore(snapshot);
     bus.dispatch({ kind: "RunEndOfDay" });
 
-    expect(fresh.balanceOf(SAVINGS)).toBeCloseTo(savingsBefore * 1.01, 6);
+    expect(fresh.balanceOf(SAVINGS)).toBe(
+      savingsBefore + Math.round(savingsBefore * 0.01),
+    );
     expect(balanced(fresh)).toBe(true);
     const after = fresh.balanceOf(SAVINGS);
     bus.dispatch({ kind: "RunEndOfDay", date: snapshot.businessDate - 1 });

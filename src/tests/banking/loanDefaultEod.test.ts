@@ -162,18 +162,18 @@ describe("EOD loan default — seizure", () => {
 
     eod(h); // day 2: overdue, unpaid → seize what little there is (200), then penalty
     expect(h.service.balanceOf(PLAYER)).toBe(0);
-    expect(h.service.balanceOf(LOAN)).toBeCloseTo(
-      -4900 * (1 + PENALTY_RATE),
-      6,
+    expect(h.service.balanceOf(LOAN)).toBe(
+      -(4900 + Math.round(4900 * PENALTY_RATE)),
     );
+    expect(Number.isInteger(h.service.balanceOf(LOAN))).toBe(true);
     expect(balanced(h.service)).toBe(true);
   });
 
-  it("floors a fractional seizure to whole credits, leaving the current account integral, and writes off the sub-credit residual", () => {
+  it("interest on an odd principal rounds to whole credits and the seizure clears the debt with no residual", () => {
     const bus = new BankBus();
     const service = new BankingService(bus, {
       startDate: 1,
-      loanDailyRate: 0.025, // 2.5 %/day → 100 → −102.5 (a fractional debt)
+      loanDailyRate: 0.025, // 2.5 %/day → 100 → −103 (2.5 rounds away from zero)
     });
     const events: BankEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -198,13 +198,13 @@ describe("EOD loan default — seizure", () => {
     const h: Harness = { bus, service, events };
 
     disburse(h, 100); // current = 100, loan = −100
-    fund(h, 50); // current = 150 — more than the (fractional) debt will be
+    fund(h, 50); // current = 150 — more than the debt will be
 
-    eod(h); // day 1: not due → base accrual → loan = −102.5, current = 150
-    expect(service.balanceOf(LOAN)).toBeCloseTo(-102.5, 6);
+    eod(h); // day 1: not due → base accrual → loan = −103, current = 150
+    expect(service.balanceOf(LOAN)).toBe(-103);
 
-    eod(h); // day 2: overdue → seize floor(min(150, 102.5)) = 102, then residual write-off
-    expect(service.balanceOf(PLAYER)).toBe(48);
+    eod(h); // day 2: overdue → seize min(150, 103) = 103, debt retired exactly
+    expect(service.balanceOf(PLAYER)).toBe(47);
     expect(Number.isInteger(service.balanceOf(PLAYER))).toBe(true);
     expect(service.balanceOf(LOAN)).toBe(0);
     expect(defaults(events)).toHaveLength(0);

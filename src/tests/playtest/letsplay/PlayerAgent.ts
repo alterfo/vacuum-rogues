@@ -497,6 +497,7 @@ export class PlayerAgent {
       engine.currentSceneType !== SceneType.SPACE_FLIGHT ||
       typeof scene?.onPlayPause !== "function"
     ) {
+      engine.advanceGalaxyDay();
       this.harness.tick();
       return;
     }

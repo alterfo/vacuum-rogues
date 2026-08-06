@@ -6,8 +6,8 @@ const name = (key: string): string => key.split("/")[1] ?? "";
 describe("asset manifest — nebula parallax layers", () => {
   const keys = allTextures("nebula");
 
-  it("exposes all 24 palette × layer × variant tiles", () => {
-    expect(keys).toHaveLength(24);
+  it("exposes all 72 palette × layer × variant tiles", () => {
+    expect(keys).toHaveLength(72);
   });
 
   it("covers every palette × layer combination with 2 variants (<palette>_<layer>_01/_02)", () => {

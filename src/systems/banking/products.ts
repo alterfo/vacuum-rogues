@@ -159,9 +159,12 @@ export function loanPayment(
       { dailyRate },
     );
   }
-  if (dailyRate === 0) return principal / periods;
+  if (dailyRate === 0) return Math.max(1, Math.round(principal / periods));
   const factor = Math.pow(1 + dailyRate, periods);
-  return (principal * dailyRate * factor) / (factor - 1);
+  return Math.max(
+    1,
+    Math.round((principal * dailyRate * factor) / (factor - 1)),
+  );
 }
 
 export interface LoanTermsSummary {
@@ -204,7 +207,7 @@ export function amortizationSchedule(
   const schedule: AmortizationPeriod[] = [];
   let remaining = principal;
   for (let i = 1; i <= periods; i++) {
-    const interest = remaining * dailyRate;
+    const interest = Math.round(remaining * dailyRate);
     if (i === periods) {
       schedule.push({
         period: i,
@@ -215,11 +218,14 @@ export function amortizationSchedule(
       });
       remaining = 0;
     } else {
-      const principalPortion = payment - interest;
+      const principalPortion = Math.min(
+        remaining,
+        Math.max(0, payment - interest),
+      );
       remaining -= principalPortion;
       schedule.push({
         period: i,
-        payment,
+        payment: principalPortion + interest,
         interest,
         principal: principalPortion,
         remaining,

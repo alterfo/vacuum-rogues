@@ -107,12 +107,85 @@ describe("EOD — savings interest accrual", () => {
     expect(balanced(h.service)).toBe(true);
   });
 
-  it("compounds across successive days (interest accrues on the grown balance)", () => {
+  it("compounds across successive days in whole credits (10.1 rounds to 10)", () => {
     h.bus.dispatch({ kind: "RunEndOfDay" }); // day 1 → 1000 → 1010
-    h.bus.dispatch({ kind: "RunEndOfDay" }); // day 2 → 1010 → 1020.1
+    h.bus.dispatch({ kind: "RunEndOfDay" }); // day 2 → 1010 → 1020 (10.1 → 10)
 
-    expect(h.service.balanceOf(SAVINGS)).toBeCloseTo(1020.1, 6);
+    expect(h.service.balanceOf(SAVINGS)).toBe(1020);
+    expect(Number.isInteger(h.service.balanceOf(SAVINGS))).toBe(true);
     expect(balanced(h.service)).toBe(true);
+  });
+});
+
+describe("EOD — interest stays whole-credit (fractional-loan regression)", () => {
+  it("a small odd loan balance never drifts into fractions (282 @ default 0.2%/day)", () => {
+    const bus = new BankBus();
+    const service = new BankingService(bus, { startDate: 1 });
+    bus.dispatch({
+      kind: "OpenAccount",
+      account: {
+        id: PLAYER,
+        type: AccountType.CURRENT,
+        label: "Игрок",
+        ownerId: "player",
+      },
+    });
+    bus.dispatch({
+      kind: "OpenAccount",
+      account: {
+        id: LOAN,
+        type: AccountType.LOAN,
+        label: "Кредит",
+        ownerId: "player",
+      },
+    });
+    bus.dispatch({
+      kind: "DisburseLoan",
+      loanAccountId: LOAN,
+      toAccountId: PLAYER,
+      amount: 282,
+      reason: "Small loan",
+    });
+
+    for (let d = 0; d < 60; d++) bus.dispatch({ kind: "RunEndOfDay" });
+
+    const balance = service.balanceOf(LOAN);
+    expect(Number.isInteger(balance)).toBe(true);
+    expect(balance).toBeLessThan(0);
+  });
+
+  it("a loan too small for a whole-credit day of interest stays flat, never fractional", () => {
+    const bus = new BankBus();
+    const service = new BankingService(bus, { startDate: 1 });
+    bus.dispatch({
+      kind: "OpenAccount",
+      account: {
+        id: PLAYER,
+        type: AccountType.CURRENT,
+        label: "Игрок",
+        ownerId: "player",
+      },
+    });
+    bus.dispatch({
+      kind: "OpenAccount",
+      account: {
+        id: LOAN,
+        type: AccountType.LOAN,
+        label: "Кредит",
+        ownerId: "player",
+      },
+    });
+    bus.dispatch({
+      kind: "DisburseLoan",
+      loanAccountId: LOAN,
+      toAccountId: PLAYER,
+      amount: 100,
+      reason: "Tiny loan",
+    });
+
+    for (let d = 0; d < 10; d++) bus.dispatch({ kind: "RunEndOfDay" });
+
+    expect(Number.isInteger(service.balanceOf(LOAN))).toBe(true);
   });
 });
 
