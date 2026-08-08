@@ -4,6 +4,7 @@ import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { pickVariant } from "../textures";
 import { pointAlongPath } from "@/utils/flightGeometry";
 import type { FlightModule } from "./FlightModule";
+import { resolveHullArtKey } from "./hullArtAlias";
 
 interface FilterableNode {
   filters?: { destroy?: () => void }[] | { destroy?: () => void } | null;
@@ -31,10 +32,6 @@ export class PlayerShipRenderer implements FlightModule {
 
   private readonly hullClassKey: string;
 
-  private static readonly HULL_ART_ALIAS: Record<string, string> = {
-    cruiser: "destroyer",
-  };
-
   constructor(
     _renderer: Renderer,
     gameLayer: Container,
@@ -43,8 +40,7 @@ export class PlayerShipRenderer implements FlightModule {
   ) {
     this.gameLayer = gameLayer;
     this.shipPhysics = shipPhysics;
-    const key = hullClass.toLowerCase();
-    this.hullClassKey = PlayerShipRenderer.HULL_ART_ALIAS[key] ?? key;
+    this.hullClassKey = resolveHullArtKey(hullClass.toLowerCase());
   }
 
   initialize(): void {

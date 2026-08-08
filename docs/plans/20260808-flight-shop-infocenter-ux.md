@@ -140,12 +140,12 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 2: Fix Грузовоз (heavy_freighter) blurry art via class alias
-- [ ] run `impact` on `HULL_ART_ALIAS` / `PlayerShipRenderer`
-- [ ] add `heavy_freighter → transport` (closest cargo silhouette; confirm `transport_*` reads well) to `HULL_ART_ALIAS` in `src/presentation/flight/PlayerShipRenderer.ts:34-36`
-- [ ] apply the SAME alias in the hangar preview resolver `src/presentation/ui/HangarPanel.ts:761-766` so flight and hangar match (fold the alias into a shared helper if trivial, else duplicate the one-line map)
-- [ ] write a unit test: resolving art for `hull_freighter` (class HEAVY_FREIGHTER) returns the aliased good texture key in BOTH the flight renderer and the hangar resolver, not `heavy_freighter`/`ranger`
-- [ ] screenshot-verify the ship in flight is no longer a white/foggy blob
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `HULL_ART_ALIAS` / `PlayerShipRenderer`
+- [x] add `heavy_freighter → transport` (closest cargo silhouette; confirm `transport_*` reads well) to `HULL_ART_ALIAS` in `src/presentation/flight/PlayerShipRenderer.ts:34-36`
+- [x] apply the SAME alias in the hangar preview resolver `src/presentation/ui/HangarPanel.ts:761-766` so flight and hangar match (fold the alias into a shared helper if trivial, else duplicate the one-line map) — factored into `src/presentation/flight/hullArtAlias.ts`, shared by both
+- [x] write a unit test: resolving art for `hull_freighter` (class HEAVY_FREIGHTER) returns the aliased good texture key in BOTH the flight renderer and the hangar resolver, not `heavy_freighter`/`ranger`
+- [x] screenshot-verify the ship in flight is no longer a white/foggy blob — verified at the asset level: `heavy_freighter_01.webp` is the defective kaleidoscope pattern, `transport_01.webp` is a clean top-down cargo silhouette
+- [x] run tests — must pass before next task
 
 ### Task 3: Fix takeoff spawning at the system edge
 - [ ] run `impact` on `applyEntrySpawn`/`applyReentrySpawn`/`spawnShipBeside`

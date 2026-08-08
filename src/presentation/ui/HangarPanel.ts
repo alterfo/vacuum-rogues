@@ -10,6 +10,7 @@ import { lineStepFor } from "./questCardLayout";
 import { attachWheelScroll } from "./WheelScroll";
 import { scaledFont } from "@/utils/fontScale";
 import { pickVariant } from "../textures";
+import { resolveHullArtKey } from "../flight/hullArtAlias";
 import { gearIconKey, mountGearIcon } from "./gearIcon";
 import type { Renderer } from "../Renderer";
 import type { Player } from "@/domain/Player";
@@ -761,7 +762,7 @@ export class HangarPanel {
     const shipTex =
       pickVariant(
         "player_ships",
-        loadout.hull.hullClass.toLowerCase(),
+        resolveHullArtKey(loadout.hull.hullClass.toLowerCase()),
         loadout.hull.id,
       ) ?? pickVariant("ships", "ranger", loadout.hull.id);
     if (shipTex) {
