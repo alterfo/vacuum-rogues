@@ -9,6 +9,20 @@ export function hashToAngle(s: string): number {
   return (hashStr(s) / 0xffffffff) * Math.PI * 2;
 }
 
+export function planetOrbitPosition(
+  orbitalRadius: number,
+  baseAngle: number,
+  day: number,
+  center: Point,
+): Point {
+  const periodDays = 400 * Math.pow(orbitalRadius / 600, 1.5);
+  const angle = baseAngle + ((Math.PI * 2) / periodDays) * day;
+  return {
+    x: center.x + Math.cos(angle) * orbitalRadius,
+    y: center.y + Math.sin(angle) * orbitalRadius,
+  };
+}
+
 export function warpEdgePoint(
   ship: Point,
   center: Point,

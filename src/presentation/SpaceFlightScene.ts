@@ -66,6 +66,9 @@ import {
   spawnShipBeside as computeSpawnShipBeside,
   type EntrySpawnDeps,
 } from "./flight/flightEntrySpawn";
+import { hashToAngle, planetOrbitPosition } from "@/utils/flightGeometry";
+
+const DOMAIN_FALLBACK_PLANET_RADIUS = 90;
 
 type LandingHint = { planetX: number; planetY: number; planetRadius: number };
 
@@ -974,6 +977,22 @@ export class SpaceFlightScene extends GameScene {
     if (this.shipPhysics) this.camera.centerOnShip();
   }
 
+  private currentSystemStations(): Station[] {
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    return (
+      this.gameEngine?.galaxy?.systems.find((s) => s.id === systemId)
+        ?.stations ?? []
+    );
+  }
+
+  private currentSystemPlanets(): Planet[] {
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    return (
+      this.gameEngine?.galaxy?.systems.find((s) => s.id === systemId)
+        ?.planets ?? []
+    );
+  }
+
   private entrySpawnDeps(): EntrySpawnDeps {
     return {
       shipPhysics: this.shipPhysics,
@@ -985,6 +1004,29 @@ export class SpaceFlightScene extends GameScene {
         this.planetManager.planetSprites.find((s) => s.planet.id === id),
       findStationMarker: (id) =>
         this.planetManager.stationMarkers.find((m) => m.station.id === id),
+      findStationDomainPos: (id) => {
+        const station = this.currentSystemStations().find((s) => s.id === id);
+        if (!station) return undefined;
+        return {
+          x:
+            this.starRenderer.centerX +
+            Math.cos(station.orbitAngle) * station.orbitRadius,
+          y:
+            this.starRenderer.centerY +
+            Math.sin(station.orbitAngle) * station.orbitRadius,
+        };
+      },
+      findPlanetDomainPos: (id) => {
+        const planet = this.currentSystemPlanets().find((p) => p.id === id);
+        if (!planet) return undefined;
+        const pos = planetOrbitPosition(
+          planet.orbitalRadius,
+          hashToAngle(planet.id),
+          this.gameEngine?.galaxy?.gameDays ?? 0,
+          { x: this.starRenderer.centerX, y: this.starRenderer.centerY },
+        );
+        return { ...pos, radius: DOMAIN_FALLBACK_PLANET_RADIUS };
+      },
       startTakeoffArc: (arc) => this.playerShip.startTakeoffArc(arc),
       setShipContainerPos: (x, y) => {
         const shipC = this.playerShip?.container;

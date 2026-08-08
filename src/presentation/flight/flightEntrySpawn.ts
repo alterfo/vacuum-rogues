@@ -10,6 +10,10 @@ export interface EntrySpawnDeps {
   findStationMarker: (
     stationId: string,
   ) => { x: number; y: number } | undefined;
+  findStationDomainPos: (stationId: string) => Point | undefined;
+  findPlanetDomainPos: (
+    planetId: string,
+  ) => (Point & { radius: number }) | undefined;
   startTakeoffArc: (arc: Point[]) => void;
   setShipContainerPos: (x: number, y: number) => void;
   landedPlanetId: string | null | undefined;
@@ -41,9 +45,11 @@ export function applyReentrySpawn(
   if (!deps.shipPhysics) return;
 
   if (fromStationId) {
-    const marker = deps.findStationMarker(fromStationId);
-    if (marker) {
-      spawnShipBeside(deps, marker.x, marker.y, 20);
+    const pos =
+      deps.findStationMarker(fromStationId) ??
+      deps.findStationDomainPos(fromStationId);
+    if (pos) {
+      spawnShipBeside(deps, pos.x, pos.y, 20);
       deps.clearLandedPlanetId();
       return;
     }
@@ -52,13 +58,11 @@ export function applyReentrySpawn(
   const landedId = deps.landedPlanetId;
   if (landedId) {
     const sprite = deps.findPlanetSprite(landedId);
-    if (sprite) {
-      spawnShipBeside(
-        deps,
-        sprite.screenX,
-        sprite.screenY,
-        sprite.displayRadius,
-      );
+    const pos = sprite
+      ? { x: sprite.screenX, y: sprite.screenY, radius: sprite.displayRadius }
+      : deps.findPlanetDomainPos(landedId);
+    if (pos) {
+      spawnShipBeside(deps, pos.x, pos.y, pos.radius);
     }
     deps.clearLandedPlanetId();
   }
@@ -97,6 +101,9 @@ export function applyEntrySpawn(
       const end = arc[arc.length - 1];
       ship.teleport(end.x, end.y);
       deps.startTakeoffArc(arc);
+    } else {
+      const pos = deps.findPlanetDomainPos(ctx.fromPlanetId);
+      if (pos) spawnShipBeside(deps, pos.x, pos.y, pos.radius);
     }
     deps.clearLandedPlanetId();
     return;

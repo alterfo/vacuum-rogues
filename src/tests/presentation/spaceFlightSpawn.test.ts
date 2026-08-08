@@ -98,6 +98,7 @@ vi.mock("@/presentation/cursor", () => ({
 import { SpaceFlightScene } from "@/presentation/SpaceFlightScene";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import type { Renderer } from "@/presentation/Renderer";
+import { planetOrbitPosition, hashToAngle } from "@/utils/flightGeometry";
 
 function makeMockRenderer(): Renderer {
   const makeLayer = () => ({
@@ -205,6 +206,58 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
     expect(phys.shipX).toBeCloseTo(EDGE.x, 5);
     expect(phys.shipY).toBeCloseTo(EDGE.y, 5);
   });
+
+  it("falls back to the domain station position when the live marker lookup misses (e.g. a lookup-timing race)", () => {
+    s.planetManager = { planetSprites: [], stationMarkers: [] };
+    s.gameEngine = {
+      player: { currentSystemId: "sys-1", landedPlanetId: null },
+      galaxy: {
+        systems: [
+          {
+            id: "sys-1",
+            planets: [],
+            stations: [{ id: "station-1", orbitAngle: 0, orbitRadius: 300 }],
+          },
+        ],
+      },
+    };
+    (
+      scene as unknown as { applyReentrySpawn(id?: string): void }
+    ).applyReentrySpawn("station-1");
+    const phys = s.shipPhysics as ShipPhysics;
+    expect(dist(phys.shipX, phys.shipY, 700, 300)).toBeLessThanOrEqual(200);
+    expect(dist(phys.shipX, phys.shipY, EDGE.x, EDGE.y)).toBeGreaterThan(200);
+  });
+
+  it("falls back to the domain planet position for landedPlanetId when the live sprite lookup misses", () => {
+    s.planetManager = { planetSprites: [], stationMarkers: [] };
+    s.gameEngine = {
+      player: { currentSystemId: "sys-1", landedPlanetId: "planet-2" },
+      galaxy: {
+        gameDays: 0,
+        systems: [
+          {
+            id: "sys-1",
+            stations: [],
+            planets: [{ id: "planet-2", orbitalRadius: 250 }],
+          },
+        ],
+      },
+    };
+    (
+      scene as unknown as { applyReentrySpawn(id?: string): void }
+    ).applyReentrySpawn(undefined);
+    const phys = s.shipPhysics as ShipPhysics;
+    const expected = planetOrbitPosition(250, hashToAngle("planet-2"), 0, STAR);
+    expect(
+      dist(phys.shipX, phys.shipY, expected.x, expected.y),
+    ).toBeLessThanOrEqual(200);
+    expect(dist(phys.shipX, phys.shipY, EDGE.x, EDGE.y)).toBeGreaterThan(200);
+    expect(
+      (s.gameEngine as { player: { landedPlanetId: string | null } }).player
+        .landedPlanetId,
+    ).toBeNull();
+  });
 });
 
 describe("preserveShipPos entry spawn + font-scale restyle-in-place", () => {
@@ -227,6 +280,31 @@ describe("preserveShipPos entry spawn + font-scale restyle-in-place", () => {
     const phys = s.shipPhysics as ShipPhysics;
     expect(phys.shipX).toBeCloseTo(keep.x, 5);
     expect(phys.shipY).toBeCloseTo(keep.y, 5);
+    expect(dist(phys.shipX, phys.shipY, EDGE.x, EDGE.y)).toBeGreaterThan(200);
+  });
+
+  it("applyEntrySpawn falls back to the domain planet position for fromPlanetId when the live sprite lookup misses", () => {
+    s.gameEngine = {
+      player: { currentSystemId: "sys-1" },
+      galaxy: {
+        gameDays: 3,
+        systems: [
+          {
+            id: "sys-1",
+            stations: [],
+            planets: [{ id: "planet-3", orbitalRadius: 260 }],
+          },
+        ],
+      },
+    };
+    (
+      scene as unknown as { applyEntrySpawn(ctx?: object): void }
+    ).applyEntrySpawn({ fromPlanetId: "planet-3" });
+    const phys = s.shipPhysics as ShipPhysics;
+    const expected = planetOrbitPosition(260, hashToAngle("planet-3"), 3, STAR);
+    expect(
+      dist(phys.shipX, phys.shipY, expected.x, expected.y),
+    ).toBeLessThanOrEqual(200);
     expect(dist(phys.shipX, phys.shipY, EDGE.x, EDGE.y)).toBeGreaterThan(200);
   });
 

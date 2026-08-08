@@ -3,6 +3,7 @@ import { RealEngineHarness } from "./realEngineHarness";
 import { SceneType } from "@/types";
 import type { StationScene } from "@/presentation/StationScene";
 import type { Station } from "@/domain/Station";
+import { PlanetManager } from "@/presentation/flight/PlanetManager";
 
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
@@ -173,6 +174,67 @@ describe("Bug 8: take-off from a station spawns beside it", () => {
     expect(
       dist(phys.shipX, phys.shipY, sprite.screenX, sprite.screenY),
     ).toBeLessThanOrEqual(sprite.displayRadius + 220);
+
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("undocking still spawns beside the station when the live marker lookup misses (lookup-timing race)", async () => {
+    harness = await RealEngineHarness.boot();
+    await harness.newGame();
+
+    const galaxy = harness.galaxy()!;
+    const system = galaxy.systems.find(
+      (s) => s.id === harness.player()!.currentSystemId,
+    )!;
+    const station = system.stations[0];
+
+    const flightScene = harness.currentScene() as unknown as {
+      onDockAtStation(station: Station): Promise<void>;
+    };
+    await flightScene.onDockAtStation(station);
+    expect(harness.currentSceneType()).toBe(SceneType.STATION);
+
+    const stationScene = harness.currentScene() as unknown as StationScene;
+    const initSpy = vi
+      .spyOn(PlanetManager.prototype, "initialize")
+      .mockImplementation(() => {});
+    try {
+      await stationScene.goBack();
+    } finally {
+      initSpy.mockRestore();
+    }
+    expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
+
+    const arrivedScene = harness.currentScene() as unknown as {
+      shipPhysics: { shipX: number; shipY: number } | null;
+      starRenderer: { centerX: number; centerY: number };
+      SYSTEM_BOUNDARY_RADIUS: number;
+      planetManager: { stationMarkers: unknown[] };
+    };
+    expect(arrivedScene.planetManager.stationMarkers.length).toBe(0);
+
+    const phys = arrivedScene.shipPhysics!;
+    const distFromCenter = dist(
+      phys.shipX,
+      phys.shipY,
+      arrivedScene.starRenderer.centerX,
+      arrivedScene.starRenderer.centerY,
+    );
+    expect(distFromCenter).toBeLessThan(
+      arrivedScene.SYSTEM_BOUNDARY_RADIUS * 0.9,
+    );
+
+    const expected = {
+      x:
+        arrivedScene.starRenderer.centerX +
+        Math.cos(station.orbitAngle) * station.orbitRadius,
+      y:
+        arrivedScene.starRenderer.centerY +
+        Math.sin(station.orbitAngle) * station.orbitRadius,
+    };
+    expect(
+      dist(phys.shipX, phys.shipY, expected.x, expected.y),
+    ).toBeLessThanOrEqual(200);
 
     expect(harness.errors()).toEqual([]);
   });

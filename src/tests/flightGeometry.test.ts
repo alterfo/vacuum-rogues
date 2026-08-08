@@ -4,10 +4,30 @@ import {
   avoidStarPath,
   planWarpEdgeRoute,
   planetApproachPoint,
+  planetOrbitPosition,
   questMarkerRadius,
   shouldReaim,
   warpEdgePoint,
 } from "@/utils/flightGeometry";
+
+describe("planetOrbitPosition (Task 3: domain-only fallback matching PlanetSprite's own orbit math)", () => {
+  it("matches PlanetSprite's constructor formula: BASE_PERIOD_DAYS=400, radius/600^1.5", () => {
+    const center = { x: 400, y: 300 };
+    const orbitalRadius = 600;
+    const baseAngle = 0;
+    const day = 200; // half of the 400-day period at radius=600 -> half a revolution
+    const pos = planetOrbitPosition(orbitalRadius, baseAngle, day, center);
+    expect(pos.x).toBeCloseTo(center.x - orbitalRadius, 5);
+    expect(pos.y).toBeCloseTo(center.y, 5);
+  });
+
+  it("at day 0 sits exactly at baseAngle on the orbital radius", () => {
+    const center = { x: 0, y: 0 };
+    const pos = planetOrbitPosition(500, Math.PI / 2, 0, center);
+    expect(pos.x).toBeCloseTo(0, 5);
+    expect(pos.y).toBeCloseTo(500, 5);
+  });
+});
 
 describe("planetApproachPoint — landing dead zone (live report 2026-07-19, Task 10)", () => {
   it("heads straight at the planet once inside the radius+offset ring (the dead zone)", () => {
