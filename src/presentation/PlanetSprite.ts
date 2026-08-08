@@ -112,7 +112,7 @@ export class PlanetSprite {
     this.centerX = centerX;
     this.centerY = centerY;
 
-    const BASE_PERIOD_DAYS = 80;
+    const BASE_PERIOD_DAYS = 400;
     const periodDays =
       BASE_PERIOD_DAYS * Math.pow(this.orbitalRadius / 600, 1.5);
     this.radPerDay = (Math.PI * 2) / periodDays;

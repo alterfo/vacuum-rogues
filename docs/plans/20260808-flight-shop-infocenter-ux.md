@@ -132,12 +132,12 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 ## Implementation Steps
 
 ### Task 1: Slow planet orbits 5×
-- [ ] run `impact` on `PlanetSprite` orbit constants; confirm `BASE_PERIOD_DAYS`/`radPerDay` have no other definition
-- [ ] in `src/presentation/PlanetSprite.ts:115` change `BASE_PERIOD_DAYS` `80 → 400` (5× longer period → 5× slower); do NOT touch `SPIN_SLOWEST` axial spin
-- [ ] write a unit test asserting `radPerDay` (or `orbitalVelocityPerDay()`) for a fixed radius is 1/5 of the pre-change value, and that the outer-slower-than-inner relation still holds
-- [ ] verify `src/tests/presentation/planetSpriteVelocity.test.ts` still green (relative-only assertions)
-- [ ] run `npm run letsplay:ci` — landing/lead reads must still pass
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `PlanetSprite` orbit constants; confirm `BASE_PERIOD_DAYS`/`radPerDay` have no other definition
+- [x] in `src/presentation/PlanetSprite.ts:115` change `BASE_PERIOD_DAYS` `80 → 400` (5× longer period → 5× slower); do NOT touch `SPIN_SLOWEST` axial spin
+- [x] write a unit test asserting `radPerDay` (or `orbitalVelocityPerDay()`) for a fixed radius is 1/5 of the pre-change value, and that the outer-slower-than-inner relation still holds
+- [x] verify `src/tests/presentation/planetSpriteVelocity.test.ts` still green (relative-only assertions)
+- [x] run `npm run letsplay:ci` — landing/lead reads must still pass
+- [x] run tests — must pass before next task
 
 ### Task 2: Fix Грузовоз (heavy_freighter) blurry art via class alias
 - [ ] run `impact` on `HULL_ART_ALIAS` / `PlayerShipRenderer`
