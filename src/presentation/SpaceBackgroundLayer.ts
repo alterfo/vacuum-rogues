@@ -4,23 +4,11 @@ import {
   softGlowTexture,
   starPointTexture,
 } from "./gradientTexture";
-import type { Texture } from "pixi.js";
 import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { FlightModule } from "./flight/FlightModule";
-import { pickVariant, pickVariantKey, loadTextureAsync } from "./textures";
-import { BACKGROUND_DIM, NEBULA_BACKDROP_ALPHA } from "@/config/balance";
+import { BACKGROUND_DIM } from "@/config/balance";
 import { reducedMotion } from "./ui/reducedMotion";
-
-interface DriftAsteroid {
-  g: Graphics;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  spin: number;
-  rot: number;
-}
 
 interface CometStreak {
   g: Graphics;
@@ -97,26 +85,15 @@ export class SpaceBackgroundLayer implements FlightModule {
   private readonly skyContainer: Container;
   private readonly systemId: string;
   private readonly getCamera: () => BackgroundCamera;
-  private destroyed = false;
 
   private readonly midground = new Container();
 
-  private readonly driftAsteroids: DriftAsteroid[] = [];
   private readonly activeComets: CometStreak[] = [];
   private cometTimer = 0;
   private cometNextSpawn = 0;
   private readonly bgShips: BgShip[] = [];
   private readonly dustParticles: DustParticle[] = [];
 
-  private camAstG: Graphics | null = null;
-  private camAstX = 0;
-  private camAstY = 0;
-  private camAstIdle = true;
-  private camAstTimer = 0;
-  private camAstElapsed = 0;
-  private camAstDuration = 5000;
-
-  private nebulaBackdropSprite: Sprite | null = null;
   private readonly starLayers: StarLayer[] = [];
   private nebulaeContainer: Container | null = null;
   private readonly nebulaLayers: NebulaLayer[] = []; // Animated nebula clouds
@@ -165,11 +142,9 @@ export class SpaceBackgroundLayer implements FlightModule {
       return;
     }
 
-    this.updateDriftAsteroids(_dt);
     this.updateBgShips(_dt);
     this.updateDustParticles(_dt);
     this.updateComets(_dt);
-    this.updateCamAsteroid(_dt);
     this.updateStarField();
     this.updateNebulae(bgElapsed);
     this.updateSwarms(bgElapsed);
@@ -182,8 +157,6 @@ export class SpaceBackgroundLayer implements FlightModule {
   }
 
   destroy(): void {
-    this.destroyed = true;
-
     for (const c of this.activeComets) {
       c.g.destroy();
     }
@@ -198,17 +171,14 @@ export class SpaceBackgroundLayer implements FlightModule {
       this.vignette.parent.removeChild(this.vignette);
     }
 
-    this.nebulaBackdropSprite = null;
     this.nebulaeContainer = null;
     this.twinkleContainer = null;
     this.vignette = null;
     this.dimmer = null;
-    this.camAstG = null;
     this.starLayers.length = 0;
     this.nebulaLayers.length = 0;
     this.twinkleStars.length = 0;
     this.swarmLayers.length = 0;
-    this.driftAsteroids.length = 0;
     this.activeComets.length = 0;
     this.bgShips.length = 0;
     this.dustParticles.length = 0;
@@ -233,19 +203,27 @@ export class SpaceBackgroundLayer implements FlightModule {
     const layerConfigs = [
       {
         count: 3400,
-        depth: 0.02,
+        depth: 0.006,
         zoomDepth: 0.0,
-        size: [0.18, 0.55],
-        alpha: [0.1, 0.42],
+        size: [0.35, 0.85],
+        alpha: [0.22, 0.6],
         spread: 1.0,
       },
       {
         count: 1200,
-        depth: 0.08,
+        depth: 0.025,
         zoomDepth: 0.03,
-        size: [0.42, 1.15],
-        alpha: [0.28, 0.72],
+        size: [0.6, 1.5],
+        alpha: [0.4, 0.85],
         spread: 1.3,
+      },
+      {
+        count: 320,
+        depth: 0.05,
+        zoomDepth: 0.05,
+        size: [1.1, 2.1],
+        alpha: [0.55, 0.95],
+        spread: 1.4,
       },
     ];
 
@@ -312,7 +290,7 @@ export class SpaceBackgroundLayer implements FlightModule {
       for (let k = 0; k < w; k++) twinklePool.push(c);
     }
 
-    const count = 60;
+    const count = 110;
     const heroTex = starPointTexture(true);
     const normalTex = starPointTexture(false);
 
@@ -375,43 +353,8 @@ export class SpaceBackgroundLayer implements FlightModule {
       [0x002a14, 0x0a7a3a, 0x18cc66, 0x44ffaa, 0xaaffcc], // green — emerald
       [0x00222a, 0x067a7a, 0x10cccc, 0x44ffff, 0xaaffff], // teal — cyan
     ];
-    const families = ["red", "blue", "green", "teal"];
     const palIdx = rng.nextInt(0, palettes.length - 1);
     const palette = palettes[palIdx];
-    const palName = families[palIdx];
-
-    const depths = ["mid", "near", "far"];
-    const depth = depths[rng.nextInt(0, depths.length - 1)];
-    const backdropKey =
-      pickVariantKey("nebula", `${palName}_${depth}`, systemId) ??
-      pickVariantKey("nebula", `${palName}_mid`, systemId);
-    if (backdropKey) {
-      const mountBackdrop = (tex: Texture): void => {
-        if (this.destroyed) return;
-        const bg = new Sprite(tex);
-        bg.anchor.set(0.5);
-        bg.x = sw / 2;
-        bg.y = sh / 2;
-        const size = Math.max(sw, sh) * 2.4;
-        bg.width = size;
-        bg.height = size;
-        bg.alpha = NEBULA_BACKDROP_ALPHA;
-        bg.eventMode = "none";
-        this.nebulaBackdropSprite = bg;
-        this.skyContainer.addChildAt(bg, 0);
-      };
-      const cached =
-        pickVariant("nebula", `${palName}_${depth}`, systemId) ??
-        pickVariant("nebula", `${palName}_mid`, systemId);
-      if (cached) {
-        mountBackdrop(cached);
-      } else {
-        void loadTextureAsync(backdropKey).then((tex) => {
-          if (tex && !this.destroyed) mountBackdrop(tex);
-        });
-      }
-    }
-
     const cloudCount = rng.nextInt(4, 6);
 
     for (let c = 0; c < cloudCount; c++) {
@@ -670,11 +613,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     const cx = this.renderer.app.screen.width / 2;
     const cy = this.renderer.app.screen.height / 2;
 
-    if (this.nebulaBackdropSprite) {
-      this.nebulaBackdropSprite.x = cx + cam.panX * 0.01;
-      this.nebulaBackdropSprite.y = cy + cam.panY * 0.01;
-    }
-
     for (const layer of this.starLayers) {
       const s = Math.max(0.4, 1 + (cam.zoom - 1) * layer.zoomDepth);
       layer.container.scale.set(s);
@@ -683,8 +621,8 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
 
     if (this.twinkleContainer) {
-      this.twinkleContainer.x = cx + cam.panX * 0.08;
-      this.twinkleContainer.y = cy + cam.panY * 0.08;
+      this.twinkleContainer.x = cx + cam.panX * 0.05;
+      this.twinkleContainer.y = cy + cam.panY * 0.05;
     }
   }
 
@@ -727,52 +665,10 @@ export class SpaceBackgroundLayer implements FlightModule {
 
     const rng = new SeededRNG(`bgLayer_${this.systemId}`);
 
-    this.createDriftAsteroids(rng);
     this.createBgShips(rng);
     this.createDustParticles(rng);
 
-    this.camAstG = this.buildCamAsteroid();
-    this.camAstG.alpha = 0;
-    this.midground.addChild(this.camAstG);
-    this.camAstTimer = rng.nextFloat(60000, 90000);
-
     this.cometNextSpawn = rng.nextFloat(15000, 40000);
-  }
-
-  private createDriftAsteroids(rng: SeededRNG): void {
-    const count = rng.nextInt(8, 12);
-    for (let i = 0; i < count; i++) {
-      const g = new Graphics();
-      g.eventMode = "none";
-      const size = rng.nextFloat(4, 14);
-      this.drawIrregularRock(g, size, rng);
-      const a: DriftAsteroid = {
-        g,
-        x: rng.nextFloat(0, this.width),
-        y: rng.nextFloat(0, this.height),
-        vx: rng.nextFloat(-0.014, 0.014),
-        vy: rng.nextFloat(-0.014, 0.014),
-        spin: rng.nextFloat(-0.0006, 0.0006),
-        rot: rng.nextFloat(0, Math.PI * 2),
-      };
-      g.x = a.x;
-      g.y = a.y;
-      g.rotation = a.rot;
-      this.driftAsteroids.push(a);
-      this.midground.addChild(g);
-    }
-  }
-
-  private drawIrregularRock(g: Graphics, r: number, rng: SeededRNG): void {
-    const sides = 7;
-    const pts: number[] = [];
-    for (let i = 0; i < sides; i++) {
-      const ang = (i / sides) * Math.PI * 2;
-      const rr = r * (0.65 + rng.next() * 0.55);
-      pts.push(Math.cos(ang) * rr, Math.sin(ang) * rr);
-    }
-    g.poly(pts).fill({ color: 0x6b6256, alpha: 0.55 });
-    g.poly(pts).stroke({ width: 0.8, color: 0x2a251f, alpha: 0.35 });
   }
 
   private createBgShips(rng: SeededRNG): void {
@@ -838,40 +734,6 @@ export class SpaceBackgroundLayer implements FlightModule {
       g.y = p.y;
       this.dustParticles.push(p);
       this.midground.addChild(g);
-    }
-  }
-
-  private buildCamAsteroid(): Graphics {
-    const g = new Graphics();
-    g.eventMode = "none";
-    const pts: number[] = [];
-    const r = 20;
-    const sides = 8;
-    for (let i = 0; i < sides; i++) {
-      const ang = (i / sides) * Math.PI * 2;
-      const rr = r * (0.7 + (i % 3 === 0 ? 0.35 : 0.15));
-      pts.push(Math.cos(ang) * rr, Math.sin(ang) * rr);
-    }
-    g.poly(pts).fill({ color: 0x554e47, alpha: 0.75 });
-    g.poly(pts).stroke({ width: 1, color: 0x2a2520, alpha: 0.45 });
-    g.circle(-6, -4, 4).fill({ color: 0x3e3830, alpha: 0.55 });
-    g.circle(5, 6, 3).fill({ color: 0x3e3830, alpha: 0.5 });
-    return g;
-  }
-
-  private updateDriftAsteroids(dt: number): void {
-    const { width: w, height: h } = this;
-    for (const a of this.driftAsteroids) {
-      a.x += a.vx * dt;
-      a.y += a.vy * dt;
-      a.rot += a.spin * dt;
-      if (a.x < -30) a.x += w + 60;
-      else if (a.x > w + 30) a.x -= w + 60;
-      if (a.y < -30) a.y += h + 60;
-      else if (a.y > h + 30) a.y -= h + 60;
-      a.g.x = a.x;
-      a.g.y = a.y;
-      a.g.rotation = a.rot;
     }
   }
 
@@ -997,34 +859,5 @@ export class SpaceBackgroundLayer implements FlightModule {
     g.alpha = 0;
     this.midground.addChild(g);
     this.activeComets.push({ g, x: sx, y: sy, vx, vy, life: maxLife, maxLife });
-  }
-
-  private updateCamAsteroid(dt: number): void {
-    if (!this.camAstG) return;
-    if (this.camAstIdle) {
-      this.camAstTimer -= dt;
-      if (this.camAstTimer <= 0) {
-        this.camAstIdle = false;
-        this.camAstElapsed = 0;
-        this.camAstDuration = 4500 + Math.random() * 2000;
-        this.camAstX = this.width * 0.15 + Math.random() * this.width * 0.7;
-        this.camAstY = this.height * 0.15 + Math.random() * this.height * 0.7;
-        this.camAstG.x = this.camAstX;
-        this.camAstG.y = this.camAstY;
-        this.camAstG.scale.set(0.3);
-        this.camAstG.alpha = 0;
-      }
-    } else {
-      this.camAstElapsed += dt;
-      const t = Math.min(this.camAstElapsed / this.camAstDuration, 1);
-      const scale = 0.3 + t * 1.2;
-      this.camAstG.scale.set(scale);
-      this.camAstG.alpha = t < 0.5 ? (t / 0.5) * 0.55 : ((1 - t) / 0.5) * 0.55;
-      if (t >= 1) {
-        this.camAstG.alpha = 0;
-        this.camAstIdle = true;
-        this.camAstTimer = 60000 + Math.random() * 30000;
-      }
-    }
   }
 }

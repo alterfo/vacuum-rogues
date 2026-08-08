@@ -141,20 +141,4 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
 
     belt.destroy();
   });
-
-  it("leaves drifting asteroids on their unchanged straight-line path", () => {
-    const { belt } = makeHarness();
-    belt.initialize();
-    const rock = peek(belt).asteroids.find((m) => !m.comet)!;
-    const x0 = rock.x;
-    const y0 = rock.y;
-    const rot0 = rock.graphics.rotation;
-    const dt = 10;
-    belt.update(dt, 0);
-    expect(rock.x).toBeCloseTo(x0 + rock.vx * dt, 9);
-    expect(rock.y).toBeCloseTo(y0 + rock.vy * dt, 9);
-    expect(rock.graphics.rotation).toBeCloseTo(rot0 + rock.spin * dt, 9);
-
-    belt.destroy();
-  });
 });

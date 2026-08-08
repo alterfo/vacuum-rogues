@@ -1,12 +1,12 @@
 import { GameScene } from "./GameScene";
-import { Graphics, Text, Container, Sprite, type Texture } from "pixi.js";
+import { Graphics, Text, Container, Sprite } from "pixi.js";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { buildInfo } from "@/systems/feedback/buildInfo";
 import { openFeedback } from "@/systems/feedback/openFeedback";
 import { resetSeen } from "@/systems/onboarding/onboardingState";
-import { pickVariant, pickVariantKey, tex, loadTextureAsync } from "./textures";
+import { pickVariant } from "./textures";
 import { t } from "@/i18n/i18n";
 import { reducedMotion } from "./ui/reducedMotion";
 import { SettingsPanel, SETTINGS_PANEL_WIDTH } from "./ui/SettingsPanel";
@@ -181,8 +181,6 @@ export class MainMenuScene extends GameScene {
       alpha: 1,
     });
     this.renderer.gameLayer.addChild(this.background);
-
-    this.mountNebulaBackdrop(width, height);
 
     const gradientOverlay = new Graphics();
     gradientOverlay.circle(width * 0.3, height * 0.2, width * 0.4);
@@ -648,36 +646,6 @@ export class MainMenuScene extends GameScene {
       this.messageTimeoutId = null;
       this.currentMsgText = null;
     }, 5000);
-  }
-
-  private mountNebulaBackdrop(width: number, height: number): void {
-    const gen = this.renderGen;
-    const key = pickVariantKey("nebula", "blue_far", "main_menu");
-    if (!key) return;
-
-    const mount = (t: Texture): void => {
-      if (gen !== this.renderGen) return;
-      const sp = new Sprite(t);
-      sp.anchor.set(0.5);
-      const cover = Math.max(
-        width / Math.max(t.width, 1),
-        height / Math.max(t.height, 1),
-      );
-      sp.scale.set(cover);
-      sp.x = width / 2;
-      sp.y = height / 2;
-      sp.alpha = 0.5; // dimmed — the menu must stay subdued and readable
-      sp.eventMode = "none";
-      const layer = this.renderer.gameLayer;
-      layer.addChildAt(sp, Math.min(1, layer.children.length));
-    };
-
-    const cached = tex(key);
-    if (cached) mount(cached);
-    else
-      void loadTextureAsync(key).then((t) => {
-        if (t) mount(t);
-      });
   }
 
   private createShip(

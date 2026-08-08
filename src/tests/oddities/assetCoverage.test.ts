@@ -27,8 +27,6 @@ const ROLE_PREFIX: Record<NpcRole, string> = {
   [NpcRole.PATROL]: "patrol",
   [NpcRole.OVERMIND]: "patrol",
 };
-const NEBULA_FAMILIES = ["red", "blue", "green", "teal"]; // SpaceBackgroundLayer
-const NEBULA_DEPTHS = ["far", "mid", "near"];
 const HULL_SHIP_PREFIX: Record<HullClass, string> = {
   [HullClass.LIGHT_FIGHTER]: "light_fighter",
   [HullClass.CORVETTE]: "corvette",
@@ -82,13 +80,6 @@ const PRODUCTION_PREFIXES: ProdPrefix[] = [
     prefix: f.toLowerCase(),
     source: "RaceSelectionScene",
   })),
-  ...NEBULA_FAMILIES.flatMap((fam) =>
-    NEBULA_DEPTHS.map((depth) => ({
-      category: "nebula",
-      prefix: `${fam}_${depth}`,
-      source: "SpaceBackgroundLayer",
-    })),
-  ),
   ...Object.values(STATION_TEXTURE_PREFIX).map((prefix) => ({
     category: "station",
     prefix,
@@ -118,7 +109,6 @@ describe("asset coverage — every production pickVariant prefix resolves", () =
 
 describe("asset coverage — no unreferenced ('orphan') art category", () => {
   const PICKVARIANT_CATEGORIES = new Set([
-    "nebula",
     "portraits",
     "planet_maps",
     "planets",

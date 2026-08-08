@@ -108,8 +108,8 @@ export class AsteroidBelt implements FlightModule {
     this.asteroidContainer = new Container();
     this.asteroidContainer.eventMode = "none";
     this.asteroidContainer.zIndex = 120; // in front of ship (110) / planets
-    const count = 8;
-    const cometCount = 2; // a couple of single-pass comet flybys among the rocks
+    const cometCount = 2; // flyby comets only — drifting rocks removed by design
+    const count = cometCount;
     for (let i = 0; i < count; i++) {
       const g = new Graphics();
       g.eventMode = "none";

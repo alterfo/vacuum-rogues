@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { Container, Graphics, Sprite, Texture } from "pixi.js";
+import { Container, Graphics, Texture } from "pixi.js";
 import {
   SpaceBackgroundLayer,
   type BackgroundCamera,
@@ -58,8 +58,7 @@ interface BackgroundInternals {
   swarmLayers: unknown[];
   starLayers: unknown[];
   dimmer: Graphics | null;
-  nebulaBackdropSprite: Sprite | null;
-  driftAsteroids: { x: number; y: number }[];
+  nebulaLayers: { container: { x: number; y: number } }[];
   nebulaeContainer: Container | null;
 }
 
@@ -110,39 +109,21 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     expect(internal.dimmer).toBeNull();
   });
 
-  it("keeps the async-mounted nebula backdrop BELOW the dimmer (F2 regression path)", () => {
-    const { layer, skyContainer } = makeHarness();
-    layer.initialize();
-
-    const internal = layer as unknown as BackgroundInternals;
-    const backdrop = internal.nebulaBackdropSprite;
-    const dimmer = internal.dimmer;
-    expect(backdrop).not.toBeNull();
-    expect(dimmer).not.toBeNull();
-    expect(skyContainer.getChildIndex(backdrop!)).toBe(0);
-    expect(skyContainer.getChildIndex(backdrop!)).toBeLessThan(
-      skyContainer.getChildIndex(dimmer!),
-    );
-    expect(skyContainer.getChildIndex(dimmer!)).toBe(
-      skyContainer.children.length - 1,
-    );
-
-    layer.destroy();
-  });
-
   it("honours reduced motion: idle parallax/particles freeze, camera parallax still positions", () => {
     localStorage.clear();
     const moving = makeHarness();
     moving.layer.initialize();
     const movingInternal = moving.layer as unknown as BackgroundInternals;
-    const before = movingInternal.driftAsteroids.map((a) => ({
-      x: a.x,
-      y: a.y,
+    const before = movingInternal.nebulaLayers.map((n) => ({
+      x: n.container.x,
+      y: n.container.y,
     }));
     moving.layer.update(1000, 1000);
-    const movedDelta = movingInternal.driftAsteroids.reduce(
-      (sum, a, i) =>
-        sum + Math.abs(a.x - before[i].x) + Math.abs(a.y - before[i].y),
+    const movedDelta = movingInternal.nebulaLayers.reduce(
+      (sum, n, i) =>
+        sum +
+        Math.abs(n.container.x - before[i].x) +
+        Math.abs(n.container.y - before[i].y),
       0,
     );
     expect(movedDelta).toBeGreaterThan(0);
@@ -152,14 +133,14 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     const calm = makeHarness();
     calm.layer.initialize();
     const calmInternal = calm.layer as unknown as BackgroundInternals;
-    const frozenBefore = calmInternal.driftAsteroids.map((a) => ({
-      x: a.x,
-      y: a.y,
+    const frozenBefore = calmInternal.nebulaLayers.map((n) => ({
+      x: n.container.x,
+      y: n.container.y,
     }));
     calm.layer.update(1000, 1000);
-    calmInternal.driftAsteroids.forEach((a, i) => {
-      expect(a.x).toBe(frozenBefore[i].x);
-      expect(a.y).toBe(frozenBefore[i].y);
+    calmInternal.nebulaLayers.forEach((n, i) => {
+      expect(n.container.x).toBe(frozenBefore[i].x);
+      expect(n.container.y).toBe(frozenBefore[i].y);
     });
     expect(calmInternal.nebulaeContainer).not.toBeNull();
     expect(calmInternal.nebulaeContainer!.x).toBeCloseTo(400);

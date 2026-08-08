@@ -74,13 +74,12 @@ describe("MainMenuScene visual upgrade", () => {
 
   it("renders textured planets and ship sprites when art is available", () => {
     vi.mocked(textures.pickVariant).mockReturnValue(fakeTexture);
-    vi.mocked(textures.pickVariantKey).mockReturnValue("nebula/blue_far_01");
     vi.mocked(textures.tex).mockReturnValue(fakeTexture);
 
     const scene = new MainMenuScene(makeRenderer());
     scene.initialize({});
 
-    expect(vi.mocked(Sprite).mock.calls.length).toBe(6);
+    expect(vi.mocked(Sprite).mock.calls.length).toBe(5);
     const cats = vi.mocked(textures.pickVariant).mock.calls.map((c) => c[0]);
     expect(cats.filter((c) => c === "planets")).toHaveLength(2);
     expect(cats.filter((c) => c === "ships")).toHaveLength(3);
