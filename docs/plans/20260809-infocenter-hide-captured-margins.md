@@ -154,7 +154,7 @@ separate bug — out of scope here, worth its own follow-up plan.
       no diff against master after the Task 1 revert
 
 ### Task 4: [Final] Update documentation
-- [ ] extend the "InfoCenter trade margins respect partial observability" section in
+- [x] extend the "InfoCenter trade margins respect partial observability" section in
       `src/presentation/CLAUDE.md` with a short addendum noting margins/rumors are also
       unconditionally excluded for hostile (Overmind/pirate-captured) systems, separate
       from the known/unknown masking, with a pointer to this plan

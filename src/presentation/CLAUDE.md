@@ -150,6 +150,18 @@ can't leak the number the panel above it hides (and the margin re-appears once t
 is explored). Presentation/visibility only — the rumor data is unchanged, so no
 domain/schema/save change.
 
+**Addendum — hostile (captured) systems are unconditionally excluded**
+(`docs/plans/20260809-infocenter-hide-captured-margins.md`). Separate from the
+known/unknown masking above, `buildRumorPanel` and `feedEventVisible` (both in
+`rumorPanel.ts`) drop any rumor/news line whose `fromSystemId`/`toSystemId` is
+currently `galaxy.isHostileSystem(id)` (Overmind- or pirate-held) — not masked, not
+shown at all, regardless of player knowledge. This filter runs at render time, so a
+tip into a system captured mid-session disappears immediately without waiting for the
+next day tick. `RouteScanner.scanTradeRoutes` was intentionally left unfiltered (a
+source-level filter shifts NPC-AI shared-seed RNG draws via `NpcSimulator.pickTraderGoal`
+also reading `galaxy.activeRumors`, flipping unrelated Overmind-arc test outcomes) — the
+display-level filter alone already satisfies the player-facing requirement.
+
 **Contextual help is one-line per scene** (`ui/mountSceneHelp.ts`,
 `docs/plans/20260623-onboarding-and-contextual-help.md`). Onboarding is three pure pieces +
 one wiring call: the **content registry** `src/systems/onboarding/helpContent.ts` (`HELP_CONTENT:
