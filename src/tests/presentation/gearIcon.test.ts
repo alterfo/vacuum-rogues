@@ -29,7 +29,36 @@ vi.mock("pixi.js", () => {
     eventMode = "auto";
     constructor(public texture: unknown) {}
   }
-  return { Container: FakeContainer, Sprite: FakeSprite };
+  class FakeGraphics {
+    x = 0;
+    y = 0;
+    eventMode = "auto";
+    rect() {
+      return this;
+    }
+    fill() {
+      return this;
+    }
+    stroke() {
+      return this;
+    }
+  }
+  class FakeText {
+    anchor = { set: vi.fn() };
+    x = 0;
+    y = 0;
+    eventMode = "auto";
+    text: string;
+    constructor(opts: { text: string }) {
+      this.text = opts.text;
+    }
+  }
+  return {
+    Container: FakeContainer,
+    Sprite: FakeSprite,
+    Graphics: FakeGraphics,
+    Text: FakeText,
+  };
 });
 
 import { gearIconKey, mountGearIcon } from "@/presentation/ui/gearIcon";
@@ -140,5 +169,36 @@ describe("mountGearIcon — shared mount helper", () => {
     expect(
       (container as unknown as { children: unknown[] }).children,
     ).toHaveLength(1);
+  });
+});
+
+describe("gearIconKey — FRAGMENT/MISSILE weapons have no flat fallback (Task 7)", () => {
+  it("stays undefined instead of reusing the ENERGY laser icon", () => {
+    pickVariantKeyMock.mockReturnValue(undefined);
+    expect(gearIconKey(gearById("wpn_scatter")!)).toBeUndefined();
+    expect(gearIconKey(gearById("wpn_rocket")!)).toBeUndefined();
+  });
+});
+
+describe("mountGearIcon — category glyph fallback for art-less families (Task 7)", () => {
+  it("mounts a visible glyph + positive offset for every gap family, never 0", () => {
+    pickVariantKeyMock.mockReturnValue(undefined);
+    texMock.mockReturnValue(undefined);
+    const gapFamilyIds = [
+      "hull_scout", // HULL
+      "eq_scanner", // EquipmentClass.SCANNER
+      "eq_grapple_i", // EquipmentClass.GRAPPLE
+      "grav_tractor_1", // EquipmentClass.GRAV_TRACTOR
+      "wpn_scatter", // WeaponClass.FRAGMENT
+      "wpn_rocket", // WeaponClass.MISSILE
+    ];
+    for (const id of gapFamilyIds) {
+      const container = new Container();
+      const consumed = mountGearIcon(container, gearById(id)!, 0, 0, 18);
+      expect(consumed).toBeGreaterThan(0);
+      expect(
+        (container as unknown as { children: unknown[] }).children.length,
+      ).toBeGreaterThan(0);
+    }
   });
 });

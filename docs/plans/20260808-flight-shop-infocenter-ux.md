@@ -182,12 +182,12 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 7: Category-glyph fallback icons for every gear family
-- [ ] run `impact` on `gearIcon.ts` (`gearIconKey`/`mountGearIcon`/`FAMILY_FALLBACK_ICON`)
-- [ ] add a deterministic per-category glyph fallback (colored shape/letter drawn with `Graphics`/`Text`, keyed by `slotCategoryFor()`/`GearKind`/`WeaponClass`/`EquipmentClass`) for the families with no committed art: HULL, SCANNER, GRAPPLE, GRAV_TRACTOR, and MISSILE/FRAGMENT weapons — so `mountGearIcon` ALWAYS returns a visible glyph and a non-zero x-offset (no more text-only fallback)
-- [ ] keep existing real fallback icons (engine/fuel_tank/radar/shield/repair_droid/laser) as-is; glyphs only fill the gaps
-- [ ] reuse `KIND_COLOR` from `GearBridge` for glyph tint so categories are visually distinguishable
-- [ ] write a unit test: `mountGearIcon` yields a visible node + positive offset for one gear of EACH family (no family returns 0/undefined)
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `gearIcon.ts` (`gearIconKey`/`mountGearIcon`/`FAMILY_FALLBACK_ICON`)
+- [x] add a deterministic per-category glyph fallback (colored shape/letter drawn with `Graphics`/`Text`, keyed by `slotCategoryFor()`/`GearKind`/`WeaponClass`/`EquipmentClass`) for the families with no committed art: HULL, SCANNER, GRAPPLE, GRAV_TRACTOR, and MISSILE/FRAGMENT weapons — so `mountGearIcon` ALWAYS returns a visible glyph and a non-zero x-offset (no more text-only fallback)
+- [x] keep existing real fallback icons (engine/fuel_tank/radar/shield/repair_droid/laser) as-is; glyphs only fill the gaps
+- [x] reuse `KIND_COLOR` from `GearBridge` for glyph tint so categories are visually distinguishable
+- [x] write a unit test: `mountGearIcon` yields a visible node + positive offset for one gear of EACH family (no family returns 0/undefined)
+- [x] run tests — must pass before next task
 
 ### Task 8: Icon-forward shop rows (kill the label overlap)
 - [ ] run `impact` on `EquipmentShopScene.renderRows`/`renderColumnHeaders`/`renderHullPanel`
