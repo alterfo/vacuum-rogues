@@ -483,7 +483,11 @@ export class EquipmentShopScene extends GameScene {
       const isCurrent = player?.ship.hullClass === hull.hullClass;
       const tradeIn =
         currentHull && currentHull.id !== hull.id
-          ? hullTradeInPrice(currentHull)
+          ? hullTradeInPrice(
+              currentHull,
+              player?.ship.hullHP,
+              player?.ship.maxHull,
+            )
           : 0;
       const netPrice = Math.max(0, listing.price - tradeIn);
       const canAfford = playerCredits >= netPrice;

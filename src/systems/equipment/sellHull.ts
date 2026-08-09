@@ -9,9 +9,18 @@ import {
 } from "@/systems/banking/economy";
 
 export const HULL_TRADE_IN_RATE = 0.4;
+export const HULL_TRADE_IN_CONDITION_FLOOR = 0.2;
 
-export function hullTradeInPrice(hull: HullSpec): number {
-  return Math.floor(hull.basePrice * HULL_TRADE_IN_RATE);
+export function hullTradeInPrice(
+  hull: HullSpec,
+  hullHP?: number,
+  maxHull?: number,
+): number {
+  const conditionFactor =
+    hullHP === undefined || maxHull === undefined || maxHull <= 0
+      ? 1
+      : Math.max(HULL_TRADE_IN_CONDITION_FLOOR, Math.min(1, hullHP / maxHull));
+  return Math.floor(hull.basePrice * HULL_TRADE_IN_RATE * conditionFactor);
 }
 
 export interface HullPurchaseResult {
@@ -29,7 +38,10 @@ export function buyHullWithTradeIn(
   price: number,
 ): HullPurchaseResult {
   const oldHull = loadout.hull;
-  const tradeIn = oldHull.id === newHull.id ? 0 : hullTradeInPrice(oldHull);
+  const tradeIn =
+    oldHull.id === newHull.id
+      ? 0
+      : hullTradeInPrice(oldHull, player.ship.hullHP, player.ship.maxHull);
 
   adjustPlayerCredits(
     access,

@@ -174,12 +174,12 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 6: Hull trade-in accounts for wear (износ) from current HP
-- [ ] run `impact` on `hullTradeInPrice`
-- [ ] change `hullTradeInPrice` in `src/systems/equipment/sellHull.ts:13-15` to scale by current condition: `floor(basePrice * HULL_TRADE_IN_RATE * conditionFactor)` where `conditionFactor = clamp(hullHP / maxHull, floor, 1)` via `hullStatus.ts`; pass current `hullHP`/`maxHull` (from ship/loadout) into the function — no persisted field, derived only
-- [ ] update both consumers to pass condition: UI preview (`EquipmentShopScene.ts:481-485`) and the transaction (`sellHull.ts:32` in `buyHullWithTradeIn`)
-- [ ] confirm buying a hull still always replaces + evicts overflow (behavior already present in `buyHullWithTradeIn`/`swapHull`) — add an assertion, don't refactor
-- [ ] write tests: full-HP hull → 40% trade-in unchanged; half-HP hull → ~20%; near-dead hull → floored value; and buy replaces the old hull
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `hullTradeInPrice`
+- [x] change `hullTradeInPrice` in `src/systems/equipment/sellHull.ts:13-15` to scale by current condition: `floor(basePrice * HULL_TRADE_IN_RATE * conditionFactor)` where `conditionFactor = clamp(hullHP / maxHull, floor, 1)` via `hullStatus.ts`; pass current `hullHP`/`maxHull` (from ship/loadout) into the function — no persisted field, derived only
+- [x] update both consumers to pass condition: UI preview (`EquipmentShopScene.ts:481-485`) and the transaction (`sellHull.ts:32` in `buyHullWithTradeIn`)
+- [x] confirm buying a hull still always replaces + evicts overflow (behavior already present in `buyHullWithTradeIn`/`swapHull`) — add an assertion, don't refactor
+- [x] write tests: full-HP hull → 40% trade-in unchanged; half-HP hull → ~20%; near-dead hull → floored value; and buy replaces the old hull
+- [x] run tests — must pass before next task
 
 ### Task 7: Category-glyph fallback icons for every gear family
 - [ ] run `impact` on `gearIcon.ts` (`gearIconKey`/`mountGearIcon`/`FAMILY_FALLBACK_ICON`)

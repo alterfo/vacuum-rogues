@@ -173,3 +173,47 @@ describe("hull trade-in — buy a replacement", () => {
     expect(h.loadout.hull.id).toBe("hull_scout");
   });
 });
+
+describe("hull trade-in — wear (износ) scales the refund", () => {
+  it("a full-HP hull keeps the flat 40% rate (backward compatible)", () => {
+    const scout = hull("hull_scout");
+    expect(hullTradeInPrice(scout, 1200, 1200)).toBe(480);
+    expect(hullTradeInPrice(scout)).toBe(480);
+  });
+
+  it("a half-HP hull refunds about half of the full trade-in", () => {
+    const scout = hull("hull_scout");
+    expect(hullTradeInPrice(scout, 600, 1200)).toBe(240); // 480 * 0.5
+  });
+
+  it("a near-dead hull is floored at HULL_TRADE_IN_CONDITION_FLOOR, not zero", () => {
+    const scout = hull("hull_scout");
+    expect(hullTradeInPrice(scout, 1, 1200)).toBe(96); // 480 * 0.2 floor
+    expect(hullTradeInPrice(scout, 0, 1200)).toBe(96);
+  });
+
+  it("buyHullWithTradeIn uses the ship's current HP for the refund", () => {
+    const h = makeHarness(20000, "hull_scout");
+    h.player.ship.hullHP = Math.round(h.player.ship.maxHull * 0.5);
+    const before = h.player.credits;
+    const price = 4000;
+    const expectedTradeIn = hullTradeInPrice(
+      hull("hull_scout"),
+      h.player.ship.hullHP,
+      h.player.ship.maxHull,
+    );
+
+    const result = buyHullWithTradeIn(
+      h.access,
+      h.player,
+      h.loadout,
+      hull("hull_corvette"),
+      price,
+    );
+
+    expect(expectedTradeIn).toBeLessThan(480);
+    expect(result.tradeIn).toBe(expectedTradeIn);
+    expect(h.player.credits).toBe(before - (price - expectedTradeIn));
+    expect(h.loadout.hull.id).toBe("hull_corvette");
+  });
+});
