@@ -32,7 +32,13 @@ export function buildRumorPanel(
   hideUnknown = false,
 ): RumorPanelData {
   if (!galaxy) return { lines: [], emptyText: rumorPanelEmpty() };
-  let rumors = galaxy.getActiveRumors();
+  let rumors = galaxy
+    .getActiveRumors()
+    .filter(
+      (r) =>
+        !galaxy.isHostileSystem(r.fromSystemId) &&
+        !galaxy.isHostileSystem(r.toSystemId),
+    );
   const filtering = hideUnknown && player != null;
   if (filtering) {
     rumors = rumors.filter(
@@ -80,14 +86,21 @@ export function feedEventVisible(
   galaxy: Galaxy,
   player: Player | null,
 ): boolean {
-  if (player == null) return true;
   if (event.type === "TRADE_OPPORTUNITY") {
     if (!event.fromSystemId || !event.toSystemId) return true;
+    if (
+      galaxy.isHostileSystem(event.fromSystemId) ||
+      galaxy.isHostileSystem(event.toSystemId)
+    ) {
+      return false;
+    }
+    if (player == null) return true;
     return (
       isSystemKnown(player, galaxy, event.fromSystemId) &&
       isSystemKnown(player, galaxy, event.toSystemId)
     );
   }
+  if (player == null) return true;
   return isSystemKnown(player, galaxy, event.systemId);
 }
 

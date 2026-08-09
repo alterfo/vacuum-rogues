@@ -91,26 +91,26 @@ kind of exclusion in `GameEngine.resolveCampaignChainTarget` and `NpcGarrisonCom
       before Task 2.
 
 ### Task 2: Drop already-open rumors/news touching a now-hostile system in the InfoCenter panel
-- [ ] In `src/tests/info/infocenterMarginVisibility.test.ts` (or a new sibling test file
+- [x] In `src/tests/info/infocenterMarginVisibility.test.ts` (or a new sibling test file
       if scope diverges), write a failing test: boot `RealEngineHarness`, seed
       `galaxy.activeRumors` with a rumor whose `toSystemId` is a real system, call
       `galaxy.addOvermindSystem(toSystemId)` (or `addPirateSystem`), then assert
       `buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player)` returns **no line** for that
       rumor (not just a masked margin).
-- [ ] In `src/presentation/rumorPanel.ts` `buildRumorPanel`, add an unconditional filter
+- [x] In `src/presentation/rumorPanel.ts` `buildRumorPanel`, add an unconditional filter
       (runs regardless of `hideUnknown`/`player`, since capture state isn't
       player-knowledge-gated) dropping any rumor where
       `galaxy.isHostileSystem(r.fromSystemId) || galaxy.isHostileSystem(r.toSystemId)`,
       applied before the existing `isSystemKnown` filtering.
-- [ ] Write a failing test for `feedEventVisible`: a `TRADE_OPPORTUNITY` news event whose
+- [x] Write a failing test for `feedEventVisible`: a `TRADE_OPPORTUNITY` news event whose
       `fromSystemId`/`toSystemId` is hostile — assert it returns `false`.
-- [ ] In `feedEventVisible`, extend the existing `TRADE_OPPORTUNITY` branch to also
+- [x] In `feedEventVisible`, extend the existing `TRADE_OPPORTUNITY` branch to also
       return `false` when `galaxy.isHostileSystem(event.fromSystemId) ||
       galaxy.isHostileSystem(event.toSystemId)`.
-- [ ] Write a test confirming a rumor between two *non-hostile* systems still renders
+- [x] Write a test confirming a rumor between two *non-hostile* systems still renders
       normally (masked or unmasked per existing known/unknown behavior) — no regression
       to the `20260625-infocenter-margin-known-systems-only` masking feature.
-- [ ] run tests (`npm test -- --run src/tests/info src/tests/presentation`) — must pass
+- [x] run tests (`npm test -- --run src/tests/info src/tests/presentation`) — must pass
       before Task 3.
 
 ### Task 3: Verify acceptance criteria

@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../playtest/realEngineHarness";
-import { buildRumorPanel, RUMOR_PANEL_MAX } from "@/presentation/rumorPanel";
+import {
+  buildRumorPanel,
+  feedEventVisible,
+  RUMOR_PANEL_MAX,
+} from "@/presentation/rumorPanel";
 import { isSystemKnown } from "@/systems/galaxy/systemKnown";
 import { createRumor } from "@/domain/RouteRumor";
 import type { RouteLike } from "@/domain/RouteRumor";
@@ -70,7 +74,9 @@ describe("InfoCenter margin visibility — fresh game knows its home cluster", (
     const galaxy = harness.galaxy()!;
     const homeId = player.currentSystemId;
     const home = galaxy.systems.find((s) => s.id === homeId)!;
-    const neighbourId = home.connections[0]!.toSystemId;
+    const neighbourId = home.connections
+      .map((c) => c.toSystemId)
+      .find((id) => !galaxy.isHostileSystem(id))!;
 
     galaxy.activeRumors = [
       createRumor(route(ResourceType.FUEL, homeId, neighbourId, 42), 1),
@@ -107,6 +113,116 @@ describe("InfoCenter margin visibility — fresh game knows its home cluster", (
     expect(data.lines).toHaveLength(1);
     expect(data.lines[0].text).not.toMatch(NUMERIC_MARGIN);
     expect(data.lines[0].text).toContain("маржа ~?%");
+
+    expect(harness.errors()).toEqual([]);
+  });
+});
+
+describe("InfoCenter hides tips into captured systems", () => {
+  let harness: RealEngineHarness;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    harness = await RealEngineHarness.boot();
+  });
+
+  afterEach(() => {
+    harness?.dispose();
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("drops an already-open rumor once its destination is Overmind-captured", async () => {
+    await harness.newGame();
+    const player = harness.player()!;
+    const galaxy = harness.galaxy()!;
+    const homeId = player.currentSystemId;
+    const home = galaxy.systems.find((s) => s.id === homeId)!;
+    const neighbourId = home.connections
+      .map((c) => c.toSystemId)
+      .find((id) => !galaxy.isHostileSystem(id))!;
+
+    galaxy.activeRumors = [
+      createRumor(route(ResourceType.FUEL, homeId, neighbourId, 42), 1),
+    ];
+    expect(buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player).lines).toHaveLength(
+      1,
+    );
+
+    galaxy.addOvermindSystem(neighbourId);
+    const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player);
+    expect(data.lines).toHaveLength(0);
+
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("drops an already-open rumor once its destination is pirate-captured", async () => {
+    await harness.newGame();
+    const player = harness.player()!;
+    const galaxy = harness.galaxy()!;
+    const homeId = player.currentSystemId;
+    const home = galaxy.systems.find((s) => s.id === homeId)!;
+    const neighbourId = home.connections
+      .map((c) => c.toSystemId)
+      .find((id) => !galaxy.isHostileSystem(id))!;
+
+    galaxy.activeRumors = [
+      createRumor(route(ResourceType.FUEL, homeId, neighbourId, 42), 1),
+    ];
+    expect(buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player).lines).toHaveLength(
+      1,
+    );
+    galaxy.addPirateSystem(neighbourId);
+    const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player);
+    expect(data.lines).toHaveLength(0);
+
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("still shows a rumor between two non-hostile systems (no over-filtering)", async () => {
+    await harness.newGame();
+    const player = harness.player()!;
+    const galaxy = harness.galaxy()!;
+    const homeId = player.currentSystemId;
+    const home = galaxy.systems.find((s) => s.id === homeId)!;
+    const neighbourId = home.connections
+      .map((c) => c.toSystemId)
+      .find((id) => !galaxy.isHostileSystem(id))!;
+    const unrelated = galaxy.systems.find(
+      (s) => s.id !== homeId && s.id !== neighbourId,
+    )!;
+    galaxy.addOvermindSystem(unrelated.id);
+
+    galaxy.activeRumors = [
+      createRumor(route(ResourceType.FUEL, homeId, neighbourId, 42), 1),
+    ];
+    const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player);
+    expect(data.lines).toHaveLength(1);
+    expect(data.lines[0].text).toContain("маржа ~42%");
+
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("hides a TRADE_OPPORTUNITY news event whose destination is hostile", async () => {
+    await harness.newGame();
+    const player = harness.player()!;
+    const galaxy = harness.galaxy()!;
+    const homeId = player.currentSystemId;
+    const home = galaxy.systems.find((s) => s.id === homeId)!;
+    const neighbourId = home.connections[0]!.toSystemId;
+    galaxy.addOvermindSystem(neighbourId);
+
+    const visible = feedEventVisible(
+      {
+        type: "TRADE_OPPORTUNITY",
+        systemId: homeId,
+        fromSystemId: homeId,
+        toSystemId: neighbourId,
+      },
+      galaxy,
+      player,
+    );
+    expect(visible).toBe(false);
 
     expect(harness.errors()).toEqual([]);
   });
