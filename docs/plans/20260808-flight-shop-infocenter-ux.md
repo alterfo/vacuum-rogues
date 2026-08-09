@@ -190,13 +190,13 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 8: Icon-forward shop rows (kill the label overlap)
-- [ ] run `impact` on `EquipmentShopScene.renderRows`/`renderColumnHeaders`/`renderHullPanel`
-- [ ] rework `renderRows` (`:662-815`): left = icon (from Task 7) as the primary identifier; keep a single short name with a hard `wordWrapWidth`/truncation clamped to the column budget (name must not cross the type column at `w*0.52`); keep price + Buy button; drop the inline stat line (moves to the tooltip in Task 10)
-- [ ] apply the same width-clamp / column discipline to the hull tab `renderHullPanel` (`:433-580`) so `specText`/`priceText`/`tradeInText`/button don't collide
-- [ ] update `renderColumnHeaders` (`:626-644`) to match the new columns
-- [ ] write a test asserting the name node's right edge does not exceed the type-column X (measure via numeric x + font-scaled glyph budget, NOT `.width`)
-- [ ] screenshot-verify: no overlapping text in the gear tab or hull tab
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `EquipmentShopScene.renderRows`/`renderColumnHeaders`/`renderHullPanel` (LOW risk, confined to `EquipmentShopScene` + one process)
+- [x] rework `renderRows` (`:686-844`): left = icon (from Task 7) as the primary identifier; name gets a hard pixel-width clamp (`clampLabelToWidth`) so it never crosses the type column at `w*0.52`; keep price + Buy button. Deviation from the plan: the inline stat line is **kept** (clamped to the same budget, not dropped) — dropping it would break the existing pinned assertions in `equipmentShopFontScaleLayout.test.ts` ("keeps the stat line from overlapping the name line above it" / "grows ROW_H so the two-line stack fits"), and the standing project rule is to never touch existing test assertions. The tooltip in Task 10 can still surface the fuller stat set; this line stays as the always-visible summary.
+- [x] apply the same width-clamp / column discipline to the hull tab `renderHullPanel` (`:448-604`) — name/spec text plus price/trade-in/badge/button labels are all now routed through `clampLabelToWidth` with column-budget-derived pixel widths, so nothing can collide
+- [x] `renderColumnHeaders` (`:650-668`) already matches the clamped body columns (ПРЕДМЕТ/ТИП@0.52/Т.ЛВЛ@0.68/ЦЕНА@0.78) — no change needed
+- [x] write a test asserting the name node's right edge does not exceed the type-column X (measure via numeric x + font-scaled glyph budget, NOT `.width`) — `src/tests/presentation/equipmentShopRowLabelClamp.test.ts`
+- [x] screenshot-verify: no overlapping text in the gear tab or hull tab — no live-browser tool available in this environment, so verified with a real-Playwright-browser regression test (`e2e/playtest-regression.spec.ts`, "icon-forward shop rows never let a name cross the type/price column…") that measures actual `getBounds()` on both tabs at a narrow 380px viewport + L font scale; proved it catches the bug (red without the fix, showing real overlapping label text captured from the live game), green with it
+- [x] run tests — must pass before next task
 
 ### Task 9: Icon-forward hangar rows
 - [ ] run `impact` on `HangarPanel` filled-slot/loadout/hold renderers

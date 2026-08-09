@@ -2046,6 +2046,129 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: icon-forward shop rows never let a name cross the type/price column at a narrow width + L font (Task 8)', async ({ page }) => {
+    await page.setViewportSize({ width: 380, height: 700 });
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('fontScale', 'L');
+      } catch {
+        /* storage unavailable */
+      }
+    });
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.mouse.move(5, 5);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
+      };
+      await engine.currentScene?.e2eLandOnPlanet?.();
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { planet?: unknown } | null;
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+      };
+      const planet = engine.currentScene?.planet;
+      await engine.transitionTo('EQUIPMENT_SHOP', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'EquipmentShopScene', 15_000);
+
+    const measureNameOverflow = () =>
+      page.evaluate(() => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const scene = engine.currentScene;
+        if (!scene) return null;
+
+        const renderer = scene['renderer'] as { app: { screen: { width: number } } };
+        const sw = renderer.app.screen.width;
+        const pw = Math.min(820, sw - 40);
+        const px = (sw - pw) / 2;
+        const typeColX = px + pw * 0.52;
+
+        const list = scene['listContainer'] as
+          | { children: Array<Record<string, unknown>> }
+          | undefined;
+        const overflowing: Array<{ text: string; maxX: number }> = [];
+        for (const child of list?.children ?? []) {
+          const text = child['text'];
+          const x = child['x'] as number;
+          if (typeof text !== 'string' || text.length === 0) continue;
+          if (x >= typeColX) continue; // not a name-column node
+          const getBounds = child['getBounds'] as
+            | (() => { maxX?: number; x: number; width: number })
+            | undefined;
+          const b = getBounds ? getBounds.call(child) : { x: 0, width: 0 };
+          const maxX = b.maxX ?? b.x + b.width;
+          if (maxX > typeColX + 2) overflowing.push({ text, maxX });
+        }
+        return { typeColX, overflowing };
+      });
+
+    const gearAudit = await measureNameOverflow();
+    expect(gearAudit).not.toBeNull();
+    expect(gearAudit!.overflowing, `gear rows crossed the type column: ${JSON.stringify(gearAudit!.overflowing)}`).toEqual([]);
+
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { activeTab?: string; rebuild?: () => void } | null;
+      };
+      const scene = engine.currentScene;
+      if (scene) {
+        scene.activeTab = 'hull';
+        scene.rebuild?.();
+      }
+    });
+
+    const hullAudit = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return null;
+
+      const renderer = scene['renderer'] as {
+        app: { screen: { width: number; height: number } };
+      };
+      const sw = renderer.app.screen.width;
+      const sh = renderer.app.screen.height;
+      const pw = Math.min(820, sw - 40);
+      const ph = Math.min(580, sh - 40);
+      const px = (sw - pw) / 2;
+      const py = (sh - ph) / 2;
+      const priceColX = px + pw * 0.7;
+      const firstRowY = py + 76 + 34; // renderHullPanel's first row top
+
+      const main = scene['mainContainer'] as
+        | { children: Array<Record<string, unknown>> }
+        | undefined;
+      const overflowing: Array<{ text: string; maxX: number }> = [];
+      for (const child of main?.children ?? []) {
+        const text = child['text'];
+        const x = child['x'] as number;
+        const y = child['y'] as number;
+        if (typeof text !== 'string' || text.length === 0) continue;
+        if (y < firstRowY - 2) continue; // header/tabs/info, not a row node
+        if (x >= priceColX) continue; // not a name-column node
+        const getBounds = child['getBounds'] as
+          | (() => { maxX?: number; x: number; width: number })
+          | undefined;
+        const b = getBounds ? getBounds.call(child) : { x: 0, width: 0 };
+        const maxX = b.maxX ?? b.x + b.width;
+        if (maxX > priceColX + 2) overflowing.push({ text, maxX });
+      }
+      return { priceColX, overflowing };
+    });
+    expect(hullAudit).not.toBeNull();
+    expect(hullAudit!.overflowing, `hull rows crossed the price column: ${JSON.stringify(hullAudit!.overflowing)}`).toEqual([]);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('regression: owned-uninstalled gear shows in the ТРЮМ and sells for the trade-in refund', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

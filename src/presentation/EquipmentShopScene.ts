@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
-import { lineStepFor } from "./ui/questCardLayout";
+import { lineStepFor, MONO_CHAR_WIDTH_RATIO } from "./ui/questCardLayout";
 import { scaledFont } from "@/utils/fontScale";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
@@ -70,6 +70,18 @@ function techLevelForPlanet(type: PlanetType): number {
     default:
       return 2;
   }
+}
+
+export function clampLabelToWidth(
+  text: string,
+  basePx: number,
+  budgetPx: number,
+): string {
+  const charPx = Math.max(1, scaledFont(basePx) * MONO_CHAR_WIDTH_RATIO);
+  const maxChars = Math.max(3, Math.floor(budgetPx / charPx));
+  return text.length > maxChars
+    ? text.slice(0, Math.max(1, maxChars - 1)) + "…"
+    : text;
 }
 
 export function gearStatLine(gear: Gear): string {
@@ -500,8 +512,9 @@ export class EquipmentShopScene extends GameScene {
       if (isCurrent) rowBg.stroke({ width: 1, color: 0x1a4060 });
       this.mainContainer.addChild(rowBg);
 
+      const hullLabelBudgetPx = Math.max(20, w * 0.7 - 22);
       const nameText = scaledText(
-        hull.name,
+        clampLabelToWidth(hull.name, 13, hullLabelBudgetPx),
         13,
         isCurrent ? 0x44aaff : canAfford ? 0xddeeff : 0x667788,
         { rawColor: true, fontWeight: "bold" },
@@ -512,7 +525,11 @@ export class EquipmentShopScene extends GameScene {
       this.mainContainer.addChild(nameText);
 
       const specText = scaledText(
-        `HP: ${hull.hp}  Оружие: ${hull.weaponSlots}  Снаряж: ${hull.equipmentSlots}  Трюм: ${hull.cargo}  T${hull.techLevel}`,
+        clampLabelToWidth(
+          `HP: ${hull.hp}  Оружие: ${hull.weaponSlots}  Снаряж: ${hull.equipmentSlots}  Трюм: ${hull.cargo}  T${hull.techLevel}`,
+          11,
+          hullLabelBudgetPx,
+        ),
         11,
         0x445566,
         { rawColor: true },
@@ -522,8 +539,13 @@ export class EquipmentShopScene extends GameScene {
       specText.y = rowY + 26;
       this.mainContainer.addChild(specText);
 
+      const priceColBudgetPx = Math.max(20, w * 0.15 - 8);
       const priceText = scaledText(
-        `${listing.price.toLocaleString("ru")}₡`,
+        clampLabelToWidth(
+          `${listing.price.toLocaleString("ru")}₡`,
+          12,
+          priceColBudgetPx,
+        ),
         12,
         canAfford ? 0xffee55 : 0x556655,
         { rawColor: true },
@@ -535,7 +557,11 @@ export class EquipmentShopScene extends GameScene {
 
       if (tradeIn > 0) {
         const tradeInText = scaledText(
-          `сдача +${tradeIn.toLocaleString("ru")}₡`,
+          clampLabelToWidth(
+            `сдача +${tradeIn.toLocaleString("ru")}₡`,
+            10,
+            priceColBudgetPx,
+          ),
           10,
           0x55cc88,
           { rawColor: true },
@@ -546,10 +572,14 @@ export class EquipmentShopScene extends GameScene {
         this.mainContainer.addChild(tradeInText);
       }
 
+      const badgeColBudgetPx = Math.max(20, w * 0.15 - 44);
       if (isCurrent) {
-        const currentBadge = scaledText("Установлен", 12, 0x44aaff, {
-          rawColor: true,
-        });
+        const currentBadge = scaledText(
+          clampLabelToWidth("Установлен", 12, badgeColBudgetPx),
+          12,
+          0x44aaff,
+          { rawColor: true },
+        );
         currentBadge.eventMode = "none";
         currentBadge.x = x + w * 0.85;
         currentBadge.y = rowY + 16;
@@ -557,7 +587,7 @@ export class EquipmentShopScene extends GameScene {
       } else {
         const btnLabel = canAfford ? "[Установить]" : "Мало₡";
         const buyBtn = scaledText(
-          btnLabel,
+          clampLabelToWidth(btnLabel, 12, badgeColBudgetPx),
           12,
           canAfford ? 0x00ff88 : 0x445544,
           { rawColor: true, fontWeight: "bold" },
@@ -720,8 +750,13 @@ export class EquipmentShopScene extends GameScene {
           : canAfford
             ? 0xddeeff
             : 0x667788;
+      const nameBudgetPx = Math.max(20, w * 0.51 - iconOffset - 8);
       const nameText = scaledText(
-        isInstalled ? `★ ${gear.name}` : gear.name,
+        clampLabelToWidth(
+          isInstalled ? `★ ${gear.name}` : gear.name,
+          13,
+          nameBudgetPx,
+        ),
         13,
         nameColor,
         { rawColor: true, fontWeight: "bold" },
@@ -737,7 +772,7 @@ export class EquipmentShopScene extends GameScene {
         statLine += gearComparisonSuffix(gear, replacing);
       }
       const statText = scaledText(
-        statLine,
+        clampLabelToWidth(statLine, 10, nameBudgetPx),
         10,
         replacing && !isInstalled ? 0x88aacc : 0x445566,
         { rawColor: true },
