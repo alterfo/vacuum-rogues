@@ -6,6 +6,8 @@ import { NpcRole, ResourceType } from "@/types";
 import { Market } from "@/domain/Market";
 import { GearKind } from "@/systems/equipment/GearCatalog";
 import { buildRegistry, factionPriceFactor } from "@/systems/info/InfoService";
+import { generateShop } from "@/systems/equipment/ShopGenerator";
+import { techLevelWithUplift } from "@/systems/campaign/techUplift";
 
 function market(prices: Partial<Record<ResourceType, number>>): Market {
   const resources = Object.keys(prices) as ResourceType[];
@@ -21,11 +23,13 @@ function sys(
   toIds: string[],
   owner: Faction,
   planets: { id: string; market?: Market }[],
+  techLevel?: number,
 ): StarSystem {
   return {
     id,
     name: id,
     ownerFaction: owner,
+    techLevel,
     connections: toIds.map((toSystemId) => ({
       fromSystemId: id,
       toSystemId,
@@ -89,5 +93,68 @@ describe("InfoService.buildRegistry", () => {
     expect(factionPriceFactor(Faction.OUTLANDERS)).toBeLessThan(
       factionPriceFactor(Faction.BASTIONS),
     );
+  });
+});
+
+describe("InfoService.buildRegistry — stock parity with the real shop", () => {
+  function galaxyWithTech(techLevel: number) {
+    return {
+      systems: [
+        sys("A", ["B"], Faction.OUTLANDERS, [{ id: "A1" }], techLevel),
+        sys("B", ["A"], Faction.BASTIONS, [{ id: "B1" }], 1),
+      ],
+      npcShips: [],
+      newsFeed: [],
+    };
+  }
+
+  function idsFor(reg: ReturnType<typeof buildRegistry>, systemId: string) {
+    return new Set(
+      reg
+        .findGear({ originSystemId: systemId, maxJumps: 0 })
+        .map((h) => h.gear.id),
+    );
+  }
+
+  function shopIdsFor(
+    systemId: string,
+    planetId: string,
+    day: number,
+    techLevel: number,
+  ) {
+    const maxTechLevel = techLevelWithUplift(techLevel, day);
+    return new Set(
+      generateShop({ systemId, planetId, seed: "seed", day, maxTechLevel }).map(
+        (l) => l.gear.id,
+      ),
+    );
+  }
+
+  it("does not list an item the real shop's tech cap filters out (low-tech system)", () => {
+    const day = 0;
+    const reg = buildRegistry(galaxyWithTech(1), "seed", day);
+    const maxTechLevel = techLevelWithUplift(1, day);
+    const listed = reg.findGear({ originSystemId: "A", maxJumps: 0 });
+    for (const hit of listed) {
+      expect(hit.gear.techLevel).toBeLessThanOrEqual(maxTechLevel);
+    }
+  });
+
+  it("matches the real shop's stocked id set for a low-tech system", () => {
+    const day = 0;
+    const reg = buildRegistry(galaxyWithTech(1), "seed", day);
+    expect(idsFor(reg, "A")).toEqual(shopIdsFor("A", "A1", day, 1));
+  });
+
+  it("matches the real shop's stocked id set for a high-tech system", () => {
+    const day = 0;
+    const reg = buildRegistry(galaxyWithTech(8), "seed", day);
+    expect(idsFor(reg, "A")).toEqual(shopIdsFor("A", "A1", day, 8));
+  });
+
+  it("matches at the uplift cap boundary once the tech cap has grown from play time", () => {
+    const day = 2000;
+    const reg = buildRegistry(galaxyWithTech(3), "seed", day);
+    expect(idsFor(reg, "A")).toEqual(shopIdsFor("A", "A1", day, 3));
   });
 });

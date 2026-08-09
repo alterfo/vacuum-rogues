@@ -158,12 +158,12 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 4: Make infocenter stock consistent with the real shop
-- [ ] run `impact` on `generateGalaxyGear`/`buildRegistry`/`generateShop`
-- [ ] write a RED test: for a low-tech system, an item the real `buildShopInventory()` filters out (tech > `techLevelWithUplift(system.techLevel, day)`) must NOT appear in the infocenter registry for that system
-- [ ] thread the same per-system `maxTechLevel = techLevelWithUplift(system.techLevel, day)` and price factor into `generateGalaxyGear`/`buildRegistry` (`InfoService.ts:29-53`) that `EquipmentShopScene.buildShopInventory()` uses (`EquipmentShopScene.ts:258-267`), so both callers of `generateShop` agree on membership
-- [ ] verify infocenter listing == shop stock for the same system/day/seed (add an assertion comparing the two id sets)
-- [ ] write tests: parity for a high-tech and a low-tech system (success + boundary at the cap)
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `generateGalaxyGear`/`buildRegistry`/`generateShop`
+- [x] write a RED test: for a low-tech system, an item the real `buildShopInventory()` filters out (tech > `techLevelWithUplift(system.techLevel, day)`) must NOT appear in the infocenter registry for that system
+- [x] thread the same per-system `maxTechLevel = techLevelWithUplift(system.techLevel, day)` and price factor into `generateGalaxyGear`/`buildRegistry` (`InfoService.ts:29-53`) that `EquipmentShopScene.buildShopInventory()` uses (`EquipmentShopScene.ts:258-267`), so both callers of `generateShop` agree on membership
+- [x] verify infocenter listing == shop stock for the same system/day/seed (add an assertion comparing the two id sets)
+- [x] write tests: parity for a high-tech and a low-tech system (success + boundary at the cap)
+- [x] run tests — must pass before next task
 
 ### Task 5: Hide already-installed gear in the shop
 - [ ] run `impact` on `renderRows`/`gearListings`/`installedGearIds`

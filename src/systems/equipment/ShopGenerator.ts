@@ -52,7 +52,12 @@ export function generateShop(opts: ShopOptions): GearListing[] {
 }
 
 export function generateGalaxyGear(
-  planets: { systemId: string; planetId: string; priceFactor?: number }[],
+  planets: {
+    systemId: string;
+    planetId: string;
+    priceFactor?: number;
+    maxTechLevel?: number;
+  }[],
   seed: string,
   day: number,
 ): GearListing[] {
@@ -65,6 +70,7 @@ export function generateGalaxyGear(
         seed,
         day,
         priceFactor: p.priceFactor,
+        maxTechLevel: p.maxTechLevel,
       }),
     );
   }
