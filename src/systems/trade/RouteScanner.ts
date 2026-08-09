@@ -38,6 +38,7 @@ export function scanTradeRoutes(
 
   const byResource = new Map<ResourceType, PricePoint[]>();
   for (const system of galaxy.systems) {
+    if (galaxy.isHostileSystem(system.id)) continue;
     for (const planet of system.planets) {
       const market = planet.market;
       if (!market) continue;
