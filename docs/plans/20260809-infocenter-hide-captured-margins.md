@@ -90,6 +90,26 @@ kind of exclusion in `GameEngine.resolveCampaignChainTarget` and `NpcGarrisonCom
 - [x] run tests (`npm test -- --run src/tests/trade/routeScanner.test.ts`) — must pass
       before Task 2.
 
+**Reverted during Task 3 verification (2026-08-09):** the `scanTradeRoutes`-level filter
+was found to break the existing `src/tests/oddities/lateGameRecoverability.test.ts`
+regression test ("a captured front is reversible"). Root cause: `NpcSimulator`'s
+`pickTraderGoal` (`src/systems/npc/NpcSimulator.ts`) also reads `galaxy.getActiveRumors()`
+to decide NPC trade diversions, undocumented in this plan's discovery. Changing which
+routes populate `galaxy.activeRumors` shifts NPC AI's shared-seed RNG draw counts within
+the same day tick, which cascades into a different (not wrong, just different) Overmind
+capture/liberation outcome for that test's hardcoded seed — confirmed empirically that
+*any* correct fix touching this shared rumor state (including fixing the equivalent bug
+in `pickTraderGoal`) flips the same seed, so the test cannot be reconciled with a
+source-level filter without weakening its assertion, which is against the standing rule.
+Since Task 2's display-level filter is *unconditional* (applies regardless of whether a
+rumor is freshly opened or was already active), it alone already satisfies this plan's
+full player-facing acceptance criteria — a hostile-bound route/rumor never appears in the
+InfoCenter panel, whether newly scanned or previously open. The `scanTradeRoutes` filter
+line and its two dedicated tests were reverted; the additive `makeGalaxy(..., hostileIds)`
+test helper was left in place (harmless, no longer exercised by this file's tests).
+`NpcSimulator.pickTraderGoal` diverting traders toward captured systems remains a latent,
+separate bug — out of scope here, worth its own follow-up plan.
+
 ### Task 2: Drop already-open rumors/news touching a now-hostile system in the InfoCenter panel
 - [x] In `src/tests/info/infocenterMarginVisibility.test.ts` (or a new sibling test file
       if scope diverges), write a failing test: boot `RealEngineHarness`, seed
@@ -114,19 +134,24 @@ kind of exclusion in `GameEngine.resolveCampaignChainTarget` and `NpcGarrisonCom
       before Task 3.
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify a route/rumor into an Overmind-held system never appears as a fresh
-      InfoCenter tip (Task 1) and disappears immediately from an already-open tip once
-      the system is captured (Task 2), without waiting for the next day tick
-- [ ] verify a route/rumor into a pirate-held system is equally excluded
+- [x] verify a route/rumor into an Overmind-held system never appears as a fresh
+      InfoCenter tip and disappears immediately from an already-open tip once the system
+      is captured, without waiting for the next day tick — satisfied by Task 2's
+      unconditional `buildRumorPanel`/`feedEventVisible` filter alone (see the Task 1
+      revert note above; `infocenterMarginVisibility.test.ts` covers both cases)
+- [x] verify a route/rumor into a pirate-held system is equally excluded
       (`isHostileSystem` covers both `isOvermindSystem`/`isPirateSystem`)
-- [ ] verify non-hostile routes/rumors are completely unaffected (no over-filtering) and
+- [x] verify non-hostile routes/rumors are completely unaffected (no over-filtering) and
       the existing known/unknown masking behavior (`infocenterMarginVisibility.test.ts`)
       still passes untouched
-- [ ] run full unit test suite (`npm test -- --run`) — must pass
-- [ ] run linter (`npm run lint`) — all issues fixed
-- [ ] run `mcp__gitnexus__detect_changes` (`scope: "compare", base_ref: "master"`) and
-      confirm the affected symbols/flows are limited to `RouteScanner`, `RumorDirector`
-      (read-only, unchanged), `rumorPanel.ts`, and their tests
+- [x] run full unit test suite (`npm test -- --run`) — must pass (6368 passed, 0 failed,
+      16 skipped)
+- [x] run linter (`npm run lint`) — all issues fixed (0 errors; pre-existing warnings
+      unrelated to this change)
+- [x] run `mcp__gitnexus__detect_changes` (`scope: "compare", base_ref: "master"`) and
+      confirm the affected symbols/flows are limited to `RumorDirector` (read-only,
+      unchanged), `rumorPanel.ts`, and their tests — confirmed; `RouteScanner.ts` shows
+      no diff against master after the Task 1 revert
 
 ### Task 4: [Final] Update documentation
 - [ ] extend the "InfoCenter trade margins respect partial observability" section in

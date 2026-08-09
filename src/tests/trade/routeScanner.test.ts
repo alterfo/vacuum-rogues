@@ -214,46 +214,6 @@ describe("scanTradeRoutes — cross-system arbitrage ranking", () => {
     ]);
   });
 
-  it("excludes routes touching a hostile (captured) system", () => {
-    const galaxy = makeGalaxy(
-      [
-        { id: "S1", planets: [makePlanet("A", [ResourceType.METALS])] },
-        { id: "S2", planets: [makePlanet("B", [ResourceType.METALS])] },
-      ],
-      ["S2"],
-    );
-    const prices = priceTable({
-      "A:METALS": 100,
-      "B:METALS": 150,
-    });
-
-    const routes = scanTradeRoutes(galaxy, prices, { maxRoutes: 10 });
-    expect(routes).toHaveLength(0);
-  });
-
-  it("leaves non-hostile routes unaffected by an unrelated hostile system", () => {
-    const galaxy = makeGalaxy(
-      [
-        { id: "S1", planets: [makePlanet("A", [ResourceType.METALS])] },
-        { id: "S2", planets: [makePlanet("B", [ResourceType.METALS])] },
-        { id: "S3", planets: [makePlanet("C", [ResourceType.METALS])] },
-      ],
-      ["S3"],
-    );
-    const prices = priceTable({
-      "A:METALS": 100,
-      "B:METALS": 150,
-      "C:METALS": 500,
-    });
-
-    const routes = scanTradeRoutes(galaxy, prices, { maxRoutes: 10 });
-    expect(routes).toHaveLength(1);
-    expect(routes[0]).toMatchObject({
-      fromSystemId: "S1",
-      toSystemId: "S2",
-    });
-  });
-
   it("is deterministic across runs (stable ordering and tie-break)", () => {
     const build = (): Galaxy =>
       makeGalaxy([
