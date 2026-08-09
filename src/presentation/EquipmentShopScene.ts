@@ -270,7 +270,10 @@ export class EquipmentShopScene extends GameScene {
   }
 
   private gearListings(): GearListing[] {
-    return this.listings.filter((l) => l.gear.kind !== GearKind.HULL);
+    const installedIds = this.installedGearIds();
+    return this.listings.filter(
+      (l) => l.gear.kind !== GearKind.HULL && !installedIds.has(l.gear.id),
+    );
   }
 
   private render(): void {

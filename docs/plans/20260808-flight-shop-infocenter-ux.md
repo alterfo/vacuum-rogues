@@ -166,12 +166,12 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 5: Hide already-installed gear in the shop
-- [ ] run `impact` on `renderRows`/`gearListings`/`installedGearIds`
-- [ ] in `EquipmentShopScene`, filter the gear listing (`gearListings()`/the `renderRows` loop, `:662-815`) to exclude ids in `this.installedGearIds()` before rendering (hide by exact installed id; keep same-class-installed rows visible as upgrades — those use `installedSameClass`, a different concept)
-- [ ] confirm the hull tab is unaffected (hull replacement is handled in Task 6, hulls aren't "installed gear ids")
-- [ ] write a unit/playtest test: install a gear id, open shop, assert that id is absent from rendered rows while a same-class higher-tier item still appears
-- [ ] write an edge test: nothing installed → full list unchanged
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `renderRows`/`gearListings`/`installedGearIds`
+- [x] in `EquipmentShopScene`, filter the gear listing (`gearListings()`/the `renderRows` loop, `:662-815`) to exclude ids in `this.installedGearIds()` before rendering (hide by exact installed id; keep same-class-installed rows visible as upgrades — those use `installedSameClass`, a different concept)
+- [x] confirm the hull tab is unaffected (hull replacement is handled in Task 6, hulls aren't "installed gear ids")
+- [x] write a unit/playtest test: install a gear id, open shop, assert that id is absent from rendered rows while a same-class higher-tier item still appears
+- [x] write an edge test: nothing installed → full list unchanged
+- [x] run tests — must pass before next task
 
 ### Task 6: Hull trade-in accounts for wear (износ) from current HP
 - [ ] run `impact` on `hullTradeInPrice`
