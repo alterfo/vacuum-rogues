@@ -501,4 +501,22 @@ export const ru: Dict = {
     "Карта куплена за {price} ₡ — открыто систем: {revealed}",
   "planet.starMapPurchasedNoneNew":
     "Карта куплена за {price} ₡ — новых систем не открыто",
+
+  "gearTooltip.class.engine": "Двигатель",
+  "gearTooltip.class.fuelTank": "Топливный бак",
+  "gearTooltip.class.radar": "Радар",
+  "gearTooltip.class.scanner": "Сканер",
+  "gearTooltip.class.repairDroid": "Ремонтный дроид",
+  "gearTooltip.class.grapple": "Захват",
+  "gearTooltip.class.shield": "Щит",
+  "gearTooltip.class.gravTractor": "Грав. трактор",
+  "gearTooltip.ability.none": "нет",
+  "gearTooltip.ability.emp": "ЭМИ",
+  "gearTooltip.ability.homing": "самонаведение",
+  "gearTooltip.ability.burst": "очередь",
+  "gearTooltip.hullSlotsLine":
+    "Оружие/снаряж.: {weapon}/{equipment}  Макс.масса: {mass}",
+  "gearTooltip.weaponAbilityLine": "Способность: {ability}  Откат: {cooldown}",
+  "gearTooltip.equipmentClassLine": "Класс: {class}  Мощность: {potency}",
+  "gearTooltip.techMassLine": "Тех.уровень: T{tech}  Масса: {mass}",
 };

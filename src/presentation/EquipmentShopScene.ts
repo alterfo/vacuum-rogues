@@ -12,10 +12,8 @@ import { techLevelWithUplift } from "@/systems/campaign/techUplift";
 import {
   GearKind,
   gearById,
-  EquipmentClass,
   type Gear,
   type HullSpec,
-  type EquipmentSpec,
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
@@ -29,9 +27,9 @@ import {
 import { shopRowAction } from "./equipment/shopRowAction";
 import { HangarPanel } from "./ui/HangarPanel";
 import { mountGearIcon } from "./ui/gearIcon";
+import { wireGearTooltip } from "./ui/gearTooltip";
 import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
-import { formatStat, formatStatDelta } from "@/utils/formatStat";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import type { SlotCategory } from "@/systems/equipment/GearCatalog";
 import {
@@ -48,6 +46,11 @@ import {
 } from "@/systems/banking/economy";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { logger } from "@/utils/logger";
+import {
+  gearStatLine,
+  installedSameClass,
+  gearComparisonSuffix,
+} from "@/systems/equipment/gearDisplay";
 
 interface ShopContext {
   gameEngine?: GameEngine;
@@ -73,63 +76,7 @@ function techLevelForPlanet(type: PlanetType): number {
 }
 
 export { clampLabelToWidth };
-
-export function gearStatLine(gear: Gear): string {
-  if (gear.kind === GearKind.HULL) {
-    return `HP: ${gear.hp}  Слоты: ${gear.slots}  Трюм: ${gear.cargo}`;
-  }
-  if (gear.kind === GearKind.WEAPON) {
-    return `Урон: ${gear.damage}  Дальность: ${gear.range}`;
-  }
-  if ((gear as EquipmentSpec).equipmentClass === EquipmentClass.ENGINE) {
-    return `Тех.ур.: ${gear.techLevel}  Масса: ${gear.mass}`;
-  }
-  return `Мощность: ${formatStat(gear.potency)}`;
-}
-
-export function installedSameClass(
-  installedIds: Iterable<string>,
-  gear: Gear,
-): Gear | null {
-  if (gear.kind === GearKind.HULL) return null;
-  for (const id of installedIds) {
-    const inst = gearById(id);
-    if (!inst) continue;
-    if (
-      gear.kind === GearKind.WEAPON &&
-      inst.kind === GearKind.WEAPON &&
-      inst.weaponClass === gear.weaponClass
-    ) {
-      return inst;
-    }
-    if (
-      gear.kind === GearKind.EQUIPMENT &&
-      inst.kind === GearKind.EQUIPMENT &&
-      inst.equipmentClass === gear.equipmentClass
-    ) {
-      return inst;
-    }
-  }
-  return null;
-}
-
-export function gearComparisonSuffix(gear: Gear, replacing: Gear): string {
-  let delta: number;
-  if (gear.kind === GearKind.WEAPON && replacing.kind === GearKind.WEAPON) {
-    delta = gear.damage - replacing.damage;
-  } else if (
-    gear.kind === GearKind.EQUIPMENT &&
-    replacing.kind === GearKind.EQUIPMENT
-  ) {
-    delta =
-      gear.equipmentClass === EquipmentClass.ENGINE
-        ? gear.techLevel - replacing.techLevel
-        : gear.potency - replacing.potency;
-  } else {
-    delta = gear.techLevel - replacing.techLevel;
-  }
-  return `  (${formatStatDelta(delta)} vs ${replacing.name})`;
-}
+export { gearStatLine, installedSameClass, gearComparisonSuffix };
 
 const BANK_LABEL: Record<SlotCategory, string> = {
   weapon: "ОРУЖИЕ",
@@ -500,7 +447,12 @@ export class EquipmentShopScene extends GameScene {
         color: isCurrent ? 0x0a1f30 : i % 2 === 0 ? 0x060e18 : 0x050b14,
       });
       if (isCurrent) rowBg.stroke({ width: 1, color: 0x1a4060 });
+      rowBg.eventMode = "static";
       this.mainContainer.addChild(rowBg);
+      wireGearTooltip(rowBg, this.mainContainer, hull, x + w * 0.35, rowY, {
+        screenW: this.renderer.app.screen.width,
+        screenH: this.renderer.app.screen.height,
+      });
 
       const hullLabelBudgetPx = Math.max(20, w * 0.7 - 22);
       const nameText = scaledText(
@@ -722,7 +674,20 @@ export class EquipmentShopScene extends GameScene {
       rowBg.rect(startX, rowY, w - 30, this.ROW_H - 2);
       rowBg.fill({ color: rowColor });
       if (isInstalled) rowBg.stroke({ width: 1, color: 0x226622 });
+      rowBg.eventMode = "static";
       this.listContainer.addChild(rowBg);
+      wireGearTooltip(
+        rowBg,
+        this.mainContainer!,
+        gear,
+        startX + w * 0.3,
+        rowY,
+        {
+          replacing: replacing && !isInstalled ? replacing : null,
+          screenW: this.renderer.app.screen.width,
+          screenH: this.renderer.app.screen.height,
+        },
+      );
 
       const iconSize = 16;
       const iconOffset = mountGearIcon(

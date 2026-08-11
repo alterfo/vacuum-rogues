@@ -206,13 +206,13 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 10: Hover tooltips with characteristics (shop + hangar)
-- [ ] run `impact` on `gearStatLine`/`gearComparisonSuffix` and the shop/hangar hover handlers
-- [ ] add a reusable gear tooltip node (model on `mountIconTooltip`/`starMapTooltip`): `eventMode="none"`, hidden until `pointerover`, positioned from numeric x/y + font-scaled glyph budget (never `.width`/`.height`)
-- [ ] populate it from the full stat set (`HullSpec`/`WeaponSpec`/`EquipmentSpec` via `gearStatLine` + the richer fields: HP/slots/cargo/mass for hull, damage/range/ability/cooldown for weapon, class/potency for equipment) plus the `gearComparisonSuffix` delta vs installed same-class
-- [ ] wire `pointerover`/`pointerout` on shop rows (`EquipmentShopScene.ts:795-800`) and hangar rows (`HangarPanel.ts:902`, `:1353`) to show/hide it (keep the existing alpha-dim)
-- [ ] write a test: hovering a row shows a tooltip node containing that gear's key stats; leaving hides it
-- [ ] screenshot-verify tooltip content and placement
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `gearStatLine`/`gearComparisonSuffix` and the shop/hangar hover handlers
+- [x] add a reusable gear tooltip node (model on `mountIconTooltip`/`showPlanetTooltip`): `eventMode="none"`, hidden until `pointerover`, positioned from numeric x/y + font-scaled glyph budget (never `.width`/`.height`) — `src/presentation/ui/gearTooltip.ts` (`mountGearTooltip`/`wireGearTooltip`); `gearStatLine`/`gearComparisonSuffix`/`installedSameClass` moved to a pure `src/systems/equipment/gearDisplay.ts` (re-exported unchanged from `EquipmentShopScene.ts` for existing tests) to avoid a presentation↔scene import cycle
+- [x] populate it from the full stat set (`HullSpec`/`WeaponSpec`/`EquipmentSpec` via `gearStatLine` + the richer fields: HP/slots/cargo/mass for hull, damage/range/ability/cooldown for weapon, class/potency for equipment) plus the `gearComparisonSuffix` delta vs installed same-class — all new tooltip strings routed through `t(key)` (`gearTooltip.*` keys in `ru.ts`/`en.ts`)
+- [x] wire `pointerover`/`pointerout` on shop rows (gear tab `renderRows` + hull tab `renderHullPanel`) and hangar rows (`renderFilledSlot` fitted slots + the СКЛАД warehouse rows) to show/hide it (kept the existing alpha-dim)
+- [x] write a test: hovering a row shows a tooltip node containing that gear's key stats; leaving hides it — `gearTooltip.test.ts` (pure content), `equipmentShopGearTooltip.test.ts`, `hangarPanelGearTooltip.test.ts`
+- [x] screenshot-verify tooltip content and placement — no live-browser tool available in this environment; verified at the logic/content level via the tests above (positioning is numeric x/y, screen-clamped, same pattern as the existing `showPlanetTooltip`)
+- [x] run tests — must pass before next task
 
 ### Task 11: Infocenter gear search by characteristics
 - [ ] run `impact` on `InfoCenterScene.runGearSearch`/`renderGear` and `GalacticRegistry.findEquipment`/`findGear`

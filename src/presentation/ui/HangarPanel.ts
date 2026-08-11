@@ -17,6 +17,7 @@ import { scaledFont } from "@/utils/fontScale";
 import { pickVariant } from "../textures";
 import { resolveHullArtKey } from "../flight/hullArtAlias";
 import { gearIconKey, mountGearIcon } from "./gearIcon";
+import { wireGearTooltip } from "./gearTooltip";
 import type { Renderer } from "../Renderer";
 import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
@@ -832,8 +833,12 @@ export class HangarPanel {
     const slotBg = new Graphics();
     slotBg.rect(x, y, w, slotH).fill({ color: 0x0d2030, alpha: 1 });
     slotBg.rect(x, y, w, slotH).stroke({ color: 0x336655, width: 1 });
-    slotBg.eventMode = "none";
+    slotBg.eventMode = "static";
     container.addChild(slotBg);
+    wireGearTooltip(slotBg, container, gear, x + 6, y + slotH, {
+      screenW: this.renderer.app.screen.width,
+      screenH: this.renderer.app.screen.height,
+    });
 
     this.dropZones.push({
       x,
@@ -1281,8 +1286,14 @@ export class HangarPanel {
       rowBg
         .rect(rightX, y, rightW, warehouseRowH)
         .stroke({ color: 0x30401a, width: 1 });
-      rowBg.eventMode = "none";
+      rowBg.eventMode = gear ? "static" : "none";
       container.addChild(rowBg);
+      if (gear) {
+        wireGearTooltip(rowBg, container, gear, rightX + 6, y + warehouseRowH, {
+          screenW: this.renderer.app.screen.width,
+          screenH: this.renderer.app.screen.height,
+        });
+      }
 
       const rowIconOffset = gear
         ? mountGearIcon(

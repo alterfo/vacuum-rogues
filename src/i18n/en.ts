@@ -502,4 +502,22 @@ export const en: Dict = {
     "Map purchased for {price} ₡ — systems revealed: {revealed}",
   "planet.starMapPurchasedNoneNew":
     "Map purchased for {price} ₡ — no new systems revealed",
+
+  "gearTooltip.class.engine": "Engine",
+  "gearTooltip.class.fuelTank": "Fuel tank",
+  "gearTooltip.class.radar": "Radar",
+  "gearTooltip.class.scanner": "Scanner",
+  "gearTooltip.class.repairDroid": "Repair droid",
+  "gearTooltip.class.grapple": "Grapple",
+  "gearTooltip.class.shield": "Shield",
+  "gearTooltip.class.gravTractor": "Grav tractor",
+  "gearTooltip.ability.none": "none",
+  "gearTooltip.ability.emp": "EMP",
+  "gearTooltip.ability.homing": "homing",
+  "gearTooltip.ability.burst": "burst",
+  "gearTooltip.hullSlotsLine":
+    "Weapon/equip slots: {weapon}/{equipment}  Max mass: {mass}",
+  "gearTooltip.weaponAbilityLine": "Ability: {ability}  Cooldown: {cooldown}",
+  "gearTooltip.equipmentClassLine": "Class: {class}  Power: {potency}",
+  "gearTooltip.techMassLine": "Tech level: T{tech}  Mass: {mass}",
 };
