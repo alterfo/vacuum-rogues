@@ -2169,6 +2169,109 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: icon-forward hangar rows never let a name cross the [снять]/action buttons at a narrow width + L font (Task 9)', async ({ page }) => {
+    await page.setViewportSize({ width: 380, height: 700 });
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('fontScale', 'L');
+      } catch {
+        /* storage unavailable */
+      }
+    });
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.mouse.move(5, 5);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
+      };
+      await engine.currentScene?.e2eLandOnPlanet?.();
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { planet?: unknown } | null;
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+        player: { inventory: { ownedGearIds: string[] } } | null;
+        playerLoadout: { install: (id: string) => boolean } | null;
+      };
+      engine.playerLoadout?.install('wpn_torpedo'); // "Самонаводящаяся торпеда" — longest weapon name
+      if (engine.player) {
+        engine.player.inventory.ownedGearIds = engine.player.inventory.ownedGearIds ?? [];
+        engine.player.inventory.ownedGearIds.push('wpn_mining_laser'); // "Горнодобывающий лазер" — long warehouse-row name
+      }
+      const planet = engine.currentScene?.planet;
+      await engine.transitionTo('EQUIPMENT_SHOP', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'EquipmentShopScene', 15_000);
+
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { activeTab?: string; rebuild?: () => void } | null;
+      };
+      const scene = engine.currentScene;
+      if (scene) {
+        scene.activeTab = 'hangar';
+        scene.rebuild?.();
+      }
+    });
+
+    const hangarAudit = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return null;
+
+      type Node = {
+        text?: unknown;
+        x?: number;
+        y?: number;
+        children?: Node[];
+        getBounds?: () => { maxX?: number; x: number; width: number };
+      };
+      const texts: Array<{ text: string; x: number; y: number; maxX: number }> = [];
+      const collect = (node: Node) => {
+        if (typeof node.text === 'string' && node.text.length > 0) {
+          const b = node.getBounds ? node.getBounds.call(node) : { x: node.x ?? 0, width: 0 };
+          const maxX = b.maxX ?? b.x + b.width;
+          texts.push({ text: node.text, x: b.x, y: node.y ?? 0, maxX });
+        }
+        for (const child of node.children ?? []) collect(child);
+      };
+      const main = scene['mainContainer'] as Node | undefined;
+      if (main) collect(main);
+
+      // Task 9 scope: a gear/item name (rendered as "<name> (T<n>)") must never
+      // cross under its row's bracketed action button ([снять]/[Продать …]/
+      // [Установить]/[Выброс]/[Отмена]/[Выбросить]) — the specific label-under-
+      // button bug this task fixes. Pair each name with the nearest button on
+      // roughly the same row (small y delta), not a blind whole-panel sweep,
+      // so unrelated pre-existing layout (e.g. header stat chips) is out of scope.
+      const nameNodes = texts.filter((t) => /\(T\d+\)$/.test(t.text));
+      const buttonNodes = texts.filter((t) => t.text.startsWith('['));
+
+      const overlapping: Array<{ name: string; button: string }> = [];
+      for (const name of nameNodes) {
+        const button = buttonNodes
+          .filter((b) => Math.abs(b.y - name.y) < 20)
+          .sort((a, b) => Math.abs(a.y - name.y) - Math.abs(b.y - name.y))[0];
+        if (!button) continue;
+        if (name.maxX > button.x + 2) {
+          overlapping.push({ name: name.text, button: button.text });
+        }
+      }
+      return { overlapping, nameCount: nameNodes.length, buttonCount: buttonNodes.length };
+    });
+
+    expect(hangarAudit).not.toBeNull();
+    expect(hangarAudit!.nameCount, 'expected at least one gear name row to audit').toBeGreaterThan(0);
+    expect(hangarAudit!.overlapping, `hangar row labels overlapped their action button: ${JSON.stringify(hangarAudit!.overlapping)}`).toEqual([]);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('regression: owned-uninstalled gear shows in the ТРЮМ and sells for the trade-in refund', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

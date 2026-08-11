@@ -199,11 +199,11 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 9: Icon-forward hangar rows
-- [ ] run `impact` on `HangarPanel` filled-slot/loadout/hold renderers
-- [ ] apply the same icon-forward + name-clamp treatment to `renderFilledSlot` (`HangarPanel.ts:800-864`) and the loadout/hold strips so the `[снять]`/chip buttons never sit under the name
-- [ ] write a test asserting hangar slot name width is clamped and the `[снять]` button hit area doesn't overlap the name
-- [ ] screenshot-verify the hangar (mounted by both `StationScene` and the shop АНГАР tab)
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `HangarPanel` filled-slot/loadout/hold renderers
+- [x] apply the same icon-forward + name-clamp treatment to `renderFilledSlot` (`HangarPanel.ts:800-864`) and the loadout/hold strips so the `[снять]`/chip buttons never sit under the name
+- [x] write a test asserting hangar slot name width is clamped and the `[снять]` button hit area doesn't overlap the name
+- [x] screenshot-verify the hangar (mounted by both `StationScene` and the shop АНГАР tab)
+- [x] run tests — must pass before next task
 
 ### Task 10: Hover tooltips with characteristics (shop + hangar)
 - [ ] run `impact` on `gearStatLine`/`gearComparisonSuffix` and the shop/hangar hover handlers

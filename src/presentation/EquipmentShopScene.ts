@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
-import { lineStepFor, MONO_CHAR_WIDTH_RATIO } from "./ui/questCardLayout";
+import { lineStepFor, clampLabelToWidth } from "./ui/questCardLayout";
 import { scaledFont } from "@/utils/fontScale";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
@@ -72,17 +72,7 @@ function techLevelForPlanet(type: PlanetType): number {
   }
 }
 
-export function clampLabelToWidth(
-  text: string,
-  basePx: number,
-  budgetPx: number,
-): string {
-  const charPx = Math.max(1, scaledFont(basePx) * MONO_CHAR_WIDTH_RATIO);
-  const maxChars = Math.max(3, Math.floor(budgetPx / charPx));
-  return text.length > maxChars
-    ? text.slice(0, Math.max(1, maxChars - 1)) + "…"
-    : text;
-}
+export { clampLabelToWidth };
 
 export function gearStatLine(gear: Gear): string {
   if (gear.kind === GearKind.HULL) {

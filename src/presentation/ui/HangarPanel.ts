@@ -6,7 +6,12 @@ import {
   type FederatedPointerEvent,
 } from "pixi.js";
 import { scaledText } from "./scaledText";
-import { lineStepFor } from "./questCardLayout";
+import {
+  lineStepFor,
+  clampLabelToWidth,
+  estimateTextWidthPx,
+  MONO_CHAR_WIDTH_RATIO,
+} from "./questCardLayout";
 import { attachWheelScroll } from "./WheelScroll";
 import { scaledFont } from "@/utils/fontScale";
 import { pickVariant } from "../textures";
@@ -76,6 +81,16 @@ export const CATEGORY_LABEL: Record<SlotCategory, string> = {
 export { gearIconKey };
 
 const FITTED_SLOT_MIN_H = 34;
+
+function guaranteedNameBudgetPx(
+  availablePx: number,
+  basePx: number,
+  mustFitText: string,
+): number {
+  const charPx = Math.max(1, scaledFont(basePx) * MONO_CHAR_WIDTH_RATIO);
+  const floorPx = (mustFitText.length + 1.5) * charPx;
+  return Math.max(20, availablePx, floorPx);
+}
 
 function fittedSlotHeight(): number {
   const nameStep = lineStepFor(scaledFont(11));
@@ -837,16 +852,28 @@ export class HangarPanel {
       iconSize,
     );
 
-    const name = scaledText(`${gear.name} (T${gear.techLevel})`, 11, 0xb8e6c8, {
-      rawColor: true,
-      fontFamily: "monospace",
-    });
+    const unBtnLabel = "[снять]";
+    const unBtnBudgetPx = estimateTextWidthPx(unBtnLabel, 11) + 8;
+    const nameBudgetPx = guaranteedNameBudgetPx(
+      w - 8 - iconOffset - unBtnBudgetPx - 4,
+      11,
+      gear.name,
+    );
+    const name = scaledText(
+      clampLabelToWidth(`${gear.name} (T${gear.techLevel})`, 11, nameBudgetPx),
+      11,
+      0xb8e6c8,
+      {
+        rawColor: true,
+        fontFamily: "monospace",
+      },
+    );
     name.x = x + 8 + iconOffset;
     name.y = y + 4;
     name.eventMode = "none";
     container.addChild(name);
 
-    const unBtn = scaledText("[снять]", 11, 0xff8844, {
+    const unBtn = scaledText(unBtnLabel, 11, 0xff8844, {
       rawColor: true,
       fontFamily: "monospace",
     });
@@ -866,13 +893,19 @@ export class HangarPanel {
 
     const mmCategory = gearMicromoduleCategory(gear);
     const mmRowY = y + 4 + nameStep;
+    const mmRowBudgetPx = Math.max(20, w - 8 - iconOffset);
     if (slot.micromoduleId) {
       const mmLabel =
         microModuleById(slot.micromoduleId)?.name ?? slot.micromoduleId;
-      const mmTag = scaledText(`мм: ${mmLabel}`, 10, 0xffcc44, {
-        rawColor: true,
-        fontFamily: "monospace",
-      });
+      const mmTag = scaledText(
+        clampLabelToWidth(`мм: ${mmLabel}`, 10, mmRowBudgetPx),
+        10,
+        0xffcc44,
+        {
+          rawColor: true,
+          fontFamily: "monospace",
+        },
+      );
       mmTag.x = x + 8 + iconOffset;
       mmTag.y = mmRowY;
       mmTag.eventMode = "none";
@@ -885,7 +918,7 @@ export class HangarPanel {
         );
       const control = micromoduleSlotControl(mmCategory, hasMatchingMm);
       const mmBtn = scaledText(
-        control.label,
+        clampLabelToWidth(control.label, 10, mmRowBudgetPx),
         10,
         control.actionable ? 0xffaa22 : 0xb4bcc4,
         { rawColor: true, fontFamily: "monospace" },
@@ -1260,8 +1293,42 @@ export class HangarPanel {
             Math.min(18, warehouseRowH - 8),
           )
         : 0;
+
+      const btnRight = rightX + rightW - 8;
+      const ownedGearId = row.kind === "owned" ? row.gearId : null;
+      const confirmingJettison =
+        ownedGearId !== null &&
+        this.pendingJettison?.kind === "gear" &&
+        this.pendingJettison.id === ownedGearId;
+      const installable = !!gear && gear.kind !== GearKind.HULL && !!loadout;
+      const cancelLabel = "[Отмена]";
+      const confirmJettisonLabel = "[Выбросить]";
+      const sellLabel =
+        row.kind === "owned" && gear ? `[Продать ${sellGearPrice(gear)}₡]` : "";
+      const installLabel = "[Установить]";
+      const jettisonLabel = "[Выброс]";
+      const rightLabels = confirmingJettison
+        ? [cancelLabel, confirmJettisonLabel]
+        : [
+            ...(sellLabel ? [sellLabel] : []),
+            ...(installable ? [installLabel] : []),
+            ...(ownedGearId ? [jettisonLabel] : []),
+          ];
+      const rowBtnBudgetPx =
+        rightLabels.length > 0
+          ? Math.max(...rightLabels.map((l) => estimateTextWidthPx(l, 11))) + 8
+          : 0;
+      const rowNameBudgetPx = guaranteedNameBudgetPx(
+        rightW - 8 - rowIconOffset - rowBtnBudgetPx - 4,
+        11,
+        name,
+      );
       const rowText = scaledText(
-        gear ? `${name} (T${gear.techLevel})` : name,
+        clampLabelToWidth(
+          gear ? `${name} (T${gear.techLevel})` : name,
+          11,
+          rowNameBudgetPx,
+        ),
         11,
         0xccddaa,
         { rawColor: true, fontFamily: "monospace" },
@@ -1271,15 +1338,8 @@ export class HangarPanel {
       rowText.eventMode = "none";
       container.addChild(rowText);
 
-      const btnRight = rightX + rightW - 8;
-      const ownedGearId = row.kind === "owned" ? row.gearId : null;
-      const confirmingJettison =
-        ownedGearId !== null &&
-        this.pendingJettison?.kind === "gear" &&
-        this.pendingJettison.id === ownedGearId;
-
       if (confirmingJettison && ownedGearId) {
-        const cancelBtn = scaledText("[Отмена]", 11, 0x99aabb, {
+        const cancelBtn = scaledText(cancelLabel, 11, 0x99aabb, {
           rawColor: true,
           fontFamily: "monospace",
         });
@@ -1294,7 +1354,7 @@ export class HangarPanel {
         });
         container.addChild(cancelBtn);
 
-        const confirmBtn = scaledText("[Выбросить]", 11, 0xff7755, {
+        const confirmBtn = scaledText(confirmJettisonLabel, 11, 0xff7755, {
           rawColor: true,
           fontFamily: "monospace",
         });
@@ -1310,12 +1370,10 @@ export class HangarPanel {
         container.addChild(confirmBtn);
       } else {
         if (row.kind === "owned" && gear) {
-          const sellBtn = scaledText(
-            `[Продать ${sellGearPrice(gear)}₡]`,
-            11,
-            0x44ff88,
-            { rawColor: true, fontFamily: "monospace" },
-          );
+          const sellBtn = scaledText(sellLabel, 11, 0x44ff88, {
+            rawColor: true,
+            fontFamily: "monospace",
+          });
           sellBtn.anchor.set(1, 0.5);
           sellBtn.x = btnRight;
           sellBtn.y = y + 12 + btnGap;
@@ -1336,9 +1394,8 @@ export class HangarPanel {
           container.addChild(sellBtn);
         }
 
-        const installable = !!gear && gear.kind !== GearKind.HULL && !!loadout;
         if (installable && loadout) {
-          const eqBtn = scaledText("[Установить]", 11, 0x44ddaa, {
+          const eqBtn = scaledText(installLabel, 11, 0x44ddaa, {
             rawColor: true,
             fontFamily: "monospace",
           });
@@ -1361,7 +1418,7 @@ export class HangarPanel {
         }
 
         if (ownedGearId) {
-          const jettisonBtn = scaledText("[Выброс]", 11, 0xff8844, {
+          const jettisonBtn = scaledText(jettisonLabel, 11, 0xff8844, {
             rawColor: true,
             fontFamily: "monospace",
           });

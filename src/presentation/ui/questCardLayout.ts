@@ -1,4 +1,22 @@
+import { scaledFont } from "@/utils/fontScale";
+
 export const MONO_CHAR_WIDTH_RATIO = 0.62;
+
+export function clampLabelToWidth(
+  text: string,
+  basePx: number,
+  budgetPx: number,
+): string {
+  const charPx = Math.max(1, scaledFont(basePx) * MONO_CHAR_WIDTH_RATIO);
+  const maxChars = Math.max(3, Math.floor(budgetPx / charPx));
+  return text.length > maxChars
+    ? text.slice(0, Math.max(1, maxChars - 1)) + "…"
+    : text;
+}
+
+export function estimateTextWidthPx(text: string, basePx: number): number {
+  return text.length * Math.max(1, scaledFont(basePx) * MONO_CHAR_WIDTH_RATIO);
+}
 
 export function estimateWrappedLines(
   text: string,
