@@ -116,6 +116,12 @@ export function jettisonOwnedGear(player: Player, gearId: string): boolean {
   return player.inventory.removeOwnedGear(gearId);
 }
 
+export function jettisonLegacyModule(player: Player, index: number): boolean {
+  if (!player.inventory.modules[index]) return false;
+  player.inventory.modules.splice(index, 1);
+  return true;
+}
+
 export function uninstallToOwned(
   player: Player,
   loadout: ShipLoadout,

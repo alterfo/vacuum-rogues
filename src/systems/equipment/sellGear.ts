@@ -12,14 +12,11 @@ export function sellGearPrice(gear: Gear): number {
   return Math.floor(gear.basePrice * SELL_RATE);
 }
 
-export function sellUninstalledGear(
+function creditSale(
   player: Player,
-  gearId: string,
+  gear: Gear,
   bank?: BankAccess | null,
 ): number {
-  const gear = gearById(gearId);
-  if (!gear) return 0;
-  if (!player.inventory.removeOwnedGear(gearId)) return 0;
   const refund = sellGearPrice(gear);
   adjustPlayerCredits(
     bank,
@@ -29,4 +26,28 @@ export function sellUninstalledGear(
     `Продажа: ${gear.name}`,
   );
   return refund;
+}
+
+export function sellUninstalledGear(
+  player: Player,
+  gearId: string,
+  bank?: BankAccess | null,
+): number {
+  const gear = gearById(gearId);
+  if (!gear) return 0;
+  if (!player.inventory.removeOwnedGear(gearId)) return 0;
+  return creditSale(player, gear, bank);
+}
+
+export function sellLegacyModule(
+  player: Player,
+  index: number,
+  bank?: BankAccess | null,
+): number {
+  const mod = player.inventory.modules[index];
+  if (!mod) return 0;
+  const gear = gearById(mod.id);
+  if (!gear) return 0;
+  player.inventory.modules.splice(index, 1);
+  return creditSale(player, gear, bank);
 }

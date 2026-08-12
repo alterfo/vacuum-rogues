@@ -240,6 +240,34 @@ describe("HangarPanel — shared slot-fitting component", () => {
     expect(ctx.rerender).toHaveBeenCalled();
   });
 
+  it("a starter item unfitted via [снять] can then be sold from the bag (was permanently stuck)", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    loadout.install("wpn_pulse"); // simulates a starter weapon installed with no ownedGearIds entry
+    const player = makePlayer();
+    const ctx = makeCtx(loadout, player);
+    const panel = new HangarPanel(renderer);
+    const creditsBefore = player.credits;
+
+    panel.render(ctx);
+    findButton("[снять]")!.handlers.pointerdown(fakeEvent);
+    expect(player.inventory.modules.some((m) => m.id === "wpn_pulse")).toBe(
+      true,
+    );
+    expect(player.inventory.ownedGearIds).not.toContain("wpn_pulse"); // never owned — starter gear
+
+    created.length = 0;
+    panel.render(ctx);
+
+    const sellBtn = findButton("[Продать");
+    expect(sellBtn).toBeDefined();
+    sellBtn!.handlers.pointerdown(fakeEvent);
+
+    expect(player.inventory.modules.some((m) => m.id === "wpn_pulse")).toBe(
+      false,
+    );
+    expect(player.credits).toBeGreaterThan(creditsBefore);
+  });
+
   it("sells owned warehouse gear through the shared sell seam", () => {
     const loadout = new ShipLoadout("hull_scout");
     const player = makePlayer(["eq_radar"]);
@@ -256,6 +284,53 @@ describe("HangarPanel — shared slot-fitting component", () => {
       1000,
     ); // refunded
     expect(ctx.showToast).toHaveBeenCalled();
+  });
+
+  it("sells a pre-existing legacy-bag item (a save's stuck starter gear can now be sold)", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+    player.inventory.modules = [
+      { id: "eq_radar", name: "Радар" },
+    ] as unknown as Player["inventory"]["modules"];
+    const ctx = makeCtx(loadout, player);
+
+    new HangarPanel(renderer).render(ctx);
+
+    const sellBtn = findButton("[Продать");
+    expect(sellBtn).toBeDefined();
+    sellBtn!.handlers.pointerdown(fakeEvent);
+
+    expect(player.inventory.modules).toHaveLength(0);
+    expect((player as unknown as { credits: number }).credits).toBeGreaterThan(
+      1000,
+    ); // refunded
+    expect(ctx.showToast).toHaveBeenCalled();
+  });
+
+  it("jettisons a pre-existing legacy-bag item via confirm/cancel", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+    player.inventory.modules = [
+      { id: "eq_radar", name: "Радар" },
+    ] as unknown as Player["inventory"]["modules"];
+    const ctx = makeCtx(loadout, player);
+    const panel = new HangarPanel(renderer);
+
+    panel.render(ctx);
+
+    const jettisonBtn = findButton("[Выброс]");
+    expect(jettisonBtn).toBeDefined();
+    jettisonBtn!.handlers.pointerdown(fakeEvent);
+
+    created.length = 0;
+    panel.render(ctx);
+    expect(player.inventory.modules).toHaveLength(1); // still there, pending confirm
+
+    const confirmBtn = findButton("[Выбросить]");
+    expect(confirmBtn).toBeDefined();
+    confirmBtn!.handlers.pointerdown(fakeEvent);
+
+    expect(player.inventory.modules).toHaveLength(0);
   });
 
   it("spaces «Установить» / «Продать» so the stacked actions never overlap", () => {

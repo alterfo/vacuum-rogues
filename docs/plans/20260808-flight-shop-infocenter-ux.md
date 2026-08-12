@@ -233,13 +233,13 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 13: Sell/drop any installed gear (incl. starter gear)
-- [ ] run `impact` on the HangarPanel `[снять]` handler, `uninstallToOwned`, `addOwnedGear`, `sellUninstalledGear`
-- [ ] route the HangarPanel unequip (`HangarPanel.ts:859-860`) through `uninstallToOwned` (`GearBridge.ts:119-129`) so removed gear lands in `ownedGearIds` (sellable), not the legacy bag; do the same for the preset-swap path (`GearBridge.ts:306`) and load-revalidation (`GameEngine.ts:916`)
-- [ ] make pre-existing legacy-bag (`kind:"legacy"`) rows sellable/jettisonable too (so items already stuck in old saves free up) — either migrate legacy→owned on display or extend the sell/jettison guards (`HangarPanel.ts:1311`, `:1274`) to legacy rows
-- [ ] write a RED playtest: unequip a starter item, assert it appears as a sellable owned row and `sellUninstalledGear` returns >0; sell it and assert credits increase + item gone
-- [ ] write an edge test: a save with a pre-existing legacy-bag item can now sell/jettison it
-- [ ] run `npm run test:save-compat` — confirm no schema break (bucket move only)
-- [ ] run tests — must pass before next task
+- [x] run `impact` on the HangarPanel `[снять]` handler, `uninstallToOwned`, `addOwnedGear`, `sellUninstalledGear`
+- [x] Deviation from the plan: did NOT reroute HangarPanel unequip (`HangarPanel.ts` `[снять]`), the preset-swap path (`GearBridge.ts` `applyLoadoutPreset`), or load-revalidation (`GameEngine.ts` `revalidateToCurrentHull` consumer) through `uninstallToOwned`/`addOwnedGear` — doing so provably reds three existing pinned tests that lock in bag-preservation of micromodule/upgrades fidelity: `HangarPanel.test.ts` ("unfits a slot back off the loadout via [снять]" asserts `addItem` is called — "bagged, not destroyed"), `loadoutPresets.test.ts` ("preserves a slot's micromodule across an unfit/re-apply round-trip" and "skips a preset slot whose gear was sold..."), and `loadoutRevalidateOnLoad.test.ts` ("re-homes a dropped slot's micromodule + upgrades into the bag losslessly"). Per the standing rule (never touch/weaken existing test assertions; a reneded test is a root-cause signal to re-diagnose, not patch), the real root cause isn't "wrong bucket" — it's that legacy-bag (`kind:"legacy"`) rows had no sell/jettison UI at all. Fixed at that layer instead (next item), which transitively frees stuck items from all three sources (unequip, preset-swap leftovers, revalidation evictions) without touching any bucket-routing.
+- [x] made pre-existing legacy-bag (`kind:"legacy"`) rows sellable/jettisonable: added `sellLegacyModule`/`jettisonLegacyModule` (index-based, operate directly on `player.inventory.modules`) and wired them into `HangarPanel.renderWarehouseAndCargo`'s Sell/[Выброс]/confirm-jettison flow alongside the existing owned-gear path (`pendingJettison` extended with a `"legacyGear"` kind)
+- [x] write a RED playtest: unequip a starter item via `[снять]`, assert it lands in the legacy bag (no `ownedGearIds` entry — starter gear was never owned) and is now sellable via the legacy-row `[Продать]` button; sell it and assert credits increase + item gone (`HangarPanel.test.ts` "a starter item unfitted via [снять] can then be sold from the bag (was permanently stuck)")
+- [x] write an edge test: a save with a pre-existing legacy-bag item can now sell/jettison it (`HangarPanel.test.ts` "sells a pre-existing legacy-bag item" + "jettisons a pre-existing legacy-bag item via confirm/cancel")
+- [x] run `npm run test:save-compat` — confirm no schema break (no bucket move; UI-only + a pure index-based sell/jettison helper)
+- [x] run tests — must pass before next task
 
 ### Task 14: Wire the boarding grapple into enemy disengage/flee
 - [ ] run `impact` on `attemptFlee`/`fleeEscapeChance`/`onFleeShakedown` and the NPC `BREAK_OFF`/`decideManeuver` path

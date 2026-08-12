@@ -55,11 +55,13 @@ import {
   upsertLoadoutPreset,
   removeLoadoutPreset,
   applyLoadoutPreset,
+  jettisonLegacyModule,
   type MicromoduleDropTarget,
 } from "@/systems/equipment/GearBridge";
 import {
   sellGearPrice,
   sellUninstalledGear,
+  sellLegacyModule,
 } from "@/systems/equipment/sellGear";
 import { hullStatus, repairCost } from "@/systems/equipment/hullStatus";
 import { diagnosticVoiceLine } from "@/systems/equipment/serviceVoice";
@@ -197,8 +199,10 @@ export class HangarPanel {
   }> = [];
   private ctx: HangarPanelContext | null = null;
 
-  private pendingJettison: { kind: "gear" | "resource"; id: string } | null =
-    null;
+  private pendingJettison: {
+    kind: "gear" | "resource" | "legacyGear";
+    id: string;
+  } | null = null;
 
   private leftContent: Container | null = null;
   private rightContent: Container | null = null;
@@ -1307,15 +1311,18 @@ export class HangarPanel {
 
       const btnRight = rightX + rightW - 8;
       const ownedGearId = row.kind === "owned" ? row.gearId : null;
+      const legacyIndex = row.kind === "legacy" ? row.index : null;
       const confirmingJettison =
-        ownedGearId !== null &&
-        this.pendingJettison?.kind === "gear" &&
-        this.pendingJettison.id === ownedGearId;
+        (ownedGearId !== null &&
+          this.pendingJettison?.kind === "gear" &&
+          this.pendingJettison.id === ownedGearId) ||
+        (legacyIndex !== null &&
+          this.pendingJettison?.kind === "legacyGear" &&
+          this.pendingJettison.id === String(legacyIndex));
       const installable = !!gear && gear.kind !== GearKind.HULL && !!loadout;
       const cancelLabel = "[Отмена]";
       const confirmJettisonLabel = "[Выбросить]";
-      const sellLabel =
-        row.kind === "owned" && gear ? `[Продать ${sellGearPrice(gear)}₡]` : "";
+      const sellLabel = gear ? `[Продать ${sellGearPrice(gear)}₡]` : "";
       const installLabel = "[Установить]";
       const jettisonLabel = "[Выброс]";
       const rightLabels = confirmingJettison
@@ -1323,7 +1330,7 @@ export class HangarPanel {
         : [
             ...(sellLabel ? [sellLabel] : []),
             ...(installable ? [installLabel] : []),
-            ...(ownedGearId ? [jettisonLabel] : []),
+            ...(ownedGearId || legacyIndex !== null ? [jettisonLabel] : []),
           ];
       const rowBtnBudgetPx =
         rightLabels.length > 0
@@ -1349,7 +1356,7 @@ export class HangarPanel {
       rowText.eventMode = "none";
       container.addChild(rowText);
 
-      if (confirmingJettison && ownedGearId) {
+      if (confirmingJettison) {
         const cancelBtn = scaledText(cancelLabel, 11, 0x99aabb, {
           rawColor: true,
           fontFamily: "monospace",
@@ -1380,7 +1387,7 @@ export class HangarPanel {
         });
         container.addChild(confirmBtn);
       } else {
-        if (row.kind === "owned" && gear) {
+        if (gear) {
           const sellBtn = scaledText(sellLabel, 11, 0x44ff88, {
             rawColor: true,
             fontFamily: "monospace",
@@ -1392,7 +1399,10 @@ export class HangarPanel {
           sellBtn.cursor = "pointer";
           sellBtn.on("pointerdown", (e) => {
             e.stopPropagation();
-            const refund = sellUninstalledGear(player, gearId, this.ctx!.bank);
+            const refund =
+              row.kind === "owned"
+                ? sellUninstalledGear(player, gearId, this.ctx!.bank)
+                : sellLegacyModule(player, row.index, this.ctx!.bank);
             if (refund > 0) {
               this.sfx("sell");
               this.ctx!.showToast(
@@ -1428,7 +1438,7 @@ export class HangarPanel {
           container.addChild(eqBtn);
         }
 
-        if (ownedGearId) {
+        if (ownedGearId || legacyIndex !== null) {
           const jettisonBtn = scaledText(jettisonLabel, 11, 0xff8844, {
             rawColor: true,
             fontFamily: "monospace",
@@ -1440,7 +1450,11 @@ export class HangarPanel {
           jettisonBtn.cursor = "pointer";
           jettisonBtn.on("pointerdown", (e) => {
             e.stopPropagation();
-            this.requestJettisonConfirm("gear", ownedGearId);
+            if (ownedGearId) {
+              this.requestJettisonConfirm("gear", ownedGearId);
+            } else if (legacyIndex !== null) {
+              this.requestJettisonConfirm("legacyGear", String(legacyIndex));
+            }
           });
           container.addChild(jettisonBtn);
         }
@@ -1662,7 +1676,10 @@ export class HangarPanel {
     this.ctx!.rerender();
   }
 
-  private requestJettisonConfirm(kind: "gear" | "resource", id: string): void {
+  private requestJettisonConfirm(
+    kind: "gear" | "resource" | "legacyGear",
+    id: string,
+  ): void {
     this.pendingJettison = { kind, id };
     this.ctx!.rerender();
   }
@@ -1683,6 +1700,8 @@ export class HangarPanel {
     }
     if (pending.kind === "gear") {
       jettisonOwnedGear(player, pending.id);
+    } else if (pending.kind === "legacyGear") {
+      jettisonLegacyModule(player, Number(pending.id));
     } else {
       const stack = player.inventory.resources.find(
         (r) => r.type === pending.id,
