@@ -497,6 +497,13 @@ export const en: Dict = {
   "infoCenter.objectsPlaceholder": "Enter an NPC, planet, or system name...",
   "infoCenter.objectsHintOtherTab":
     "Search ships, planets, systems — OBJECTS tab",
+  "infoCenter.gearMinHp": "HP≥:",
+  "infoCenter.gearMinSlots": "Slots≥:",
+  "infoCenter.gearMinCargo": "Cargo≥:",
+  "infoCenter.gearMinDamage": "Dmg≥:",
+  "infoCenter.gearMinRange": "Range≥:",
+  "infoCenter.gearAnyThreshold": "any",
+  "infoCenter.gearSortStat": "Stat",
 
   "planet.starMapPurchased":
     "Map purchased for {price} ₡ — systems revealed: {revealed}",

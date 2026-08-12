@@ -215,13 +215,13 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 11: Infocenter gear search by characteristics
-- [ ] run `impact` on `InfoCenterScene.runGearSearch`/`renderGear` and `GalacticRegistry.findEquipment`/`findGear`
-- [ ] switch the infocenter gear search to `registry.findGear(GearQuery)` (or extend `EquipmentQuery` with stat thresholds) so it can filter by `minHp/minSlots/minCargo/minDamage/minRange` (`GalacticRegistry.ts:87-102,288-309`)
-- [ ] add stat-threshold controls to the gear search UI (`InfoCenterScene.ts:1041-1364`) alongside the existing facet/tech/price pills — one input per relevant stat, shown per active facet (e.g. damage/range for weapons, HP/slots/cargo for hulls)
-- [ ] keep existing facet/tech/price/sort controls working; add sort-by-stat (damage/hp) where `findGear` supports it
-- [ ] write tests: a stat threshold filters out gear below it; combining facet + stat + price narrows correctly; empty thresholds == current behavior
-- [ ] screenshot-verify the new search controls render without overlap
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `InfoCenterScene.runGearSearch`/`renderGear` and `GalacticRegistry.findEquipment`/`findGear`
+- [x] switch the infocenter gear search to `registry.findGear(GearQuery)` (or extend `EquipmentQuery` with stat thresholds) so it can filter by `minHp/minSlots/minCargo/minDamage/minRange` (`GalacticRegistry.ts:87-102,288-309`)
+- [x] add stat-threshold controls to the gear search UI (`InfoCenterScene.ts:1041-1364`) alongside the existing facet/tech/price pills — one input per relevant stat, shown per active facet (e.g. damage/range for weapons, HP/slots/cargo for hulls)
+- [x] keep existing facet/tech/price/sort controls working; add sort-by-stat (damage/hp) where `findGear` supports it
+- [x] write tests: a stat threshold filters out gear below it; combining facet + stat + price narrows correctly; empty thresholds == current behavior
+- [x] screenshot-verify the new search controls render without overlap — no live-browser tool available in this environment; verified with a geometry regression test (`src/tests/presentation/infoCenterGearSearchStatFilterLayout.test.ts`) that captures every `Graphics.rect()` call during `renderGear` and asserts the hull (HP/Slots/Cargo) and weapon (Dmg/Range) stat-threshold boxes sit on one row, in sequence with no x-overlap, and stay within the panel width
+- [x] run tests — must pass before next task
 
 ### Task 12: Route-to-shop + "flight to purchase" quest (replace "→ Карта")
 - [ ] run `impact` on `openStarMapForSystem`, `navigateToQuestTarget`, `QuestManager.acceptQuestFromTemplate`

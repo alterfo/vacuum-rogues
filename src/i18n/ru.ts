@@ -496,6 +496,13 @@ export const ru: Dict = {
   "infoCenter.objectsPlaceholder": "Введите имя NPC, планеты или системы...",
   "infoCenter.objectsHintOtherTab":
     "Поиск кораблей, планет и систем — вкладка ОБЪЕКТЫ",
+  "infoCenter.gearMinHp": "ПП≥:",
+  "infoCenter.gearMinSlots": "Слоты≥:",
+  "infoCenter.gearMinCargo": "Трюм≥:",
+  "infoCenter.gearMinDamage": "Урон≥:",
+  "infoCenter.gearMinRange": "Дальн≥:",
+  "infoCenter.gearAnyThreshold": "любой",
+  "infoCenter.gearSortStat": "Характеристика",
 
   "planet.starMapPurchased":
     "Карта куплена за {price} ₡ — открыто систем: {revealed}",

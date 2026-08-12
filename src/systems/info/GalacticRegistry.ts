@@ -84,7 +84,15 @@ export interface GearHit extends GearListing {
   readonly jumps: number;
 }
 
-export interface GearQuery {
+export interface GearStatFilter {
+  readonly minHp?: number;
+  readonly minSlots?: number;
+  readonly minCargo?: number;
+  readonly minDamage?: number;
+  readonly minRange?: number;
+}
+
+export interface GearQuery extends GearStatFilter {
   readonly originSystemId: string;
   readonly kind?: GearKind;
   readonly minTech?: number;
@@ -92,11 +100,6 @@ export interface GearQuery {
   readonly maxSize?: number;
   readonly maxPrice?: number;
   readonly maxJumps?: number;
-  readonly minHp?: number;
-  readonly minSlots?: number;
-  readonly minCargo?: number;
-  readonly minDamage?: number;
-  readonly minRange?: number;
   readonly sort?: "price" | "jumps" | "damage" | "hp" | "tech";
   readonly limit?: number;
 }
@@ -119,13 +122,14 @@ export interface EquipmentHit {
   readonly planetId: string;
 }
 
-export interface EquipmentQuery {
+export interface EquipmentQuery extends GearStatFilter {
   readonly originSystemId: string;
   readonly type?: EquipmentFacet;
   readonly types?: EquipmentFacet[];
   readonly name?: string;
   readonly maxPrice?: number;
   readonly maxJumps?: number;
+  readonly sort?: "price" | "jumps" | "damage" | "hp";
 }
 
 export class GalacticRegistry {
@@ -335,6 +339,8 @@ export class GalacticRegistry {
         !l.gear.name.toLowerCase().includes(query.name.toLowerCase())
       )
         continue;
+      if (!matchesHull(l.gear, query)) continue;
+      if (!matchesWeapon(l.gear, query)) continue;
       const jumps = dist.get(l.systemId);
       if (jumps === undefined) continue;
       if (query.maxJumps !== undefined && jumps > query.maxJumps) continue;
@@ -359,7 +365,7 @@ export class GalacticRegistry {
         planetId: l.planetId,
       });
     }
-    hits.sort((a, b) => a.price - b.price || a.jumps - b.jumps);
+    sortEquipment(hits, query.sort ?? "price");
     return hits;
   }
 
@@ -410,7 +416,7 @@ function matchesSingleFacet(g: Gear, facet: EquipmentFacet): boolean {
   }
 }
 
-function matchesHull(g: Gear, q: GearQuery): boolean {
+function matchesHull(g: Gear, q: GearStatFilter): boolean {
   const wantsHull =
     q.minHp !== undefined ||
     q.minSlots !== undefined ||
@@ -424,7 +430,7 @@ function matchesHull(g: Gear, q: GearQuery): boolean {
   return true;
 }
 
-function matchesWeapon(g: Gear, q: GearQuery): boolean {
+function matchesWeapon(g: Gear, q: GearStatFilter): boolean {
   const wantsWeapon = q.minDamage !== undefined || q.minRange !== undefined;
   if (!wantsWeapon) return true;
   if (g.kind !== GearKind.WEAPON) return false;
@@ -432,6 +438,29 @@ function matchesWeapon(g: Gear, q: GearQuery): boolean {
   if (q.minDamage !== undefined && w.damage < q.minDamage) return false;
   if (q.minRange !== undefined && w.range < q.minRange) return false;
   return true;
+}
+
+function sortEquipment(
+  hits: EquipmentHit[],
+  sort: NonNullable<EquipmentQuery["sort"]>,
+): void {
+  const dmg = (h: EquipmentHit) =>
+    h.gear.kind === GearKind.WEAPON ? (h.gear as WeaponSpec).damage : 0;
+  const hp = (h: EquipmentHit) =>
+    h.gear.kind === GearKind.HULL ? (h.gear as HullSpec).hp : 0;
+  hits.sort((a, b) => {
+    switch (sort) {
+      case "jumps":
+        return a.jumps - b.jumps || a.price - b.price;
+      case "damage":
+        return dmg(b) - dmg(a) || a.price - b.price;
+      case "hp":
+        return hp(b) - hp(a) || a.price - b.price;
+      case "price":
+      default:
+        return a.price - b.price || a.jumps - b.jumps;
+    }
+  });
 }
 
 function sortGear(hits: GearHit[], sort: NonNullable<GearQuery["sort"]>): void {

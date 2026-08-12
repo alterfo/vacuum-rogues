@@ -289,11 +289,22 @@ function isStaleSystem(
 }
 
 type Tab = "news" | "objects" | "gear";
-type GearSortOption = "price" | "tech" | "distance";
+type GearSortOption = "price" | "tech" | "distance" | "stat";
 
-const GEAR_SORT_OPTIONS: GearSortOption[] = ["price", "tech", "distance"];
+const GEAR_SORT_OPTIONS: GearSortOption[] = [
+  "price",
+  "tech",
+  "distance",
+  "stat",
+];
 const GEAR_MAX_PRICE_OPTIONS = [0, 1000, 5000, 10000, 50000];
 export const GEAR_TECH_MAX = 8;
+
+const GEAR_HP_OPTIONS = [0, 50, 100, 200, 400, 800];
+const GEAR_SLOTS_OPTIONS = [0, 1, 2, 3, 4, 5];
+const GEAR_CARGO_OPTIONS = [0, 10, 25, 50, 100, 200];
+const GEAR_DAMAGE_OPTIONS = [0, 5, 10, 20, 40, 80];
+const GEAR_RANGE_OPTIONS = [0, 50, 100, 200, 400];
 
 export function cycleGearTech(value: number): number {
   return (value % GEAR_TECH_MAX) + 1;
@@ -343,6 +354,11 @@ export class InfoCenterScene extends GameScene {
   private gearMaxTech = GEAR_TECH_MAX;
   private gearMaxPriceIdx = 0; // index into GEAR_MAX_PRICE_OPTIONS
   private gearSort: GearSortOption = "price";
+  private gearMinHpIdx = 0; // index into GEAR_HP_OPTIONS
+  private gearMinSlotsIdx = 0; // index into GEAR_SLOTS_OPTIONS
+  private gearMinCargoIdx = 0; // index into GEAR_CARGO_OPTIONS
+  private gearMinDamageIdx = 0; // index into GEAR_DAMAGE_OPTIONS
+  private gearMinRangeIdx = 0; // index into GEAR_RANGE_OPTIONS
   private gearResults: EquipmentHit[] = [];
   private gearScroll = 0;
   private gearList: ScrollableList<EquipmentHit> | null = null;
@@ -1269,7 +1285,11 @@ export class InfoCenterScene extends GameScene {
     });
     container.addChild(sortBg);
 
-    const sortVal = scaledText(GEAR_SORT_LABELS[this.gearSort], 12, 0xaabbcc, {
+    const sortValLabel =
+      this.gearSort === "stat"
+        ? t("infoCenter.gearSortStat")
+        : GEAR_SORT_LABELS[this.gearSort];
+    const sortVal = scaledText(sortValLabel, 12, 0xaabbcc, {
       rawColor: true,
       fontFamily: "monospace",
     });
@@ -1304,7 +1324,87 @@ export class InfoCenterScene extends GameScene {
     findBtnLabel.eventMode = "none";
     container.addChild(findBtnLabel);
 
-    const LIST_Y = CTRL_Y + CTRL_H + 8;
+    const showStatRow = singleFacet === "hull" || singleFacet === "weapon";
+    const STAT_Y = CTRL_Y + CTRL_H + 6;
+    const anyThreshold = t("infoCenter.gearAnyThreshold");
+    if (showStatRow) {
+      let sx = PAD;
+      if (singleFacet === "hull") {
+        sx = this.mountStatCycle(
+          container,
+          sx,
+          STAT_Y,
+          CTRL_H,
+          t("infoCenter.gearMinHp"),
+          GEAR_HP_OPTIONS[this.gearMinHpIdx] === 0
+            ? anyThreshold
+            : String(GEAR_HP_OPTIONS[this.gearMinHpIdx]),
+          () => {
+            this.gearMinHpIdx =
+              (this.gearMinHpIdx + 1) % GEAR_HP_OPTIONS.length;
+          },
+        );
+        sx = this.mountStatCycle(
+          container,
+          sx + GAP,
+          STAT_Y,
+          CTRL_H,
+          t("infoCenter.gearMinSlots"),
+          GEAR_SLOTS_OPTIONS[this.gearMinSlotsIdx] === 0
+            ? anyThreshold
+            : String(GEAR_SLOTS_OPTIONS[this.gearMinSlotsIdx]),
+          () => {
+            this.gearMinSlotsIdx =
+              (this.gearMinSlotsIdx + 1) % GEAR_SLOTS_OPTIONS.length;
+          },
+        );
+        this.mountStatCycle(
+          container,
+          sx + GAP,
+          STAT_Y,
+          CTRL_H,
+          t("infoCenter.gearMinCargo"),
+          GEAR_CARGO_OPTIONS[this.gearMinCargoIdx] === 0
+            ? anyThreshold
+            : String(GEAR_CARGO_OPTIONS[this.gearMinCargoIdx]),
+          () => {
+            this.gearMinCargoIdx =
+              (this.gearMinCargoIdx + 1) % GEAR_CARGO_OPTIONS.length;
+          },
+        );
+      } else {
+        sx = this.mountStatCycle(
+          container,
+          sx,
+          STAT_Y,
+          CTRL_H,
+          t("infoCenter.gearMinDamage"),
+          GEAR_DAMAGE_OPTIONS[this.gearMinDamageIdx] === 0
+            ? anyThreshold
+            : String(GEAR_DAMAGE_OPTIONS[this.gearMinDamageIdx]),
+          () => {
+            this.gearMinDamageIdx =
+              (this.gearMinDamageIdx + 1) % GEAR_DAMAGE_OPTIONS.length;
+          },
+        );
+        this.mountStatCycle(
+          container,
+          sx + GAP,
+          STAT_Y,
+          CTRL_H,
+          t("infoCenter.gearMinRange"),
+          GEAR_RANGE_OPTIONS[this.gearMinRangeIdx] === 0
+            ? anyThreshold
+            : String(GEAR_RANGE_OPTIONS[this.gearMinRangeIdx]),
+          () => {
+            this.gearMinRangeIdx =
+              (this.gearMinRangeIdx + 1) % GEAR_RANGE_OPTIONS.length;
+          },
+        );
+      }
+    }
+
+    const LIST_Y = showStatRow ? STAT_Y + CTRL_H + 8 : CTRL_Y + CTRL_H + 8;
     const ROW_H = Math.max(
       38,
       5 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(10)) + 3,
@@ -1439,6 +1539,50 @@ export class InfoCenterScene extends GameScene {
     return row;
   }
 
+  private mountStatCycle(
+    container: Container,
+    x: number,
+    y: number,
+    h: number,
+    label: string,
+    valueLabel: string,
+    onCycle: () => void,
+  ): number {
+    const lbl = scaledText(label, 12, 0x88aacc, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    lbl.x = x;
+    lbl.y = y + 7;
+    lbl.eventMode = "none";
+    container.addChild(lbl);
+    const labelW = label.length * 7 + 4;
+    const boxX = x + labelW;
+    const boxW = 46;
+    const bg = new Graphics();
+    bg.rect(boxX, y, boxW, h);
+    bg.fill({ color: 0x0d1522 });
+    bg.stroke({ color: 0x556677, width: 1 });
+    bg.eventMode = "static";
+    bg.cursor = "pointer";
+    bg.on("pointerdown", (e) => {
+      e.stopPropagation();
+      onCycle();
+      this.render();
+    });
+    container.addChild(bg);
+    const val = scaledText(valueLabel, 11, 0xaabbcc, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    val.anchor.set(0.5, 0.5);
+    val.x = boxX + boxW / 2;
+    val.y = y + h / 2;
+    val.eventMode = "none";
+    container.addChild(val);
+    return boxX + boxW;
+  }
+
   private runGearSearch(): void {
     this.gearResults = [];
     const registry = this.gameEngine?.getInfoRegistry();
@@ -1448,11 +1592,39 @@ export class InfoCenterScene extends GameScene {
     const originId =
       this.gameEngine?.player?.currentSystemId ?? galaxy.systems[0]?.id ?? "";
     const maxPrice = GEAR_MAX_PRICE_OPTIONS[this.gearMaxPriceIdx];
+    const singleFacet =
+      this.gearFacets.size === 1
+        ? (this.gearFacets.values().next().value as EquipmentFacet)
+        : null;
+
+    const statFilters =
+      singleFacet === "hull"
+        ? {
+            minHp: GEAR_HP_OPTIONS[this.gearMinHpIdx] || undefined,
+            minSlots: GEAR_SLOTS_OPTIONS[this.gearMinSlotsIdx] || undefined,
+            minCargo: GEAR_CARGO_OPTIONS[this.gearMinCargoIdx] || undefined,
+          }
+        : singleFacet === "weapon"
+          ? {
+              minDamage:
+                GEAR_DAMAGE_OPTIONS[this.gearMinDamageIdx] || undefined,
+              minRange: GEAR_RANGE_OPTIONS[this.gearMinRangeIdx] || undefined,
+            }
+          : {};
 
     let hits = registry.findEquipment({
       originSystemId: originId,
       types: this.gearFacets.size > 0 ? [...this.gearFacets] : undefined,
       maxPrice: maxPrice > 0 ? maxPrice : undefined,
+      sort:
+        this.gearSort === "stat"
+          ? singleFacet === "weapon"
+            ? "damage"
+            : singleFacet === "hull"
+              ? "hp"
+              : undefined
+          : undefined,
+      ...statFilters,
     });
 
     hits = hits.filter(
