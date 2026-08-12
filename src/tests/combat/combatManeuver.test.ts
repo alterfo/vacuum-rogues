@@ -163,3 +163,30 @@ describe("decideManeuver — boundary cases", () => {
     expect(d.mode).toBe(ManeuverMode.CLOSE);
   });
 });
+
+describe("decideManeuver — grapple suppresses BREAK_OFF", () => {
+  it("a grappled low-hull target does not BREAK_OFF — it orbits/closes instead", () => {
+    const d = decideManeuver(
+      input({
+        range: 100,
+        targetX: 100,
+        hullRatio: BREAK_OFF_HULL_RATIO - 0.05,
+        grappled: true,
+      }),
+    );
+    expect(d.mode).not.toBe(ManeuverMode.BREAK_OFF);
+    expect(d.mode).toBe(ManeuverMode.ORBIT);
+  });
+
+  it("an un-grappled low-hull target still BREAK_OFFs (unchanged default behavior)", () => {
+    const d = decideManeuver(
+      input({
+        range: 100,
+        targetX: 100,
+        hullRatio: BREAK_OFF_HULL_RATIO - 0.05,
+        grappled: false,
+      }),
+    );
+    expect(d.mode).toBe(ManeuverMode.BREAK_OFF);
+  });
+});

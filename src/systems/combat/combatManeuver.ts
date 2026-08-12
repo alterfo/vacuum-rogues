@@ -15,6 +15,7 @@ export interface ManeuverInput {
   targetY: number;
   hullRatio?: number;
   orbitDir?: 1 | -1;
+  grappled?: boolean;
 }
 
 export interface ManeuverDecision {
@@ -36,11 +37,12 @@ export function decideManeuver(input: ManeuverInput): ManeuverDecision {
     targetY,
     hullRatio = 1,
     orbitDir = 1,
+    grappled = false,
   } = input;
 
   const angleToTarget = Math.atan2(targetY - selfY, targetX - selfX);
 
-  if (hullRatio < BREAK_OFF_HULL_RATIO) {
+  if (hullRatio < BREAK_OFF_HULL_RATIO && !grappled) {
     return {
       mode: ManeuverMode.BREAK_OFF,
       heading: wrapAngle(angleToTarget + Math.PI),

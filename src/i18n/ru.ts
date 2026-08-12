@@ -271,6 +271,7 @@ export const ru: Dict = {
   "flight.lootModule": "модуль",
 
   "flight.incomingAttacker": "⚠ Приближается противник: {name}!",
+  "flight.grappledHint": "🔗 Абордажный крюк держит {name} — не уйдёт!",
   "flight.overmindCoreBroken":
     "Ядро Овермайнда уничтожено — рой обезглавлен! Освободите оставшиеся системы.",
   "flight.starMap": "Межзвёздная карта",

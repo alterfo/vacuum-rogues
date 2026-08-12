@@ -3,8 +3,10 @@ import {
   shakedownTribute,
   fleeEscapeChance,
   attemptFlee,
+  grappleHoldFraction,
   SHAKEDOWN_OUTCOME,
 } from "@/systems/npc/NpcBrain";
+import { GRAPPLE_HOLD } from "@/config/balance";
 import { SeededRNG } from "@/utils/seededRNG";
 import { BALANCE_EPSILON } from "@/domain/banking/Ledger";
 import { BankBus } from "@/systems/banking/bus";
@@ -81,6 +83,47 @@ describe("fleeEscapeChance", () => {
     expect(fast).toBeGreaterThan(even);
     expect(slow).toBeGreaterThanOrEqual(SHAKEDOWN_OUTCOME.fleeMinChance);
     expect(fast).toBeLessThanOrEqual(SHAKEDOWN_OUTCOME.fleeMaxChance);
+  });
+});
+
+describe("grappleHoldFraction", () => {
+  it("is zero with no grapple installed", () => {
+    expect(grappleHoldFraction(0, 100)).toBe(0);
+  });
+
+  it("saturates at 1 once grappleStrength reaches the enemy's threshold", () => {
+    const threshold = 100 * GRAPPLE_HOLD.hullToThreshold;
+    expect(grappleHoldFraction(threshold, 100)).toBe(1);
+    expect(grappleHoldFraction(threshold * 2, 100)).toBe(1);
+  });
+
+  it("scales linearly below the threshold", () => {
+    const threshold = 100 * GRAPPLE_HOLD.hullToThreshold;
+    expect(grappleHoldFraction(threshold / 2, 100)).toBeCloseTo(0.5, 5);
+  });
+
+  it("a bigger/tougher enemy needs proportionally more grapple strength", () => {
+    const weak = grappleHoldFraction(50, 100);
+    const tough = grappleHoldFraction(50, 400);
+    expect(weak).toBeGreaterThan(tough);
+  });
+});
+
+describe("fleeEscapeChance — grapple hold", () => {
+  it("no hold leaves the base chance unchanged", () => {
+    const base = fleeEscapeChance(0.2, 0.2);
+    expect(fleeEscapeChance(0.2, 0.2, 0)).toBeCloseTo(base, 6);
+  });
+
+  it("full hold (1) drives the escape chance to exactly zero", () => {
+    expect(fleeEscapeChance(0.2, 0.2, 1)).toBe(0);
+  });
+
+  it("partial hold scales the chance down proportionally, not to zero", () => {
+    const base = fleeEscapeChance(0.2, 0.2);
+    const held = fleeEscapeChance(0.2, 0.2, 0.5);
+    expect(held).toBeCloseTo(base * 0.5, 6);
+    expect(held).toBeGreaterThan(0);
   });
 });
 

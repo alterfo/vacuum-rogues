@@ -147,6 +147,10 @@ export const SYSTEM_GEOMETRY = {
   orbitRadii: [600, 1050, 1500, 1950, 2500] as const,
 } as const;
 
+export const GRAPPLE_HOLD = {
+  hullToThreshold: 0.5,
+} as const;
+
 export const GameConfig = {
   GAME_TITLE: "ВАКУУМНЫЕ ПРОЙДОХИ",
   ALLOWED_ORIGINS: [

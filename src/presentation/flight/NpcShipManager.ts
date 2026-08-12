@@ -13,6 +13,7 @@ import { OvermindBossController } from "./OvermindBossController";
 import type { NpcShip } from "@/domain/NpcShip";
 import type { CommsContext } from "@/systems/comms/commsOptions";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
+import { grappleHoldFraction } from "@/systems/npc/NpcBrain";
 import { isHostile, factionKindOf } from "@/systems/npc/factionHostility";
 import {
   adjustPlayerCredits,
@@ -77,6 +78,7 @@ export class NpcShipManager implements FlightModule {
   private npcSprites: NpcShipSprite[] = [];
   private npcAnchorPlanet = new Map<NpcShipSprite, PlanetSprite>();
   private warnedAggressorIds = new Set<string>();
+  private grappledHintIds = new Set<string>();
   private readonly panels: ContactPanelManager;
   private readonly interaction: NpcInteractionController;
   private readonly pursuit: CombatPursuitController;
@@ -260,8 +262,29 @@ export class NpcShipManager implements FlightModule {
           );
         }
         this.warnedAggressorIds.add(sprite.npc.id);
+        const grappleStrength =
+          this.gameEngine?.playerLoadout?.derivedStats().grappleStrength ?? 0;
+        const grappleHold = grappleHoldFraction(
+          grappleStrength,
+          sprite.npc.maxHull,
+        );
+        const nowGrappled = grappleHold >= 1;
+        sprite.setGrappled(nowGrappled);
+        if (nowGrappled) {
+          if (!this.grappledHintIds.has(sprite.npc.id)) {
+            this.grappledHintIds.add(sprite.npc.id);
+            this.deps.showMessage(
+              t("flight.grappledHint", { name: sprite.npc.name }),
+              0x44ddff,
+            );
+          }
+        } else {
+          this.grappledHintIds.delete(sprite.npc.id);
+        }
       } else {
         this.warnedAggressorIds.delete(sprite.npc.id);
+        this.grappledHintIds.delete(sprite.npc.id);
+        sprite.setGrappled(false);
       }
       if (
         sprite.aggressive &&
@@ -287,6 +310,7 @@ export class NpcShipManager implements FlightModule {
       if (sprite.isGone()) {
         this.npcAnchorPlanet.delete(sprite);
         this.warnedAggressorIds.delete(sprite.npc.id);
+        this.grappledHintIds.delete(sprite.npc.id);
         sprite.destroy();
         this.npcSprites.splice(i, 1);
       } else {

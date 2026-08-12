@@ -868,3 +868,103 @@ describe("NpcShipManager.rememberFlightPos", () => {
     manager.destroy();
   });
 });
+
+describe("NpcShipManager — grapple pins an aggressive target", () => {
+  function harnessWithGrapple(grappleStrength: number | null): {
+    manager: NpcShipManager;
+    messages: Array<{ text: string; color?: number }>;
+    sprite: { setAggressive(on: boolean): void; isGrappled(): boolean };
+  } {
+    const messages: Array<{ text: string; color?: number }> = [];
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+
+    const npc = makeNpc("npc_grappled", NpcRole.PIRATE);
+    const galaxy = { npcShips: [npc] };
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+      playerLoadout:
+        grappleStrength == null
+          ? null
+          : { derivedStats: () => ({ grappleStrength }) },
+    } as unknown as GameEngine;
+
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: (text, color) => messages.push({ text, color }),
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+      isCombatant: () => true, // suppress the unrelated "incoming attacker" warning
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{
+          setAggressive(on: boolean): void;
+          isGrappled(): boolean;
+        }>;
+      }
+    ).npcSprites[0];
+    sprite.setAggressive(true);
+
+    return { manager, messages, sprite };
+  }
+
+  it("marks the target grappled once player grappleStrength meets its hold threshold", () => {
+    // npc_grappled has maxHull 100 (see makeNpc) → threshold = 100 * GRAPPLE_HOLD.hullToThreshold = 50
+    const { manager, messages, sprite } = harnessWithGrapple(90);
+
+    manager.update(1 / 60, 100);
+
+    expect(sprite.isGrappled()).toBe(true);
+    expect(messages.some((m) => m.text.includes("🔗"))).toBe(true);
+
+    manager.destroy();
+  });
+
+  it("does not mark the target grappled with no grapple installed", () => {
+    const { manager, messages, sprite } = harnessWithGrapple(null);
+
+    manager.update(1 / 60, 100);
+
+    expect(sprite.isGrappled()).toBe(false);
+    expect(messages.some((m) => m.text.includes("🔗"))).toBe(false);
+
+    manager.destroy();
+  });
+
+  it("only shows the grapple hint once across repeated frames", () => {
+    const { manager, messages } = harnessWithGrapple(90);
+
+    manager.update(1 / 60, 100);
+    manager.update(1 / 60, 100);
+    manager.update(1 / 60, 100);
+
+    expect(messages.filter((m) => m.text.includes("🔗")).length).toBe(1);
+
+    manager.destroy();
+  });
+});

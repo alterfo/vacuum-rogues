@@ -8,6 +8,7 @@ import {
   shipCombatStrength,
   shakedownTribute,
   attemptFlee,
+  grappleHoldFraction,
   acceptsHire,
   hireFee,
   hireGoal,
@@ -172,10 +173,14 @@ export class NpcInteractionController {
     const sprite = this.deps.getNpcSprites().find((s) => s.npc.id === npc.id);
     const playerSpeed = physics?.getMaxSpeed() ?? 0;
     const day = this.engine?.galaxy?.gameDays ?? 0;
+    const grappleStrength =
+      this.engine?.playerLoadout?.derivedStats().grappleStrength ?? 0;
+    const grappleHold = grappleHoldFraction(grappleStrength, npc.maxHull);
     const escaped = attemptFlee(
       playerSpeed,
       npc.speed,
       new SeededRNG(`flee:${npc.id}:${day}`),
+      grappleHold,
     );
     if (escaped) {
       this.disengagePirate(npc);

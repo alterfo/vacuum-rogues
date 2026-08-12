@@ -270,6 +270,8 @@ export const en: Dict = {
   "flight.lootModule": "module",
 
   "flight.incomingAttacker": "⚠ Incoming attacker: {name}!",
+  "flight.grappledHint":
+    "🔗 The boarding grapple holds {name} — it can't escape!",
   "flight.overmindCoreBroken":
     "The Overmind core is destroyed — the swarm is beheaded! Liberate the remaining systems.",
   "flight.starMap": "Interstellar Map",

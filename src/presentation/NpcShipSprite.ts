@@ -86,6 +86,7 @@ export class NpcShipSprite {
   private aggressorOrbitDir: 1 | -1 = 1;
   private npcCombatX: number | null = null;
   private npcCombatY: number | null = null;
+  private grappled = false;
 
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
     this.npc = npc;
@@ -352,6 +353,14 @@ export class NpcShipSprite {
     this.npcCombatY = null;
   }
 
+  setGrappled(v: boolean): void {
+    this.grappled = v;
+  }
+
+  isGrappled(): boolean {
+    return this.grappled;
+  }
+
   private maneuverToward(
     targetX: number,
     targetY: number,
@@ -370,6 +379,7 @@ export class NpcShipSprite {
       targetY,
       hullRatio: this.npc.maxHull > 0 ? this.npc.hullHP / this.npc.maxHull : 1,
       orbitDir: this.aggressorOrbitDir,
+      grappled: this.grappled,
     });
 
     if (decision.mode === ManeuverMode.BREAK_OFF) {

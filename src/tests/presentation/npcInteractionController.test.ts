@@ -365,6 +365,29 @@ describe("NpcInteractionController.onFleeShakedown", () => {
     expect(h.routes.length).toBe(1); // closes on the (moving) mark
     expect(h.msgs.some((m) => m.text.includes("атакует"))).toBe(true);
   });
+
+  it("a fully-grappled otherwise-slow pirate cannot escape — pinned into combat", () => {
+    const npc = makeNpc("f3", {
+      name: "Схваченный",
+      speed: 0,
+      aggressive: true,
+    });
+    Object.assign(npc, { maxHull: 100 });
+    const sprite = makeSprite(npc, 100, 0);
+    const engine = {
+      playerLoadout: {
+        derivedStats: () => ({ grappleStrength: 90 }),
+      },
+    } as unknown as GameEngine;
+    const h = makeHarness({
+      sprites: [sprite],
+      physics: makePhysics(80),
+      engine,
+    });
+    h.ctrl.onFleeShakedown(npc);
+    expect(h.combatStarted).toEqual([sprite]); // no escape despite speed 0 chance
+    expect(h.msgs.some((m) => m.text.includes("атакует"))).toBe(true);
+  });
 });
 
 describe("NpcInteractionController.onPayTribute", () => {

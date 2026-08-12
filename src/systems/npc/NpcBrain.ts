@@ -3,6 +3,7 @@ import type { Galaxy } from "@/domain/Galaxy";
 import type { SeededRNG } from "@/utils/seededRNG";
 import type { NpcGoal } from "@/types";
 import { NpcGoalKind, NpcRole } from "@/types";
+import { GRAPPLE_HOLD } from "@/config/balance";
 import {
   isHostile,
   type FactionKind,
@@ -162,12 +163,25 @@ export function shakedownTribute(playerCredits: number): number {
   return Math.min(bounded, Math.floor(playerCredits));
 }
 
+export function grappleHoldFraction(
+  grappleStrength: number,
+  enemyMaxHull: number,
+): number {
+  if (grappleStrength <= 0) return 0;
+  if (enemyMaxHull <= 0) return 1;
+  const threshold = enemyMaxHull * GRAPPLE_HOLD.hullToThreshold;
+  if (threshold <= 0) return 1;
+  return Math.min(1, Math.max(0, grappleStrength / threshold));
+}
+
 export function fleeEscapeChance(
   playerSpeed: number,
   pirateSpeed: number,
+  grappleHold = 0,
 ): number {
   if (playerSpeed <= 0) return 0;
-  if (pirateSpeed <= 0) return 1;
+  const hold = Math.min(1, Math.max(0, grappleHold));
+  if (pirateSpeed <= 0) return 1 * (1 - hold);
   const ratio = playerSpeed / pirateSpeed;
   const span =
     SHAKEDOWN_OUTCOME.fleeFastRatio - SHAKEDOWN_OUTCOME.fleeSlowRatio;
@@ -175,18 +189,19 @@ export function fleeEscapeChance(
     1,
     Math.max(0, (ratio - SHAKEDOWN_OUTCOME.fleeSlowRatio) / span),
   );
-  return (
+  const chance =
     SHAKEDOWN_OUTCOME.fleeMinChance +
-    t * (SHAKEDOWN_OUTCOME.fleeMaxChance - SHAKEDOWN_OUTCOME.fleeMinChance)
-  );
+    t * (SHAKEDOWN_OUTCOME.fleeMaxChance - SHAKEDOWN_OUTCOME.fleeMinChance);
+  return chance * (1 - hold);
 }
 
 export function attemptFlee(
   playerSpeed: number,
   pirateSpeed: number,
   rng: SeededRNG,
+  grappleHold = 0,
 ): boolean {
-  return rng.next() < fleeEscapeChance(playerSpeed, pirateSpeed);
+  return rng.next() < fleeEscapeChance(playerSpeed, pirateSpeed, grappleHold);
 }
 
 export const HIRE = {

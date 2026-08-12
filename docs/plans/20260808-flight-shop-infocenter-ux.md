@@ -242,13 +242,13 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 14: Wire the boarding grapple into enemy disengage/flee
-- [ ] run `impact` on `attemptFlee`/`fleeEscapeChance`/`onFleeShakedown` and the NPC `BREAK_OFF`/`decideManeuver` path
-- [ ] add a `GRAPPLE_*` balance constant block in `src/config/balance.ts` (strength→hold mapping; do NOT hardcode at call sites)
-- [ ] thread the player's `grappleStrength` (`DerivedStats`) into the shakedown flee path (`NpcInteractionController.ts:175` → `NpcBrain.attemptFlee`) to drive enemy escape chance toward 0 when `grappleStrength` ≥ the enemy's mass/tier threshold, scaled below it (per the Overview design assumption)
-- [ ] suppress NPC-initiated `BREAK_OFF`/disengage in `combatManeuver.ts`/`NpcShipSprite.ts` for the grappled target while grapple holds
-- [ ] surface a hint that the enemy is grappled (reuse existing combat/contact UI; no new art)
-- [ ] write tests: with sufficient grapple, an enemy that would flee cannot escape; below threshold it's only slowed; no grapple → unchanged behavior (existing flee tests stay green)
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `attemptFlee`/`fleeEscapeChance`/`onFleeShakedown` and the NPC `BREAK_OFF`/`decideManeuver` path
+- [x] add a `GRAPPLE_*` balance constant block in `src/config/balance.ts` (strength→hold mapping; do NOT hardcode at call sites)
+- [x] thread the player's `grappleStrength` (`DerivedStats`) into the shakedown flee path (`NpcInteractionController.ts:175` → `NpcBrain.attemptFlee`) to drive enemy escape chance toward 0 when `grappleStrength` ≥ the enemy's mass/tier threshold, scaled below it (per the Overview design assumption)
+- [x] suppress NPC-initiated `BREAK_OFF`/disengage in `combatManeuver.ts`/`NpcShipSprite.ts` for the grappled target while grapple holds
+- [x] surface a hint that the enemy is grappled (reuse existing combat/contact UI; no new art)
+- [x] write tests: with sufficient grapple, an enemy that would flee cannot escape; below threshold it's only slowed; no grapple → unchanged behavior (existing flee tests stay green)
+- [x] run tests — must pass before next task
 
 ### Task 15: Denser background starfield
 - [ ] run `impact` on `SpaceBackgroundLayer`
