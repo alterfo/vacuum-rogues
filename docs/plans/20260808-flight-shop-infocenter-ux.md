@@ -282,13 +282,13 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task — full suite 686 files / 6441 tests passed; lint 0 errors (72 pre-existing warnings); `tsc --noEmit` clean
 
 ### Task 19: Loosen the tech-cap chokepoint
-- [ ] run `impact` on `GALAXY_MAX_TECH_FLOOR`/`systemTechDistribution`/`TECH_UPLIFT_DAYS`
-- [ ] make tech-6+ gear reachable without waiting the whole campaign: either add a few high-tech systems / raise the galaxy tech ceiling (generation-only, new games) and/or shorten `TECH_UPLIFT_DAYS` (270 → ~180, config, applies live) — tune in `balance.ts`/`systemTechDistribution.ts`
-- [ ] compute the resulting effective buyable engine tier by day 300/500 and confirm it now matches the hull ladder
-- [ ] confirm existing pacing/overmind adaptive tests still green — if one reds, STOP and re-diagnose (do not weaken)
-- [ ] write a test pinning the new effective tech cap over time (day→cap curve)
-- [ ] run `npm run letsplay:ci` — progression/pacing gate
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `GALAXY_MAX_TECH_FLOOR`/`systemTechDistribution`/`TECH_UPLIFT_DAYS` (gitnexus index was stale/couldn't resolve the symbols; confirmed the small blast radius manually — `GalaxySimulator.ts`, `InfoService.ts`, `StationScene.ts`, `EquipmentShopScene.ts`, plus 3 existing test files, none of which hardcode the old numeric values — all reference the exported constants)
+- [x] made tech-6+ gear reachable without waiting the whole campaign: added a `[6, 1]` weight to `SYSTEM_TECH_WEIGHTS` (so systems can naturally roll tech 6 at generation, not only the forced peak) and raised `GALAXY_MAX_TECH_FLOOR` 5 → 6 (generation-only, new games) plus shortened `TECH_UPLIFT_DAYS` 270 → 180 (config, applies live to all saves) in `systemTechDistribution.ts`/`balance.ts`
+- [x] computed the resulting effective buyable engine tier by day 300/500 and confirmed it now matches the hull ladder — a fresh galaxy already carries a tech-6 system at day 0 (`hull_cruiser`/`eq_engine_iv`, both tech 6 with no `minDay` gate, become reachable together instead of only after day 270); pinned in the new test
+- [x] confirmed existing pacing/overmind adaptive tests still green (full suite: 687 files / 6445 tests passed, 0 regressions) — no diagnosis needed
+- [x] wrote `src/tests/balance/techCapChokepoint.test.ts` pinning the new effective tech cap over time (day→cap curve at day 0/300/500/10000) plus day-0 galaxy generation and stocking checks
+- [x] ran `npm run letsplay:ci` — 7 files / 97 tests passed, progression/pacing gate green
+- [x] ran tests — full unit suite, lint (pre-existing unrelated `.js`/`.cjs` lint noise, not touched by this change), `tsc --noEmit`, and `npm run test:save-compat` all green before next task
 
 ### Task 20: Mid-game wealth sink + gear uniqueness
 - [ ] run `impact` on `buyItem`/`generateShop`/`SaveStateSchema`

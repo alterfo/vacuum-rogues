@@ -70,7 +70,7 @@ export const QUEST_REWARD_ERA_START_DAY = 270;
 export const QUEST_REWARD_ERA_DOUBLING_DAYS = 135;
 export const QUEST_REWARD_ERA_MAX_MULT = 96;
 
-export const TECH_UPLIFT_DAYS = 270;
+export const TECH_UPLIFT_DAYS = 180;
 export const TECH_UPLIFT_CAP = 8;
 
 export const QUEST_DEADLINE_BASE_DAYS = 16;

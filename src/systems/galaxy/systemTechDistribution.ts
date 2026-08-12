@@ -7,11 +7,12 @@ export const SYSTEM_TECH_WEIGHTS: ReadonlyArray<readonly [number, number]> = [
   [3, 3],
   [4, 2],
   [5, 1],
+  [6, 1],
 ];
 
 export const HOME_SYSTEM_MIN_TECH = 3;
 
-export const GALAXY_MAX_TECH_FLOOR = 5;
+export const GALAXY_MAX_TECH_FLOOR = 6;
 
 export function pickSystemTechLevel(rng: { next(): number }): number {
   const total = SYSTEM_TECH_WEIGHTS.reduce((sum, [, w]) => sum + w, 0);
