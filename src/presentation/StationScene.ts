@@ -18,9 +18,13 @@ import {
 import { SceneType, StationType, QuestType, type MicroModule } from "@/types";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
-import { generateShop } from "@/systems/equipment/ShopGenerator";
+import {
+  generateShop,
+  soldOutKey,
+  shopBucket,
+} from "@/systems/equipment/ShopGenerator";
 import { techLevelWithUplift } from "@/systems/campaign/techUplift";
-import { GearKind } from "@/systems/equipment/GearCatalog";
+import { GearKind, isRareGear } from "@/systems/equipment/GearCatalog";
 import {
   micromoduleShopCatalog,
   micromodulePrice,
@@ -305,6 +309,7 @@ export class StationScene extends GameScene {
       day: galaxy.gameDays,
       priceFactor,
       maxTechLevel,
+      soldOutGear: galaxy.soldOutGear,
     }).filter((l) => l.gear.kind !== GearKind.HULL);
   }
 
@@ -1085,6 +1090,15 @@ export class StationScene extends GameScene {
     );
     acquireUninstalledGear(player, listing.gear.id);
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
+
+    if (isRareGear(listing.gear) && this.gameEngine?.galaxy) {
+      const galaxy = this.gameEngine.galaxy;
+      galaxy.soldOutGear ??= {};
+      galaxy.soldOutGear[soldOutKey(listing.planetId, listing.gear.id)] =
+        shopBucket(galaxy.gameDays);
+      this.buildShopInventory();
+    }
+
     this.render();
     this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
   }

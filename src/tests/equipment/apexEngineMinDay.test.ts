@@ -38,6 +38,8 @@ describe("apex engine minDay gate (plan Task 6)", () => {
     "eq_engine_vi",
     "eq_shield_fortress",
     "eq_droid_swarm",
+    "hull_marauder",
+    "eq_engine_surge",
   ]);
 
   it("the day-gated set is exactly the apex engine plus the endgame band", () => {

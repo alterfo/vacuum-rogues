@@ -454,6 +454,7 @@ export const GalaxySchema = z.object({
   overmindArc: OvermindSpreadStateSchema.default(DORMANT_OVERMIND_ARC),
   activeTradeBoomSystems: z.record(z.number().int().min(0)).default({}),
   activeRumors: z.array(RouteRumorSchema).default([]),
+  soldOutGear: z.record(z.number().int().min(0)).optional(),
 });
 
 export const DialogueSessionSchema = z.object({

@@ -7,11 +7,16 @@ import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import { SceneType, PlanetType } from "@/types";
-import { generateShop } from "@/systems/equipment/ShopGenerator";
+import {
+  generateShop,
+  soldOutKey,
+  shopBucket,
+} from "@/systems/equipment/ShopGenerator";
 import { techLevelWithUplift } from "@/systems/campaign/techUplift";
 import {
   GearKind,
   gearById,
+  isRareGear,
   type Gear,
   type HullSpec,
 } from "@/systems/equipment/GearCatalog";
@@ -215,6 +220,7 @@ export class EquipmentShopScene extends GameScene {
       day: this.gameEngine.galaxy.gameDays,
       priceFactor: techLevelForPlanet(this.planet.type) >= 4 ? 0.9 : 1.0,
       maxTechLevel,
+      soldOutGear: this.gameEngine.galaxy.soldOutGear,
     });
   }
 
@@ -1088,6 +1094,14 @@ export class EquipmentShopScene extends GameScene {
     );
     acquireUninstalledGear(player, listing.gear.id);
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
+
+    if (isRareGear(listing.gear) && this.gameEngine?.galaxy) {
+      const galaxy = this.gameEngine.galaxy;
+      galaxy.soldOutGear ??= {};
+      galaxy.soldOutGear[soldOutKey(listing.planetId, listing.gear.id)] =
+        shopBucket(galaxy.gameDays);
+      this.buildShopInventory();
+    }
 
     logger.info(
       `Bought ${listing.gear.name} for ${listing.price} credits ` +

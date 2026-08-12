@@ -25,6 +25,7 @@ export class Galaxy {
   };
   activeTradeBoomSystems: Record<string, number> = {};
   activeRumors: RouteRumor[] = [];
+  soldOutGear?: Record<string, number>;
 
   constructor(
     public readonly id: string,

@@ -24,11 +24,23 @@ export interface ShopOptions {
   readonly refreshEveryDays?: number;
   readonly priceFactor?: number;
   readonly maxTechLevel?: number;
+  readonly soldOutGear?: Readonly<Record<string, number>>;
 }
 
 function stockChance(gear: Gear): number {
   const byTech = Math.max(0.15, 0.95 - (gear.techLevel - 1) * 0.1);
   return isRareGear(gear) ? byTech * RARE_STOCK_FACTOR : byTech;
+}
+
+export function soldOutKey(planetId: string, gearId: string): string {
+  return `${planetId}|${gearId}`;
+}
+
+export function shopBucket(
+  day: number,
+  refreshEveryDays: number = SHOP_REFRESH_DAYS,
+): number {
+  return Math.floor(day / Math.max(1, refreshEveryDays));
 }
 
 export function generateShop(opts: ShopOptions): GearListing[] {
@@ -40,13 +52,20 @@ export function generateShop(opts: ShopOptions): GearListing[] {
     refreshEveryDays = SHOP_REFRESH_DAYS,
     priceFactor = 1,
     maxTechLevel,
+    soldOutGear,
   } = opts;
-  const bucket = Math.floor(day / Math.max(1, refreshEveryDays));
+  const bucket = shopBucket(day, refreshEveryDays);
   const listings: GearListing[] = [];
 
   for (const gear of GEAR_CATALOG) {
     if (maxTechLevel !== undefined && gear.techLevel > maxTechLevel) continue;
     if (gear.minDay !== undefined && day < gear.minDay) continue;
+    if (
+      isRareGear(gear) &&
+      soldOutGear?.[soldOutKey(planetId, gear.id)] === bucket
+    ) {
+      continue;
+    }
     const rng = new SeededRNG(`${seed}|shop|${planetId}|${bucket}|${gear.id}`);
     if (rng.next() > stockChance(gear)) continue;
     const jitter = rng.nextFloat(0.9, 1.15);
