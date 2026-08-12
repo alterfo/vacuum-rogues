@@ -259,12 +259,12 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task — also found and fixed a pre-existing regression from the prior commit (Task 14, boarding grapple): `NpcShipManager.update` now calls `sprite.setGrappled(...)` unconditionally on every aggressive NPC sprite, which 7 existing playtest mock sprites (`combatPlanningLoopGuards`, `combatRoundRearmOnConfirm`, `fleeAfterCombatPauseProgress`, `combatPauseFreezesLiveFight` ×2, `combatPlanningLiveWiring`, `combatMultiHostileDamagedShip`, `combatExecutionLive`) never implemented — added a no-op `setGrappled: () => {}` to each mock (mock-shape fix only, no assertion touched); full suite was 26 failed → 0 failed after
 
 ### Task 16: Gate infocenter listings to real shop locations
-- [ ] run `impact` on `buildRegistry`/`generateGalaxyGear`
-- [ ] write a RED test: an uninhabited (`isHabitable === false`) planet must produce NO gear listings in the registry; a station shop location must be present
-- [ ] in `InfoService.ts:38-44`, skip non-shop planets (`if (!planet.isHabitable) continue;`, mirroring `PlanetScene.ts:73-74`) and enumerate `sys.stations` shop locations so `findGear`/`findEquipment` cover real stations
-- [ ] (depends on Task 4) ensure these gated locations also use the shop's `maxTechLevel`/price factor so listing == real stock
-- [ ] write tests: inhabited planet lists gear; uninhabited planet lists none; station shop appears; registry id-set ⊆ what the real shop at that location sells
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `buildRegistry`/`generateGalaxyGear`
+- [x] write a RED test: an uninhabited (`isHabitable === false`) planet must produce NO gear listings in the registry; a station shop location must be present
+- [x] in `InfoService.ts:38-44`, skip non-shop planets (`if (planet.isHabitable === false) continue;`, mirroring `PlanetScene.ts:73-74`) and enumerate `sys.stations` shop locations so `findGear`/`findEquipment` cover real stations — added `stationSellsGear(type)` in `ShopGenerator.ts` (TRADE_POST/RESEARCH_LAB only, mirroring `StationScene.TYPE_SERVICES`), station entries filtered to drop `GearKind.HULL` (mirrors `StationScene.buildShopInventory`'s filter)
+- [x] (depends on Task 4) ensure these gated locations also use the shop's `maxTechLevel`/price factor so listing == real stock — RESEARCH_LAB gets the same `+1 tech cap`/`1.1 priceFactor` bonus as `StationScene.buildShopInventory`
+- [x] write tests: inhabited planet lists gear; uninhabited planet lists none; station shop appears; registry id-set ⊆ what the real shop at that location sells — `src/tests/info/InfoService.test.ts` "gate listings to real shop locations" (5 new tests)
+- [x] run tests — must pass before next task
 
 ### Task 17: Fill the engine (and shield) tier-ladder gaps
 - [ ] run `impact` on `GEAR_CATALOG`/`GearCatalog` consumers; confirm catalog-add is load-revalidation only (no migration)

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { StarSystem } from "@/domain/StarSystem";
 import type { NpcShip } from "@/domain/NpcShip";
 import { Faction } from "@/types/faction";
-import { NpcRole, ResourceType } from "@/types";
+import { NpcRole, ResourceType, StationType } from "@/types";
 import { Market } from "@/domain/Market";
 import { GearKind } from "@/systems/equipment/GearCatalog";
 import { buildRegistry, factionPriceFactor } from "@/systems/info/InfoService";
@@ -22,8 +22,9 @@ function sys(
   id: string,
   toIds: string[],
   owner: Faction,
-  planets: { id: string; market?: Market }[],
+  planets: { id: string; market?: Market; isHabitable?: boolean }[],
   techLevel?: number,
+  stations: { id: string; type: StationType }[] = [],
 ): StarSystem {
   return {
     id,
@@ -36,6 +37,7 @@ function sys(
       fuelCost: 5,
     })),
     planets,
+    stations,
   } as unknown as StarSystem;
 }
 
@@ -156,5 +158,112 @@ describe("InfoService.buildRegistry — stock parity with the real shop", () => 
     const day = 2000;
     const reg = buildRegistry(galaxyWithTech(3), "seed", day);
     expect(idsFor(reg, "A")).toEqual(shopIdsFor("A", "A1", day, 3));
+  });
+});
+
+describe("InfoService.buildRegistry — gate listings to real shop locations", () => {
+  it("lists no gear for an uninhabited planet", () => {
+    const g = {
+      systems: [
+        sys(
+          "A",
+          ["B"],
+          Faction.OUTLANDERS,
+          [{ id: "A1", isHabitable: false }],
+          5,
+        ),
+        sys("B", ["A"], Faction.BASTIONS, [{ id: "B1" }], 1),
+      ],
+      npcShips: [],
+      newsFeed: [],
+    };
+    const reg = buildRegistry(g, "seed", 0);
+    const hits = reg.findGear({ originSystemId: "A", maxJumps: 0 });
+    expect(hits).toHaveLength(0);
+  });
+
+  it("still lists gear for an inhabited planet in the same registry", () => {
+    const g = {
+      systems: [
+        sys(
+          "A",
+          ["B"],
+          Faction.OUTLANDERS,
+          [{ id: "A1", isHabitable: false }, { id: "A2" }],
+          5,
+        ),
+        sys("B", ["A"], Faction.BASTIONS, [{ id: "B1" }], 1),
+      ],
+      npcShips: [],
+      newsFeed: [],
+    };
+    const reg = buildRegistry(g, "seed", 0);
+    const hits = reg.findGear({ originSystemId: "A", maxJumps: 0 });
+    expect(hits.every((h) => h.planetId === "A2")).toBe(true);
+    expect(reg.gearListingCount).toBeGreaterThan(0);
+  });
+
+  it("lists gear for a shop-service station (e.g. a trade post)", () => {
+    const g = {
+      systems: [
+        sys("A", ["B"], Faction.OUTLANDERS, [], 5, [
+          { id: "A_station", type: StationType.TRADE_POST },
+        ]),
+        sys("B", ["A"], Faction.BASTIONS, [{ id: "B1" }], 1),
+      ],
+      npcShips: [],
+      newsFeed: [],
+    };
+    const reg = buildRegistry(g, "seed", 0);
+    const hits = reg.findGear({ originSystemId: "A", maxJumps: 0 });
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((h) => h.planetId === "A_station")).toBe(true);
+  });
+
+  it("does not list gear for a station type with no shop service (e.g. a military base)", () => {
+    const g = {
+      systems: [
+        sys("A", ["B"], Faction.OUTLANDERS, [], 5, [
+          { id: "A_station", type: StationType.MILITARY_BASE },
+        ]),
+        sys("B", ["A"], Faction.BASTIONS, [{ id: "B1" }], 1),
+      ],
+      npcShips: [],
+      newsFeed: [],
+    };
+    const reg = buildRegistry(g, "seed", 0);
+    const hits = reg.findGear({ originSystemId: "A", maxJumps: 0 });
+    expect(hits).toHaveLength(0);
+  });
+
+  it("a station's registry id-set is a subset of what the real shop sells there (no hulls, tech-capped)", () => {
+    const day = 0;
+    const g = {
+      systems: [
+        sys("A", ["B"], Faction.OUTLANDERS, [], 8, [
+          { id: "A_station", type: StationType.TRADE_POST },
+        ]),
+        sys("B", ["A"], Faction.BASTIONS, [{ id: "B1" }], 1),
+      ],
+      npcShips: [],
+      newsFeed: [],
+    };
+    const reg = buildRegistry(g, "seed", day);
+    const registryIds = new Set(
+      reg.findGear({ originSystemId: "A", maxJumps: 0 }).map((h) => h.gear.id),
+    );
+    const maxTechLevel = techLevelWithUplift(8, day);
+    const realShopIds = new Set(
+      generateShop({
+        systemId: "A",
+        planetId: "A_station",
+        seed: "seed",
+        day,
+        maxTechLevel,
+      })
+        .filter((l) => l.gear.kind !== GearKind.HULL)
+        .map((l) => l.gear.id),
+    );
+    for (const id of registryIds) expect(realShopIds.has(id)).toBe(true);
   });
 });

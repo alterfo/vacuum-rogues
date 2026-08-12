@@ -6,6 +6,11 @@ import {
   type Gear,
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
+import { StationType } from "@/types";
+
+export function stationSellsGear(type: StationType): boolean {
+  return type === StationType.TRADE_POST || type === StationType.RESEARCH_LAB;
+}
 
 export const SHOP_REFRESH_DAYS = 7;
 

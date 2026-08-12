@@ -1,9 +1,14 @@
 import type { StarSystem } from "@/domain/StarSystem";
 import type { NpcShip } from "@/domain/NpcShip";
 import type { NewsEvent } from "@/types";
+import { StationType } from "@/types";
 import { Faction } from "@/types/faction";
 import { GalacticRegistry } from "@/systems/info/GalacticRegistry";
-import { generateGalaxyGear } from "@/systems/equipment/ShopGenerator";
+import {
+  generateGalaxyGear,
+  stationSellsGear,
+} from "@/systems/equipment/ShopGenerator";
+import { GearKind } from "@/systems/equipment/GearCatalog";
 import { techLevelWithUplift } from "@/systems/campaign/techUplift";
 
 export interface GalaxyView {
@@ -38,19 +43,43 @@ export function buildRegistry(
     priceFactor: number;
     maxTechLevel: number;
   }[] = [];
+  const stations: {
+    systemId: string;
+    planetId: string;
+    priceFactor: number;
+    maxTechLevel: number;
+  }[] = [];
   for (const sys of galaxy.systems) {
     const factor = factionPriceFactor(sys.ownerFaction);
-    const maxTechLevel = techLevelWithUplift(sys.techLevel, day);
+    const systemTechLevel = techLevelWithUplift(sys.techLevel, day);
     for (const planet of sys.planets) {
+      if (planet.isHabitable === false) continue;
       planets.push({
         systemId: sys.id,
         planetId: planet.id,
         priceFactor: factor,
-        maxTechLevel,
+        maxTechLevel: systemTechLevel,
+      });
+    }
+    for (const station of sys.stations ?? []) {
+      if (!stationSellsGear(station.type)) continue;
+      const isResearchLab = station.type === StationType.RESEARCH_LAB;
+      stations.push({
+        systemId: sys.id,
+        planetId: station.id,
+        priceFactor: isResearchLab ? 1.1 : 1.0,
+        maxTechLevel: isResearchLab
+          ? Math.min(8, systemTechLevel + 1)
+          : systemTechLevel,
       });
     }
   }
-  const gear = generateGalaxyGear(planets, seed, day);
+  const gear = [
+    ...generateGalaxyGear(planets, seed, day),
+    ...generateGalaxyGear(stations, seed, day).filter(
+      (l) => l.gear.kind !== GearKind.HULL,
+    ),
+  ];
   return new GalacticRegistry(
     galaxy.systems,
     galaxy.npcShips,
