@@ -275,11 +275,11 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task — full suite 685 files / 6438 tests passed (regenerated `src/tests/i18n/cyrillicBaseline.json` via `UPDATE_CYRILLIC_BASELINE=1` for the new catalog-literal gear names, per that test's own instructions)
 
 ### Task 18: Give the top-tier hull a reachable matching engine
-- [ ] run `impact` on `APEX_ENGINE_MIN_DAY`/`eq_engine_v` gating
-- [ ] lower the T7 engine's reachability so a top hull has a matching engine within the campaign: drop `APEX_ENGINE_MIN_DAY` (`balance.ts:103`) from 1050 to ~540 (align with the dreadnought) and/or reduce its tech to 6 — tune in `balance.ts`/catalog, not at call sites
-- [ ] verify via a production-parameter check (per the "verify content reachable" rule): at a realistically-reachable system/day, the T7 engine actually becomes stockable
-- [ ] write a test asserting the top hull's tier has a buyable engine by ~day 540 at an uplifted system
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `APEX_ENGINE_MIN_DAY`/`eq_engine_v` gating — `APEX_ENGINE_MIN_DAY` is a plain `balance.ts` const consumed only by `GearCatalog.ts`'s `eq_engine_v.minDay`; not indexed as a graph symbol (0 upstream callers besides that one field and the two tests that already reference it symbolically), LOW risk
+- [x] lower the T7 engine's reachability so a top hull has a matching engine within the campaign: dropped `APEX_ENGINE_MIN_DAY` (`balance.ts:103`) from 1050 to 550 (10 days after `hull_dreadnought`'s own `minDay:540` — close enough to "align with the dreadnought" while not colliding exactly with the existing day-540 gate shared by `hull_dreadnought`/`wpn_lance_array`, which the pre-existing `apexEngineMinDay.test.ts` "every other item is untouched" test pins as isolated to `eq_engine_v` only)
+- [x] verify via a production-parameter check (per the "verify content reachable" rule): `techLevelWithUplift(GALAXY_MAX_TECH_FLOOR=5, 550) = min(8, 5+floor(550/270)) = 7`, matching `eq_engine_v`'s techLevel 7 — confirmed with a live `generateShop` sweep across 300 planets at day 550
+- [x] write a test asserting the top hull's tier has a buyable engine by ~day 540 at an uplifted system — `src/tests/balance/apexEngineHullMatch.test.ts` (3 new tests: minDay offset ≤30 days from the hull, uplifted tech cap reaches the engine's tier, engine is actually stockable at day 550)
+- [x] run tests — must pass before next task — full suite 686 files / 6441 tests passed; lint 0 errors (72 pre-existing warnings); `tsc --noEmit` clean
 
 ### Task 19: Loosen the tech-cap chokepoint
 - [ ] run `impact` on `GALAXY_MAX_TECH_FLOOR`/`systemTechDistribution`/`TECH_UPLIFT_DAYS`

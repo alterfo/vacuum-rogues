@@ -100,7 +100,7 @@ export const LOCAL_DELIVERY_REWARD_MARGIN = 3.1;
 
 export const RARE_TECH_THRESHOLD = 6;
 
-export const APEX_ENGINE_MIN_DAY = 1050;
+export const APEX_ENGINE_MIN_DAY = 550;
 
 export const ARTIFACT_DROP_CHANCE = 0.25;
 export const ARTIFACT_DROP_COUNT_MIN = 1;
