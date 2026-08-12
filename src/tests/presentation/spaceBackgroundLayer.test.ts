@@ -162,6 +162,22 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     expect(internal.swarmLayers.length).toBe(0);
   });
 
+  it("renders a dense starfield: parallax dot layers total well over 6000 stars, twinkle stars over 150 (F15)", () => {
+    const { layer } = makeHarness();
+    layer.initialize();
+    const internal = layer as unknown as BackgroundInternals;
+    const starLayers = internal.starLayers as { container: Container }[];
+
+    const totalDots = starLayers.reduce(
+      (sum, l) => sum + l.container.children.length,
+      0,
+    );
+    expect(totalDots).toBeGreaterThan(6000);
+    expect(internal.twinkleStars.length).toBeGreaterThan(150);
+
+    layer.destroy();
+  });
+
   it("builds nebula clouds via the Graphics fallback when no 2D canvas context is available", () => {
     const { layer } = makeHarness();
     layer.initialize();

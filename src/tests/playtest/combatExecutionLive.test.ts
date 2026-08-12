@@ -67,6 +67,7 @@ function makeStaticHostile(
     setNpcCombatTarget: () => {},
     clearNpcCombatTarget: () => {},
     setPursuitTarget: () => {},
+    setGrappled: () => {},
   };
   return sprite as unknown as NpcShipSprite;
 }

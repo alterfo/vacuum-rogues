@@ -202,7 +202,7 @@ export class SpaceBackgroundLayer implements FlightModule {
     const cy = height / 2;
     const layerConfigs = [
       {
-        count: 3400,
+        count: 5200,
         depth: 0.006,
         zoomDepth: 0.0,
         size: [0.35, 0.85],
@@ -210,7 +210,7 @@ export class SpaceBackgroundLayer implements FlightModule {
         spread: 1.0,
       },
       {
-        count: 1200,
+        count: 1800,
         depth: 0.025,
         zoomDepth: 0.03,
         size: [0.6, 1.5],
@@ -218,7 +218,7 @@ export class SpaceBackgroundLayer implements FlightModule {
         spread: 1.3,
       },
       {
-        count: 320,
+        count: 480,
         depth: 0.05,
         zoomDepth: 0.05,
         size: [1.1, 2.1],
@@ -290,7 +290,7 @@ export class SpaceBackgroundLayer implements FlightModule {
       for (let k = 0; k < w; k++) twinklePool.push(c);
     }
 
-    const count = 110;
+    const count = 170;
     const heroTex = starPointTexture(true);
     const normalTex = starPointTexture(false);
 

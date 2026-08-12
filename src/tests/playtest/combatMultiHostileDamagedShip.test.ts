@@ -38,6 +38,7 @@ function makeGarrisonHostile(id: string, x: number, y: number): NpcShipSprite {
     setNpcCombatTarget: () => {},
     clearNpcCombatTarget: () => {},
     setPursuitTarget: () => {},
+    setGrappled: () => {},
   };
   return sprite as unknown as NpcShipSprite;
 }
