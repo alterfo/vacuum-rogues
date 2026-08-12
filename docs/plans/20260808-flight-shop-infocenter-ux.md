@@ -267,12 +267,12 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 17: Fill the engine (and shield) tier-ladder gaps
-- [ ] run `impact` on `GEAR_CATALOG`/`GearCatalog` consumers; confirm catalog-add is load-revalidation only (no migration)
-- [ ] add `eq_engine_ii` (T3, ~2.2k, potency ~1.1) and a T4 engine (~4k, potency ~1.25) to `GearCatalog.ts` to remove the 0.9→1.4 dead-zone; add shield T4/T5/T7 fillers to smooth that ladder
-- [ ] keep ids unique and names/stats consistent with the existing naming; update `manifestKeys.snapshot.json` only if new asset keys are introduced (prefer reusing existing engine/shield icons)
-- [ ] write tests: the engine potency ladder is now monotonic with no tech gap T2→T6; new gear validates against the catalog/schema
-- [ ] run `npm run test:save-compat` (catalog add → revalidate, no migration)
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `GEAR_CATALOG`/`GearCatalog` consumers; confirm catalog-add is load-revalidation only (no migration) — `impact` on `GEAR_CATALOG` upstream = 0 impacted symbols, LOW risk, purely additive
+- [x] add `eq_engine_ii` (T3, ~2.2k, potency ~1.1) and a T4 engine (~4k, potency ~1.25) to `GearCatalog.ts` to remove the 0.9→1.4 dead-zone; add shield T4/T5/T7 fillers to smooth that ladder — added `eq_engine_ii`/`eq_engine_iib` and `eq_shield_ii`/`eq_shield_iii`/`eq_shield_v`
+- [x] keep ids unique and names/stats consistent with the existing naming; update `manifestKeys.snapshot.json` only if new asset keys are introduced (prefer reusing existing engine/shield icons) — no new asset keys, icons resolved by `equipmentClass` (existing engine/shield icons apply)
+- [x] write tests: the engine potency ladder is now monotonic with no tech gap T2→T6; new gear validates against the catalog/schema — `src/tests/balance/engineShieldLadder.test.ts`
+- [x] run `npm run test:save-compat` (catalog add → revalidate, no migration) — 22/22 passed
+- [x] run tests — must pass before next task — full suite 685 files / 6438 tests passed (regenerated `src/tests/i18n/cyrillicBaseline.json` via `UPDATE_CYRILLIC_BASELINE=1` for the new catalog-literal gear names, per that test's own instructions)
 
 ### Task 18: Give the top-tier hull a reachable matching engine
 - [ ] run `impact` on `APEX_ENGINE_MIN_DAY`/`eq_engine_v` gating

@@ -52,7 +52,7 @@
   "src/systems/encounters/encounterFlight.ts": 1,
   "src/systems/encounters/encounterOutcomeText.ts": 7,
   "src/systems/equipment/GearBridge.ts": 10,
-  "src/systems/equipment/GearCatalog.ts": 82,
+  "src/systems/equipment/GearCatalog.ts": 87,
   "src/systems/equipment/ShipLoadout.ts": 3,
   "src/systems/equipment/gearDisplay.ts": 4,
   "src/systems/equipment/micromoduleShop.ts": 1,
