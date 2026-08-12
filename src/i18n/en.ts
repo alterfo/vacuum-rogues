@@ -504,6 +504,11 @@ export const en: Dict = {
   "infoCenter.gearMinRange": "Range≥:",
   "infoCenter.gearAnyThreshold": "any",
   "infoCenter.gearSortStat": "Stat",
+  "infoCenter.gearFlyButton": "→ fly",
+  "infoCenter.purchaseQuestTitle": "Purchase: {gear}",
+  "infoCenter.purchaseQuestDesc":
+    "{gear} is sold at {planet} ({system}). Fly there to buy it.",
+  "infoCenter.purchaseQuestObjective": "Arrive at system {system}",
 
   "planet.starMapPurchased":
     "Map purchased for {price} ₡ — systems revealed: {revealed}",

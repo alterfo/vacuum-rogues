@@ -224,13 +224,13 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run tests — must pass before next task
 
 ### Task 12: Route-to-shop + "flight to purchase" quest (replace "→ Карта")
-- [ ] run `impact` on `openStarMapForSystem`, `navigateToQuestTarget`, `QuestManager.acceptQuestFromTemplate`
-- [ ] replace the gear-row "→ Карта" action (`InfoCenterScene.ts:1416-1437`, handler `:1425`) with: create a "flight to purchase" quest via `questManager.acceptQuestFromTemplate(...)` with `targetSystemId = hit.systemId`, `targetPlanetId = hit.planetId`, a购-purchase title/description, then plot the route through the same seam the journal uses (`questRouteAction`/`navigateToQuestTarget`, `flight/routePlot.ts:56-68`) instead of the star-map-only jump
-- [ ] ensure the quest carries a real `targetPlanetId` (planet-issued shop) so the journal's "Проложить маршрут" button can name/route to it (`presentation/CLAUDE.md` journal gap)
-- [ ] keep a plain map-jump only as a secondary affordance if needed; primary action = add quest + route
-- [ ] write a real-engine playtest: triggering the action on a gear hit adds an active quest with the correct `targetSystemId`/`targetPlanetId` and initiates a route/warp toward it
-- [ ] write an edge test: same-system hit → in-system approach route; cross-system hit → warp-to-system
-- [ ] run tests — must pass before next task
+- [x] run `impact` on `openStarMapForSystem`, `navigateToQuestTarget`, `QuestManager.acceptQuestFromTemplate`
+- [x] replace the gear-row "→ Карта" action (`InfoCenterScene.ts:1416-1437`, handler `:1425`) with: create a "flight to purchase" quest via `questManager.acceptQuestFromTemplate(...)` with `targetSystemId = hit.systemId`, `targetPlanetId = hit.planetId`, a购-purchase title/description, then plot the route through the same seam the journal uses (`questRouteAction`/`navigateToQuestTarget`, `flight/routePlot.ts:56-68`) instead of the star-map-only jump
+- [x] ensure the quest carries a real `targetPlanetId` (planet-issued shop) so the journal's "Проложить маршрут" button can name/route to it (`presentation/CLAUDE.md` journal gap)
+- [x] keep a plain map-jump only as a secondary affordance if needed; primary action = add quest + route
+- [x] write a real-engine playtest: triggering the action on a gear hit adds an active quest with the correct `targetSystemId`/`targetPlanetId` and initiates a route/warp toward it
+- [x] write an edge test: same-system hit → in-system approach route; cross-system hit → warp-to-system
+- [x] run tests — must pass before next task
 
 ### Task 13: Sell/drop any installed gear (incl. starter gear)
 - [ ] run `impact` on the HangarPanel `[снять]` handler, `uninstallToOwned`, `addOwnedGear`, `sellUninstalledGear`

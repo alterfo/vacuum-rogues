@@ -503,6 +503,11 @@ export const ru: Dict = {
   "infoCenter.gearMinRange": "Дальн≥:",
   "infoCenter.gearAnyThreshold": "любой",
   "infoCenter.gearSortStat": "Характеристика",
+  "infoCenter.gearFlyButton": "→ лететь",
+  "infoCenter.purchaseQuestTitle": "Покупка: {gear}",
+  "infoCenter.purchaseQuestDesc":
+    "{gear} продаётся в {planet} ({system}). Долетите за покупкой.",
+  "infoCenter.purchaseQuestObjective": "Прибыть в систему {system}",
 
   "planet.starMapPurchased":
     "Карта куплена за {price} ₡ — открыто систем: {revealed}",

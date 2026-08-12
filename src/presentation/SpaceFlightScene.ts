@@ -206,6 +206,7 @@ export class SpaceFlightScene extends GameScene {
           fromPlanetId?: string;
           fromStationId?: string;
           preserveShipPos?: { x: number; y: number };
+          pendingNavigateLocationId?: string;
         }
       | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
@@ -576,6 +577,10 @@ export class SpaceFlightScene extends GameScene {
       this.e2eSetBackgroundVisible(false);
     }
     this.flightHelp = mountFlightSceneHelp(this.renderer);
+
+    if (ctx?.pendingNavigateLocationId) {
+      this.navigateToQuestObjective(ctx.pendingNavigateLocationId);
+    }
 
     logger.info(
       "SpaceFlightScene initialized with camera controls: pan (Shift+click), zoom (wheel)",

@@ -17,8 +17,9 @@ import {
 import { isSystemKnown } from "@/systems/galaxy/systemKnown";
 import { resourceLabelRu } from "@/domain/RouteRumor";
 import { t } from "@/i18n/i18n";
-import { SceneType, NpcRole, ResourceType } from "@/types";
+import { SceneType, NpcRole, ResourceType, QuestType } from "@/types";
 import type { NewsEvent } from "@/types";
+import type { QuestTemplate } from "@/core/ports/IQuestService";
 import type {
   PlanetHit,
   ShipLocation,
@@ -1522,14 +1523,19 @@ export class InfoCenterScene extends GameScene {
     mapBtn.cursor = "pointer";
     mapBtn.on("pointerdown", (e) => {
       e.stopPropagation();
-      void this.openStarMapForSystem(hit.systemId);
+      void this.routeToShop(hit);
     });
     row.addChild(mapBtn);
 
-    const mapBtnLabel = scaledText("→ карта", 10, 0x6699bb, {
-      rawColor: true,
-      fontFamily: "monospace",
-    });
+    const mapBtnLabel = scaledText(
+      t("infoCenter.gearFlyButton"),
+      10,
+      0x6699bb,
+      {
+        rawColor: true,
+        fontFamily: "monospace",
+      },
+    );
     mapBtnLabel.anchor.set(0.5, 0.5);
     mapBtnLabel.x = mapBtnX + 32;
     mapBtnLabel.y = ROW_H / 2;
@@ -1677,6 +1683,48 @@ export class InfoCenterScene extends GameScene {
     await this.gameEngine.transitionTo(SceneType.STAR_MAP, {
       gameEngine: this.gameEngine,
       pendingSelectedSystemId: systemId,
+    });
+  }
+
+  private async routeToShop(hit: EquipmentHit): Promise<void> {
+    if (!this.gameEngine) return;
+    const currentDay = this.gameEngine.galaxy?.gameDays ?? 0;
+    const template: QuestTemplate = {
+      id: `purchase-${hit.planetId}-${hit.gear.id}`,
+      title: t("infoCenter.purchaseQuestTitle", { gear: hit.gear.name }),
+      description: t("infoCenter.purchaseQuestDesc", {
+        gear: hit.gear.name,
+        planet: hit.planet,
+        system: hit.system,
+      }),
+      type: QuestType.EXPLORATION,
+      objectives: [
+        {
+          id: "visit-system",
+          description: t("infoCenter.purchaseQuestObjective", {
+            system: hit.system,
+          }),
+          type: "VISIT_SYSTEM",
+          targetAmount: 1,
+          targetSystemId: hit.systemId,
+        },
+      ],
+      reward: { credits: 0, experience: 0, items: [] },
+      dialogueAnchors: [],
+      deadline: 0,
+      failurePenalty: null,
+      targetSystemId: hit.systemId,
+      targetPlanetId: hit.planetId,
+    };
+    this.gameEngine.questManager.acceptQuestFromTemplate(
+      template,
+      hit.planetId,
+      currentDay,
+      "",
+    );
+    await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+      gameEngine: this.gameEngine,
+      pendingNavigateLocationId: hit.planetId,
     });
   }
 
