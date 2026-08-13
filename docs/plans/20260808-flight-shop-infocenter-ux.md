@@ -318,10 +318,10 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] run `detect_changes({scope:"compare", base_ref:"master"})` — 113 changed symbols / 46 affected processes, all mapping onto the plan's 13 documented areas (shop/hangar UI, infocenter, spawn, orbit, grapple, gear catalog, economy); no unexpected touch-points
 
 ### Task 23: Update documentation
-- [ ] update `.claude/docs/systems/equipment.md` (icon-forward layout, tooltip pattern, hide-installed rule, износ-based trade-in, sell-any-gear via `uninstallToOwned`, engine/shield ladder, uniqueness)
-- [ ] note the infocenter↔shop stock-consistency + inhabited/station-gate contract wherever the info system is documented
-- [ ] document the grapple mechanic + its `GRAPPLE_*` balance knobs, the tech-cap/uplift progression changes, and the dev economy admin panel (with its production-exclusion guarantee)
-- [ ] record the `heavy_freighter → transport` alias as interim, pending art regeneration
+- [x] update `.claude/docs/systems/equipment.md` (icon-forward layout, tooltip pattern, hide-installed rule, износ-based trade-in, sell-any-gear via `uninstallToOwned`, engine/shield ladder, uniqueness)
+- [x] note the infocenter↔shop stock-consistency + inhabited/station-gate contract wherever the info system is documented — added an "Infocenter ↔ shop stock parity" section in `equipment.md` (no dedicated info-system doc exists yet)
+- [x] document the grapple mechanic + its `GRAPPLE_*` balance knobs, the tech-cap/uplift progression changes, and the dev economy admin panel (with its production-exclusion guarantee)
+- [x] record the `heavy_freighter → transport` alias as interim, pending art regeneration
 
 ## Technical Details
 
