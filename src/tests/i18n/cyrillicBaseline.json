@@ -46,7 +46,7 @@
   "src/systems/QuestManager.ts": 2,
   "src/systems/TradeSystem.ts": 2,
   "src/systems/banking/BankingService.ts": 6,
-  "src/systems/banking/economy.ts": 11,
+  "src/systems/banking/economy.ts": 12,
   "src/systems/banking/products.ts": 7,
   "src/systems/comms/commsOptions.ts": 4,
   "src/systems/encounters/encounterFlight.ts": 1,

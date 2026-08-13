@@ -21,6 +21,7 @@ export const GL_COUNTERPARTY = {
   BRIBES: "gl:bribes",
   EQUIPMENT: "gl:equipment",
   PLUNDER: "gl:plunder",
+  DEV_ADMIN: "gl:dev-admin",
 } as const;
 
 const GL_LABELS: Record<string, string> = {
@@ -31,6 +32,7 @@ const GL_LABELS: Record<string, string> = {
   [GL_COUNTERPARTY.BRIBES]: "Взятки",
   [GL_COUNTERPARTY.EQUIPMENT]: "Оборудование",
   [GL_COUNTERPARTY.PLUNDER]: "Трофеи пиратов",
+  [GL_COUNTERPARTY.DEV_ADMIN]: "Панель разработчика",
 };
 
 function ensureCounterparty(access: BankAccess, accountId: string): void {

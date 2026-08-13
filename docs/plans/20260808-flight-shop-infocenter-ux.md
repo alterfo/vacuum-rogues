@@ -300,13 +300,13 @@ A batch of player-facing fixes and UX improvements across four areas, all report
 - [x] ran tests — full suite 688 files / 6458 tests passed, lint clean on touched files, `tsc --noEmit` clean, `npm run letsplay:ci` 97/97 passed
 
 ### Task 21: Dev-only economy admin panel
-- [ ] run `impact` on the autopilot hook seam and `balance.ts` consumers
-- [ ] add a dev-gated (`import.meta.env.DEV`/`__DEBUG__`) overlay toggled by a key (model on `installAutopilotHook`/`createLiveSceneController`), tree-shaken from production builds
-- [ ] add a minimal dev-only override seam for the highest-value `balance.ts` knobs (uplift days, stock factors, `HULL_TRADE_IN_RATE`, minDay gates) that the economy reads when an override is set — no effect in production
-- [ ] add live state pokes: set/add credits (`adjustPlayerCredits`), advance day, set a system's tech level, force a shop re-roll
-- [ ] write tests: the override seam changes the economy output in dev and is a no-op / absent in production; state pokes apply
-- [ ] add an architecture test (or reuse the ONNX-exclusion pattern) asserting the admin panel is not referenced from production entry paths
-- [ ] run tests — must pass before next task
+- [x] run `impact` on the autopilot hook seam and `balance.ts` consumers — `installAutopilotHook` LOW risk (0 impacted); `techLevelWithUplift`/`hullTradeInPrice`/`generateShop` consumers all LOW risk, purely additive override seam that no-ops absent an override
+- [x] add a dev-gated (`import.meta.env.DEV`/`__DEBUG__`) overlay toggled by a key (model on `installAutopilotHook`/`createLiveSceneController`), tree-shaken from production builds — `src/dev/EconomyAdminPanel.ts` (`installEconomyAdminPanel`), F9 hotkey, dynamic-imported from `main.ts` behind `import.meta.env.DEV` (same pattern as `attachDevAutopilot`)
+- [x] add a minimal dev-only override seam for the highest-value `balance.ts` knobs (uplift days, stock factors, `HULL_TRADE_IN_RATE`, minDay gates) that the economy reads when an override is set — no effect in production — `src/config/economyOverrides.ts` (`EconomyOverrides`/`getEconomyOverrides`/`setEconomyOverride`/`resetEconomyOverrides`/`bumpShopRerollNonce`), read by `techLevelWithUplift`, `sellHull.hullTradeInPrice`, `ShopGenerator.stockCount`/`shopBucket`/`generateShop` via `?? BASE_CONSTANT` fallback
+- [x] add live state pokes: set/add credits (`adjustPlayerCredits`), advance day, set a system's tech level, force a shop re-roll — panel buttons for credits ±, day advance, system tech ±, "Обновить магазины" (`bumpShopRerollNonce`), "Сбросить override'ы" (`resetEconomyOverrides`)
+- [x] write tests: the override seam changes the economy output in dev and is a no-op / absent in production; state pokes apply — `src/tests/dev/economyOverrides.test.ts` (11 tests: base-behavior-absent-override + each override changes output + reset), `src/tests/dev/economyAdminPanel.test.ts` (9 tests: hotkey toggle, credits/day/tech buttons, dispose)
+- [x] add an architecture test (or reuse the ONNX-exclusion pattern) asserting the admin panel is not referenced from production entry paths — `src/tests/architecture/economyAdminPanelDevOnly.test.ts` (only `main.ts` may reference the panel, and only via a DEV-gated dynamic import)
+- [x] run tests — must pass before next task — full suite 691 files / 6478 tests passed, lint clean on touched files (repo-wide `npm run lint` noise is pre-existing, unrelated `.js`/`.cjs` reference files), `tsc --noEmit` clean; regenerated `cyrillicBaseline.json` for the new `GL_LABELS` catalog entry ("Панель разработчика"), same pattern as Tasks 17/20
 
 ### Task 22: Verify acceptance criteria
 - [ ] verify each of the 15 reported issues is fixed against the Overview

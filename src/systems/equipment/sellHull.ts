@@ -7,6 +7,7 @@ import {
   GL_COUNTERPARTY,
   type BankAccess,
 } from "@/systems/banking/economy";
+import { getEconomyOverrides } from "@/config/economyOverrides";
 
 export const HULL_TRADE_IN_RATE = 0.4;
 export const HULL_TRADE_IN_CONDITION_FLOOR = 0.2;
@@ -16,11 +17,12 @@ export function hullTradeInPrice(
   hullHP?: number,
   maxHull?: number,
 ): number {
+  const rate = getEconomyOverrides().hullTradeInRate ?? HULL_TRADE_IN_RATE;
   const conditionFactor =
     hullHP === undefined || maxHull === undefined || maxHull <= 0
       ? 1
       : Math.max(HULL_TRADE_IN_CONDITION_FLOOR, Math.min(1, hullHP / maxHull));
-  return Math.floor(hull.basePrice * HULL_TRADE_IN_RATE * conditionFactor);
+  return Math.floor(hull.basePrice * rate * conditionFactor);
 }
 
 export interface HullPurchaseResult {

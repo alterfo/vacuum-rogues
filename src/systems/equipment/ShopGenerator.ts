@@ -7,6 +7,7 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import { StationType } from "@/types";
+import { getEconomyOverrides } from "@/config/economyOverrides";
 
 export function stationSellsGear(type: StationType): boolean {
   return type === StationType.TRADE_POST || type === StationType.RESEARCH_LAB;
@@ -29,7 +30,9 @@ export interface ShopOptions {
 
 function stockChance(gear: Gear): number {
   const byTech = Math.max(0.15, 0.95 - (gear.techLevel - 1) * 0.1);
-  return isRareGear(gear) ? byTech * RARE_STOCK_FACTOR : byTech;
+  const rareStockFactor =
+    getEconomyOverrides().rareStockFactor ?? RARE_STOCK_FACTOR;
+  return isRareGear(gear) ? byTech * rareStockFactor : byTech;
 }
 
 export function soldOutKey(planetId: string, gearId: string): string {
@@ -40,7 +43,8 @@ export function shopBucket(
   day: number,
   refreshEveryDays: number = SHOP_REFRESH_DAYS,
 ): number {
-  return Math.floor(day / Math.max(1, refreshEveryDays));
+  const nonce = getEconomyOverrides().shopRerollNonce ?? 0;
+  return Math.floor(day / Math.max(1, refreshEveryDays)) + nonce;
 }
 
 export function generateShop(opts: ShopOptions): GearListing[] {
@@ -57,9 +61,11 @@ export function generateShop(opts: ShopOptions): GearListing[] {
   const bucket = shopBucket(day, refreshEveryDays);
   const listings: GearListing[] = [];
 
+  const minDayReduction = getEconomyOverrides().minDayReduction ?? 0;
   for (const gear of GEAR_CATALOG) {
     if (maxTechLevel !== undefined && gear.techLevel > maxTechLevel) continue;
-    if (gear.minDay !== undefined && day < gear.minDay) continue;
+    if (gear.minDay !== undefined && day < gear.minDay - minDayReduction)
+      continue;
     if (
       isRareGear(gear) &&
       soldOutGear?.[soldOutKey(planetId, gear.id)] === bucket

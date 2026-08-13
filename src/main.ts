@@ -172,6 +172,9 @@ async function main(): Promise<void> {
         () => import('./tests/playtest/letsplay/installAutopilotHook'),
         (err) => logger.warn('Dev autopilot hook unavailable:', err),
       );
+      import('./dev/EconomyAdminPanel')
+        .then((mod) => mod.installEconomyAdminPanel(engine))
+        .catch((err) => logger.warn('Dev economy admin panel unavailable:', err));
     }
   } catch (error) {
     logger.error('Failed to initialize game:', error);
