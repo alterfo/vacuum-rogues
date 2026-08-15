@@ -96,9 +96,9 @@ Current net: `weights/player.weights.json`, 3-layer `54→256→128→18` ≈ 49
 
 ### Texture Loading
 
-`src/presentation/textures.ts` — `LAZY_PREFIXES` excludes heavy categories from eager boot preload. Current lazy: `panoramas/`, `surfaces/`, `planet_maps/`, `star_maps/`, `stars/`, `nebula/`.
+`src/presentation/textures.ts` — `LAZY_PREFIXES` excludes heavy categories from eager boot preload (`GameEngine.initialize` `await`s `preloadTextures()` before the main menu can render, so this list is the primary lever on boot time). Current lazy: `panoramas/`, `surfaces/`, `planet_maps/`, `star_maps/`, `stars/`, `nebula/`, `quest_art/`, `overmind_mood/`, `icons/`, `player_ships/`, `portraits/`, `ui/`.
 
-**Pattern for lazy categories** (must NOT use synchronous `pickVariant`):
+**Pattern for on-demand lazy categories** (must NOT use synchronous `pickVariant`):
 ```typescript
 const key = pickVariantKey("nebula", prefix, seed);
 if (key) {
@@ -107,7 +107,9 @@ if (key) {
   else void loadTextureAsync(key).then((t) => { if (t && !this.sceneDestroyed) mount(t); });
 }
 ```
-Any new art category with >10 MB total must be added to `LAZY_PREFIXES`.
+`icons/`, `player_ships/`, `portraits/` are a second, weaker flavor: `BACKGROUND_PRELOAD_PREFIXES` kicks off `preloadCategories(...)` right after `preloadTextures()` resolves, **not awaited**, so they fill the cache in the background instead of blocking the menu — their consumers (`gearIcon.ts`, `PlayerShipRenderer`, `RaceSelectionScene`) still call synchronous `pickVariant`/`tex` and already degrade gracefully (glyph badge, fallback ship texture, bare portrait frame) if a lookup lands before the background load finishes, so they don't need the cache-then-async-mount dance. `ui/` (`bottom_bar`/`panel`/`radar_bezel`/`tooltip`) has **zero code references** — it's dead art, kept out of both the blocking and background preload entirely; `ui/cursor_*` doesn't need either path since `cursor.ts` reads its URL via `texUrl()`, not the texture cache. Station art (`station/`) stays **eager and off this list on purpose** — see `src/presentation/CLAUDE.md`'s "Station markers render sprite-or-diamond" for why it can't go through `pickVariantKey`/async.
+
+Any new art category with >10 MB total must be added to `LAZY_PREFIXES` (add it to `BACKGROUND_PRELOAD_PREFIXES` too if it's needed soon after boot, not just on rare demand).
 
 **Assets are WebP.** New PNG/JPG art must be run through `tools/optimize-assets.ts` before commit. Key-parity is locked by `src/tests/assets/manifestKeys.snapshot.json`.
 

@@ -4,7 +4,11 @@ import { Galaxy } from "@/domain/Galaxy";
 import type { FlightShipPos } from "@/domain/SaveState";
 import type { GameScene } from "@/presentation/GameScene";
 import { Renderer } from "@/presentation/Renderer";
-import { preloadTextures } from "@/presentation/textures";
+import {
+  preloadTextures,
+  preloadCategories,
+  BACKGROUND_PRELOAD_PREFIXES,
+} from "@/presentation/textures";
 import { SaveManager, EMERGENCY_SLOT_ID } from "@/data/SaveManager";
 import { latestMeaningfulSlot } from "@/systems/saves/saveSlots";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
@@ -369,6 +373,7 @@ export class GameEngine {
       await this.renderer.initialize();
 
       await preloadTextures();
+      void preloadCategories(BACKGROUND_PRELOAD_PREFIXES);
 
       const rendererType = (
         this.renderer.app.renderer as unknown as { type?: string }

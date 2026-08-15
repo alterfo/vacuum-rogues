@@ -14,6 +14,20 @@ const LAZY_PREFIXES = [
   "nebula/",
   "quest_art/",
   "overmind_mood/",
+  "icons/",
+  "player_ships/",
+  "portraits/",
+  "ui/",
+];
+
+// Not needed for the first paint (main menu only needs planets/ships/station
+// art) but wanted soon after — kicked off in the background once the menu
+// is up, unlike the rest of LAZY_PREFIXES which loads strictly on demand.
+// "ui/" is deliberately excluded: no code path consumes those textures.
+export const BACKGROUND_PRELOAD_PREFIXES = [
+  "icons/",
+  "player_ships/",
+  "portraits/",
 ];
 
 export function preloadTextures(): Promise<void> {
@@ -35,6 +49,24 @@ export function preloadTextures(): Promise<void> {
     );
   });
   return loadPromise;
+}
+
+export function preloadCategories(prefixes: string[]): Promise<void> {
+  const entries = Object.entries(manifest).filter(([key]) =>
+    prefixes.some((p) => key.startsWith(p)),
+  );
+  return Promise.all(
+    entries.map(async ([key, url]) => {
+      if (cache[key]) return;
+      try {
+        cache[key] = await Assets.load(url);
+      } catch (e) {
+        logger.warn(`background texture preload failed: ${key}`, e);
+      }
+    }),
+  ).then(() => {
+    logger.info(`Background-preloaded ${entries.length} deferred textures`);
+  });
 }
 
 export async function loadTextureAsync(
