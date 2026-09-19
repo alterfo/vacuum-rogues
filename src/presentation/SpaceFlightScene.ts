@@ -1227,6 +1227,7 @@ export class SpaceFlightScene extends GameScene {
       )
     ) {
       this.enterBlackHole();
+      return;
     }
 
     const ship = this.gameEngine?.player?.ship;
@@ -1374,9 +1375,21 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private enterBlackHole(): void {
-    logger.info(
-      "Entering black hole anomaly (arcade transition wired in Task 4)",
-    );
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    if (!this.gameEngine || !systemId) {
+      logger.warn("Entering black hole without an active current system");
+      return;
+    }
+
+    void this.gameEngine
+      .transitionTo(SceneType.BLACK_HOLE_ARCADE, {
+        gameEngine: this.gameEngine,
+        returnSystemId: systemId,
+        blackHoleSystemId: systemId,
+      })
+      .catch((error) => {
+        logger.error("Black hole arcade transition failed", error);
+      });
   }
 
   private plotRoute(): void {

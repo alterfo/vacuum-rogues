@@ -256,29 +256,31 @@ Research (this session, via Explore agent + direct file reads) found:
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Create: `e2e/page-objects/BlackHoleArcadeScenePage.ts`
 
-- [ ] Run `gitnexus impact SceneType` and `gitnexus impact GameEngine.transitionTo`, record blast
-      radius
-- [ ] Run `npx tsx tools/scaffold/new-scene.ts --name BlackHoleArcade --context-dependent` to
+- [x] Run `gitnexus impact SceneType` and `gitnexus impact GameEngine.transitionTo`, record blast
+      radius (gitnexus unavailable; verified manually: SceneType consumers are SceneFactory and
+      GameEngine scene wiring, and transitionTo callers are scene transitions/load paths)
+- [x] Run `npx tsx tools/scaffold/new-scene.ts --name BlackHoleArcade --context-dependent` to
       generate the `SceneType.BLACK_HOLE_ARCADE` enum entry, the `SceneFactory` case, the
       `contextDependentScenes` entry, and the scene stub — then verify/adjust its output against
       this task's remaining items (the scaffold does steps 1-3 of `adding-features.md`'s "New
       Scene" recipe automatically)
-- [ ] Confirm `SceneType.BLACK_HOLE_ARCADE` is added to the `gameEngine`-context injection list
+- [x] Confirm `SceneType.BLACK_HOLE_ARCADE` is added to the `gameEngine`-context injection list
       in `GameEngine.transitionTo` (`:508-519`) so the scene receives `gameEngine` in context
-- [ ] Exclude `BLACK_HOLE_ARCADE` from the terminal-scene autosave concerns (it's not terminal,
+- [x] Exclude `BLACK_HOLE_ARCADE` from the terminal-scene autosave concerns (it's not terminal,
       normal mid-gameplay autosave-on-transition is fine and desired here)
-- [ ] Wire `SpaceFlightScene.enterBlackHole()` (the Task 2 stub) to call
+- [x] Wire `SpaceFlightScene.enterBlackHole()` (the Task 2 stub) to call
       `gameEngine.transitionTo(SceneType.BLACK_HOLE_ARCADE, { gameEngine, returnSystemId,
       blackHoleSystemId })`
-- [ ] `BlackHoleArcadeScene.initialize(context)` reads `gameEngine`/`returnSystemId`/
+- [x] `BlackHoleArcadeScene.initialize(context)` reads `gameEngine`/`returnSystemId`/
       `blackHoleSystemId`, mounts an empty container (full gameplay wired in Tasks 5-9), and on
       `destroy()` releases all children (mirrors the `gameLayer.children.length === 0` contract
       flight modules follow)
-- [ ] Add the scaffolded `BlackHoleArcadeScenePage` E2E page object
-- [ ] Write a real-engine playtest test: contact-triggering `enterBlackHole()` transitions
+- [x] Add the scaffolded `BlackHoleArcadeScenePage` E2E page object
+- [x] Write a real-engine playtest test: contact-triggering `enterBlackHole()` transitions
       `currentSceneType` to `BLACK_HOLE_ARCADE` with the expected context; loading a save mid-run
       falls back to `SPACE_FLIGHT` (the `contextDependentScenes` contract)
-- [ ] Run tests — must pass before Task 5
+- [x] Run tests — must pass before Task 5 (new playtest + blackHoleMishapWarp + tsc + lint green;
+      full unit suite still hits pre-existing Node 26 jsdom/canvas environment failures)
 
 ### Task 5: Arcade core loop — pure state machine
 

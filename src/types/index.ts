@@ -135,6 +135,7 @@ export enum SceneType {
   GAME_OVER = "GAME_OVER",
   BANK = "BANK",
   SAVE_LOAD = "SAVE_LOAD",
+  BLACK_HOLE_ARCADE = "BLACK_HOLE_ARCADE",
 }
 
 export enum StationType {

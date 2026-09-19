@@ -516,7 +516,8 @@ export class GameEngine {
       sceneType === SceneType.INFO_CENTER ||
       sceneType === SceneType.STATION ||
       sceneType === SceneType.GOVERNMENT ||
-      sceneType === SceneType.TEXT_QUEST
+      sceneType === SceneType.TEXT_QUEST ||
+      sceneType === SceneType.BLACK_HOLE_ARCADE
     ) {
       finalContext.gameEngine = this;
     }
@@ -980,6 +981,7 @@ export class GameEngine {
       SceneType.INFO_CENTER,
       SceneType.BANK,
       SceneType.SAVE_LOAD,
+      SceneType.BLACK_HOLE_ARCADE,
     ];
     const savedScene = save.currentSceneType ?? SceneType.SPACE_FLIGHT;
     const isKnownScene = (Object.values(SceneType) as string[]).includes(

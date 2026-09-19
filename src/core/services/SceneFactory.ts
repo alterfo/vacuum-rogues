@@ -19,6 +19,7 @@ import { WinScene } from "@/presentation/WinScene";
 import { GameOverScene } from "@/presentation/GameOverScene";
 import { BankScene } from "@/presentation/BankScene";
 import { SaveLoadScene } from "@/presentation/SaveLoadScene";
+import { BlackHoleArcadeScene } from "@/presentation/BlackHoleArcadeScene";
 
 export class SceneFactory implements ISceneFactory {
   createScene(type: SceneType, renderer: Renderer): GameScene | null {
@@ -57,6 +58,8 @@ export class SceneFactory implements ISceneFactory {
         return new BankScene(renderer);
       case SceneType.SAVE_LOAD:
         return new SaveLoadScene(renderer);
+      case SceneType.BLACK_HOLE_ARCADE:
+        return new BlackHoleArcadeScene(renderer);
       default:
         return null;
     }
