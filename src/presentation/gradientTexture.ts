@@ -1,4 +1,9 @@
 import { Texture } from "pixi.js";
+import { hashStr } from "@/utils/hashStr";
+import {
+  BLACK_HOLE_EVENT_HORIZON_RADIUS,
+  BLACK_HOLE_VISUAL_RADIUS,
+} from "@/config/balance";
 
 let cached: Texture | null | undefined;
 
@@ -350,5 +355,85 @@ export function nebulaCloudTexture(seed: number): Texture | null {
 
   const tex = Texture.from(canvas);
   nebulaCache.set(variant, tex);
+  return tex;
+}
+
+const blackHoleCache = new Map<string, Texture | null>();
+
+export function blackHoleTexture(seed: string): Texture | null {
+  const existing = blackHoleCache.get(seed);
+  if (existing !== undefined) return existing;
+
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    blackHoleCache.set(seed, null);
+    return null;
+  }
+
+  const rng = mulberry32(hashStr(seed));
+  const cx = size / 2;
+  const cy = size / 2;
+  const coreFraction =
+    BLACK_HOLE_VISUAL_RADIUS > 0
+      ? BLACK_HOLE_EVENT_HORIZON_RADIUS / BLACK_HOLE_VISUAL_RADIUS
+      : 0.7;
+  const coreR = (size / 2) * coreFraction;
+  const diskR = size / 2;
+
+  const disk = ctx.createRadialGradient(cx, cy, coreR, cx, cy, diskR);
+  disk.addColorStop(0.0, "rgba(255, 188, 110, 0.95)");
+  disk.addColorStop(0.25, "rgba(226, 122, 62, 0.8)");
+  disk.addColorStop(0.55, "rgba(120, 62, 54, 0.45)");
+  disk.addColorStop(1.0, "rgba(8, 6, 18, 0)");
+  ctx.fillStyle = disk;
+  ctx.beginPath();
+  ctx.arc(cx, cy, diskR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, diskR - 2, 0, Math.PI * 2);
+  ctx.clip();
+  const streaks = 10 + Math.floor(rng() * 8);
+  for (let i = 0; i < streaks; i++) {
+    const ang = rng() * Math.PI * 2;
+    const start = coreR + rng() * (diskR - coreR) * 0.25;
+    const end = diskR * (0.75 + rng() * 0.25);
+    const grad = ctx.createLinearGradient(
+      cx + Math.cos(ang) * start,
+      cy + Math.sin(ang) * start,
+      cx + Math.cos(ang) * end,
+      cy + Math.sin(ang) * end,
+    );
+    grad.addColorStop(
+      0.0,
+      `rgba(255, 200, 120, ${(0.1 + rng() * 0.14).toFixed(3)})`,
+    );
+    grad.addColorStop(1.0, "rgba(255, 200, 120, 0)");
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2 + rng() * 5;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(ang) * start, cy + Math.sin(ang) * start);
+    ctx.lineTo(cx + Math.cos(ang) * end, cy + Math.sin(ang) * end);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const core = ctx.createRadialGradient(cx, cy, coreR * 0.6, cx, cy, coreR);
+  core.addColorStop(0.0, "rgba(4, 4, 10, 1)");
+  core.addColorStop(0.86, "rgba(4, 4, 10, 1)");
+  core.addColorStop(0.94, "rgba(150, 130, 220, 0.35)");
+  core.addColorStop(1.0, "rgba(150, 130, 220, 0)");
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+  ctx.fill();
+
+  const tex = Texture.from(canvas);
+  blackHoleCache.set(seed, tex);
   return tex;
 }

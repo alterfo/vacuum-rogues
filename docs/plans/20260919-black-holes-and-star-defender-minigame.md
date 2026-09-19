@@ -185,36 +185,37 @@ Research (this session, via Explore agent + direct file reads) found:
 - Create: `src/presentation/flight/BlackHoleRenderer.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Run `gitnexus impact SpaceFlightScene` (flight-module wiring section), record blast radius
-- [ ] Add `blackHoleTexture(seed: string): Texture | null` to `gradientTexture.ts` following the
+- [x] Run `gitnexus impact SpaceFlightScene` (flight-module wiring section), record blast radius
+      (manual: gitnexus MCP/CLI unavailable; callers are SceneFactory + flight tests)
+- [x] Add `blackHoleTexture(seed: string): Texture | null` to `gradientTexture.ts` following the
       existing bake-once-via-Canvas2D-cache-by-seed convention (`nebulaCloudTexture`/
       `cometHeadTexture`): a radial accretion-disk gradient (warm inner ring → dark outer) plus
       a solid dark event-horizon core; return `null` with no 2D context so callers fall back to
       a `Graphics` approximation (same contract every other baker follows)
-- [ ] Create `BlackHoleRenderer implements FlightModule` (`initialize()`/`update(dt,
+- [x] Create `BlackHoleRenderer implements FlightModule` (`initialize()`/`update(dt,
       bgElapsed)`/`destroy()`), constructed only when `system.hasBlackHoleAnomaly` is true.
       Position seeded via `new SeededRNG(\`blackhole_${systemId}\`)` at a fixed angle/radius
       within `[SYSTEM_GEOMETRY.innerRadius, SYSTEM_GEOMETRY.outerRadius]` (same band planets
       use), independent of the star (never at the star's own position)
-- [ ] Visual: mount the baked texture (or `Graphics` fallback: layered rotating rings + a dark
+- [x] Visual: mount the baked texture (or `Graphics` fallback: layered rotating rings + a dark
       core `Graphics.circle` + `softGlowTexture` halo tinted toward violet/blue, reusing
       `buildStarHalo`'s halo-sprite approach) at `BLACK_HOLE_VISUAL_RADIUS`; animate slow rotation
       + a subtle pulsing scale on the core in `update()`, gated on `!reducedMotion()` per the
       accessibility seam (`src/presentation/ui/reducedMotion.ts`) for the autonomous portion of
       the animation (idle spin), per `.claude/docs/adding-features.md`'s accessibility rules
-- [ ] Add `updateBlackHoleContact(playerX, playerY): boolean` mirroring
+- [x] Add `updateBlackHoleContact(playerX, playerY): boolean` mirroring
       `StarRenderer.updateSunContactDamage`'s distance check, returning true once when
       `dist < BLACK_HOLE_EVENT_HORIZON_RADIUS` (no periodic damage here — a **single**
       one-shot trigger, since entering *launches the sub-game* rather than applying continuous
       damage)
-- [ ] Wire into `SpaceFlightScene`: instantiate `BlackHoleRenderer` alongside the other flight
+- [x] Wire into `SpaceFlightScene`: instantiate `BlackHoleRenderer` alongside the other flight
       modules only when the current system has the anomaly; on `updateBlackHoleContact` returning
       true, call a new `enterBlackHole()` method (stub in this task — full transition wired in
       Task 4) instead of applying damage
-- [ ] Write tests for `BlackHoleRenderer`'s pure position-seeding (deterministic by systemId,
+- [x] Write tests for `BlackHoleRenderer`'s pure position-seeding (deterministic by systemId,
       lands within the expected radius band) and `updateBlackHoleContact`'s distance math
       (touching/not-touching/one-shot-not-retriggering-until-leaving-and-reentering)
-- [ ] Run tests — must pass before Task 3
+- [x] Run tests — must pass before Task 3 (new tests 5/5; tsc clean; lint 0 errors)
 
 ### Task 3: Hyperjump mishap
 

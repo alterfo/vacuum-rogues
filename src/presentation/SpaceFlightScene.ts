@@ -19,6 +19,7 @@ import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { landingDenialMessage } from "@/systems/galaxy/landingAccess";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 import { StarRenderer } from "./flight/StarRenderer";
+import { BlackHoleRenderer } from "./flight/BlackHoleRenderer";
 import { AsteroidBelt } from "./flight/AsteroidBelt";
 import { OrbitRenderer } from "./flight/OrbitRenderer";
 import { RouteRenderer } from "./flight/RouteRenderer";
@@ -87,6 +88,7 @@ export class SpaceFlightScene extends GameScene {
   private planetManager!: PlanetManager;
   private starRenderer!: StarRenderer;
   private orbitRenderer!: OrbitRenderer;
+  private blackHoleRenderer: BlackHoleRenderer | null = null;
 
   private npcManager!: NpcShipManager;
   private combatModule!: CombatModule;
@@ -394,6 +396,17 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.gameLayer,
     );
 
+    const currentSystem = this.gameEngine?.galaxy?.systems.find(
+      (s) => s.id === this.gameEngine?.player?.currentSystemId,
+    );
+    this.blackHoleRenderer = currentSystem?.hasBlackHoleAnomaly
+      ? new BlackHoleRenderer(
+          this.renderer,
+          this.gameEngine,
+          this.renderer.gameLayer,
+        )
+      : null;
+
     this.asteroidBelt = new AsteroidBelt(
       this.renderer,
       this.renderer.gameLayer,
@@ -487,6 +500,7 @@ export class SpaceFlightScene extends GameScene {
     this.background.initialize();
 
     this.starRenderer.initialize();
+    this.blackHoleRenderer?.initialize();
     this.orbitRenderer.initialize(); // Orbit circles + boundary (hyperjump edge)
     this.planetManager.initialize(); // Planets + station markers (US-066)
     this.npcManager.initialize(!!ctx?.preserveShipPos); // NPC ships present in this system (Feature 8)
@@ -592,6 +606,7 @@ export class SpaceFlightScene extends GameScene {
     this.background?.update(deltaTime, this.bgElapsed);
     this.asteroidBelt.update(deltaTime, this.bgElapsed);
     this.starRenderer.update(deltaTime, this.bgElapsed);
+    this.blackHoleRenderer?.update(deltaTime, this.bgElapsed);
     this.warpFx.update(deltaTime);
     this.updateShip(deltaTime);
     this.combatPlanning.tickExecute(deltaTime); // no-op outside EXECUTING (14.5a)
@@ -699,6 +714,7 @@ export class SpaceFlightScene extends GameScene {
     this.combatPlanning.endCombat(); // Reset the pause-and-plan loop too (Task 14.5a).
 
     this.starRenderer?.destroy();
+    this.blackHoleRenderer?.destroy();
     this.asteroidBelt?.destroy();
     this.orbitRenderer?.destroy();
     this.playerShip?.destroy();
@@ -1181,6 +1197,15 @@ export class SpaceFlightScene extends GameScene {
     );
     if (startedBurning) this.hud.showMessage("☀ Корпус горит!", 0xff8800);
 
+    if (
+      this.blackHoleRenderer?.updateBlackHoleContact(
+        this.shipPhysics.shipX,
+        this.shipPhysics.shipY,
+      )
+    ) {
+      this.enterBlackHole();
+    }
+
     const ship = this.gameEngine?.player?.ship;
     if (ship && ship.maxHull > 0) {
       const hullFraction = ship.hullHP / ship.maxHull;
@@ -1314,6 +1339,12 @@ export class SpaceFlightScene extends GameScene {
       arrivalHeading: arrivalHeadingFromExitVector(departureVector),
       warpArrival: true,
     });
+  }
+
+  private enterBlackHole(): void {
+    logger.info(
+      "Entering black hole anomaly (arcade transition wired in Task 4)",
+    );
   }
 
   private plotRoute(): void {
