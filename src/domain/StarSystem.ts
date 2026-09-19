@@ -16,6 +16,7 @@ export class StarSystem {
   isFactionHome: boolean = false;
   homeFactionId: Faction | null = null;
   techLevel: number = 1;
+  hasBlackHoleAnomaly: boolean = false;
 
   constructor(
     public readonly id: string,

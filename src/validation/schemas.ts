@@ -290,6 +290,7 @@ export const StarSystemSchema = z.object({
     .default(null),
   stations: z.array(StationSchema).default([]),
   techLevel: z.number().int().min(1).max(8).default(1),
+  hasBlackHoleAnomaly: z.boolean().default(false),
 });
 
 export const NpcGoalSchema = z.object({

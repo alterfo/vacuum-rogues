@@ -11,6 +11,7 @@ import { PlanetGenerator } from "./PlanetGenerator";
 import { seedMarket } from "./galaxy/marketSeeding";
 import { pickStarType } from "./galaxy/starTypeDistribution";
 import { assignSystemTechLevels } from "./galaxy/systemTechDistribution";
+import { assignBlackHoleAnomalies } from "./galaxy/blackHoleDistribution";
 import { pickSystemFaction } from "./galaxy/systemFactionDistribution";
 import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
@@ -137,6 +138,7 @@ export class GalaxySimulator {
     }
 
     assignSystemTechLevels(generatedSystems, seed);
+    assignBlackHoleAnomalies(generatedSystems, seed);
 
     for (const system of generatedSystems) {
       const distances = generatedSystems

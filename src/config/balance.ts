@@ -147,6 +147,11 @@ export const SYSTEM_GEOMETRY = {
   orbitRadii: [600, 1050, 1500, 1950, 2500] as const,
 } as const;
 
+export const BLACK_HOLE_SYSTEM_CHANCE = 0.08;
+export const BLACK_HOLE_VISUAL_RADIUS = 130;
+export const BLACK_HOLE_EVENT_HORIZON_RADIUS = 90;
+export const BLACK_HOLE_JUMP_MISHAP_CHANCE = 0.015;
+
 export const GRAPPLE_HOLD = {
   hullToThreshold: 0.5,
 } as const;
