@@ -223,28 +223,28 @@ Research (this session, via Explore agent + direct file reads) found:
 - Create: `src/systems/galaxy/blackHoleMishap.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Run `gitnexus impact performWarp`, record blast radius
-- [ ] Create `blackHoleMishap.ts`: `rollBlackHoleMishap(seed: string): boolean` (pure, weighted
+- [x] Run `gitnexus impact performWarp`, record blast radius
+- [x] Create `blackHoleMishap.ts`: `rollBlackHoleMishap(seed: string): boolean` (pure, weighted
       by `BLACK_HOLE_JUMP_MISHAP_CHANCE`, seeded per-jump e.g.
       `\`mishap_${sourceSystemId}_${targetSystemId}_${gameDays}\`` so it's deterministic-testable
       but varies jump-to-jump) + `findNearestBlackHoleSystem(galaxy, fromSystemId): StarSystem |
       null` (BFS over `connections`, reusing the existing graph-hop approach from
       `src/systems/galaxy/jumpDistance.ts` as a reference, not a dependency) — returns `null`
       when the galaxy has zero `hasBlackHoleAnomaly` systems (mishap is then a no-op)
-- [ ] In `performWarp()` (`SpaceFlightScene.ts:1264-1317`), after resolving `target` and before
+- [x] In `performWarp()` (`SpaceFlightScene.ts:1264-1317`), after resolving `target` and before
       committing the jump: roll `rollBlackHoleMishap`; on a hit with a non-null nearest black-hole
       system, redirect the jump's `targetSystemId` to that system's id and pass a
       `warpMishap: true` flag through the `SPACE_FLIGHT` transition context
-- [ ] On `SPACE_FLIGHT` init with `warpMishap: true` in a black-hole system, spawn the ship at a
+- [x] On `SPACE_FLIGHT` init with `warpMishap: true` in a black-hole system, spawn the ship at a
       point already just outside `BLACK_HOLE_EVENT_HORIZON_RADIUS` from the anomaly (reusing
       `BlackHoleRenderer`'s seeded position, not a new spawn-geometry concept) so the existing
       `updateBlackHoleContact` check naturally fires within the first few frames — the mishap
       reuses the exact same entry trigger as flying in voluntarily, no second trigger path
-- [ ] Write tests for `rollBlackHoleMishap` (rate/determinism) and `findNearestBlackHoleSystem`
+- [x] Write tests for `rollBlackHoleMishap` (rate/determinism) and `findNearestBlackHoleSystem`
       (correct nearest pick, `null` on a galaxy with none, doesn't mutate the galaxy)
-- [ ] Write a real-engine playtest test: a forced-true mishap roll redirects `performWarp` to a
+- [x] Write a real-engine playtest test: a forced-true mishap roll redirects `performWarp` to a
       black-hole system and the ship spawns within contact range
-- [ ] Run tests — must pass before Task 4
+- [x] Run tests — must pass before Task 4
 
 ### Task 4: `BLACK_HOLE_ARCADE` scene scaffold + transition wiring
 

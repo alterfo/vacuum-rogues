@@ -15,11 +15,22 @@ import {
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { PanZoomController } from "@/systems/PanZoomController";
-import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+import {
+  SYSTEM_GEOMETRY,
+  GAME_BALANCE,
+  BLACK_HOLE_EVENT_HORIZON_RADIUS,
+} from "@/config/balance";
 import { landingDenialMessage } from "@/systems/galaxy/landingAccess";
+import {
+  findNearestBlackHoleSystem,
+  rollBlackHoleMishap,
+} from "@/systems/galaxy/blackHoleMishap";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 import { StarRenderer } from "./flight/StarRenderer";
-import { BlackHoleRenderer } from "./flight/BlackHoleRenderer";
+import {
+  BlackHoleRenderer,
+  blackHolePosition,
+} from "./flight/BlackHoleRenderer";
 import { AsteroidBelt } from "./flight/AsteroidBelt";
 import { OrbitRenderer } from "./flight/OrbitRenderer";
 import { RouteRenderer } from "./flight/RouteRenderer";
@@ -204,6 +215,7 @@ export class SpaceFlightScene extends GameScene {
             fuelCost: number;
             exitVector: { x: number; y: number };
           };
+          warpMishap?: boolean;
           warpArrival?: boolean;
           fromPlanetId?: string;
           fromStationId?: string;
@@ -369,14 +381,28 @@ export class SpaceFlightScene extends GameScene {
     if (this.gameEngine) this.gameEngine.lastFlightShipPos = null; // consume
     if (this.gameEngine) this.gameEngine.lastFlightWasFleeing = false; // consume
     const entryVector = ctx?.entryVector ?? { x: 0, y: 1 };
-    const entryX = this.pendingWarp
-      ? (lastPos?.x ??
-        centerX - this.pendingWarp.exitVector.x * this.SYSTEM_INNER_RADIUS)
-      : (lastPos?.x ?? centerX + entryVector.x * this.SYSTEM_BOUNDARY_RADIUS);
-    const entryY = this.pendingWarp
-      ? (lastPos?.y ??
-        centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
-      : (lastPos?.y ?? centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS);
+    const currentSystem = this.gameEngine?.galaxy?.systems.find(
+      (s) => s.id === this.gameEngine?.player?.currentSystemId,
+    );
+    const mishapPosition =
+      ctx?.warpMishap && currentSystem?.hasBlackHoleAnomaly
+        ? blackHolePosition(currentSystem.id)
+        : null;
+    const entryX = mishapPosition
+      ? centerX +
+        mishapPosition.x +
+        BLACK_HOLE_EVENT_HORIZON_RADIUS +
+        this.SYSTEM_BOUNDARY_RADIUS * 0.02
+      : this.pendingWarp
+        ? (lastPos?.x ??
+          centerX - this.pendingWarp.exitVector.x * this.SYSTEM_INNER_RADIUS)
+        : (lastPos?.x ?? centerX + entryVector.x * this.SYSTEM_BOUNDARY_RADIUS);
+    const entryY = mishapPosition
+      ? centerY + mishapPosition.y
+      : this.pendingWarp
+        ? (lastPos?.y ??
+          centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
+        : (lastPos?.y ?? centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS);
     const loadoutStats = this.gameEngine?.playerLoadout?.derivedStats();
     const ship = this.gameEngine?.player?.ship;
     const cruise = loadoutStats
@@ -396,9 +422,6 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.gameLayer,
     );
 
-    const currentSystem = this.gameEngine?.galaxy?.systems.find(
-      (s) => s.id === this.gameEngine?.player?.currentSystemId,
-    );
     this.blackHoleRenderer = currentSystem?.hasBlackHoleAnomaly
       ? new BlackHoleRenderer(
           this.renderer,
@@ -1313,14 +1336,22 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
+    const sourceSystemId = this.gameEngine.player.currentSystemId;
+    const mishapSeed = `mishap_${sourceSystemId}_${targetSystemId}_${this.gameEngine.galaxy.gameDays}`;
+    const mishapTarget = rollBlackHoleMishap(mishapSeed)
+      ? findNearestBlackHoleSystem(this.gameEngine.galaxy, sourceSystemId)
+      : null;
+    const resolvedTargetSystemId = mishapTarget?.id ?? targetSystemId;
+    const resolvedTarget = mishapTarget ?? target;
+
     this.gameEngine.player.ship.energy = Math.max(
       0,
       this.gameEngine.player.ship.energy - fuelCost,
     );
-    this.gameEngine.player.currentSystemId = targetSystemId;
-    this.gameEngine.galaxy.revealSystemAndNeighbors(targetSystemId);
+    this.gameEngine.player.currentSystemId = resolvedTargetSystemId;
+    this.gameEngine.galaxy.revealSystemAndNeighbors(resolvedTargetSystemId);
     logger.info(
-      `Hyperjump to ${target.name} complete. Fuel left: ${this.gameEngine.player.ship.energy}`,
+      `Hyperjump to ${resolvedTarget.name} complete. Fuel left: ${this.gameEngine.player.ship.energy}`,
     );
 
     this.gameEngine.saveGame("auto").catch((e) => {
@@ -1338,6 +1369,7 @@ export class SpaceFlightScene extends GameScene {
       entryVector,
       arrivalHeading: arrivalHeadingFromExitVector(departureVector),
       warpArrival: true,
+      warpMishap: mishapTarget !== null,
     });
   }
 
