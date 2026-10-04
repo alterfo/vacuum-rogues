@@ -82,6 +82,7 @@ compiling and preserves the strict top-down layer direction.
 | Overmind arc / spread machine | `.claude/docs/systems/overmind.md` |
 | Adaptive audio / music director | `.claude/docs/systems/audio.md` |
 | Letsplay engine / autopilot / neural training | `.claude/docs/systems/letsplay.md` |
+| Black hole arcade (vertical shooter, 50 levels, payout) | `.claude/docs/systems/blackhole-arcade.md` |
 | Adding features (scenes/assets/i18n/domain fields) | `.claude/docs/adding-features.md` |
 
 ### Neural / AI Pipeline (pure-TS, no ONNX runtime)
@@ -176,7 +177,7 @@ Every bug follows this order — no exceptions:
 
 ### Letsplay engine (key facts)
 
-Full details: `.claude/docs/systems/letsplay.md`. `src/tests/playtest/letsplay/` plays the real engine (dev-only). Loop: `observe → decide → apply → tick`. Live autopilot: `` ` `` (Backquote) in `npm run dev`. Default policy: `MemoryHeuristicPolicy`. First human input reclaims control.
+Full details: `.claude/docs/systems/letsplay.md`. `src/tests/playtest/letsplay/` plays the real engine (a lazy chunk, never statically imported). Loop: `observe → decide → apply → tick`. Live autopilot: `` ` `` (Backquote), in dev and in production (prod loads the engine lazily on first press or when a save had it engaged — `attachAutopilot`; dev loads it at boot — `attachDevAutopilot`; `letsplayDevOnly.test.ts` pins that nothing statically imports it). Default policy: `MemoryHeuristicPolicy`. First human input reclaims control.
 
 **Two appliers, one contract (2026-08-06):** the shared policy's verbs are applied by BOTH the live hook (`installAutopilotHook`/`createLiveSceneController`) and the headless `PlayerAgent` — keep them semantically in lockstep (found divergences: live trade exited to flight and skipped the quest board; live land/dock didn't confirm the combat-planning freeze; headless wait didn't advance the day off-flight → the campaign calendar wedge). Invariant: **every verb must either progress the sim or unblock a freeze** — "wait" advances a day in ANY scene (`waitOnPlanet.test.ts`), any handler reachable during PLANNING confirms the turn first (`autopilotCombatPlanningTick.test.ts`). When touching a verb, patch and pin both appliers.
 

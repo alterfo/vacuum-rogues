@@ -137,7 +137,8 @@ describe("Customs quest — win exits once and does not restart", () => {
     });
 
     driveToWinTerminal(scene);
-    vi.advanceTimersByTime(800); // check_final auto-executes `win` → quest_success
+    (scene as any).continueFromAuto();
+    (scene as any).continueFromAuto();
 
     const vm = (scene as any).vm as QuestVM;
     expect(vm.isFinished()).toBe(true);
@@ -145,7 +146,11 @@ describe("Customs quest — win exits once and does not restart", () => {
     expect(forceCompleteQuest).toHaveBeenCalledTimes(1);
     expect(forceCompleteQuest).toHaveBeenCalledWith("q_customs", engine.player);
 
-    vi.advanceTimersByTime(2000); // success terminal returns after the toast delay
+    vi.advanceTimersByTime(60_000);
+    expect(transitionTo).not.toHaveBeenCalled();
+    (scene as any).continueFromAuto();
+    expect(transitionTo).not.toHaveBeenCalled();
+    (scene as any).continueFromAuto();
     expect(transitionTo).toHaveBeenCalledTimes(1);
     expect(transitionTo.mock.calls[0][0]).toBe(SceneType.PLANET);
     const reLaunched = transitionTo.mock.calls.some(

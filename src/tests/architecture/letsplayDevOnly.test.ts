@@ -63,7 +63,7 @@ function resolveSpecifier(fromFile: string, spec: string): string | null {
   return null; // bare package (pixi.js, zod, onnxruntime-web, …)
 }
 
-describe("letsplay engine is dev-only (never in prod)", () => {
+describe("letsplay engine is never statically bundled; prod loads it lazily on demand", () => {
   it("no production module imports anything from the letsplay engine dir", () => {
     const offenders: string[] = [];
     for (const file of productionTsFiles()) {
@@ -119,7 +119,7 @@ describe("letsplay engine is dev-only (never in prod)", () => {
     ).toEqual([]);
   });
 
-  it("the only production dynamic import of the engine is main.ts, DEV-gated", () => {
+  it("the only production dynamic import of the engine is main.ts, behind the lazy seam", () => {
     const offenders: string[] = [];
     for (const file of productionTsFiles()) {
       const source = readFileSync(file, "utf8");
@@ -130,20 +130,19 @@ describe("letsplay engine is dev-only (never in prod)", () => {
         const rel = relative(SRC_ROOT, file);
         if (file !== MAIN_TS) {
           offenders.push(
-            `${rel} dynamically imports the dev engine ` +
-              `(only main.ts may, DEV-gated)`,
+            `${rel} dynamically imports the engine (only main.ts may)`,
           );
-        } else if (source.lastIndexOf("import.meta.env.DEV", m.index) === -1) {
+        } else if (!/attachAutopilot\s*\(/.test(source)) {
           offenders.push(
-            `${rel} dynamic-imports the dev engine without a preceding ` +
-              `import.meta.env.DEV gate (would ship in the prod bundle)`,
+            `${rel} dynamic-imports the engine but never hands it to the ` +
+              `lazy attachAutopilot seam (it would load at boot)`,
           );
         }
       }
     }
     expect(
       offenders,
-      `Dev-engine dynamic imports must be main.ts-only and DEV-gated:\n` +
+      `Engine dynamic imports must be main.ts-only and go through the lazy attachAutopilot seam:\n` +
         offenders.join("\n"),
     ).toEqual([]);
   });

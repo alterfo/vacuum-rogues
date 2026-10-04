@@ -450,7 +450,31 @@ export class MainMenuScene extends GameScene {
     );
     this.buttonsContainer.addChild(replayHelpBtn);
 
+    const arcadeBtn = createButton(
+      t("menu.arcade"),
+      255,
+      () => this.handleArcade(),
+      16,
+      0xff99ff,
+    );
+    this.buttonsContainer.addChild(arcadeBtn);
+
     this.renderer.uiLayer.addChild(this.buttonsContainer);
+  }
+
+  private async handleArcade(): Promise<void> {
+    if (!this.gameEngine) {
+      this.showMessage(t("menu.engineUnavailable"));
+      return;
+    }
+    try {
+      await this.gameEngine.transitionTo(SceneType.BLACK_HOLE_ARCADE, {
+        gameEngine: this.gameEngine,
+      });
+    } catch (error) {
+      logger.error("Failed to open the arcade:", error);
+      this.showMessage(t("menu.engineUnavailable"));
+    }
   }
 
   private toggleSettings(): void {

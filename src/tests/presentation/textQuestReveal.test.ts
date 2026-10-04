@@ -206,64 +206,84 @@ describe("TextQuestScene typewriter reveal", () => {
   });
 });
 
-describe("TextQuestScene auto-execute chain waits for the reveal", () => {
-  it("does not advance a routing node while a live reveal is still typing", () => {
+const blankRoutingScript: QuestScript = {
+  id: "reveal_blank_routing",
+  title: "Пустой узел",
+  params: [],
+  startLocation: "intro",
+  locations: [
+    {
+      id: "intro",
+      text: "",
+      transitions: [
+        {
+          id: "toEnd",
+          label: "...",
+          toLocation: "end",
+          effects: [],
+          autoExecute: true,
+        },
+      ],
+    },
+    { id: "end", text: "Финал.", transitions: [], isSuccess: true },
+  ],
+};
+
+function startAuto(script: QuestScript) {
+  const scene = new TextQuestScene(makeRenderer());
+  scene.initialize({ gameEngine: makeEngine(), questScript: script });
+  const loc = () => ((scene as any).vm as QuestVM).currentLocation().id;
+  return { scene, loc };
+}
+
+describe("TextQuestScene auto-execute nodes wait for the player", () => {
+  it("never advances a node with text on its own, however long it waits", () => {
     vi.useFakeTimers();
-    const scene = new TextQuestScene(makeRenderer());
-    scene.initialize({
-      gameEngine: makeEngine(),
-      questScript: autoChainScript,
-    });
-    const vm = () => ((scene as any).vm as QuestVM).currentLocation().id;
+    const { scene, loc } = startAuto(autoChainScript);
 
     scene.update(50);
-    expect((scene as any).revealing).toBe(true);
-    expect(narrationText(scene).length).toBeLessThan(LONG_TEXT.length);
+    scene.update(5000);
+    expect(narrationText(scene)).toBe(LONG_TEXT);
 
-    vi.advanceTimersByTime(800);
-    expect(vm()).toBe("intro");
+    vi.advanceTimersByTime(60_000);
+    expect(loc()).toBe("intro");
+
+    scene.destroy();
+  });
+
+  it("advances on the continue action and reveals the next node", () => {
+    vi.useFakeTimers();
+    const { scene, loc } = startAuto(autoChainScript);
 
     scene.update(5000);
-    expect(vm()).toBe("mid");
+    (scene as any).continueFromAuto();
+    expect(loc()).toBe("mid");
     expect((scene as any).revealing).toBe(true);
 
     scene.destroy();
   });
 
-  it("skipping the reveal advances at the 800 ms beat, not before", () => {
+  it("Space completes a live reveal first, then continues on the next press", () => {
     vi.useFakeTimers();
-    const scene = new TextQuestScene(makeRenderer());
-    scene.initialize({
-      gameEngine: makeEngine(),
-      questScript: autoChainScript,
-    });
-    const vm = () => ((scene as any).vm as QuestVM).currentLocation().id;
+    const { scene, loc } = startAuto(autoChainScript);
 
-    scene.update(50); // live loop
-    (scene as any).completeReveal(); // click-to-skip → full text now shown
+    scene.update(50);
+    (scene as any).onVmKeyDown({ key: " " } as KeyboardEvent);
     expect(narrationText(scene)).toBe(LONG_TEXT);
-    expect(vm()).toBe("intro");
+    expect(loc()).toBe("intro");
 
-    vi.advanceTimersByTime(800);
-    expect(vm()).toBe("mid");
+    (scene as any).onVmKeyDown({ key: "Enter" } as KeyboardEvent);
+    expect(loc()).toBe("mid");
 
     scene.destroy();
   });
 
-  it("advances at the 800 ms beat in a headless (no update loop) context", () => {
+  it("still passes through blank routing nodes without stopping", () => {
     vi.useFakeTimers();
-    const scene = new TextQuestScene(makeRenderer());
-    scene.initialize({
-      gameEngine: makeEngine(),
-      questScript: autoChainScript,
-    });
-    const vm = () => ((scene as any).vm as QuestVM).currentLocation().id;
-
-    expect((scene as any).revealing).toBe(true);
-    expect(vm()).toBe("intro");
+    const { scene, loc } = startAuto(blankRoutingScript);
 
     vi.advanceTimersByTime(800);
-    expect(vm()).toBe("mid");
+    expect(loc()).toBe("end");
 
     scene.destroy();
   });

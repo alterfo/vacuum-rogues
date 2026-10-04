@@ -18,6 +18,7 @@ const ALL_KEYS: HelpKey[] = [
   "BANK",
   "INVENTORY",
   "TEXT_QUEST",
+  "BLACK_HOLE_ARCADE",
   "welcome",
   "quest-journal",
   "combat",

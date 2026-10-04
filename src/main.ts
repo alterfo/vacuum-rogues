@@ -9,7 +9,7 @@ import { GameConfig } from './config/balance';
 import { gatherDiagnostics } from './systems/feedback/gatherDiagnostics';
 import { openFeedback } from './systems/feedback/openFeedback';
 import { shouldShowMobileGate, markDismissed } from './systems/device/mobileGateState';
-import { attachDevAutopilot } from './dev/devAutopilot';
+import { attachAutopilot, attachDevAutopilot } from './dev/devAutopilot';
 
 declare const __DEBUG__: boolean;
 
@@ -109,6 +109,7 @@ function wireIssueButton(engine: GameEngine): void {
 }
 
 function maybeShowMobileGate(): void {
+  if (new URLSearchParams(location.search).has('arcade')) return;
   if (!shouldShowMobileGate()) return;
   const gate = document.getElementById('mobile-gate');
   if (!gate) return;
@@ -165,13 +166,23 @@ async function main(): Promise<void> {
       (window as unknown as Record<string, GameEngine>).__gameEngine = engine;
     }
 
+    const loadAutopilot = () =>
+      import('./tests/playtest/letsplay/installAutopilotHook');
+    const autopilotUnavailable = (err: unknown) =>
+      logger.warn('Autopilot hook unavailable:', err);
     if (import.meta.env.DEV) {
-      attachDevAutopilot(
-        import.meta.env.DEV,
-        engine,
-        () => import('./tests/playtest/letsplay/installAutopilotHook'),
-        (err) => logger.warn('Dev autopilot hook unavailable:', err),
-      );
+      attachDevAutopilot(true, engine, loadAutopilot, autopilotUnavailable);
+    } else {
+      attachAutopilot(engine, loadAutopilot, autopilotUnavailable);
+    }
+
+    if (location.search.includes('arcade')) {
+      import('./systems/arcadeLaunch')
+        .then((mod) => mod.launchArcadeFromQuery(engine, location.search))
+        .catch((err) => logger.warn('Arcade direct launch failed:', err));
+    }
+
+    if (import.meta.env.DEV) {
       import('./dev/EconomyAdminPanel')
         .then((mod) => mod.installEconomyAdminPanel(engine))
         .catch((err) => logger.warn('Dev economy admin panel unavailable:', err));

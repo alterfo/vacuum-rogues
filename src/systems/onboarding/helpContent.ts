@@ -13,6 +13,7 @@ export type HelpKey =
   | "BANK"
   | "INVENTORY"
   | "TEXT_QUEST"
+  | "BLACK_HOLE_ARCADE"
   | "welcome"
   | "quest-journal"
   | "combat"
@@ -38,6 +39,7 @@ export const HELP_SPEC: Record<HelpKey, { body: number; controls: number }> = {
   BANK: { body: 2, controls: 2 },
   INVENTORY: { body: 2, controls: 2 },
   TEXT_QUEST: { body: 2, controls: 1 },
+  BLACK_HOLE_ARCADE: { body: 2, controls: 2 },
   "quest-journal": { body: 2, controls: 1 },
   combat: { body: 2, controls: 2 },
   refuel: { body: 2, controls: 0 },

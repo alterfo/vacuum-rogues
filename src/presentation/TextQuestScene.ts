@@ -17,6 +17,7 @@ import { QuestVM } from "@/systems/quests/QuestVM";
 import type { NarratorContext } from "@/ai/adapters/QuestNarrator";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
+import { t } from "@/i18n/i18n";
 
 export function deriveRestartSeed(
   baseSeed: number | string,
@@ -61,6 +62,7 @@ export class TextQuestScene extends GameScene {
   private vmParamPanel: Container | null = null;
   private autoExecuteTimer: ReturnType<typeof setTimeout> | null = null;
   private successTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingContinue: (() => void) | null = null;
 
   private revealTarget = "";
   private revealShown = 0;
@@ -502,6 +504,7 @@ export class TextQuestScene extends GameScene {
     const fullText = this.vm.interpolate(this.vm.currentLocationText());
     this.refreshVmParamPanel();
 
+    this.pendingContinue = null;
     while (this.vmChoiceContainer.children.length > 0) {
       const c = this.vmChoiceContainer.children[0];
       this.vmChoiceContainer.removeChild(c);
@@ -524,8 +527,22 @@ export class TextQuestScene extends GameScene {
 
     const autoT = transitions.find((t) => t.autoExecute);
     if (autoT && transitions.every((t) => t.autoExecute)) {
-      this.scheduleAutoExecute(autoT.id);
-      this.startReveal(fullText, () => this.onAutoRevealDone(autoT.id));
+      if (fullText.trim().length === 0) {
+        this.scheduleAutoExecute(autoT.id);
+        this.startReveal(fullText, () => this.onAutoRevealDone(autoT.id));
+        return;
+      }
+      this.startReveal(fullText, null);
+      this.addVmTransitionButton(
+        this.vmChoiceContainer,
+        t("quest.text.continue"),
+        8,
+        0,
+        btnW,
+        btnH,
+        () => this.continueFromAuto(),
+      );
+      this.pendingContinue = () => this.executeVmTransition(autoT.id);
       return;
     }
 
@@ -564,6 +581,14 @@ export class TextQuestScene extends GameScene {
       if (this.revealing && this.revealElapsed > 0) return;
       this.doAutoAdvance(transitionId);
     }, 800);
+  }
+
+  private continueFromAuto(): void {
+    if (this.revealing) {
+      this.completeReveal();
+      return;
+    }
+    this.pendingContinue?.();
   }
 
   private onAutoRevealDone(transitionId: string): void {
@@ -676,10 +701,19 @@ export class TextQuestScene extends GameScene {
         );
       }
       this.showToast("Квест выполнен!", 0x44ff88);
-      this.successTimer = setTimeout(() => {
-        this.successTimer = null;
-        this.doReturn();
-      }, 2000);
+      if (this.vmChoiceContainer) {
+        const btnW = this.renderer.app.screen.width - 192 - 8 - 32;
+        this.addVmTransitionButton(
+          this.vmChoiceContainer,
+          t("quest.text.finish"),
+          8,
+          0,
+          btnW,
+          36,
+          () => this.doReturn(),
+        );
+      }
+      this.pendingContinue = () => this.doReturn();
     } else {
       this.showToast("Провал. Нажмите «Начать заново».", 0xff6644);
     }
@@ -688,6 +722,11 @@ export class TextQuestScene extends GameScene {
   private onVmKeyDown(event: KeyboardEvent): void {
     if (event.key === "Escape") {
       this.doReturn();
+      return;
+    }
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault?.();
+      this.continueFromAuto();
     }
   }
 
