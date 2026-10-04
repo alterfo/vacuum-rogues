@@ -33,6 +33,7 @@ import {
   adjustPlayerCredits,
 } from "@/systems/banking/economy";
 import { SceneType } from "@/types";
+import { stripArcadeQuery } from "@/systems/arcadeLaunch";
 import {
   ARCADE_FX_QUALITY,
   AdaptiveQuality,
@@ -1098,6 +1099,7 @@ export class BlackHoleArcadeScene extends GameScene {
   private exit(): void {
     if (this.exiting || !this.gameEngine) return;
     this.exiting = true;
+    stripArcadeQuery();
     void this.gameEngine
       .transitionTo(
         this.practice ? SceneType.MAIN_MENU : SceneType.SPACE_FLIGHT,

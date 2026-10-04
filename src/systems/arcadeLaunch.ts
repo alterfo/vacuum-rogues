@@ -39,3 +39,21 @@ export async function launchArcadeFromQuery(
   });
   return true;
 }
+
+const ARCADE_QUERY_KEYS = ["arcade", "level", "game"] as const;
+
+export function stripArcadeQuery(
+  loc: Pick<Location, "pathname" | "search" | "hash"> = location,
+  hist: Pick<History, "replaceState" | "state"> = history,
+): boolean {
+  const params = new URLSearchParams(loc.search);
+  if (!params.has("arcade")) return false;
+  for (const key of ARCADE_QUERY_KEYS) params.delete(key);
+  const rest = params.toString();
+  hist.replaceState(
+    hist.state,
+    "",
+    `${loc.pathname}${rest ? `?${rest}` : ""}${loc.hash}`,
+  );
+  return true;
+}

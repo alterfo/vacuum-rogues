@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   launchArcadeFromQuery,
   parseArcadeLaunch,
+  stripArcadeQuery,
 } from "@/systems/arcadeLaunch";
 import { SceneType } from "@/types";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -61,5 +62,39 @@ describe("arcade direct launch", () => {
       returnSystemId: "s1",
       startLevel: 2,
     });
+  });
+});
+
+describe("leaving the arcade cleans the address bar", () => {
+  const run = (search: string, hash = "") => {
+    const replaceState = vi.fn();
+    const changed = stripArcadeQuery(
+      { pathname: "/play", search, hash },
+      { replaceState, state: { s: 1 } },
+    );
+    return {
+      changed,
+      url: replaceState.mock.calls[0]?.[2] as string | undefined,
+      replaceState,
+    };
+  };
+
+  it("removes arcade, level and game but keeps everything else", () => {
+    expect(run("?arcade=7&level=3&game&lang=en", "#top").url).toBe(
+      "/play?lang=en#top",
+    );
+    expect(run("?arcade").url).toBe("/play");
+    expect(run("?x=1&arcade=2&game").url).toBe("/play?x=1");
+  });
+
+  it("does nothing when the page was not opened through the arcade link", () => {
+    const r = run("?level=4&x=1");
+    expect(r.changed).toBe(false);
+    expect(r.replaceState).not.toHaveBeenCalled();
+  });
+
+  it("keeps the history state and replaces instead of adding an entry", () => {
+    const r = run("?arcade=1");
+    expect(r.replaceState).toHaveBeenCalledWith({ s: 1 }, "", "/play");
   });
 });

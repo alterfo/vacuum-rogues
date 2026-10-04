@@ -51,6 +51,20 @@ describe("arcade weapons", () => {
     expect(bullets.filter((b) => b.kind === "pulse")).toHaveLength(1);
   });
 
+  it("homing missiles hit moderately: damage and splash are kept modest", () => {
+    const damage = (level: number) =>
+      fireWeapon("homing", level, 0, 0, []).bullets.find(
+        (b) => b.kind === "missile",
+      )!.damage;
+    expect(damage(1)).toBe(18);
+    expect(damage(5)).toBe(26);
+    const blast =
+      fireWeapon("homing", 3, 0, 0, []).bullets.find(
+        (b) => b.kind === "missile",
+      )!.blast ?? 0;
+    expect(blast).toBe(30);
+  });
+
   it("wave fires mirrored sine pairs", () => {
     const l1 = fireWeapon("wave", 1, 360, 900, []).bullets;
     expect(l1).toHaveLength(2);

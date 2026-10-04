@@ -88,10 +88,10 @@ function homing(level: number, x: number, y: number): BulletSpec[] {
       y,
       ...polar(620, side * spread),
       radius: 7,
-      damage: 20 + level * 2,
+      damage: 16 + level * 2,
       ttlMs: 2800,
       homingTurn: 5.5,
-      blast: 36,
+      blast: 30,
     });
   }
   bullets.push({

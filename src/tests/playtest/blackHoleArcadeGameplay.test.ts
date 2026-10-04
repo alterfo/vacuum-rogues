@@ -468,4 +468,17 @@ describe("Black-hole arcade gameplay", () => {
       engine.player = player;
     }
   });
+
+  it("leaving the arcade removes ?arcade from the URL but keeps other parameters", async () => {
+    window.history.replaceState(null, "", "/?arcade=4&game&keep=1");
+    await enter();
+    clearLevel();
+    key("KeyC");
+    key("Enter");
+    await vi.waitFor(() =>
+      expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT),
+    );
+    expect(window.location.search).toBe("?keep=1");
+    window.history.replaceState(null, "", "/");
+  });
 });
