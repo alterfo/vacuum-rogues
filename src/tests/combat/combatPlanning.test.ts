@@ -225,3 +225,53 @@ describe("CombatPlanningController round timer config (Task 2)", () => {
     expect(c.tickExecute(1)).toBe(true);
   });
 });
+
+describe("CombatPlanningController weapon assignments carry over between rounds", () => {
+  it("keeps a still-valid weapon target into the next planning draft", () => {
+    const alive: Target = { id: "alive" };
+    const c = new CombatPlanningController<Target, Weapon>({
+      roundMs: ROUND,
+      isTargetValid: () => true,
+    });
+    const gun: Weapon = { id: "gun" };
+
+    c.beginCombat();
+    c.assignWeapon(gun, alive);
+    c.confirm();
+    c.tickExecute(ROUND);
+
+    expect(c.plan.weaponTargets.get(gun)).toBe(alive);
+  });
+
+  it("drops carried targets that are no longer valid", () => {
+    const dead: Target = { id: "dead" };
+    const c = new CombatPlanningController<Target, Weapon>({
+      roundMs: ROUND,
+      isTargetValid: (t) => t !== dead,
+    });
+    const gun: Weapon = { id: "gun" };
+
+    c.beginCombat();
+    c.assignWeapon(gun, dead);
+    c.confirm();
+    c.tickExecute(ROUND);
+
+    expect(c.plan.weaponTargets.size).toBe(0);
+  });
+
+  it("does not carry targets across a combat end", () => {
+    const t: Target = { id: "t" };
+    const c = new CombatPlanningController<Target, Weapon>({
+      roundMs: ROUND,
+      isTargetValid: () => true,
+    });
+    const gun: Weapon = { id: "gun" };
+
+    c.beginCombat();
+    c.assignWeapon(gun, t);
+    c.endCombat();
+    c.beginCombat();
+
+    expect(c.plan.weaponTargets.size).toBe(0);
+  });
+});

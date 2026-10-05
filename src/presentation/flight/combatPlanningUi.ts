@@ -327,6 +327,7 @@ export function createCombatPlanningController(
 ): CombatPlanningController<NpcShipSprite, WeaponSpec> {
   return new CombatPlanningController<NpcShipSprite, WeaponSpec>({
     roundMs: COMBAT_ROUND_MS,
+    isTargetValid: (target) => !target.container?.destroyed,
     onEnterPlanning: () => {
       if (host.isAutoCombat?.()) return;
       host.getUi()?.enterPlanning();

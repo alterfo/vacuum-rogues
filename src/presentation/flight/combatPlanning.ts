@@ -10,6 +10,7 @@ export interface PlannedTurn<TTarget, TWeapon> {
 
 export interface CombatPlanningDeps<TTarget, TWeapon> {
   roundMs?: number;
+  isTargetValid?(target: TTarget): boolean;
   onEnterPlanning?(): void;
   onConfirm?(plan: PlannedTurn<TTarget, TWeapon>): void;
   onEnterExecuting?(): void;
@@ -128,9 +129,14 @@ export class CombatPlanningController<TTarget, TWeapon> {
   }
 
   private openPlanning(): void {
+    const carried = this._plan.weaponTargets;
     this._phase = "planning";
     this.executeElapsedMs = 0;
     this._plan = freshPlan<TTarget, TWeapon>();
+    const isValid = this.deps.isTargetValid;
+    if (isValid)
+      for (const [weapon, target] of carried)
+        if (isValid(target)) this._plan.weaponTargets.set(weapon, target);
     this.deps.onEnterPlanning?.();
   }
 }
