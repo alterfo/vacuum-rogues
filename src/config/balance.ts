@@ -187,7 +187,7 @@ export const GAME_BALANCE = {
   lootPickupRadius: 45,
   starRadius: 170,
   landingApproachOffset: 80,
-  gameSpeedDefault: 1.0,
+  gameSpeedDefault: 4.0,
   gameSpeedMultipliers: [1.0, 2.0, 4.0, 10.0] as const,
   tradeDealThreshold: 0.2,
   marketImpactPerUnit: 0.004,

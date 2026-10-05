@@ -16,7 +16,7 @@ import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 import { logger } from "@/utils/logger";
-import { additionalHostileSeeds } from "@/config/balance";
+import { additionalHostileSeeds, GAME_BALANCE } from "@/config/balance";
 import { FlightSessionState } from "@/systems/FlightSessionState";
 import { FlightPositionTracker } from "@/systems/FlightPositionTracker";
 import { DayTickController } from "@/systems/DayTickController";
@@ -140,7 +140,7 @@ export class GameEngine {
   set flightShipPos(pos: FlightShipPos | null) {
     this.flightPositions.persistedFlightShipPos = pos;
   }
-  public gameSpeedMultiplier = 1;
+  public gameSpeedMultiplier: number = GAME_BALANCE.gameSpeedDefault;
   public readonly sessionState = new FlightSessionState();
 
   public get offeredEncounterIds(): Set<string> {

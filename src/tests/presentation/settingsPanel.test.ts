@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { GAME_BALANCE } from "@/config/balance";
 
 vi.mock("pixi.js", () => {
   const makeContainer = () => {
@@ -169,8 +170,8 @@ describe("SettingsPanel", () => {
   it("an out-of-range speed falls back to the default through the store", () => {
     const { deps, speedTarget } = makeDeps();
     const panel = new SettingsPanel(deps);
-    panel.selectSpeed(99); // not a selectable step
-    expect(speedTarget.gameSpeedMultiplier).toBe(1);
+    panel.selectSpeed(99);
+    expect(speedTarget.gameSpeedMultiplier).toBe(GAME_BALANCE.gameSpeedDefault);
   });
 
   it("selectFont persists the size, restyles live, then requests a close", () => {

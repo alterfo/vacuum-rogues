@@ -1037,7 +1037,8 @@ export class FlightHud implements FlightModule {
 
   private restoreGameSpeed(): void {
     const steps = GAME_BALANCE.gameSpeedMultipliers;
-    const persisted = this.gameEngine?.gameSpeedMultiplier ?? 1;
+    const persisted =
+      this.gameEngine?.gameSpeedMultiplier ?? GAME_BALANCE.gameSpeedDefault;
     const idx = steps.findIndex((s) => s === persisted);
     this.speedIndex = idx >= 0 ? idx : 0;
     this.applyGameSpeed(steps[this.speedIndex]);

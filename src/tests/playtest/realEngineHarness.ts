@@ -64,6 +64,7 @@ export class RealEngineHarness {
       qualityProfile: new AdaptiveQualityProfile(),
     };
     this.engine = new GameEngine(diDeps);
+    this.engine.gameSpeedMultiplier = 1;
   }
 
   static async boot(opts: HarnessOptions = {}): Promise<RealEngineHarness> {
