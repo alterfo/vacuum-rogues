@@ -8,7 +8,6 @@ import {
   SYSTEM_GEOMETRY,
 } from "@/config/balance";
 import { blackHoleTexture, softGlowTexture } from "../gradientTexture";
-import { reducedMotion } from "../ui/reducedMotion";
 import type { FlightModule } from "./FlightModule";
 
 export interface BlackHolePosition {
@@ -102,7 +101,6 @@ export class BlackHoleRenderer implements FlightModule {
   }
 
   update(deltaTime: number, _bgElapsed: number): void {
-    if (reducedMotion()) return;
     this.elapsed += deltaTime;
     if (this.diskContainer) {
       this.diskContainer.rotation += 0.00002 * deltaTime;

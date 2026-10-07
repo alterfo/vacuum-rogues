@@ -1,7 +1,6 @@
 import { Container, Graphics, Text, Sprite } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
-import { isReducedMotionSet } from "./ui/reducedMotion";
 import { lineStepFor } from "./ui/questCardLayout";
 import { scaledFont } from "@/utils/fontScale";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
@@ -160,7 +159,7 @@ export class TextQuestScene extends GameScene {
     this.revealTarget = fullText;
     this.revealElapsed = 0;
 
-    if (isReducedMotionSet() || fullText.length === 0) {
+    if (fullText.length === 0) {
       this.revealShown = fullText.length;
       this.revealing = false;
       if (this.vmNarrationText) this.vmNarrationText.text = fullText;

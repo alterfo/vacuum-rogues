@@ -361,10 +361,6 @@ export class NpcShipManager implements FlightModule {
     this.encounters.refreshFontScale();
   }
 
-  refreshFactionColors(): void {
-    for (const sprite of this.npcSprites) sprite.refreshPaletteColors();
-  }
-
   get npcCount(): number {
     return this.npcSprites.length;
   }

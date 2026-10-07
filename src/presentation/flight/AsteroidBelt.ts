@@ -26,7 +26,6 @@ import {
   moteScale,
 } from "./cometDustTail";
 import type { FlightModule } from "./FlightModule";
-import { reducedMotion } from "../ui/reducedMotion";
 
 const MAX_TAIL_PARTICLES = 96;
 const TAIL_SPRITE_SCALE = 1.15;
@@ -83,7 +82,6 @@ export class AsteroidBelt implements FlightModule {
   }
 
   update(deltaTime: number, _bgElapsed: number): void {
-    if (reducedMotion()) return;
     this.updateAsteroids(deltaTime);
   }
 

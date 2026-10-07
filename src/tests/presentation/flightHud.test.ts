@@ -204,6 +204,16 @@ describe("FlightHud", () => {
     expect(uiLayer.addChild.mock.calls.length).toBeGreaterThan(before);
   });
 
+  it("setMiniLogVisible hides and restores the bottom-left log so it cannot sit under the planning buttons", () => {
+    hud.initialize();
+    const log = (hud as unknown as { miniLogContainer: { visible: boolean } })
+      .miniLogContainer;
+    hud.setMiniLogVisible(false);
+    expect(log.visible).toBe(false);
+    hud.setMiniLogVisible(true);
+    expect(log.visible).toBe(true);
+  });
+
   it("toggles the quest journal open and closed", () => {
     hud.initialize();
     expect(hud.isQuestJournalOpen()).toBe(false);
@@ -219,7 +229,6 @@ describe("FlightHud", () => {
     hud.destroy();
     expect(hud.miniMap).toBeNull();
     expect(hud.isQuestJournalOpen()).toBe(false);
-    expect(hud.isSettingsPanelOpen()).toBe(false);
   });
 });
 
@@ -304,14 +313,6 @@ describe("FlightHud settings panel relocated to the main menu (Task 8)", () => {
     hud.initialize();
     const icons = vi.mocked(UiButton).mock.calls.map((c) => c[0]);
     expect(icons).not.toContain("⚙");
-  });
-
-  it("still mounts the ♿ accessibility button (the in-the-moment a11y aid stays)", () => {
-    const m = makeMockRenderer();
-    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
-    hud.initialize();
-    const icons = vi.mocked(UiButton).mock.calls.map((c) => c[0]);
-    expect(icons).toContain("♿");
   });
 
   it("exposes no toggleSettingsPanel method", () => {
@@ -573,17 +574,4 @@ describe("FlightHud HUD cleanup (Bug 3)", () => {
       expect(intersects(menuBox, miniMapBox(hud))).toBe(false);
     });
   }
-
-  it("[МЕНЮ] sits at the true bottom-left corner, below the ♿ accessibility button (not above it)", () => {
-    const m = makeMockRenderer();
-    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
-    hud.initialize();
-    const menuY = findMenuButtonText().y;
-    const accBtn = vi
-      .mocked(UiButton)
-      .mock.results.map((r) => r.value as { icon: string; y: number })
-      .find((b) => b.icon === "♿");
-    expect(accBtn, "♿ accessibility button must exist").toBeDefined();
-    expect(menuY).toBeGreaterThan(accBtn!.y);
-  });
 });

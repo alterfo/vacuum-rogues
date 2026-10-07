@@ -612,7 +612,7 @@ export function createLiveSceneController(
     takeQuest() {
       const scene = engine.currentScene as {
         e2eOpenJobBoard?: () => void;
-        e2eAcceptBoardQuest?: (quest: GeneratedQuest) => void;
+        e2eAcceptBoardQuest?: (quest: GeneratedQuest) => boolean | void;
         e2eCloseJobBoard?: () => void;
       } | null;
       if (
@@ -621,9 +621,12 @@ export function createLiveSceneController(
         scene.e2eCloseJobBoard
       ) {
         scene.e2eOpenJobBoard();
-        acceptBoardQuests(engine, getMemory().completedQuestsBaseline, (q) =>
-          scene.e2eAcceptBoardQuest!(q),
-        );
+        acceptBoardQuests(engine, getMemory().completedQuestsBaseline, (q) => {
+          if (scene.e2eAcceptBoardQuest!(q) === false) {
+            const planetId = landedPlanet(engine)?.id;
+            if (planetId) engine.acceptBoardQuest(q, planetId);
+          }
+        });
         scene.e2eCloseJobBoard();
         return;
       }

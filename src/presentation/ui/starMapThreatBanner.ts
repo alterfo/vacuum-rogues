@@ -2,7 +2,6 @@ import { Container, Graphics, type TextStyleFontWeight } from "pixi.js";
 import { scaledFont } from "@/utils/fontScale";
 import { scaledText } from "./scaledText";
 import { MONO_CHAR_WIDTH_RATIO } from "./questCardLayout";
-import { reducedMotion, type ReducedMotionEnv } from "./reducedMotion";
 
 export type ThreatBannerLevel = "warning" | "critical";
 
@@ -48,11 +47,8 @@ export function threatBannerPulseAlpha(elapsedMs: number): number {
   );
 }
 
-export function shouldPulseThreatBanner(
-  level: ThreatBannerLevel,
-  env?: ReducedMotionEnv,
-): boolean {
-  return level === "critical" && !reducedMotion(env);
+export function shouldPulseThreatBanner(level: ThreatBannerLevel): boolean {
+  return level === "critical";
 }
 
 export function threatBannerWidth(text: string): number {

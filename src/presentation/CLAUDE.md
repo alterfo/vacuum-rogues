@@ -212,24 +212,6 @@ centring can't desync. Control actions are public
 (`selectFont`/`selectSpeed`/`selectLanguage`/`toggleNeural`) so they're unit-testable without PixiJS
 pointer events.
 
-**Accessibility lives in a sibling ♿ panel** (`ui/AccessibilityPanel.ts`,
-`docs/plans/20260625-accessibility-pass.md`). The colorblind **ПАЛИТРА** / **МЕНЬШЕ ДВИЖЕНИЯ** /
-key-remap **УПРАВЛЕНИЕ** group is a **separate** panel from `SettingsPanel` on purpose — the ⚙
-panel's hit-area layout is pinned by locked tests, so the a11y group gets its own ♿ HUD surface
-mounted beside the ⚙ gear button (`FlightHud`); the two bottom-left panels share one anchor so only
-one is open, and the ♿ panel reuses the ⚙ panel's Esc-close / outside-click / Space-suppression
-wiring (`FlightHud.isSettingsPanelOpen`/`closeModals`, so `flightKeyHandler` is untouched). Each
-row writes through its own pure seam — palette → `ui/palette.ts` (`currentPaletteMode`/
-`setPaletteMode`), reduced-motion → `ui/reducedMotion.ts` (`isReducedMotionSet`/`setReducedMotion`),
-remap → `input/keymap.ts` (`rebind`+`setKeymap`, conflicts surfaced, Escape aborts) — each a
-browser-level `localStorage` pref, **no new save field**. Consume these seams, don't re-derive
-them: read faction colours through `factionColor(faction)` (never a raw colour map), gate idle/
-parallax/heavy-particle animation on `reducedMotion()`, and route a new flight shortcut through a
-`FlightAction` + `resolveFlightAction` (not a literal `event.key ===`). Control actions are public
-(`cyclePalette`/`toggleReducedMotion`/`beginRebind`/`captureRebind`/`resetKeymapToDefaults`) so the
-behaviour is unit-testable without PixiJS pointer events. See root CLAUDE.md "Accessibility" +
-`.claude/docs/adding-features.md` → "Consuming an Accessibility seam".
-
 **Dev-only autopilot watches the agent fly the *rendered* game** (`docs/plans/20260625-dev-autopilot.md`,
 `docs/architecture/LETSPLAY_ENGINE.md` → "Autopilot"). In `npm run dev` only, press `` ` ``
 (Backquote) or call `window.__autopilot.start()/.stop()/.toggle()` to hand the live ship to the
@@ -251,7 +233,7 @@ overlap/clip/overflow at the "L" font setting even though its text already goes 
 `ui/questCardLayout.ts`, then generalized): step row/line offsets by `lineStepFor` (font-scale-derived
 line height) instead of a fixed `+N` pixel constant, and replace `slice(N)+"…"` truncation with either
 real `wordWrap`/`wordWrapWidth` or a `MONO_CHAR_WIDTH_RATIO`-derived pixel-width budget. Applied to:
-`JobBoardPanel` (`ui/jobBoardRowLayout.ts`, dynamic per-row height replacing fixed `ROW_H`/`ROW_H_OFFER`),
+`JobBoardPanel` (`ui/jobBoardRowLayout.ts`, dynamic per-row height replacing fixed `ROW_H`/`ROW_H_OFFER`; the head/cap-note, highlight tags and scroll arrows via `ui/jobBoardChrome.ts` — tags are laid out by estimated width and arrows by hint width, never fixed pixel steps),
 `HangarPanel` (fitted-slot/warehouse row gaps), `BankScene` (ledger row step + reason truncation),
 `EquipmentShopScene` (`renderRows` name/stat/price stacks, `ROW_H` now a floored getter), `StationScene`
 (in-space shop rows + micromodule-shop rows), `InventoryScene` (`renderWarehouseRow` button gap),
@@ -270,9 +252,8 @@ shared component, out of scope for a single-panel fix.
 `critical`/`warning` alert carried no visual weight. `buildThreatBanner(level, …)` now mounts a filled,
 bordered `Graphics` chip behind a **bold** `scaledText` label at `THREAT_BANNER_BASE_PX` (15) — strictly
 larger than the 12px РАЗУМ/ПИРАТЫ stat lines — with a hotter red accent for `critical` than `warning`,
-`eventMode="none"` so it never intercepts map clicks. Any animated emphasis (the subtle pulse) is gated
-on `shouldPulseThreatBanner(level, env)` = `critical` **and** `!reducedMotion(env)` per the accessibility
-seam — a reduced-motion player gets a static banner. This is the one StarMapScene line migrated to
+`eventMode="none"` so it never intercepts map clicks. Only the `critical` banner pulses
+(`shouldPulseThreatBanner(level)`). This is the one StarMapScene line migrated to
 `scaledText` (the file is still on the not-yet-migrated list above; migrate only lines you touch).
 
 **Hover tooltips on icon-only HUD buttons reuse the star-map tooltip shape** (`FlightHud.mountIconTooltip`,

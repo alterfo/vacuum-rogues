@@ -285,11 +285,13 @@ describe("createCombatPlanningController — factory side effects (14.5b)", () =
       enterPlanning: () => uiCalls.push("enter"),
       exitPlanning: () => uiCalls.push("exit"),
     } as unknown as CombatPlanningUi;
+    const miniLog: boolean[] = [];
     let fightEnded = 0;
     const controller = createCombatPlanningController({
       getShipPhysics: () => ({ setPath: (p) => paths.push(p) }),
       getUi: () => fakeUi,
       showMessage: (text) => messages.push(text),
+      setMiniLogVisible: (visible) => miniLog.push(visible),
       onFightEnd: () => {
         fightEnded += 1;
       },
@@ -299,6 +301,7 @@ describe("createCombatPlanningController — factory side effects (14.5b)", () =
       messages,
       paths,
       uiCalls,
+      miniLog,
       fightEnded: () => fightEnded,
     };
   }
@@ -325,6 +328,21 @@ describe("createCombatPlanningController — factory side effects (14.5b)", () =
     h.controller.beginCombat();
     h.controller.confirm();
     expect(h.paths).toEqual([]);
+  });
+
+  it("hides the mini-log while planning (it sits under the action row) and restores it on confirm", () => {
+    const h = makeFactoryHarness();
+    h.controller.beginCombat();
+    expect(h.miniLog).toEqual([false]);
+    h.controller.confirm();
+    expect(h.miniLog).toEqual([false, true]);
+  });
+
+  it("fight end restores the mini-log even if the plan was never confirmed", () => {
+    const h = makeFactoryHarness();
+    h.controller.beginCombat();
+    h.controller.endCombat();
+    expect(h.miniLog).toEqual([false, true]);
   });
 
   it("fight end unmounts the UI and fires the route-restore hook", () => {

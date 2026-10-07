@@ -61,7 +61,7 @@ every controller method (`pointerType !== "touch"` ⇒ no-op), so the desktop pa
 **not** re-implement the route guards in the touch controller — it only ever adds pinch-zoom.
 
 **HUD bottom-left corner lane** (`FlightHud`, ae8b082 + `layoutTurnControls`): [МЕНЮ] is the true
-bottom-left corner element (`h-40`), ♿ stacks tight above it (`h-80`), the mini-log sits above both
+bottom-left corner element (`h-40`), the mini-log sits above it
 (`h-180`) — nothing may render below [МЕНЮ] (an empty mini-log gap under it read as dead space).
 The bottom-centre ✕/ХОД cluster (`layoutTurnControls`) must clamp right of that lane on narrow
 touch screens: the ✕ is `addChild`'d to `uiContainer` **after** [МЕНЮ], so an overlap renders
@@ -72,8 +72,12 @@ measured lane would be permanently untested — re-derive the constant if the la
 changes. Desktop (no ✕) keeps exact centring. Below ~316px viewport width the lane clamp and the
 right screen edge conflict — the lane deliberately wins (tap-stealing [МЕНЮ] is worse than ХОД
 touching the edge). Guarded by `flightHudTouchControls.test.ts` (lane clamp on narrow touch
-screens) and `flightHudCornerLayout.test.ts` (corner-stack order — mini-log above ♿ above
+screens) and `flightHudCornerLayout.test.ts` (corner-stack order — mini-log above
 [МЕНЮ] — on both the create and reposition paths).
+The mini-log is **hidden while combat PLANNING is open** (`FlightHud.setMiniLogVisible`, driven by
+`CombatPlanningHost.setMiniLogVisible` from `createCombatPlanningController`: hide on enter, restore on
+execute/fight end). The frozen sim never ages its lines, so a long message («Тактическое планирование — Ход
+для подтверждения») used to sit for the whole planning phase under the centred action row.
 
 **Exploration encounters are two pure functions + a thin flight bridge**
 (`src/systems/encounters/`, `docs/plans/20260625-exploration-encounters.md`). On system entry

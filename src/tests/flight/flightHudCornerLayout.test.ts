@@ -4,7 +4,6 @@ import { Container, type Text } from "pixi.js";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { FlightHud } from "@/presentation/flight/FlightHud";
-import type { UiButton } from "@/presentation/ui/UiButton";
 
 function makeRenderer(uiLayer: Container, w = 800, h = 600): Renderer {
   return {
@@ -33,31 +32,27 @@ function build(w = 800, h = 600): FlightHud {
 
 function cornerStack(hud: FlightHud): {
   menuY: number;
-  accY: number;
   miniLogY: number;
 } {
   const h = hud as unknown as {
     menuButtonText: Text | null;
-    accessibilityButton: UiButton | null;
     miniLogContainer: Container | null;
   };
-  if (!h.menuButtonText || !h.accessibilityButton || !h.miniLogContainer)
+  if (!h.menuButtonText || !h.miniLogContainer)
     throw new Error("bottom-left corner stack not fully built");
   return {
     menuY: h.menuButtonText.y,
-    accY: h.accessibilityButton.y,
     miniLogY: h.miniLogContainer.y,
   };
 }
 
-describe("FlightHud — bottom-left corner stack ([МЕНЮ] / ♿ / mini-log)", () => {
-  it("[МЕНЮ] anchors the true bottom-left corner with ♿ and the mini-log stacked ABOVE it", () => {
+describe("FlightHud — bottom-left corner stack ([МЕНЮ] / mini-log)", () => {
+  it("[МЕНЮ] anchors the true bottom-left corner with the mini-log stacked ABOVE it", () => {
     const hud = build(800, 600);
     hud.initialize();
-    const { menuY, accY, miniLogY } = cornerStack(hud);
+    const { menuY, miniLogY } = cornerStack(hud);
 
-    expect(miniLogY).toBeLessThan(accY);
-    expect(accY).toBeLessThan(menuY);
+    expect(miniLogY).toBeLessThan(menuY);
     expect(menuY).toBe(600 - 40);
 
     hud.destroy();
@@ -68,10 +63,9 @@ describe("FlightHud — bottom-left corner stack ([МЕНЮ] / ♿ / mini-log)",
     hud.initialize();
 
     hud.reposition(1280, 900);
-    const { menuY, accY, miniLogY } = cornerStack(hud);
+    const { menuY, miniLogY } = cornerStack(hud);
 
-    expect(miniLogY).toBeLessThan(accY);
-    expect(accY).toBeLessThan(menuY);
+    expect(miniLogY).toBeLessThan(menuY);
     expect(menuY).toBe(900 - 40);
 
     hud.destroy();

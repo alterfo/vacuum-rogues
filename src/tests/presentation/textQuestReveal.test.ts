@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 import { QuestVM } from "@/systems/quests/QuestVM";
 
@@ -150,13 +150,8 @@ function narrationText(scene: TextQuestScene): string {
   return ((scene as any).vmNarrationText as { text: string }).text;
 }
 
-beforeEach(() => {
-  localStorage.removeItem("reducedMotion");
-});
-
 afterEach(() => {
   vi.useRealTimers();
-  localStorage.removeItem("reducedMotion");
 });
 
 describe("TextQuestScene typewriter reveal", () => {
@@ -186,18 +181,6 @@ describe("TextQuestScene typewriter reveal", () => {
 
     expect((scene as any).revealing).toBe(true);
     (scene as any).completeReveal();
-
-    expect(narrationText(scene)).toBe(LONG_TEXT);
-    expect((scene as any).revealing).toBe(false);
-
-    scene.destroy();
-  });
-
-  it("shows full text with no delay under reduced motion", () => {
-    localStorage.setItem("reducedMotion", "true");
-
-    const scene = new TextQuestScene(makeRenderer());
-    scene.initialize({ gameEngine: makeEngine(), questScript: manualScript });
 
     expect(narrationText(scene)).toBe(LONG_TEXT);
     expect((scene as any).revealing).toBe(false);

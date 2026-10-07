@@ -109,8 +109,7 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     expect(internal.dimmer).toBeNull();
   });
 
-  it("honours reduced motion: idle parallax/particles freeze, camera parallax still positions", () => {
-    localStorage.clear();
+  it("idle motion moves the nebula layers each frame", () => {
     const moving = makeHarness();
     moving.layer.initialize();
     const movingInternal = moving.layer as unknown as BackgroundInternals;
@@ -128,26 +127,6 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     );
     expect(movedDelta).toBeGreaterThan(0);
     moving.layer.destroy();
-
-    localStorage.setItem("reducedMotion", "true");
-    const calm = makeHarness();
-    calm.layer.initialize();
-    const calmInternal = calm.layer as unknown as BackgroundInternals;
-    const frozenBefore = calmInternal.nebulaLayers.map((n) => ({
-      x: n.container.x,
-      y: n.container.y,
-    }));
-    calm.layer.update(1000, 1000);
-    calmInternal.nebulaLayers.forEach((n, i) => {
-      expect(n.container.x).toBe(frozenBefore[i].x);
-      expect(n.container.y).toBe(frozenBefore[i].y);
-    });
-    expect(calmInternal.nebulaeContainer).not.toBeNull();
-    expect(calmInternal.nebulaeContainer!.x).toBeCloseTo(400);
-    expect(calmInternal.nebulaeContainer!.y).toBeCloseTo(300);
-    calm.layer.destroy();
-
-    localStorage.clear();
   });
 
   it("runs an update tick and tears down cleanly without throwing", () => {

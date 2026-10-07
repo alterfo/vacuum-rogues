@@ -76,10 +76,6 @@
       50% { content: '..'; }
       75% { content: '...'; }
     }
-    @media (prefers-reduced-motion: reduce) {
-      #boot-loader .bl-ring { animation-duration: 2.6s; }
-      #boot-loader .bl-text::after { animation: none; content: '…'; }
-    }
 
     /* Soft mobile gate: a friendly, dismissible full-screen notice shown on boot
        when the device looks phone-class (src/systems/device/isMobileDevice.ts) and

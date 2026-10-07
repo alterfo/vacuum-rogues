@@ -8,7 +8,6 @@ import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { FlightModule } from "./flight/FlightModule";
 import { BACKGROUND_DIM } from "@/config/balance";
-import { reducedMotion } from "./ui/reducedMotion";
 
 interface CometStreak {
   g: Graphics;
@@ -136,12 +135,6 @@ export class SpaceBackgroundLayer implements FlightModule {
   }
 
   update(_dt: number, bgElapsed: number): void {
-    if (reducedMotion()) {
-      this.updateStarField(); // camera-pan parallax of star layers (no idle motion)
-      this.positionNebulae(); // keep nebula clouds centred + parallaxed, but frozen
-      return;
-    }
-
     this.updateBgShips(_dt);
     this.updateDustParticles(_dt);
     this.updateComets(_dt);

@@ -447,11 +447,6 @@ export class NpcShipSprite {
     this.render();
   }
 
-  refreshPaletteColors(): void {
-    this.mapColor = factionColor(this.npc.faction);
-    this.render();
-  }
-
   destroy(): void {
     this.graphics.removeAllListeners();
     this.container.destroy({ children: true });

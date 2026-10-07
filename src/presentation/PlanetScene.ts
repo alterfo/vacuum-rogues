@@ -1453,9 +1453,10 @@ export class PlanetScene extends GameScene {
     this.openJobBoard();
   }
 
-  e2eAcceptBoardQuest(quest: GeneratedQuest): void {
-    if (!__DEBUG__) return;
+  e2eAcceptBoardQuest(quest: GeneratedQuest): boolean {
+    if (!__DEBUG__) return false;
     this.acceptJob(quest);
+    return true;
   }
 
   e2eCloseJobBoard(): void {

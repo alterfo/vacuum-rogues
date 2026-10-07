@@ -14,8 +14,6 @@ Unified accessor (`src/systems/settings/gameSettings.ts`) — no new save field:
 
 **Neural flag = a plain feature gate, NOT a runtime loader.** Off ⇒ rule-based heuristic; on ⇒ pure-TS `NeuralPolicy`. No dynamic `import()` / lazy ONNX path. НЕЙРОСЕТЬ row is **dev-only** (`showNeural` defaults to `import.meta.env.DEV`).
 
-`FlightHud.isSettingsPanelOpen()`/`closeModals()` now track the ♿ accessibility panel (not SettingsPanel) — name retained because `flightKeyHandler` + locked tests key on it.
-
 ## i18n
 
 Every player-facing string resolves through `t(key, params?)` (`src/i18n/i18n.ts`). Dictionaries: `src/i18n/ru.ts` (default) and `src/i18n/en.ts` — kept in **lockstep** (a key must exist in both, no empty values). `language` is a browser-level `localStorage` pref (default `ru`) — no save/schema/migration change.

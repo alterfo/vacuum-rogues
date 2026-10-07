@@ -66,16 +66,6 @@ The three guards (all run in `npm test`):
 
 Migration backlog: `npx tsx tools/i18n/extract.ts [--list]` prints the remaining inline-Cyrillic-literal count per file under `src/presentation` / `src/systems` / `src/ai` (skipping the dicts + tests) — the shrinking tracker for incremental scene migration. Its scanner core (`findCyrillicLiterals` + the `scanFiles` walker) lives in `src/i18n/cyrillicLiterals.ts`, shared by the extract tool, the migrated-scenes guard, and the ratchet above.
 
-## Consuming an Accessibility seam (palette / reduced-motion / key remap)
-
-The accessibility pass (`docs/plans/20260625-accessibility-pass.md`, root CLAUDE.md → "Accessibility") added three pure, `localStorage`-backed seams — **read through the seam, never re-derive at a call site** (that is how the colourblind swap / motion damping / rebind reaches your UI). All three are browser-level prefs of the same class as `fontScale`/`neuralEnabled` — **no save/schema/migration change**.
-
-- **Faction colour ⇒ `factionColor(faction, mode?)`** (`src/presentation/ui/palette.ts`). Replace any raw `0x…` faction hue or `FACTION_COLOR`-style map lookup with `factionColor(faction)` (mode defaults to `currentPaletteMode()`; accepts `Faction` **or** `FactionType`). The `default` mode is the historical hues verbatim, so a sighted player sees no change; the three dichromat modes are distinct Okabe-Ito permutations. Adding a colour the player must distinguish? Add it to `DEFAULT_FACTION_PALETTE` + each mode and read it through `factionColor` — don't hardcode it.
-- **Idle/decorative motion ⇒ gate on `reducedMotion()`** (`src/presentation/ui/reducedMotion.ts`). Any new idle drift, parallax, twinkle, comet, or heavy particle animation should early-return / freeze when `reducedMotion()` is true (it ORs the in-game toggle with the OS `prefers-reduced-motion`). Read it **per-frame** in `update(dt)` (cheap + storage-guarded); pass an injected `env` in tests. Camera-driven parallax that tracks the ship may stay — freeze the *autonomous* motion, not the player-driven repositioning (see `SpaceBackgroundLayer.update`).
-- **A new flight shortcut ⇒ a `FlightAction` + the keymap** (`src/presentation/input/keymap.ts`). Don't add a literal `event.key === "x"` branch to `flightKeyHandler`. Add the action to `FlightAction`/`FLIGHT_ACTIONS`/`DEFAULT_KEYMAP`, switch on it in the handler's `resolveFlightAction(event, ctx.keymap ?? currentKeymap())` result, and add an `action.<name>` i18n key (ru/en) so the ♿ panel's УПРАВЛЕНИЕ section lists + rebinds it automatically. `rebind` already enforces conflict detection.
-
-Surfacing a new control to the player goes in `AccessibilityPanel` (the ♿ HUD panel), **not** `SettingsPanel` (whose hit-area layout is pinned by locked tests) — add a row + an `a11y.*` i18n key (ru/en lockstep) and write through the seam's `set*`. Each seam is unit-tested in isolation (`src/tests/presentation/{palette,reducedMotion,keymap,accessibilityPanel}.test.ts`); a new consumer adds its own test asserting it honours the flag/colour/binding.
-
 # Plan Format (Ralphex)
 
 All implementation plans in `docs/plans/` **must** use ralphex-compatible format — the plan runner rejects files that deviate.

@@ -36,9 +36,13 @@ export function executeTakeLoan(engine: GameEngine): void {
   if (!player || !canTakeLoan(engine)) return;
   const terms = standardLoanTerms(engine);
   if (!terms) return;
-  const scene = engine.currentScene as { e2eTakeLoan?: () => void } | null;
-  if (typeof scene?.e2eTakeLoan === "function") {
-    scene.e2eTakeLoan();
+  const scene = engine.currentScene as {
+    e2eTakeLoan?: () => boolean | void;
+  } | null;
+  if (
+    typeof scene?.e2eTakeLoan === "function" &&
+    scene.e2eTakeLoan() !== false
+  ) {
     return;
   }
   takeLoan(
@@ -57,9 +61,13 @@ export function executeRepayLoan(engine: GameEngine): void {
   if (owed <= 0) return;
   const amount = Math.max(0, Math.floor(Math.min(owed, player.credits)));
   if (amount <= 0) return;
-  const scene = engine.currentScene as { e2eRepayLoan?: () => void } | null;
-  if (typeof scene?.e2eRepayLoan === "function") {
-    scene.e2eRepayLoan();
+  const scene = engine.currentScene as {
+    e2eRepayLoan?: () => boolean | void;
+  } | null;
+  if (
+    typeof scene?.e2eRepayLoan === "function" &&
+    scene.e2eRepayLoan() !== false
+  ) {
     return;
   }
   repayLoan(

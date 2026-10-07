@@ -531,6 +531,30 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(engine.acceptBoardQuest).not.toHaveBeenCalled();
   });
 
+  it("takeQuest() still accepts via the domain when the scene's e2e job-board hooks are inert (prod build: __DEBUG__ is false, planet autopilot froze)", () => {
+    const board = [
+      { template: { id: "q1", type: "DELIVERY" } },
+      { template: { id: "q2", type: "DELIVERY" } },
+      { template: { id: "q3", type: "TEXT_ADVENTURE" } },
+    ];
+    const engine = mockEngine({
+      player: { currentSystemId: "sys1", landedPlanetId: "p1" },
+      getQuestBoard: vi.fn().mockReturnValue(board),
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        e2eOpenJobBoard: vi.fn(),
+        e2eAcceptBoardQuest: vi.fn().mockReturnValue(false),
+        e2eCloseJobBoard: vi.fn(),
+      },
+    });
+
+    createLiveSceneController(engine).takeQuest();
+
+    expect(engine.acceptBoardQuest).toHaveBeenCalledWith(board[0], "p1");
+    expect(engine.acceptBoardQuest).toHaveBeenCalledWith(board[1], "p1");
+    expect(engine.acceptBoardQuest).toHaveBeenCalledTimes(2);
+  });
+
   it("no-op verbs (tick/executeTrade/attack/flee/repair/liberate) never drive a transition", async () => {
     const engine = mockEngine({ liberateCurrentSystem: vi.fn() });
     const c = createLiveSceneController(engine);

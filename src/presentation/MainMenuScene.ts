@@ -8,13 +8,7 @@ import { openFeedback } from "@/systems/feedback/openFeedback";
 import { resetSeen } from "@/systems/onboarding/onboardingState";
 import { pickVariant } from "./textures";
 import { t } from "@/i18n/i18n";
-import { reducedMotion } from "./ui/reducedMotion";
 import { SettingsPanel, SETTINGS_PANEL_WIDTH } from "./ui/SettingsPanel";
-import {
-  AccessibilityPanel,
-  ACCESSIBILITY_PANEL_WIDTH,
-  ACCESSIBILITY_PANEL_HEIGHT,
-} from "./ui/AccessibilityPanel";
 import { GAME_BALANCE } from "@/config/balance";
 
 interface StarParticle {
@@ -60,7 +54,6 @@ export class MainMenuScene extends GameScene {
   private saveAvailable = false;
   private settingsPanel: SettingsPanel | null = null;
   private settingsBackdrop: Graphics | null = null;
-  private accessibilityPanel: AccessibilityPanel | null = null;
   private renderGen = 0;
 
   initialize(context?: object): void {
@@ -86,30 +79,25 @@ export class MainMenuScene extends GameScene {
     const h = this.renderer.app.screen.height;
     const time = performance.now();
 
-    const reduced = reducedMotion();
-
     if (this.starGraphics) {
       this.starGraphics.clear();
       for (const s of this.starParticles) {
-        const tw = reduced
-          ? 1
-          : Math.sin(time * s.twinkleSpeed + s.twinkleOffset) * 0.3 + 0.7;
+        const tw =
+          Math.sin(time * s.twinkleSpeed + s.twinkleOffset) * 0.3 + 0.7;
         this.starGraphics.fill({ color: s.color, alpha: s.alpha * tw });
         this.starGraphics.circle(s.x, s.y, s.size);
 
-        if (!reduced) {
-          s.x += s.speed * s.layer * deltaTime * 0.01;
-          if (s.x > w + 10) {
-            s.x = -10;
-            s.y = Math.random() * h;
-          }
+        s.x += s.speed * s.layer * deltaTime * 0.01;
+        if (s.x > w + 10) {
+          s.x = -10;
+          s.y = Math.random() * h;
         }
       }
     }
 
     if (w > 0 && h > 0) {
       for (const ship of this.demoShips) {
-        if (!reduced) ship.angle += deltaTime * ship.speed;
+        ship.angle += deltaTime * ship.speed;
         ship.container.x = w * 0.5 + Math.cos(ship.angle) * w * ship.radius;
         ship.container.y =
           h * 0.5 + Math.sin(ship.angle * 0.7) * h * ship.offsetY;
@@ -117,10 +105,8 @@ export class MainMenuScene extends GameScene {
       }
     }
 
-    if (!reduced) {
-      for (const p of this.menuPlanets) {
-        p.node.rotation += p.spin * deltaTime;
-      }
+    for (const p of this.menuPlanets) {
+      p.node.rotation += p.spin * deltaTime;
     }
   }
 
@@ -511,42 +497,25 @@ export class MainMenuScene extends GameScene {
       onRequestClose: () => this.closeSettings(),
     });
 
-    const accPanel = new AccessibilityPanel({
-      onRequestClose: () => this.closeSettings(),
-    });
-
-    const GAP = 16;
-    const groupW = SETTINGS_PANEL_WIDTH + GAP + ACCESSIBILITY_PANEL_WIDTH;
-    const left = Math.round((width - groupW) / 2);
+    const left = Math.round((width - SETTINGS_PANEL_WIDTH) / 2);
     const c = panel.container;
     c.x = left;
     c.y = Math.round((height - panel.heightPx) / 2);
-    const a = accPanel.container;
-    a.x = left + SETTINGS_PANEL_WIDTH + GAP;
-    a.y = Math.round((height - ACCESSIBILITY_PANEL_HEIGHT) / 2);
 
     this.renderer.stage.addChild(backdrop);
     this.renderer.stage.addChild(c);
-    this.renderer.stage.addChild(a);
     this.settingsBackdrop = backdrop;
     this.settingsPanel = panel;
-    this.accessibilityPanel = accPanel;
   }
 
   private closeSettings(): void {
     const panel = this.settingsPanel;
-    const accPanel = this.accessibilityPanel;
     const backdrop = this.settingsBackdrop;
     this.settingsPanel = null;
-    this.accessibilityPanel = null;
     this.settingsBackdrop = null;
     if (panel)
       queueMicrotask(() => {
         if (!panel.container.destroyed) panel.destroy();
-      });
-    if (accPanel)
-      queueMicrotask(() => {
-        if (!accPanel.container.destroyed) accPanel.destroy();
       });
     if (backdrop)
       queueMicrotask(() => {

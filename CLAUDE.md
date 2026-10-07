@@ -75,7 +75,6 @@ compiling and preserves the strict top-down layer direction.
 |------|------|
 | Mobile gate + touch controls | `.claude/docs/systems/mobile-touch.md` |
 | Settings panel + i18n | `.claude/docs/systems/settings-i18n.md` |
-| Accessibility seams (palette/reduced-motion/keymap) | `.claude/docs/systems/accessibility.md` |
 | Save slots UI + Continue resolver | `.claude/docs/systems/save-slots.md` |
 | Equipment / ShipLoadout / gear | `.claude/docs/systems/equipment.md` |
 | Banking / ledger / АБС | `.claude/docs/systems/banking.md` |

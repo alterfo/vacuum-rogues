@@ -71,9 +71,6 @@ vi.mock("@/presentation/textures", () => ({
 import { Text } from "pixi.js";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { SettingsPanel } from "@/presentation/ui/SettingsPanel";
-import { AccessibilityPanel } from "@/presentation/ui/AccessibilityPanel";
-import { currentPaletteMode, factionColor } from "@/presentation/ui/palette";
-import { Faction } from "@/types/faction";
 import { t, getLanguage, setLanguage } from "@/i18n/i18n";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -202,57 +199,5 @@ describe("MainMenuScene settings (Task 8 — relocated from the in-flight HUD)",
       (scene as unknown as { settingsPanel: SettingsPanel | null })
         .settingsPanel,
     ).toBeNull();
-  });
-});
-
-describe("MainMenuScene accessibility in Settings (Task 4)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
-  });
-
-  type WithA11y = {
-    settingsPanel: SettingsPanel | null;
-    accessibilityPanel: AccessibilityPanel | null;
-  };
-
-  it("mounts an AccessibilityPanel alongside the SettingsPanel", () => {
-    const scene = new MainMenuScene(makeMockRenderer());
-    scene.initialize({ gameEngine: makeEngine() });
-
-    expect((scene as unknown as WithA11y).accessibilityPanel).toBeNull();
-
-    clickTextButton(t("menu.settings"));
-
-    const s = scene as unknown as WithA11y;
-    expect(s.settingsPanel).toBeInstanceOf(SettingsPanel);
-    expect(s.accessibilityPanel).toBeInstanceOf(AccessibilityPanel);
-  });
-
-  it("cycling the palette persists the mode and flows to factionColor", () => {
-    const scene = new MainMenuScene(makeMockRenderer());
-    scene.initialize({ gameEngine: makeEngine() });
-    clickTextButton(t("menu.settings"));
-
-    const accPanel = (scene as unknown as WithA11y).accessibilityPanel!;
-    expect(accPanel.currentPalette()).toBe("default");
-    const before = factionColor(Faction.SYNDICATE);
-
-    accPanel.cyclePalette(); // default → deuteranopia
-
-    expect(accPanel.currentPalette()).toBe("deuteranopia");
-    expect(currentPaletteMode()).toBe("deuteranopia");
-    expect(factionColor(Faction.SYNDICATE)).not.toBe(before);
-  });
-
-  it("closing the overlay tears down both the settings and accessibility panels", () => {
-    const scene = new MainMenuScene(makeMockRenderer());
-    scene.initialize({ gameEngine: makeEngine() });
-    clickTextButton(t("menu.settings"));
-    clickTextButton(t("menu.settings"));
-
-    const s = scene as unknown as WithA11y;
-    expect(s.settingsPanel).toBeNull();
-    expect(s.accessibilityPanel).toBeNull();
   });
 });

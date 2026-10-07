@@ -110,6 +110,7 @@ export class SpaceFlightScene extends GameScene {
     getShipPhysics: () => this.shipPhysics,
     getUi: () => this.combatPlanningUi,
     showMessage: (text, color) => this.hud.showMessage(text, color),
+    setMiniLogVisible: (visible) => this.hud?.setMiniLogVisible(visible),
     onConfirmPlan: (plan) => this.combatExecution?.beginWindow(plan),
     breakOffPursuit: () => this.npcManager?.breakOffCombatPursuit(),
     isAutoCombat: () => isAutoCombatEnabled(),
@@ -239,7 +240,6 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onMiniMapPan = (x, y) => this.camera.focusOnWorld(x, y);
     this.hud.onMiniMapReturn = () => this.camera.startReturn();
     this.hud.onFontScaleChange = () => this.onFontScaleChanged();
-    this.hud.onPaletteChange = () => this.npcManager?.refreshFactionColors();
     this.hud.onInventory = () => void this.openInventory();
     this.hud.onCancel = () =>
       this.onKeyDown({ key: "Escape" } as KeyboardEvent);
@@ -1534,14 +1534,13 @@ export class SpaceFlightScene extends GameScene {
       this.npcManager.hasOpenModal() ||
       this.hud.isQuestJournalOpen() ||
       this.planetManager.hasInfoPanel ||
-      this.hud.isSettingsPanelOpen() ||
       this.hud.isSystemModalOpen()
     );
   }
 
   private closeBlockingModals(): void {
     this.npcManager.closeModals();
-    this.hud.closeModals(); // quest journal + ♿ accessibility panel (deferred destroy)
+    this.hud.closeModals(); // quest journal (deferred destroy)
     this.planetManager.closeInfoPanel();
   }
 
@@ -1702,6 +1701,6 @@ export class SpaceFlightScene extends GameScene {
   }
 
   e2eStartTurn(): void {
-    this.e2eHooks.startTurn();
+    if (!this.isTurnRunning) this.onPlayPause();
   }
 }

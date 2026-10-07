@@ -80,6 +80,33 @@ describe("bank-scene loan seam wiring (Task 6)", () => {
     expect(harness.errors()).toHaveLength(0);
   });
 
+  it("falls back to the domain when the bank-scene seams are inert (prod build: __DEBUG__ is false)", () => {
+    const engine = harness.engine;
+    const player = engine.player!;
+    const inert = {
+      e2eTakeLoan: vi.fn().mockReturnValue(false),
+      e2eRepayLoan: vi.fn().mockReturnValue(false),
+    };
+    engine.currentScene = inert as unknown as GameScene;
+
+    executeTakeLoan(engine);
+    expect(inert.e2eTakeLoan).toHaveBeenCalledTimes(1);
+    const owed = playerLoanBalance(engine);
+    expect(owed).toBeGreaterThan(0);
+
+    adjustPlayerCredits(
+      engine.bank,
+      player,
+      2000,
+      GL_COUNTERPARTY.REWARDS,
+      "test seed",
+    );
+    executeRepayLoan(engine);
+    expect(inert.e2eRepayLoan).toHaveBeenCalledTimes(1);
+    expect(playerLoanBalance(engine)).toBeLessThan(owed);
+    expect(harness.errors()).toHaveLength(0);
+  });
+
   it("does NOT fire e2eTakeLoan when a loan is already outstanding", () => {
     const engine = harness.engine;
     engine.currentScene = null;

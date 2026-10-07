@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import type { ReducedMotionEnv } from "@/presentation/ui/reducedMotion";
 import {
   STAR_MAP_STAT_LINE_PX,
   THREAT_BANNER_BASE_PX,
@@ -10,11 +9,6 @@ import {
   threatBannerPulseAlpha,
   shouldPulseThreatBanner,
 } from "@/presentation/ui/starMapThreatBanner";
-
-const REDUCED = (on: boolean): ReducedMotionEnv => ({
-  store: { getItem: () => (on ? "true" : "false"), setItem: () => {} },
-  matchMedia: () => ({ matches: false }),
-});
 
 describe("star-map threat banner weight (Task 6, finding #5)", () => {
   it("renders larger and bolder than the routine stat lines", () => {
@@ -35,17 +29,13 @@ describe("star-map threat banner weight (Task 6, finding #5)", () => {
   });
 });
 
-describe("star-map threat banner pulse (Task 6, reduced-motion seam)", () => {
-  it("pulses the critical banner when reduced motion is OFF", () => {
-    expect(shouldPulseThreatBanner("critical", REDUCED(false))).toBe(true);
-  });
-
-  it("skips the pulse when reduced motion is SET", () => {
-    expect(shouldPulseThreatBanner("critical", REDUCED(true))).toBe(false);
+describe("star-map threat banner pulse", () => {
+  it("pulses the critical banner", () => {
+    expect(shouldPulseThreatBanner("critical")).toBe(true);
   });
 
   it("never pulses the lower-severity warning banner", () => {
-    expect(shouldPulseThreatBanner("warning", REDUCED(false))).toBe(false);
+    expect(shouldPulseThreatBanner("warning")).toBe(false);
   });
 
   it("oscillates the alpha between the dim floor and full", () => {

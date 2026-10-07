@@ -1,9 +1,18 @@
 import { logger } from "@/utils/logger";
-import {
-  resolveFlightAction,
-  currentKeymap,
-  type FlightKeymap,
-} from "@/presentation/input/keymap";
+
+type FlightAction = "cancel" | "runTurn" | "journal" | "inventory";
+
+function resolveFlightAction(event: {
+  key: string;
+  code?: string;
+}): FlightAction | null {
+  if (event.key === "Escape") return "cancel";
+  if (event.key === " " || event.code === "Space") return "runTurn";
+  const key = event.key.toLowerCase();
+  if (key === "j") return "journal";
+  if (key === "i") return "inventory";
+  return null;
+}
 
 export interface FlightKeyContext {
   combatPause: {
@@ -35,14 +44,13 @@ export interface FlightKeyContext {
   executeRouteTo(x: number, y: number): void;
   openInventory(): void;
   combatPlanning?: { isPlanning: boolean; confirm(): void };
-  keymap?: FlightKeymap;
 }
 
 export function handleFlightKey(
   event: KeyboardEvent,
   ctx: FlightKeyContext,
 ): void {
-  const action = resolveFlightAction(event, ctx.keymap ?? currentKeymap());
+  const action = resolveFlightAction(event);
   if (action === "cancel") {
     if (ctx.combatPause.paused) {
       ctx.combatPause.beginCombatRound?.();

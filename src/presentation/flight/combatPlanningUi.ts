@@ -316,6 +316,7 @@ export interface CombatPlanningHost {
   getShipPhysics(): PathFollower | null;
   getUi(): CombatPlanningUi | null;
   showMessage(text: string, color?: number): void;
+  setMiniLogVisible?(visible: boolean): void;
   onFightEnd(): void;
   onConfirmPlan?(plan: PlannedTurn<NpcShipSprite, WeaponSpec>): void;
   breakOffPursuit?(): void;
@@ -331,6 +332,7 @@ export function createCombatPlanningController(
     onEnterPlanning: () => {
       if (host.isAutoCombat?.()) return;
       host.getUi()?.enterPlanning();
+      host.setMiniLogVisible?.(false);
       host.showMessage(t("combat.planning.enter"), PLANNING_TINT);
     },
     onConfirm: (plan) => {
@@ -340,11 +342,13 @@ export function createCombatPlanningController(
     },
     onEnterExecuting: () => {
       host.getUi()?.exitPlanning();
+      host.setMiniLogVisible?.(true);
       if (host.isAutoCombat?.()) return;
       host.showMessage(t("combat.planning.executing"), PLANNING_TINT);
     },
     onCombatEnd: () => {
       host.getUi()?.exitPlanning();
+      host.setMiniLogVisible?.(true);
       host.onFightEnd();
     },
   });

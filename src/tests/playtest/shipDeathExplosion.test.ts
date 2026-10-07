@@ -4,7 +4,6 @@ import type { NpcShipManager } from "@/presentation/flight/NpcShipManager";
 import type { ShipDeathFxRenderer } from "@/presentation/flight/shipDeathFxRenderer";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
 import { NpcRole, SceneType } from "@/types";
-import { setReducedMotion } from "@/presentation/ui/reducedMotion";
 
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
@@ -90,23 +89,6 @@ describe("Ship-death explosion wiring over the real engine (Task 3)", () => {
     npcManager.handleInFlightDeath(enemy, () => 0, false);
 
     expect(sfx).toHaveBeenCalledWith("explosion");
-    expect(harness.errors()).toEqual([]);
-  });
-
-  it("seeds NO burst when reduced motion is enabled", () => {
-    setReducedMotion(true);
-    const scene = harness.currentScene() as unknown as FlightPrivates;
-    const { npcManager } = scene;
-    const deathFx = deathFxOf(npcManager);
-
-    const enemy = makeHostile("quiet-foe", 300, 300);
-    (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
-      enemy,
-    );
-    npcManager.handleInFlightDeath(enemy, () => 0, false);
-
-    expect(deathFx.count).toBe(0); // reduced motion → no explosion at all
-    expect(deathFx.isActive()).toBe(false);
     expect(harness.errors()).toEqual([]);
   });
 

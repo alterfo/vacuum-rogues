@@ -11,6 +11,16 @@ import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Quest } from "@/domain/Quest";
 import { QuestType } from "@/types";
 import { t } from "@/i18n/i18n";
+import {
+  boardHead,
+  scrollArrowOffset,
+  highlightTagXs,
+  HIGHLIGHT_TAG_BASE_PX,
+  BOARD_TITLE_BASE_PX,
+  BOARD_NOTE_BASE_PX,
+  SCROLL_HINT_BASE_PX,
+  SCROLL_ARROW_BASE_PX,
+} from "./ui/jobBoardChrome";
 
 export interface JobBoardCallbacks {
   onAccept: (quest: GeneratedQuest) => void;
@@ -47,7 +57,6 @@ export class JobBoardPanel {
   private detachWheel: (() => void) | null = null;
 
   private static readonly W = 520;
-  private static readonly HEAD = 48;
   private static readonly SCROLL_BAR_H = 26;
   private static readonly ROW_GAP = 6;
   private static readonly MIN_OFFER_ROW_H = 124;
@@ -88,7 +97,8 @@ export class JobBoardPanel {
       quests.length > 0
         ? offerSlotSum
         : JobBoardPanel.MIN_OFFER_ROW_H + JobBoardPanel.ROW_GAP;
-    const fullH = JobBoardPanel.HEAD + activeSection + offersHeight + 16;
+    const head = boardHead(activeQuestCount >= MAX_ACTIVE_QUESTS);
+    const fullH = head.height + activeSection + offersHeight + 16;
 
     const h = Math.min(fullH, screenHeight - 16);
     this.panelHeight = h;
@@ -167,11 +177,12 @@ export class JobBoardPanel {
     bg.eventMode = "static";
     this.container.addChild(bg);
 
+    const head = boardHead(activeQuestCount >= MAX_ACTIVE_QUESTS);
     this.label(
       t("jobBoard.title"),
       16,
-      14,
-      18,
+      head.titleY,
+      BOARD_TITLE_BASE_PX,
       0x00ffff,
       true,
       this.container,
@@ -184,8 +195,8 @@ export class JobBoardPanel {
       this.label(
         t("jobBoard.maxQuests", { max: MAX_ACTIVE_QUESTS }),
         16,
-        JobBoardPanel.HEAD - 16,
-        11,
+        head.noteY,
+        BOARD_NOTE_BASE_PX,
         0xff8844,
         false,
         this.container,
@@ -193,7 +204,7 @@ export class JobBoardPanel {
       );
     }
 
-    let y = JobBoardPanel.HEAD;
+    let y = head.height;
 
     if (activeQuests.length > 0) {
       this.label(
@@ -338,7 +349,9 @@ export class JobBoardPanel {
 
   private addScrollControls(W: number, barY: number, maxScroll: number): void {
     const makeArrow = (glyph: string, dx: number, dir: number): Text => {
-      const t = scaledText(glyph, 16, 0x66ccff, { fontWeight: "bold" });
+      const t = scaledText(glyph, SCROLL_ARROW_BASE_PX, 0x66ccff, {
+        fontWeight: "bold",
+      });
       t.anchor.set(0.5);
       t.x = W / 2 + dx;
       t.y = barY + 10;
@@ -351,10 +364,12 @@ export class JobBoardPanel {
       this.container.addChild(t);
       return t;
     };
-    this.scrollUpBtn = makeArrow("▲", -52, -1);
-    this.scrollDownBtn = makeArrow("▼", 52, 1);
+    const hintText = t("jobBoard.scrollHint");
+    const arrowDx = scrollArrowOffset(hintText);
+    this.scrollUpBtn = makeArrow("▲", -arrowDx, -1);
+    this.scrollDownBtn = makeArrow("▼", arrowDx, 1);
 
-    const hint = scaledText(t("jobBoard.scrollHint"), 10, 0x668899);
+    const hint = scaledText(hintText, SCROLL_HINT_BASE_PX, 0x668899);
     hint.anchor.set(0.5);
     hint.x = W / 2;
     hint.y = barY + 10;
@@ -494,19 +509,20 @@ export class JobBoardPanel {
 
     if (q.highlights.length > 0) {
       const hy = y + layout.highlightsY;
-      const tagSpacing = 140;
-      let hx = 20;
-      for (const hl of q.highlights) {
-        if (hx > W - 100) break;
-        const tagT = scaledText(`[${hl.label}: ${hl.value}]`, 11, hl.color, {
-          rawColor: true,
-        });
+      const texts = q.highlights.map((hl) => `[${hl.label}: ${hl.value}]`);
+      const xs = highlightTagXs(texts, 20, W - 96);
+      xs.forEach((hx, i) => {
+        const tagT = scaledText(
+          texts[i],
+          HIGHLIGHT_TAG_BASE_PX,
+          q.highlights[i].color,
+          { rawColor: true },
+        );
         tagT.eventMode = "none";
         tagT.x = hx;
         tagT.y = hy;
         parent.addChild(tagT);
-        hx += tagSpacing;
-      }
+      });
     }
 
     const deadlineDays =

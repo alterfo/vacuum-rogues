@@ -729,13 +729,15 @@ export class BankScene extends GameScene {
     this.doDeposit();
   }
 
-  e2eTakeLoan(): void {
-    if (!__DEBUG__) return;
+  e2eTakeLoan(): boolean {
+    if (!__DEBUG__) return false;
     this.doTakeLoan();
+    return true;
   }
 
-  e2eRepayLoan(): void {
-    if (!__DEBUG__) return;
+  e2eRepayLoan(): boolean {
+    if (!__DEBUG__) return false;
     this.doRepay();
+    return true;
   }
 }

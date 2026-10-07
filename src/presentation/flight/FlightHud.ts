@@ -13,10 +13,6 @@ import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import type { LandingDenialReason } from "@/systems/galaxy/landingAccess";
 import { formatGameDate } from "@/utils/gameCalendar";
 import { scaledFont } from "@/utils/fontScale";
-import {
-  AccessibilityPanel,
-  ACCESSIBILITY_PANEL_HEIGHT,
-} from "../ui/AccessibilityPanel";
 import { GAME_BALANCE } from "@/config/balance";
 import { logger } from "@/utils/logger";
 import { t } from "@/i18n/i18n";
@@ -46,10 +42,6 @@ export class FlightHud implements FlightModule {
 
   private speedButton: UiButton | null = null;
   private speedIndex = 0;
-
-  private accessibilityButton: UiButton | null = null;
-  private accessibilityPanel: Container | null = null;
-  private accessibilityPanelComp: AccessibilityPanel | null = null;
 
   private menuButtonText: Text | null = null;
   private systemMenuPanel: Container | null = null;
@@ -82,7 +74,6 @@ export class FlightHud implements FlightModule {
   onMiniMapPan: ((worldX: number, worldY: number) => void) | null = null;
   onMiniMapReturn: (() => void) | null = null;
   onFontScaleChange: (() => void) | null = null;
-  onPaletteChange: (() => void) | null = null;
   onInventory: (() => void) | null = null;
   onCancel: (() => void) | null = null;
   onLoadSave: (() => void) | null = null;
@@ -128,8 +119,6 @@ export class FlightHud implements FlightModule {
     this.cancelButton = null;
     this.speedButton = null;
     this.speedIndex = 0;
-    this.accessibilityButton = null;
-    this.closeAccessibilityPanel();
     this.closeSystemMenu();
     if (this.helpOverlay) {
       this.helpOverlay.destroy({ children: true });
@@ -171,15 +160,10 @@ export class FlightHud implements FlightModule {
   }
 
   private teardownUI(): void {
-    this.closeAccessibilityPanel();
     this.closeSystemMenu();
     if (this.speedButton) {
       this.speedButton.container.destroy({ children: true });
       this.speedButton = null;
-    }
-    if (this.accessibilityButton) {
-      this.accessibilityButton.container.destroy({ children: true });
-      this.accessibilityButton = null;
     }
     this.miniLogEntries = [];
     if (this.miniLogContainer) {
@@ -232,16 +216,6 @@ export class FlightHud implements FlightModule {
       this.speedButton.y = h - 248;
     }
 
-    if (this.accessibilityButton) {
-      this.accessibilityButton.y = h - 80;
-    }
-    if (this.accessibilityPanel && this.accessibilityButton) {
-      this.accessibilityPanel.y = Math.max(
-        8,
-        this.accessibilityButton.y - ACCESSIBILITY_PANEL_HEIGHT - 4,
-      );
-    }
-
     if (this.miniLogContainer) {
       this.miniLogContainer.y = h - 180;
     }
@@ -273,10 +247,6 @@ export class FlightHud implements FlightModule {
       this.cancelButton.x = playX - CANCEL_BTN_W - CANCEL_BTN_GAP;
       this.cancelButton.y = this.playPauseButton.y;
     }
-  }
-
-  isSettingsPanelOpen(): boolean {
-    return this.accessibilityPanel !== null;
   }
 
   isSystemMenuOpen(): boolean {
@@ -389,18 +359,6 @@ export class FlightHud implements FlightModule {
     const journal = this.questJournalUI;
     this.questJournalUI = null;
     if (journal) queueMicrotask(() => journal.destroy());
-    if (this.accessibilityPanel) {
-      const ap = this.accessibilityPanel;
-      const comp = this.accessibilityPanelComp;
-      this.accessibilityPanel = null;
-      this.accessibilityPanelComp = null;
-      queueMicrotask(() => {
-        if (!ap.destroyed) {
-          if (comp) comp.destroy();
-          else ap.destroy({ children: true });
-        }
-      });
-    }
     if (this.systemMenuPanel) {
       const mp = this.systemMenuPanel;
       this.systemMenuPanel = null;
@@ -695,60 +653,7 @@ export class FlightHud implements FlightModule {
     this.uiLayer.addChild(speedBtn.container);
     this.speedButton = speedBtn;
 
-    const ACC_BTN_W = 36;
-    const ACC_BTN_H = 32;
-    const accBtn = new UiButton(
-      "♿",
-      "",
-      "neutral",
-      (event) => {
-        event.stopPropagation();
-        this.toggleAccessibilityPanel();
-      },
-      ACC_BTN_W,
-      ACC_BTN_H,
-    );
-    accBtn.x = 20;
-    accBtn.y = this.renderer.app.screen.height - 80;
-    this.uiLayer.addChild(accBtn.container);
-    this.accessibilityButton = accBtn;
-
     this.restoreGameSpeed();
-  }
-
-  private toggleAccessibilityPanel(): void {
-    if (this.accessibilityPanel) {
-      this.closeAccessibilityPanel();
-      return;
-    }
-    if (!this.accessibilityButton) return;
-
-    const panel = new AccessibilityPanel({
-      onPaletteChange: () => this.onPaletteChange?.(),
-      onRequestClose: () => this.closeAccessibilityPanel(),
-    });
-    this.accessibilityPanelComp = panel;
-    const c = panel.container;
-    c.x = this.accessibilityButton.x;
-    c.y = Math.max(
-      8,
-      this.accessibilityButton.y - ACCESSIBILITY_PANEL_HEIGHT - 4,
-    );
-    this.uiLayer.addChild(c);
-    this.accessibilityPanel = c;
-  }
-
-  private closeAccessibilityPanel(): void {
-    if (this.accessibilityPanelComp) {
-      this.accessibilityPanelComp.destroy();
-      this.accessibilityPanelComp = null;
-      this.accessibilityPanel = null;
-      return;
-    }
-    if (this.accessibilityPanel) {
-      this.accessibilityPanel.destroy({ children: true });
-      this.accessibilityPanel = null;
-    }
   }
 
   toggleSystemMenu(): void {
@@ -1279,6 +1184,10 @@ export class FlightHud implements FlightModule {
       this.tooltipContainer.destroy({ children: true });
       this.tooltipContainer = null;
     }
+  }
+
+  setMiniLogVisible(visible: boolean): void {
+    if (this.miniLogContainer) this.miniLogContainer.visible = visible;
   }
 
   private addMiniLogEntry(text: string): void {

@@ -50,7 +50,7 @@ function buildScene(opts: {
 }) {
   const scene = new SpaceFlightScene(makeRenderer());
   const s = scene as unknown as Record<string, unknown>;
-  s.hud = { showMessage: vi.fn() };
+  s.hud = { showMessage: vi.fn(), setMiniLogVisible: vi.fn() };
   s.shipPhysics = { shipX: 0, shipY: 0 };
   s.combatModule = {
     isActive: true,

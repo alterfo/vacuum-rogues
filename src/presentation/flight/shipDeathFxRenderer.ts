@@ -1,6 +1,5 @@
 import { Container, Particle, ParticleContainer } from "pixi.js";
 import { softGlowTexture } from "../gradientTexture";
-import { reducedMotion } from "../ui/reducedMotion";
 import { lerpHex } from "./cometDustTail";
 import {
   ShipDeathFx,
@@ -62,7 +61,6 @@ export class ShipDeathFxRenderer {
   }
 
   spawn(x: number, y: number): void {
-    if (reducedMotion()) return;
     this.fx.spawn(x, y);
   }
 

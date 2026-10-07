@@ -32,7 +32,6 @@
   "src/presentation/flight/QuestCompletion.ts": 4,
   "src/presentation/flight/flightKeyHandler.ts": 2,
   "src/presentation/flight/flightSystemMenu.ts": 4,
-  "src/presentation/input/keymap.ts": 1,
   "src/presentation/ui/HangarPanel.ts": 65,
   "src/presentation/ui/MicromoduleApplyPanel.ts": 6,
   "src/presentation/ui/planetProfile.ts": 10,
