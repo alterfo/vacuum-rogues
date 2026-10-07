@@ -105,3 +105,17 @@ title and its `**Files:**` block with each file's on-disk status (line count or
 files. Defaults to the first task with an unchecked `[ ]` box. Pair it with the
 vacuum `find_symbol` tool; the orientation workflow lives in
 `.ralphex/prompts/task.txt`.
+
+## overlap-detect — OpenCV UI defect finder
+
+`tools/overlap-detect` (Go + gocv) finds visual collisions by pixel geometry: a close button crossing its
+panel border, a row sticking out of a card, a ✕ inside a text line, two text colours fused in one blob.
+Zero findings on all 25 real captures in `e2e/screenshots`. Same-colour text overlaps and uneven spacing are
+known misses. Build environment, checks and the evaluation are in `tools/overlap-detect/README.md`.
+
+## ui-review — vision-model client (unreliable)
+
+`tools/ui-review` sends screenshots to an Ollama vision model (default `qwen2.5vl:7b` on ai-box). Measured on
+panels with known defects: `qwen2.5vl:7b` returns generic false positives, `qwen3-vl:8b` found none,
+`qwen3-vl:32b` found 1 of 4 with a wrong bbox and missed the crooked close button. Prefer `overlap-detect`;
+use `ui-review` only for loose leads, and note that a VL model on ai-box evicts the pinned `qwen3.8`.
