@@ -19,6 +19,8 @@ pre-commit:
 
     test:
       glob: 'src/**/*.test.ts'
+      env:
+        NODE_OPTIONS: --no-experimental-webstorage
       run: npm test -- --run {staged_files}
 
 commit-msg:
@@ -35,6 +37,8 @@ pre-push:
     # integration/wiring break fails with a clear, fast signal — the gap unit tests
     # (which mock the seams) can't catch. See docs/plans/20260623-real-engine-playtest-harness.md.
     playtest:
+      env:
+        NODE_OPTIONS: --no-experimental-webstorage
       run: npm run test:playtest
     # Letsplay CI oracle (Vitest, fast ~2–3 s): an agent *plays the real game*
     # for K seeded sessions × N steps and the run fails on any crash, soft-lock,
@@ -44,6 +48,8 @@ pre-push:
     # reproduces locally from the printed seed. Slots beside test:playtest.
     # See docs/plans/20260625-letsplay-ci-oracle.md.
     letsplay-ci:
+      env:
+        NODE_OPTIONS: --no-experimental-webstorage
       run: npm run letsplay:ci
     # Save-compatibility safety net (Vitest, fast ~2 s): replays the frozen
     # golden-save corpus (incl. genuinely old versions) through validate →
@@ -53,8 +59,12 @@ pre-push:
     # clear signal — before it reaches a beta-tester's progressed save.
     # See docs/plans/20260625-save-compatibility-safety-net.md.
     save-compat:
+      env:
+        NODE_OPTIONS: --no-experimental-webstorage
       run: npm run test:save-compat
     full-test:
+      env:
+        NODE_OPTIONS: --no-experimental-webstorage
       run: npm test -- --run
     full-lint:
       run: npm run lint
