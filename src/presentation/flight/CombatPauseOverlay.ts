@@ -1,6 +1,6 @@
-import { Container, Graphics, Rectangle, Text } from "pixi.js";
-import { scaledFont } from "@/utils/fontScale";
+import { Container, Graphics, Rectangle } from "pixi.js";
 import { UiButton } from "../ui/UiButton";
+import { scaledText } from "../ui/scaledText";
 import type { PauseReason } from "./combatPause";
 
 export interface PauseTargetOption<TTarget> {
@@ -151,14 +151,9 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
       reason === "target-lost"
         ? "Цель потеряна — выберите новую"
         : "⚠ Под обстрелом!";
-    const title = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(16),
-        fill: TITLE_COLOR,
-        fontWeight: "bold",
-      },
+    const title = scaledText(text, 16, TITLE_COLOR, {
+      fontWeight: "bold",
+      rawColor: true,
     });
     title.x = PAD;
     title.y = y;
@@ -168,14 +163,7 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
   }
 
   private addSectionLabel(panel: Container, text: string, y: number): number {
-    const label = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(12),
-        fill: SECTION_COLOR,
-      },
-    });
+    const label = scaledText(text, 12, SECTION_COLOR);
     label.x = PAD;
     label.y = y;
     label.eventMode = "none";
@@ -184,14 +172,9 @@ export class CombatPauseOverlay<TTarget, TWeapon> {
   }
 
   private addMessage(panel: Container, text: string, y: number): number {
-    const msg = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(13),
-        fill: MSG_COLOR,
-        fontWeight: "bold",
-      },
+    const msg = scaledText(text, 13, MSG_COLOR, {
+      fontWeight: "bold",
+      rawColor: true,
     });
     msg.x = PAD;
     msg.y = y;

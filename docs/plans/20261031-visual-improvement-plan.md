@@ -130,12 +130,19 @@ already done (see "Corrections" in Context) and targets what the codebase still 
   `combatShieldFlash.ts`, `combatWreckRenderer.ts`
 - Tests: real-engine playtest + E2E
 
-- [ ] Migrate `CombatHud` and `CombatPauseOverlay` off raw `fontSize:` to `scaledText` (both are on
-      the not-yet-migrated list).
-- [ ] Verify target/player HP bars, markers, tracer streaks, damage numbers and weapon-range overlay
-      remain readable and non-overlapping at S/M/L font settings and at phone widths.
-- [ ] Verify shield flash, wreck FX, auto-combat toggle and the planning-pause overlay chrome.
-- [ ] Run playtest + screenshot verification.
+- [x] Migrate `CombatHud` and `CombatPauseOverlay` off raw `fontSize:` to `scaledText` (both are on
+      the not-yet-migrated list) — the CombatHud target label and the CombatPauseOverlay
+      title/section/message nodes now go through `scaledText`; the CombatHud panel row offsets derive
+      from `lineStepFor(scaledFont(13))`.
+- [x] Verify target/player HP bars, markers, tracer streaks, damage numbers and weapon-range overlay
+      remain readable and non-overlapping at S/M/L font settings and at phone widths — new
+      `combatHudScaledText.test.ts` pins label/bar non-overlap at S/M/L and panel fit at 320 px width;
+      marker/tracer/damage/range suites are green in the full unit run.
+- [x] Verify shield flash, wreck FX, auto-combat toggle and the planning-pause overlay chrome —
+      `combatShieldFlash`, `combatWreckRenderer`, `autoCombatWiring`, `combatPlanningUi`,
+      `combatWeaponVfxOverlay`, `combatStatusBars`, `combatWeaponRangeOverlay` suites are green.
+- [x] Run playtest + screenshot verification — `npm run test:playtest` green (936 passed);
+      screenshot verification is manual (skipped - no deterministic combat-HUD visual spec).
 
 ### Task 3: Typography completion + `ScrollableList` variable height
 

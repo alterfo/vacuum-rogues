@@ -10,10 +10,10 @@ tracks the S/M/L setting, and lifts dim fills to a legible luminance floor (`REA
 Pass `rawColor: true` only for already-bright/semantic colors (accents, intentionally-dimmed
 disabled states, light backgrounds) where the floor would distort hue. Migrated: JobBoardPanel,
 StationScene, TradeScene, EquipmentShopScene, InfoCenterScene, QuestJournalUI, TextQuestScene,
-PlanetInfoPanel, StarMapScene.
+PlanetInfoPanel, StarMapScene, CombatHud, CombatPauseOverlay.
 Still hardcoding `fontSize:` (route through `scaledText` when you touch them):
 InventoryScene, ResearchUpgradePanel, GovernmentScene, RaceSelectionScene,
-NpcContactPanel, DialogueScene, WinScene, MainMenuScene, SystemMiniMap, CombatHud.
+NpcContactPanel, DialogueScene, WinScene, MainMenuScene, SystemMiniMap.
 (Flight modules that already read `scaledFont` — FlightHud, PlanetManager, DamageNumbers, UiButton,
 PlanetScene — don't need it; for the in-flight restyle-in-place rule see `flight/playtest-traps.md`.)
 
