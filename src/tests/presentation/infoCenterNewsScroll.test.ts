@@ -244,4 +244,42 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     scene.scrollNews(-1);
     expect(scene.newsList!.offset).toBe(0);
   });
+
+  it("steps back into the bottom screenful of a preceding tall row", async () => {
+    const scene = await makeScene(21);
+    const long = "Длинная новость ".repeat(400);
+    scene.newsItems = [
+      { day: 0, text: long, color: 0xffffff, bookmarkKey: 0 },
+      ...makeNews(20).map((item, i) => ({
+        ...item,
+        day: i + 1,
+        bookmarkKey: i + 1,
+      })),
+    ];
+    scene.render();
+
+    const internals = scene as unknown as {
+      newsOffsets: number[];
+      newsRowHeights: number[];
+      newsViewportHeight: number;
+    };
+    const [firstTop, secondTop] = internals.newsOffsets;
+    const [firstHeight] = internals.newsRowHeights;
+    expect(firstHeight).toBeGreaterThan(internals.newsViewportHeight);
+    expect(scene.newsList!.maxOffset).toBeGreaterThan(secondTop);
+
+    const list = scene.newsList as unknown as {
+      scrollTo: (offset: number) => void;
+    };
+    list.scrollTo(secondTop);
+    scene.scrollNews(-1);
+
+    const expected = Math.max(
+      firstTop,
+      firstTop + firstHeight - internals.newsViewportHeight,
+    );
+    expect(scene.newsList!.offset).toBe(expected);
+    expect(scene.newsList!.offset).toBeLessThan(secondTop);
+    expect(scene.newsList!.offset).toBeGreaterThan(firstTop);
+  });
 });

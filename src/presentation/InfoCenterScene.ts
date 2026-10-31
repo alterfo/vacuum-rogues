@@ -1885,7 +1885,13 @@ export class InfoCenterScene extends GameScene {
     if (current > offsets[index] + 0.5) {
       return Math.max(offsets[index], current - viewport);
     }
-    return index === 0 ? 0 : offsets[index - 1];
+    if (index === 0) return 0;
+    const prevTop = offsets[index - 1];
+    const prevHeight = heights[index - 1];
+    if (prevHeight > viewport) {
+      return Math.max(prevTop, prevTop + prevHeight - viewport);
+    }
+    return prevTop;
   }
 
   private scrollGear(deltaRows: number): void {
