@@ -13,6 +13,8 @@ import { FACTION_STATS } from "@/config/factionConfig";
 import { t } from "@/i18n/i18n";
 
 const GAME_MODE_OPTIONS: readonly GameMode[] = ["GOD", "NORMAL", "HARD"];
+const CARD_WIDTH = 300;
+const CARD_HEIGHT = 230;
 
 export class RaceSelectionScene extends GameScene {
   private gameEngine: GameEngine | null = null;
@@ -60,8 +62,8 @@ export class RaceSelectionScene extends GameScene {
   update(deltaTime: number): void {
     if (this.selectionPulse <= 0 || !this.selectedCardBg) return;
     this.selectionPulse = Math.max(0, this.selectionPulse - deltaTime * 0.002);
-    const width = 300;
-    const height = 230;
+    const width = CARD_WIDTH;
+    const height = CARD_HEIGHT;
     const settled = this.selectionPulse <= 0;
     const pulseWidth = this.selectionPulse > 0.5 ? 3 : 2;
     const glow = this.selectionPulse > 0.5 ? 0.65 : 0.25;
@@ -124,8 +126,8 @@ export class RaceSelectionScene extends GameScene {
     this.mainContainer.addChild(title);
 
     const factions = Object.values(FactionType);
-    const cardWidth = 300;
-    const cardHeight = 230;
+    const cardWidth = CARD_WIDTH;
+    const cardHeight = CARD_HEIGHT;
     const gap = 20;
     const startX = (screenWidth - (cardWidth * 3 + gap * 2)) / 2;
     const startY = 130;

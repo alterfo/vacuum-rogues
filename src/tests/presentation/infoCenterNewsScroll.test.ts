@@ -204,7 +204,11 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     ];
     scene.render();
     expect(scene.newsList!.maxOffset).toBeGreaterThan(0);
+
     scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBe(38);
+
+    for (let i = 0; i < 100; i += 1) scene.scrollNews(1);
     expect(scene.newsList!.offset).toBe(scene.newsList!.maxOffset);
   });
 
@@ -219,6 +223,25 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     expect(scene.newsList!.offset).toBe(0);
 
     scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBeGreaterThan(0);
+    expect(scene.newsList!.offset).toBeLessThan(scene.newsList!.maxOffset);
+
+    for (let i = 0; i < 100; i += 1) scene.scrollNews(1);
     expect(scene.newsList!.offset).toBe(scene.newsList!.maxOffset);
+  });
+
+  it("pages by viewport inside a row taller than the list", async () => {
+    const scene = await makeScene(1);
+    const long = "Длинная новость ".repeat(400);
+    scene.newsItems = [{ day: 0, text: long, color: 0xffffff, bookmarkKey: 0 }];
+    scene.render();
+
+    scene.scrollNews(1);
+    const paged = scene.newsList!.offset;
+    expect(paged).toBeGreaterThan(0);
+    expect(paged).toBeLessThan(scene.newsList!.maxOffset);
+
+    scene.scrollNews(-1);
+    expect(scene.newsList!.offset).toBe(0);
   });
 });

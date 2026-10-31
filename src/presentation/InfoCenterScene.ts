@@ -365,6 +365,8 @@ export class InfoCenterScene extends GameScene {
   private newsItems: NewsItem[] = [];
   private newsScroll = 0;
   private newsOffsets: number[] = [];
+  private newsRowHeights: number[] = [];
+  private newsViewportHeight = 0;
   private newsList: ScrollableList<NewsItem> | null = null;
 
   private objectsQuery = "";
@@ -692,6 +694,8 @@ export class InfoCenterScene extends GameScene {
       this.newsRowHeight(item, pw),
     );
     this.newsOffsets = [];
+    this.newsRowHeights = rowHeights;
+    this.newsViewportHeight = listH;
     let runningOffset = 0;
     for (const height of rowHeights) {
       this.newsOffsets.push(runningOffset);
@@ -1824,18 +1828,64 @@ export class InfoCenterScene extends GameScene {
       return;
     }
     const current = this.newsList.offset;
+    const heights = this.newsRowHeights;
+    const viewport = Math.max(1, this.newsViewportHeight);
+    const max = this.newsList.maxOffset;
+    const dir = deltaRows > 0 ? 1 : -1;
+    const steps = Math.max(1, Math.abs(deltaRows));
+
+    let offset = current;
+    for (let step = 0; step < steps; step += 1) {
+      offset = this.nextNewsOffset(
+        offset,
+        dir,
+        offsets,
+        heights,
+        viewport,
+        max,
+      );
+      if (dir > 0 && offset >= max) {
+        offset = max;
+        break;
+      }
+      if (dir < 0 && offset <= 0) {
+        offset = 0;
+        break;
+      }
+    }
+
+    this.newsList.scrollTo(offset);
+    this.newsScroll = this.newsList.offset;
+    this.render();
+  }
+
+  private nextNewsOffset(
+    current: number,
+    dir: number,
+    offsets: readonly number[],
+    heights: readonly number[],
+    viewport: number,
+    max: number,
+  ): number {
     let index = 0;
     while (index + 1 < offsets.length && offsets[index + 1] <= current + 0.5) {
       index += 1;
     }
-    const target = Math.min(offsets.length - 1, Math.max(0, index + deltaRows));
-    const targetOffset =
-      target >= offsets.length - 1 && deltaRows > 0
-        ? this.newsList.maxOffset
-        : offsets[target];
-    this.newsList.scrollTo(targetOffset);
-    this.newsScroll = this.newsList.offset;
-    this.render();
+
+    if (dir > 0) {
+      const rowBottom = offsets[index] + heights[index];
+      const tallRow = heights[index] > viewport;
+      if (tallRow && current + viewport < rowBottom - 0.5) {
+        return Math.min(max, current + viewport);
+      }
+      if (index + 1 < offsets.length) return Math.min(max, offsets[index + 1]);
+      return max;
+    }
+
+    if (current > offsets[index] + 0.5) {
+      return Math.max(offsets[index], current - viewport);
+    }
+    return index === 0 ? 0 : offsets[index - 1];
   }
 
   private scrollGear(deltaRows: number): void {
