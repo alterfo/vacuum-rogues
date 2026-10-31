@@ -10,8 +10,8 @@ tracks the S/M/L setting, and lifts dim fills to a legible luminance floor (`REA
 Pass `rawColor: true` only for already-bright/semantic colors (accents, intentionally-dimmed
 disabled states, light backgrounds) where the floor would distort hue. Migrated: JobBoardPanel,
 StationScene, TradeScene, EquipmentShopScene, InfoCenterScene, QuestJournalUI, TextQuestScene,
-PlanetInfoPanel.
-Still hardcoding `fontSize:` (route through `scaledText` when you touch them): StarMapScene,
+PlanetInfoPanel, StarMapScene.
+Still hardcoding `fontSize:` (route through `scaledText` when you touch them):
 InventoryScene, ResearchUpgradePanel, GovernmentScene, RaceSelectionScene,
 NpcContactPanel, DialogueScene, WinScene, MainMenuScene, SystemMiniMap, CombatHud.
 (Flight modules that already read `scaledFont` — FlightHud, PlanetManager, DamageNumbers, UiButton,
@@ -253,8 +253,8 @@ shared component, out of scope for a single-panel fix.
 bordered `Graphics` chip behind a **bold** `scaledText` label at `THREAT_BANNER_BASE_PX` (15) — strictly
 larger than the 12px РАЗУМ/ПИРАТЫ stat lines — with a hotter red accent for `critical` than `warning`,
 `eventMode="none"` so it never intercepts map clicks. Only the `critical` banner pulses
-(`shouldPulseThreatBanner(level)`). This is the one StarMapScene line migrated to
-`scaledText` (the file is still on the not-yet-migrated list above; migrate only lines you touch).
+(`shouldPulseThreatBanner(level)`). The rest of `StarMapScene` is now fully migrated to
+`scaledText` (see the migrated list above).
 
 **Hover tooltips on icon-only HUD buttons reuse the star-map tooltip shape** (`FlightHud.mountIconTooltip`,
 `docs/plans/20260729-ux-review-fixes.md` Task 10). An icon-only glyph button (`[I]` inventory, the flight

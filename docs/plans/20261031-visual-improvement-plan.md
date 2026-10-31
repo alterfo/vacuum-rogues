@@ -104,13 +104,21 @@ already done (see "Corrections" in Context) and targets what the codebase still 
 - Modify: `docs/requirements/user-stories/US-077-starmap-initial-zoom.md` (status)
 - Tests: star-map unit/E2E
 
-- [ ] Verify and close US-077 in code (zoom-to-fit, `[ Назад ]`, fuel label) — confirm behaviour, then
-      update the story status instead of re-implementing.
-- [ ] Migrate StarMapScene text nodes to `scaledText` (currently only the threat banner uses it).
-- [ ] Audit unvisited-system label contrast (`0x445566`) against the documented floor; lighten where
-      it reads as absent rather than "unknown".
-- [ ] Verify the star-map tooltip on unvisited systems and the `[ Назад ]` hit target.
-- [ ] Run star-map tests + E2E, screenshot-verify.
+- [x] Verify and close US-077 in code (zoom-to-fit, `[ Назад ]`, fuel label) — confirmed
+      `initializeViewport` fits explored systems to ~70% of the canvas, the `[ Назад ]` button
+      transitions to SPACE_FLIGHT, and the `ТОПЛИВО: x/y` label sits at 14px; story status set to
+      Implemented instead of re-implementing.
+- [x] Migrate StarMapScene text nodes to `scaledText` — every raw `fontSize:` `Text` node now goes
+      through `scaledText` (semantic colors use `rawColor: true`, dim dark-panel body text keeps the
+      luminance floor).
+- [x] Audit unvisited-system label contrast — the old failing `0x445566` neighbour label was already
+      lightened to `0x88aacc` (commit 6f28cd32); verified no `0x445566` remains and added a ratchet.
+- [x] Verify the star-map tooltip on unvisited systems and the `[ Назад ]` hit target — `[ Назад ]`
+      keeps `eventMode="static"` + `cursor="pointer"` + `stopPropagation`; the flight-HUD star-map
+      icon tooltip (`FlightHud.starMapTooltip`) is covered by `flightHud.test.ts` (verification-only).
+- [x] Run star-map tests + E2E, screenshot-verify — 12 star-map unit files (59 tests) green, full
+      unit suite green, `03-star-map` Playwright smoke green (zoom-to-fit), screenshot captured at
+      `test-results/star-map-task1.png`.
 
 ### Task 2: In-flight combat HUD & VFX polish
 

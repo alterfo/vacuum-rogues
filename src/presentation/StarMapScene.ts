@@ -1,8 +1,9 @@
 import { GameScene } from "./GameScene";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
-import { Graphics, Text, Container, Sprite, BlurFilter } from "pixi.js";
+import { Graphics, Container, Sprite, BlurFilter } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { tex, loadTextureAsync } from "./textures";
+import { scaledText } from "./ui/scaledText";
 import { overmindMoodArtKey } from "./overmindMoodArt";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
@@ -346,14 +347,9 @@ export class StarMapScene extends GameScene {
     this.threatBanner = null;
     this.threatBannerPulsing = false;
 
-    const title = new Text({
-      text: "КАРТА ГАЛАКТИКИ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 24,
-        fill: 0x00ffff,
-        letterSpacing: 4,
-      },
+    const title = scaledText("КАРТА ГАЛАКТИКИ", 24, 0x00ffff, {
+      letterSpacing: 4,
+      rawColor: true,
     });
     title.x = 20;
     title.y = 20;
@@ -365,14 +361,12 @@ export class StarMapScene extends GameScene {
     const fuelColor =
       fuelPercent > 50 ? 0x00ff00 : fuelPercent > 20 ? 0xffaa00 : 0xff4444;
 
-    const fuelText = new Text({
-      text: `ТОПЛИВО: ${Math.floor(currentFuel)}/${maxFuel}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: fuelColor,
-      },
-    });
+    const fuelText = scaledText(
+      `ТОПЛИВО: ${Math.floor(currentFuel)}/${maxFuel}`,
+      14,
+      fuelColor,
+      { rawColor: true },
+    );
     fuelText.x = 20;
     fuelText.y = 50;
     this.fixedUIContainer.addChild(fuelText);
@@ -395,19 +389,23 @@ export class StarMapScene extends GameScene {
               ? 0xffcc44
               : 0x88ff88;
 
-      const overmindIndicator = new Text({
-        text: `РАЗУМ: ${threat.overmindCount}/${threat.totalSystems} (${overmindPct}%)`,
-        style: { fontFamily: "Courier New", fontSize: 12, fill: overmindColor },
-      });
+      const overmindIndicator = scaledText(
+        `РАЗУМ: ${threat.overmindCount}/${threat.totalSystems} (${overmindPct}%)`,
+        12,
+        overmindColor,
+        { rawColor: true },
+      );
       overmindIndicator.x = 20;
       overmindIndicator.y = 72;
       overmindIndicator.eventMode = "none";
       this.fixedUIContainer.addChild(overmindIndicator);
 
-      const pirateIndicator = new Text({
-        text: `ПИРАТЫ: ${threat.pirateCount}/${threat.totalSystems} (${piratePct}%)`,
-        style: { fontFamily: "Courier New", fontSize: 12, fill: 0xff9944 },
-      });
+      const pirateIndicator = scaledText(
+        `ПИРАТЫ: ${threat.pirateCount}/${threat.totalSystems} (${piratePct}%)`,
+        12,
+        0xff9944,
+        { rawColor: true },
+      );
       pirateIndicator.x = 20;
       pirateIndicator.y = 90;
       pirateIndicator.eventMode = "none";
@@ -425,26 +423,18 @@ export class StarMapScene extends GameScene {
       }
     }
 
-    const instructions = new Text({
-      text: "Колесо мыши — зум | Перетаскивание — пан | 2x Клик — вход в систему",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xaaaaaa,
-      },
-    });
+    const instructions = scaledText(
+      "Колесо мыши — зум | Перетаскивание — пан | 2x Клик — вход в систему",
+      11,
+      0xaaaaaa,
+    );
     instructions.x = 20;
     instructions.y = height - 30;
     instructions.eventMode = "none";
     this.fixedUIContainer.addChild(instructions);
 
-    const backBtn = new Text({
-      text: "[ Назад ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0x88ccff,
-      },
+    const backBtn = scaledText("[ Назад ]", 14, 0x88ccff, {
+      rawColor: true,
     });
     backBtn.x = width - 120;
     backBtn.y = 20;
@@ -615,13 +605,8 @@ export class StarMapScene extends GameScene {
       this.mapContainer.addChild(this.createSystemHitArea(x, y, system));
 
       if (visibility === "unknown" && !isPlayer && !isOvermind && !isPirate) {
-        const qLabel = new Text({
-          text: "?",
-          style: {
-            fontFamily: "Courier New",
-            fontSize: 10,
-            fill: 0x88aacc,
-          },
+        const qLabel = scaledText("?", 10, 0x88aacc, {
+          rawColor: true,
         });
         qLabel.x = x + 6;
         qLabel.y = y - 6;
@@ -671,13 +656,8 @@ export class StarMapScene extends GameScene {
               ? 0x88aacc
               : 0x88ccff;
 
-      const label = new Text({
-        text: system.name,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 10,
-          fill: labelFill,
-        },
+      const label = scaledText(system.name, 10, labelFill, {
+        rawColor: true,
       });
       label.x = bestPos.x;
       label.y = bestPos.y;
@@ -787,9 +767,8 @@ export class StarMapScene extends GameScene {
   }
 
   private showMessage(message: string): void {
-    const msg = new Text({
-      text: message,
-      style: { fontFamily: "Courier New", fontSize: 14, fill: 0xff4444 },
+    const msg = scaledText(message, 14, 0xff4444, {
+      rawColor: true,
     });
     msg.anchor.set(0.5);
     msg.x = this.renderer.app.screen.width / 2;
@@ -829,40 +808,31 @@ export class StarMapScene extends GameScene {
     bg.stroke({ width: 2, color: 0x00ffff });
     this.infoPanel.addChild(bg);
 
-    const nameText = new Text({
-      text: system.name,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-      },
+    const nameText = scaledText(system.name, 14, 0x00ffff, {
+      fontWeight: "bold",
+      rawColor: true,
     });
     nameText.x = 10;
     nameText.y = 10;
     this.infoPanel.addChild(nameText);
 
-    const factionText = new Text({
-      text: `Владелец: ${FACTION_LABEL[system.ownerFaction] ?? system.ownerFaction}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xaaaaaa,
-      },
-    });
+    const factionText = scaledText(
+      `Владелец: ${FACTION_LABEL[system.ownerFaction] ?? system.ownerFaction}`,
+      11,
+      0xaaaaaa,
+    );
     factionText.x = 10;
     factionText.y = 35;
     this.infoPanel.addChild(factionText);
 
-    const planetsText = new Text({
-      text: `Планеты (${system.planets.length}):`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xaaaaaa,
+    const planetsText = scaledText(
+      `Планеты (${system.planets.length}):`,
+      11,
+      0xaaaaaa,
+      {
         fontWeight: "bold",
       },
-    });
+    );
     planetsText.x = 10;
     planetsText.y = 55;
     this.infoPanel.addChild(planetsText);
@@ -870,26 +840,14 @@ export class StarMapScene extends GameScene {
     let planetYOffset = 75;
     for (const planet of system.planets) {
       const planetType = this.getPlanetTypeRussian(planet.type);
-      const planetItem = new Text({
-        text: `• ${planet.name}`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 10,
-          fill: 0x88ccff,
-        },
+      const planetItem = scaledText(`• ${planet.name}`, 10, 0x88ccff, {
+        rawColor: true,
       });
       planetItem.x = 15;
       planetItem.y = planetYOffset;
       this.infoPanel.addChild(planetItem);
 
-      const typeLabel = new Text({
-        text: planetType,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 9,
-          fill: 0x889999,
-        },
-      });
+      const typeLabel = scaledText(planetType, 9, 0x889999);
       typeLabel.x = 25;
       typeLabel.y = planetYOffset + 11;
       this.infoPanel.addChild(typeLabel);
@@ -901,16 +859,13 @@ export class StarMapScene extends GameScene {
       .map((c) => this.galaxy?.systems.find((s) => s.id === c.toSystemId)?.name)
       .filter(Boolean)
       .join(", ");
-    const connectionsText = new Text({
-      text: neighborNames
+    const connectionsText = scaledText(
+      neighborNames
         ? `Соседи (можно прыгнуть): ${neighborNames}`
         : "Соседи: нет",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xaaaaaa,
-      },
-    });
+      11,
+      0xaaaaaa,
+    );
     connectionsText.x = 10;
     connectionsText.y = planetYOffset + 5;
     this.infoPanel.addChild(connectionsText);
@@ -918,27 +873,17 @@ export class StarMapScene extends GameScene {
     const interactiveYStart = planetYOffset + 30;
 
     if (system.id === this.playerSystemId) {
-      const hereText = new Text({
-        text: "(Здесь)",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 11,
-          fill: 0x00ff00,
-          fontWeight: "bold",
-        },
+      const hereText = scaledText("(Здесь)", 11, 0x00ff00, {
+        fontWeight: "bold",
+        rawColor: true,
       });
       hereText.x = 10;
       hereText.y = interactiveYStart;
       this.infoPanel.addChild(hereText);
 
-      const enterBtn = new Text({
-        text: "[Войти в систему]",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: 0x00ffff,
-          fontWeight: "bold",
-        },
+      const enterBtn = scaledText("[Войти в систему]", 12, 0x00ffff, {
+        fontWeight: "bold",
+        rawColor: true,
       });
       enterBtn.x = 10;
       enterBtn.y = interactiveYStart + 20;
@@ -979,28 +924,26 @@ export class StarMapScene extends GameScene {
       const currentFuel = this.gameEngine?.player?.ship.energy ?? 0;
       const hasEnoughFuel = currentFuel >= fuelCost;
 
-      const fuelText = new Text({
-        text: `Топливо: ${fuelCost} (есть: ${Math.floor(currentFuel)})`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 10,
-          fill: hasEnoughFuel ? 0x88ff88 : 0xff8888,
-        },
-      });
+      const fuelText = scaledText(
+        `Топливо: ${fuelCost} (есть: ${Math.floor(currentFuel)})`,
+        10,
+        hasEnoughFuel ? 0x88ff88 : 0xff8888,
+        { rawColor: true },
+      );
       fuelText.x = 10;
       fuelText.y = interactiveYStart;
       this.infoPanel.addChild(fuelText);
 
       if (hasEnoughFuel) {
-        const warpBtn = new Text({
-          text: isConnected ? "[ПРЫЖОК]" : "[ГИПЕР-ПРЫЖОК]",
-          style: {
-            fontFamily: "Courier New",
-            fontSize: 12,
-            fill: isConnected ? 0x00ff00 : 0xffaa00,
+        const warpBtn = scaledText(
+          isConnected ? "[ПРЫЖОК]" : "[ГИПЕР-ПРЫЖОК]",
+          12,
+          isConnected ? 0x00ff00 : 0xffaa00,
+          {
             fontWeight: "bold",
+            rawColor: true,
           },
-        });
+        );
         warpBtn.x = 10;
         warpBtn.y = interactiveYStart + 25;
         warpBtn.eventMode = "static";
@@ -1021,13 +964,8 @@ export class StarMapScene extends GameScene {
 
         this.infoPanel.addChild(warpBtn);
       } else {
-        const noFuelText = new Text({
-          text: "Недостаточно топлива",
-          style: {
-            fontFamily: "Courier New",
-            fontSize: 11,
-            fill: 0xff4444,
-          },
+        const noFuelText = scaledText("Недостаточно топлива", 11, 0xff4444, {
+          rawColor: true,
         });
         noFuelText.x = 10;
         noFuelText.y = interactiveYStart + 25;
@@ -1086,42 +1024,32 @@ export class StarMapScene extends GameScene {
     this.confirmDialog.addChild(dialogBg);
 
     const jumpType = isConnected ? "Прыжок" : "Гипер-прыжок";
-    const confirmText = new Text({
-      text: `${jumpType} в систему ${system.name}?`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: isConnected ? 0x00ffff : 0xffaa00,
+    const confirmText = scaledText(
+      `${jumpType} в систему ${system.name}?`,
+      16,
+      isConnected ? 0x00ffff : 0xffaa00,
+      {
         align: "center",
+        rawColor: true,
       },
-    });
+    );
     confirmText.anchor.set(0.5, 0);
     confirmText.x = width / 2;
     confirmText.y = dialogY + 20;
     this.confirmDialog.addChild(confirmText);
 
-    const fuelText = new Text({
-      text: `Расход топлива: ${fuelCost}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 13,
-        fill: 0x88ff88,
-        align: "center",
-      },
+    const fuelText = scaledText(`Расход топлива: ${fuelCost}`, 13, 0x88ff88, {
+      align: "center",
+      rawColor: true,
     });
     fuelText.anchor.set(0.5, 0);
     fuelText.x = width / 2;
     fuelText.y = dialogY + 50;
     this.confirmDialog.addChild(fuelText);
 
-    const yesBtn = new Text({
-      text: "Да",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0x00ff00,
-        fontWeight: "bold",
-      },
+    const yesBtn = scaledText("Да", 18, 0x00ff00, {
+      fontWeight: "bold",
+      rawColor: true,
     });
     yesBtn.anchor.set(0.5);
     yesBtn.x = width / 2 - 60;
@@ -1139,14 +1067,9 @@ export class StarMapScene extends GameScene {
     });
     this.confirmDialog.addChild(yesBtn);
 
-    const noBtn = new Text({
-      text: "Нет",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0xff4444,
-        fontWeight: "bold",
-      },
+    const noBtn = scaledText("Нет", 18, 0xff4444, {
+      fontWeight: "bold",
+      rawColor: true,
     });
     noBtn.anchor.set(0.5);
     noBtn.x = width / 2 + 60;
