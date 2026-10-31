@@ -17,6 +17,7 @@ const MIGRATED_FILES = [
   "WinScene.ts",
   "MainMenuScene.ts",
   "SystemMiniMap.ts",
+  "SaveLoadScene.ts",
 ] as const;
 
 const RAW_FONT_SIZE_ALLOWLIST = new Set(["ui/UiButton.ts", "ui/scaledText.ts"]);

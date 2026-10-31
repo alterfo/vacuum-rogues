@@ -74,7 +74,7 @@ Canonical inventory of the raster categories currently shipped under `src/assets
 | `planet_maps` | 47 | `PlanetSprite` equirect map (`pickVariant`) |
 | `surfaces` | 24 | `PlanetScene` landing backdrop |
 | `star_maps` | 31 | `StarRenderer` (`pickVariantKey`) |
-| `stars` | 30 | procedural star-spawn art |
+| `stars` | 30 | dead art (zero code references) |
 | `ships` | 24 | `NpcShipSprite` / main menu |
 | `player_ships` | 12 | `PlayerShipRenderer` |
 | `portraits` | 15 | `RaceSelectionScene` / dialogue |

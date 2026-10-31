@@ -15,7 +15,8 @@
 Scenario: "Продолжить" disabled with no save
   Given no save game exists in IndexedDB
   When MainMenuScene initialises
-  Then the "Продолжить" button is visually dimmed (colour 0x445566)
+  Then the "Продолжить" button is visually dimmed (colour 0x556677, raised from
+  0x445566 to clear the AA contrast floor)
   And clicking it has no effect (no error toast shown for unavailable action)
 
 Scenario: "Продолжить" enabled when save exists

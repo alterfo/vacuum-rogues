@@ -679,15 +679,29 @@ export class InfoCenterScene extends GameScene {
       itemHeight: ROW_H,
       items: this.newsItems,
       enableWheel: false,
+      getItemHeight: (item) => this.newsRowHeight(item, pw),
       renderItem: (item, i) =>
-        this.buildNewsRow(item, i, pw, PAD, ROW_H, STAR_W, bookmarks),
+        this.buildNewsRow(
+          item,
+          i,
+          pw,
+          PAD,
+          this.newsRowHeight(item, pw),
+          STAR_W,
+          bookmarks,
+        ),
     });
     this.newsList.scrollTo(this.newsScroll);
     this.newsScroll = this.newsList.offset;
     container.addChild(this.newsList.container);
 
     if (this.newsItems.length > VISIBLE) {
-      const firstRow = Math.round(this.newsScroll / ROW_H);
+      let firstRow = 0;
+      let scrolled = 0;
+      while (firstRow < this.newsItems.length && scrolled < this.newsScroll) {
+        scrolled += this.newsRowHeight(this.newsItems[firstRow], pw);
+        firstRow += 1;
+      }
       const hint = scaledText(
         `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
         11,
@@ -700,6 +714,17 @@ export class InfoCenterScene extends GameScene {
       hint.eventMode = "none";
       container.addChild(hint);
     }
+  }
+
+  private newsRowHeight(item: NewsItem, pw: number): number {
+    const PAD = 16;
+    const STAR_W = 28;
+    const textWidth = Math.max(1, pw - PAD * 2 - 50 - STAR_W);
+    const charPx = Math.max(1, scaledFont(13) * MONO_CHAR_WIDTH_RATIO);
+    const charsPerLine = Math.max(1, Math.floor(textWidth / charPx));
+    const lines = Math.max(1, Math.ceil(item.text.length / charsPerLine));
+    const textHeight = lines * lineStepFor(scaledFont(13)) + 12;
+    return Math.max(InfoCenterScene.NEWS_ROW_H, textHeight);
   }
 
   private buildNewsRow(
@@ -724,7 +749,7 @@ export class InfoCenterScene extends GameScene {
       fontFamily: "monospace",
     });
     dayBadge.x = PAD + 6;
-    dayBadge.y = ROW_H / 2 - 7;
+    dayBadge.y = 8;
     dayBadge.eventMode = "none";
     row.addChild(dayBadge);
 
@@ -735,7 +760,7 @@ export class InfoCenterScene extends GameScene {
       wordWrapWidth: pw - PAD * 2 - 50 - STAR_W,
     });
     news.x = PAD + 46;
-    news.y = ROW_H / 2 - 7;
+    news.y = 6;
     news.eventMode = "none";
     row.addChild(news);
 
@@ -747,7 +772,7 @@ export class InfoCenterScene extends GameScene {
       { rawColor: true, fontFamily: "monospace" },
     );
     star.x = pw - PAD - STAR_W + 4;
-    star.y = ROW_H / 2 - 9;
+    star.y = 6;
     star.eventMode = "static";
     star.cursor = "pointer";
     star.on("pointerdown", (e) => {

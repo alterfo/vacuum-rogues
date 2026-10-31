@@ -4,6 +4,8 @@ import { Graphics, Container, Sprite, BlurFilter } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { tex, loadTextureAsync } from "./textures";
 import { scaledText } from "./ui/scaledText";
+import { lineStepFor } from "./ui/questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 import { overmindMoodArtKey } from "./overmindMoodArt";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
@@ -798,9 +800,19 @@ export class StarMapScene extends GameScene {
     this.infoPanel.x = width - 220;
     this.infoPanel.y = 60;
 
-    const basePanelHeight = 180;
-    const planetListHeight = system.planets.length * 18; // 18px per planet
-    const totalPanelHeight = basePanelHeight + planetListHeight;
+    const nameStep = lineStepFor(scaledFont(14));
+    const smallStep = lineStepFor(scaledFont(11));
+    const planetNameStep = lineStepFor(scaledFont(10));
+    const planetTypeStep = lineStepFor(scaledFont(9));
+    const planetRowStep = planetNameStep + planetTypeStep;
+
+    const nameY = 10;
+    const factionY = nameY + nameStep + 4;
+    const planetsY = factionY + smallStep + 4;
+    const planetListTop = planetsY + smallStep + 4;
+    const planetListHeight = system.planets.length * planetRowStep;
+    const tailHeight = 105;
+    const totalPanelHeight = planetListTop + planetListHeight + tailHeight;
 
     const bg = new Graphics();
     bg.fill({ color: 0x000000, alpha: 0.95 });
@@ -813,7 +825,7 @@ export class StarMapScene extends GameScene {
       rawColor: true,
     });
     nameText.x = 10;
-    nameText.y = 10;
+    nameText.y = nameY;
     this.infoPanel.addChild(nameText);
 
     const factionText = scaledText(
@@ -822,7 +834,7 @@ export class StarMapScene extends GameScene {
       0xaaaaaa,
     );
     factionText.x = 10;
-    factionText.y = 35;
+    factionText.y = factionY;
     this.infoPanel.addChild(factionText);
 
     const planetsText = scaledText(
@@ -834,10 +846,10 @@ export class StarMapScene extends GameScene {
       },
     );
     planetsText.x = 10;
-    planetsText.y = 55;
+    planetsText.y = planetsY;
     this.infoPanel.addChild(planetsText);
 
-    let planetYOffset = 75;
+    let planetYOffset = planetListTop;
     for (const planet of system.planets) {
       const planetType = this.getPlanetTypeRussian(planet.type);
       const planetItem = scaledText(`• ${planet.name}`, 10, 0x88ccff, {
@@ -849,10 +861,10 @@ export class StarMapScene extends GameScene {
 
       const typeLabel = scaledText(planetType, 9, 0x889999);
       typeLabel.x = 25;
-      typeLabel.y = planetYOffset + 11;
+      typeLabel.y = planetYOffset + planetNameStep;
       this.infoPanel.addChild(typeLabel);
 
-      planetYOffset += 18;
+      planetYOffset += planetRowStep;
     }
 
     const neighborNames = system.connections

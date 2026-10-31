@@ -223,6 +223,9 @@ describe("MainMenuScene credits entry (Task 4)", () => {
     ).toBeGreaterThan(0);
 
     expect(clickTextButton(t("menu.creditsClose"))).toBe(true);
+    expect(
+      (scene as unknown as { creditsOverlay: unknown }).creditsOverlay,
+    ).toBeNull();
     scene.destroy();
   });
 });
