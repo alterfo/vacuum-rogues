@@ -1,7 +1,7 @@
 # US-081: Main Menu Quality Fixes
 
 > Epic: [EPIC-010](../epics/EPIC-010-visual-controls-polish.md) · UX Review: H1  
-> Status: **Planned**
+> Status: **Implemented**
 
 ## User Story
 

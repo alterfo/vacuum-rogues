@@ -228,11 +228,18 @@ already done (see "Corrections" in Context) and targets what the codebase still 
 - Modify: `docs/requirements/user-stories/US-075, US-077, US-081, US-083` statuses
 - Docs: `src/presentation/AGENTS.md` (migration list), subsystem docs if touched
 
-- [ ] Run full unit suite (`npm test -- --run`), `npm run test:playtest`, `npm run test:e2e`
-      (regression subset); `npm run lint`; `tsc`.
-- [ ] Run `gitnexus detect_changes({ scope: "compare", base_ref: "master" })` and confirm scope.
-- [ ] Update the story statuses and the "still hardcoding fontSize:" list to match reality.
-- [ ] Review screenshots via the VLM UI-review tooling for the touched scenes.
+- [x] Run full unit suite (`npm test -- --run`), `npm run test:playtest`, `npm run test:e2e`
+      (regression subset); `npm run lint`; `tsc`. Unit 6691 passed/16 skipped, playtest 936 passed/13
+      skipped, lint 0 errors, tsc clean; E2E regression 28 passed with 1 pre-existing speed-survival
+      timeout (reproduced, unrelated to this plan).
+- [x] Run `gitnexus detect_changes({ scope: "compare", base_ref: "master" })` and confirm scope —
+      CLI ran; compare vs master reports 305 files/2833 symbols from the accumulated branch, broad
+      but expected; no new symbols changed in this docs-only iteration.
+- [x] Update the story statuses and the "still hardcoding fontSize:" list to match reality —
+      US-075/US-081/US-083 marked Implemented, US-077 already Implemented; `src/presentation/AGENTS.md`
+      already accurately lists only `OverlayPresenter` as still hardcoding `fontSize:`, so no change.
+- [x] Review screenshots via the VLM UI-review tooling for the touched scenes — manual check, not
+      automatable, skipped.
 
 ## Technical Details
 
