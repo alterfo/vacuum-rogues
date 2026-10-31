@@ -1830,7 +1830,9 @@ export class InfoCenterScene extends GameScene {
     }
     const target = Math.min(offsets.length - 1, Math.max(0, index + deltaRows));
     const targetOffset =
-      target >= offsets.length - 1 ? this.newsList.maxOffset : offsets[target];
+      target >= offsets.length - 1 && deltaRows > 0
+        ? this.newsList.maxOffset
+        : offsets[target];
     this.newsList.scrollTo(targetOffset);
     this.newsScroll = this.newsList.offset;
     this.render();

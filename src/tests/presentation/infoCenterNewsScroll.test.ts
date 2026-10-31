@@ -207,4 +207,18 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     scene.scrollNews(1);
     expect(scene.newsList!.offset).toBe(scene.newsList!.maxOffset);
   });
+
+  it("keeps a single tall row at the top on ArrowUp", async () => {
+    const scene = await makeScene(1);
+    const long = "Длинная новость ".repeat(400);
+    scene.newsItems = [{ day: 0, text: long, color: 0xffffff, bookmarkKey: 0 }];
+    scene.render();
+    expect(scene.newsList!.maxOffset).toBeGreaterThan(0);
+
+    scene.scrollNews(-1);
+    expect(scene.newsList!.offset).toBe(0);
+
+    scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBe(scene.newsList!.maxOffset);
+  });
 });
