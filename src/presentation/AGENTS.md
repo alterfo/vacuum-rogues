@@ -29,7 +29,7 @@ window never gets touch chrome. `touchHitArea(w, h, env?)` grows + re-centres a 
 the **shared** `UiButton`, so every panel's buttons get comfortable targets at once with **no desktop
 change** (the `uiButtonHitArea.test.ts` exact-bounds contract still holds on desktop/Node). The
 on-screen flight touch controls (pinch-zoom + «✕» cancel) read the same `isTouchLayoutActive` gate —
-see `flight/CLAUDE.md`.
+see `flight/AGENTS.md`.
 
 **Station markers render sprite-or-diamond** (`flight/PlanetManager.createStations`).
 Each off-planet base resolves a per-type sprite via `stationSpriteKey(type, id)`
@@ -88,7 +88,7 @@ SR2-style ring rework: `docs/plans/20260707-gear-variety-and-hangar.md`). It ren
 presentation-only ring (`renderFittingRing`/`renderRingZone`) over the same four category banks
 + install/unfit + the ТРЮМ owned-gear strip via `scaledText`, plus a ВЫБРОСИТЬ/ШЛЮЗ jettison
 action, a СЕРВИСНЫЙ ЦЕНТР repair block, and КОМПЛЕКТАЦИЯ 1/2/3 loadout-preset tabs — see
-`.claude/docs/systems/equipment.md`'s "Hangar ring UI" / "Loadout presets" sections for the
+`docs/systems/equipment.md`'s "Hangar ring UI" / "Loadout presets" sections for the
 full breakdown. It mutates the canonical `ShipLoadout` through the shared gear helpers —
 **never** fork fit logic into a scene. **Both** `StationScene` and the `EquipmentShopScene`
 **АНГАР tab** mount the same `HangarPanel` (constructed with the scene's renderer), so fitting
@@ -201,7 +201,7 @@ language goes through i18n `setLanguage` → `localStorage("language")`) and fan
 via `SettingsPanelDeps` callbacks: `applySpeed` (HUD label + physics `timeScale`), `applyFont`
 (restyle in place, then `onRequestClose` — a font change rebuilds the whole HUD), `applyLanguage`
 (the same in-place restyle a font change uses, so text nodes re-read `t(...)`; then close),
-`onNeuralToggle` (the policy gate, see root CLAUDE.md "Neural / AI Pipeline"). Build the font row
+`onNeuralToggle` (the policy gate, see root AGENTS.md "Neural / AI Pipeline"). Build the font row
 **first** so its hit areas precede the others (the historical ⚙-panel "first font button" contract)
 and the **НЕЙРОСЕТЬ** row **last** (the "neural is the final hit area" contract). The neural row is
 **dev-only** — `showNeural` defaults to `import.meta.env.DEV`, so prod hides it entirely (its only
@@ -264,7 +264,7 @@ hover, toggled on the button's `pointerover`/`pointerout` via a **second** liste
 its own alpha/hover-audio handlers. Labels go through `t(...)` (`flight.inventoryTooltip` "Инвентарь",
 `flight.helpTooltip` "Помощь"; keys in both `ru.ts`/`en.ts`). **Position the tooltip from the button's
 numeric x/y + a font-scaled glyph budget, NOT `btn.width`/`btn.height`** — PixiJS Text measurement
-throws in the jsdom harness (the `BOTTOM_LEFT_LANE_W` trap; see `flight/CLAUDE.md`). The shared
+throws in the jsdom harness (the `BOTTOM_LEFT_LANE_W` trap; see `flight/AGENTS.md`). The shared
 `mountSceneHelp` "?" glyph is left untouched (self-explanatory on every scene); a full word like
 `[КВЕСТЫ]` needs no tooltip.
 
