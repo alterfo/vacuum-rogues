@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { scaledFont, setFontScale } from "@/utils/fontScale";
+import {
+  estimateWrappedLines,
+  lineStepFor,
+} from "@/presentation/ui/questCardLayout";
 
 vi.mock("pixi.js", () => {
   const makeContainer = () => {
@@ -104,6 +109,7 @@ async function makeScene(newsCount: number): Promise<SceneInternals> {
 }
 
 afterEach(() => {
+  setFontScale("M");
   for (const scene of createdScenes.splice(0)) scene.destroy();
 });
 
@@ -146,5 +152,46 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     expect(scene.newsList!.maxOffset).toBe(0);
     scene.scrollNews(3);
     expect(scene.newsList!.offset).toBe(0);
+  });
+
+  it("sizes wrapped rows with the shared estimator at the L font scale", async () => {
+    setFontScale("L");
+    const scene = await makeScene(1);
+    const long =
+      "Очень длинная новость о торговых путях и пиратских рейдах ".repeat(6);
+    scene.newsItems = [
+      { day: 1, text: long, color: 0xffffff, bookmarkKey: 99 },
+    ];
+    const pw = 800;
+    const textWidth = pw - 16 * 2 - 50 - 28;
+    const expected = Math.max(
+      38,
+      estimateWrappedLines(long, textWidth, scaledFont(13)) *
+        lineStepFor(scaledFont(13)) +
+        12,
+    );
+    const internals = scene as unknown as {
+      newsRowHeight: (item: NewsItemLike, width: number) => number;
+    };
+    expect(internals.newsRowHeight(scene.newsItems[0], pw)).toBe(expected);
+  });
+
+  it("advances to the next row boundary when rows have different heights", async () => {
+    setFontScale("L");
+    const scene = await makeScene(30);
+    const long = "Длинная новость ".repeat(20);
+    scene.newsItems = [
+      { day: 0, text: long, color: 0xffffff, bookmarkKey: 0 },
+      ...makeNews(29).map((item, i) => ({
+        ...item,
+        day: i + 1,
+        bookmarkKey: i + 1,
+      })),
+    ];
+    scene.render();
+    const internals = scene as unknown as { newsOffsets: number[] };
+    expect(internals.newsOffsets.length).toBe(30);
+    scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBe(internals.newsOffsets[1]);
   });
 });

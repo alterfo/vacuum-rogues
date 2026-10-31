@@ -317,7 +317,12 @@ export class DialogueScene extends GameScene {
     const panelHeight = Math.min(470, screenHeight - 40);
     const panelX = (screenWidth - panelWidth) / 2;
     const panelY = (screenHeight - panelHeight) / 2;
-    let buttonY = panelY + 220;
+    const measured = this.dialogueText?.height ?? 0;
+    const textBottom =
+      this.dialogueText && Number.isFinite(measured) && measured > 0
+        ? this.dialogueText.y + measured + 16
+        : panelY + 220;
+    let buttonY = Math.max(panelY + 220, textBottom);
 
     for (let i = 0; i < node.responses.length; i++) {
       const response = node.responses[i];

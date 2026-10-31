@@ -38,9 +38,27 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { ScrollableList } from "./ui/ScrollableList";
-import { MONO_CHAR_WIDTH_RATIO, lineStepFor } from "./ui/questCardLayout";
+import {
+  MONO_CHAR_WIDTH_RATIO,
+  estimateWrappedLines,
+  lineStepFor,
+} from "./ui/questCardLayout";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
+
+function countVisibleRows(
+  heights: readonly number[],
+  listHeight: number,
+): number {
+  let filled = 0;
+  let count = 0;
+  for (const height of heights) {
+    if (filled + height > listHeight) break;
+    filled += height;
+    count += 1;
+  }
+  return Math.max(1, count);
+}
 
 interface InfoContext {
   gameEngine?: GameEngine;
@@ -345,6 +363,7 @@ export class InfoCenterScene extends GameScene {
   private activeTab: Tab = "news";
   private newsItems: NewsItem[] = [];
   private newsScroll = 0;
+  private newsOffsets: number[] = [];
   private newsList: ScrollableList<NewsItem> | null = null;
 
   private objectsQuery = "";
@@ -668,7 +687,16 @@ export class InfoCenterScene extends GameScene {
     const rumorH = this.renderRumorPanel(container, pw);
 
     const listH = Math.max(ROW_H, ph - rumorH);
-    const VISIBLE = Math.floor(listH / ROW_H);
+    const rowHeights = this.newsItems.map((item) =>
+      this.newsRowHeight(item, pw),
+    );
+    this.newsOffsets = [];
+    let runningOffset = 0;
+    for (const height of rowHeights) {
+      this.newsOffsets.push(runningOffset);
+      runningOffset += height;
+    }
+    const visibleRows = countVisibleRows(rowHeights, listH);
     const bookmarks = this.gameEngine?.player?.newsBookmarks ?? [];
 
     this.newsList = new ScrollableList<NewsItem>({
@@ -695,15 +723,26 @@ export class InfoCenterScene extends GameScene {
     this.newsScroll = this.newsList.offset;
     container.addChild(this.newsList.container);
 
-    if (this.newsItems.length > VISIBLE) {
+    if (this.newsItems.length > visibleRows) {
       let firstRow = 0;
-      let scrolled = 0;
-      while (firstRow < this.newsItems.length && scrolled < this.newsScroll) {
-        scrolled += this.newsRowHeight(this.newsItems[firstRow], pw);
+      while (
+        firstRow + 1 < this.newsOffsets.length &&
+        this.newsOffsets[firstRow + 1] <= this.newsScroll + 0.5
+      ) {
         firstRow += 1;
       }
+      let lastRow = firstRow;
+      let filled = 0;
+      while (
+        lastRow < rowHeights.length &&
+        filled + rowHeights[lastRow] <= listH
+      ) {
+        filled += rowHeights[lastRow];
+        lastRow += 1;
+      }
+      const lastVisible = Math.max(firstRow + 1, lastRow);
       const hint = scaledText(
-        `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
+        `↑↓  ${firstRow + 1}–${Math.min(lastVisible, this.newsItems.length)} / ${this.newsItems.length}`,
         11,
         0x88aacc,
         { rawColor: true, fontFamily: "monospace" },
@@ -720,9 +759,7 @@ export class InfoCenterScene extends GameScene {
     const PAD = 16;
     const STAR_W = 28;
     const textWidth = Math.max(1, pw - PAD * 2 - 50 - STAR_W);
-    const charPx = Math.max(1, scaledFont(13) * MONO_CHAR_WIDTH_RATIO);
-    const charsPerLine = Math.max(1, Math.floor(textWidth / charPx));
-    const lines = Math.max(1, Math.ceil(item.text.length / charsPerLine));
+    const lines = estimateWrappedLines(item.text, textWidth, scaledFont(13));
     const textHeight = lines * lineStepFor(scaledFont(13)) + 12;
     return Math.max(InfoCenterScene.NEWS_ROW_H, textHeight);
   }
@@ -1791,7 +1828,18 @@ export class InfoCenterScene extends GameScene {
       this.render();
       return;
     }
-    this.newsList.scrollBy(deltaRows * InfoCenterScene.NEWS_ROW_H);
+    const offsets = this.newsOffsets;
+    if (offsets.length === 0) {
+      this.render();
+      return;
+    }
+    const current = this.newsList.offset;
+    let index = 0;
+    while (index + 1 < offsets.length && offsets[index + 1] <= current + 0.5) {
+      index += 1;
+    }
+    const target = Math.min(offsets.length - 1, Math.max(0, index + deltaRows));
+    this.newsList.scrollTo(offsets[target]);
     this.newsScroll = this.newsList.offset;
     this.render();
   }

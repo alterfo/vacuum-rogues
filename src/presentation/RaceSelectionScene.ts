@@ -62,15 +62,16 @@ export class RaceSelectionScene extends GameScene {
     this.selectionPulse = Math.max(0, this.selectionPulse - deltaTime * 0.002);
     const width = 300;
     const height = 230;
+    const settled = this.selectionPulse <= 0;
     const pulseWidth = this.selectionPulse > 0.5 ? 3 : 2;
     const glow = this.selectionPulse > 0.5 ? 0.65 : 0.25;
     this.selectedCardBg.clear();
     this.selectedCardBg.rect(0, 0, width, height);
-    this.selectedCardBg.fill({ color: 0x1a3a4a, alpha: 0.98 });
+    this.selectedCardBg.fill({ color: 0x1a3a4a, alpha: 0.95 });
     this.selectedCardBg.stroke({
       color: factionColor(this.selectedFaction),
-      width: pulseWidth,
-      alpha: glow,
+      width: settled ? 3 : pulseWidth,
+      alpha: settled ? 1 : glow,
     });
   }
 
