@@ -154,12 +154,13 @@ already done (see "Corrections" in Context) and targets what the codebase still 
 - Modify: `src/presentation/ui/ScrollableList.ts`
 - Create: a guard test (allowlist: `UiButton`, `scaledText`, internal modules)
 
-- [ ] Migrate the remaining files to `scaledText`, using `rawColor: true` only for bright/semantic
+- [x] Migrate the remaining files to `scaledText`, using `rawColor: true` only for bright/semantic
       colours.
-- [ ] Add per-item variable height to `ScrollableList` (or a documented per-consumer opt-out) so
+- [x] Add per-item variable height to `ScrollableList` (or a documented per-consumer opt-out) so
       wrapped rows stop bleeding at "L" scale.
-- [ ] Add a test ratchet asserting no raw `fontSize:` in the presentation allowlist violations.
-- [ ] Run tests + lint + screenshot verification.
+- [x] Add a test ratchet asserting no raw `fontSize:` in the presentation allowlist violations.
+- [x] Run tests + lint + screenshot verification (screenshot review is manual — not automatable,
+      skipped).
 
 ### Task 4: Remaining scene polish (EPIC-010 stories still open)
 

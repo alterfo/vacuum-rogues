@@ -1,4 +1,5 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -137,15 +138,10 @@ export class WinScene extends GameScene {
     centered: boolean,
   ): void {
     if (!this.container) return;
-    const t = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: size,
-        fill: color,
-        fontWeight: bold ? "bold" : "normal",
-        align: centered ? "center" : "left",
-      },
+    const t = scaledText(text, size, color, {
+      rawColor: true,
+      fontWeight: bold ? "bold" : "normal",
+      align: centered ? "center" : "left",
     });
     t.eventMode = "none";
     if (centered) {
@@ -175,14 +171,9 @@ export class WinScene extends GameScene {
     bg.stroke({ color: 0x00ff88, width: 2 });
     btn.addChild(bg);
 
-    const lbl = new Text({
-      text: label,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0x00ff88,
-        fontWeight: "bold",
-      },
+    const lbl = scaledText(label, 18, 0x00ff88, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     lbl.anchor.set(0.5);
     lbl.x = w / 2;

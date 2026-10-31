@@ -5,6 +5,7 @@ import type { NPC } from "@/domain/NPC";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { bindModalKeys } from "./ui/bindModalKeys";
+import { scaledText } from "./ui/scaledText";
 
 export interface DialogueNode {
   id: string;
@@ -235,28 +236,20 @@ export class DialogueScene extends GameScene {
     this.npcPortrait.fill({ color: 0x4488cc });
     this.dialogueContainer.addChild(this.npcPortrait);
 
-    this.npcNameText = new Text({
-      text: this.dialogueTree?.npcName ?? "NPC",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-      },
-    });
+    this.npcNameText = scaledText(
+      this.dialogueTree?.npcName ?? "NPC",
+      18,
+      0x00ffff,
+      { rawColor: true, fontWeight: "bold" },
+    );
     this.npcNameText.x = panelX + 120;
     this.npcNameText.y = panelY + 30;
     this.dialogueContainer.addChild(this.npcNameText);
 
-    this.dialogueText = new Text({
-      text: "",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffffff,
-        wordWrap: true,
-        wordWrapWidth: panelWidth - 40,
-      },
+    this.dialogueText = scaledText("", 14, 0xffffff, {
+      rawColor: true,
+      wordWrap: true,
+      wordWrapWidth: panelWidth - 40,
     });
     this.dialogueText.x = panelX + 20;
     this.dialogueText.y = panelY + 100;
@@ -318,14 +311,7 @@ export class DialogueScene extends GameScene {
     bg.stroke({ color: 0x00ffff, width: 1 });
     container.addChild(bg);
 
-    const buttonText = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffffff,
-      },
-    });
+    const buttonText = scaledText(text, 14, 0xffffff, { rawColor: true });
     buttonText.x = 10;
     buttonText.y = 10;
     container.addChild(buttonText);

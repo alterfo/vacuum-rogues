@@ -10,6 +10,7 @@ import { pickVariant } from "./textures";
 import { t } from "@/i18n/i18n";
 import { SettingsPanel, SETTINGS_PANEL_WIDTH } from "./ui/SettingsPanel";
 import { GAME_BALANCE } from "@/config/balance";
+import { scaledText } from "./ui/scaledText";
 
 interface StarParticle {
   x: number;
@@ -296,40 +297,29 @@ export class MainMenuScene extends GameScene {
       this.renderer.gameLayer.addChild(ship.container);
     }
 
-    this.title = new Text({
-      text: t("menu.title"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 38,
-        fill: 0x00ffff,
-        letterSpacing: 6,
-        align: "center",
-        lineHeight: 46,
-        dropShadow: {
-          color: 0x00ffff,
-          alpha: 0.4,
-          blur: 10,
-          distance: 0,
-          angle: 0,
-        },
-      },
+    this.title = scaledText(t("menu.title"), 38, 0x00ffff, {
+      rawColor: true,
+      letterSpacing: 6,
+      align: "center",
+      lineHeight: 46,
     });
+    this.title.style.dropShadow = {
+      color: 0x00ffff,
+      alpha: 0.4,
+      blur: 10,
+      distance: 0,
+      angle: 0,
+    };
     this.title.anchor.set(0.5);
     this.title.x = width / 2;
     this.title.y = height / 3;
     this.renderer.uiLayer.addChild(this.title);
 
-    this.intro = new Text({
-      text: t("menu.intro"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 15,
-        fill: 0xaad4e6,
-        align: "center",
-        lineHeight: 22,
-        wordWrap: true,
-        wordWrapWidth: Math.min(600, width - 80),
-      },
+    this.intro = scaledText(t("menu.intro"), 15, 0xaad4e6, {
+      align: "center",
+      lineHeight: 22,
+      wordWrap: true,
+      wordWrapWidth: Math.min(600, width - 80),
     });
     this.intro.anchor.set(0.5, 0);
     this.intro.x = width / 2;
@@ -350,14 +340,9 @@ export class MainMenuScene extends GameScene {
       fontSize = 20,
       color = 0x00ff00,
     ) => {
-      const buttonText = new Text({
-        text,
-        style: {
-          fontFamily: "Courier New",
-          fontSize,
-          fill: color,
-          fontWeight: "bold" as const,
-        },
+      const buttonText = scaledText(text, fontSize, color, {
+        rawColor: true,
+        fontWeight: "bold",
       });
       buttonText.anchor.set(0.5, 0.5);
       buttonText.y = y;
@@ -614,14 +599,7 @@ export class MainMenuScene extends GameScene {
       this.currentMsgText = null;
     }
 
-    const msgText = new Text({
-      text: message,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: color,
-      },
-    });
+    const msgText = scaledText(message, 16, color, { rawColor: true });
     msgText.anchor.set(0.5);
     msgText.x = width / 2;
     const buttonsY = this.buttonsContainer

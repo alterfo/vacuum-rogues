@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import { GameScene } from "./GameScene";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { scaledText } from "./ui/scaledText";
@@ -114,14 +114,9 @@ export class InventoryScene extends GameScene {
     panel.stroke({ color: 0x00ffff, width: 3 });
     this.mainContainer.addChild(panel);
 
-    const title = new Text({
-      text: "ИНВЕНТАРЬ И ОБОРУДОВАНИЕ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 20,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-      },
+    const title = scaledText("ИНВЕНТАРЬ И ОБОРУДОВАНИЕ", 20, 0x00ffff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     title.x = panelX + 20;
     title.y = panelY + 15;
@@ -146,14 +141,9 @@ export class InventoryScene extends GameScene {
 
     const ship = this.gameEngine.player.ship;
 
-    const statsTitle = new Text({
-      text: "КОРАБЛЬ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0xffaa00,
-        fontWeight: "bold",
-      },
+    const statsTitle = scaledText("КОРАБЛЬ", 16, 0xffaa00, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     statsTitle.x = x;
     statsTitle.y = y;
@@ -173,14 +163,7 @@ export class InventoryScene extends GameScene {
 
     let yOffset = y + 30;
     for (const line of lines) {
-      const statText = new Text({
-        text: line,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: 0xaaaaaa,
-        },
-      });
+      const statText = scaledText(line, 12, 0xaaaaaa);
       statText.x = x;
       statText.y = yOffset;
       this.mainContainer.addChild(statText);
@@ -191,15 +174,12 @@ export class InventoryScene extends GameScene {
   private renderLoadoutGear(x: number, y: number): void {
     if (!this.gameEngine || !this.mainContainer) return;
 
-    const sectionTitle = new Text({
-      text: "УСТАНОВЛЕННОЕ ОБОРУДОВАНИЕ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0xffaa00,
-        fontWeight: "bold",
-      },
-    });
+    const sectionTitle = scaledText(
+      "УСТАНОВЛЕННОЕ ОБОРУДОВАНИЕ",
+      16,
+      0xffaa00,
+      { rawColor: true, fontWeight: "bold" },
+    );
     sectionTitle.x = x;
     sectionTitle.y = y;
     this.mainContainer.addChild(sectionTitle);
@@ -222,28 +202,24 @@ export class InventoryScene extends GameScene {
       yOffset += 70;
     }
     if (items.length > MAX_CARDS) {
-      const more = new Text({
-        text: `…и ещё ${items.length - MAX_CARDS} — полный список в магазине оборудования`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 11,
-          fill: 0x8888aa,
-        },
-      });
+      const more = scaledText(
+        `…и ещё ${items.length - MAX_CARDS} — полный список в магазине оборудования`,
+        11,
+        0x8888aa,
+        { rawColor: true },
+      );
       more.x = x;
       more.y = yOffset;
       this.mainContainer.addChild(more);
       yOffset += 18;
     }
 
-    const hint = new Text({
-      text: "Покупка и установка — в магазине оборудования",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0x555577,
-      },
-    });
+    const hint = scaledText(
+      "Покупка и установка — в магазине оборудования",
+      10,
+      0x555577,
+      { rawColor: true },
+    );
     hint.x = x;
     hint.y = yOffset + 5;
     this.mainContainer.addChild(hint);
@@ -267,28 +243,20 @@ export class InventoryScene extends GameScene {
     bg.stroke({ color: 0x555555, width: 1 });
     card.addChild(bg);
 
-    const name = new Text({
-      text: gear.name,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 12,
-        fill: 0xffffff,
-        fontWeight: "bold",
-      },
+    const name = scaledText(gear.name, 12, 0xffffff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     name.eventMode = "none";
     name.x = 10;
     name.y = 10;
     card.addChild(name);
 
-    const meta = new Text({
-      text: `[${KIND_LABEL[gear.kind]}]  Тех. уровень: ${gear.techLevel}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0xb4b4b4,
-      },
-    });
+    const meta = scaledText(
+      `[${KIND_LABEL[gear.kind]}]  Тех. уровень: ${gear.techLevel}`,
+      10,
+      0xb4b4b4,
+    );
     meta.eventMode = "none";
     meta.x = 10;
     meta.y = 32;
@@ -447,14 +415,9 @@ export class InventoryScene extends GameScene {
     if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
       return;
 
-    const resourcesTitle = new Text({
-      text: "РЕСУРСЫ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffaa00,
-        fontWeight: "bold",
-      },
+    const resourcesTitle = scaledText("РЕСУРСЫ", 14, 0xffaa00, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     resourcesTitle.x = x;
     resourcesTitle.y = y;
@@ -465,14 +428,7 @@ export class InventoryScene extends GameScene {
     );
     const credits = this.gameEngine.player.credits;
 
-    const creditsText = new Text({
-      text: `Кредиты: ${credits}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xaaaaaa,
-      },
-    });
+    const creditsText = scaledText(`Кредиты: ${credits}`, 11, 0xaaaaaa);
     creditsText.x = x;
     creditsText.y = y + 25;
     this.mainContainer.addChild(creditsText);
@@ -561,14 +517,9 @@ export class InventoryScene extends GameScene {
     closeBg.fill({ color: 0xff0000, alpha: 0.8 });
     closeBtn.addChild(closeBg);
 
-    const closeText = new Text({
-      text: "X",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0xffffff,
-        fontWeight: "bold",
-      },
+    const closeText = scaledText("X", 16, 0xffffff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     closeText.x = 7;
     closeText.y = 2;
@@ -621,15 +572,10 @@ export class InventoryScene extends GameScene {
     }
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
-    const toast = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(16),
-        fill: color,
-        fontWeight: "bold",
-        align: "center",
-      },
+    const toast = scaledText(text, 16, color, {
+      rawColor: true,
+      fontWeight: "bold",
+      align: "center",
     });
     toast.anchor.set(0.5);
     toast.x = w / 2;

@@ -10,10 +10,11 @@ tracks the S/M/L setting, and lifts dim fills to a legible luminance floor (`REA
 Pass `rawColor: true` only for already-bright/semantic colors (accents, intentionally-dimmed
 disabled states, light backgrounds) where the floor would distort hue. Migrated: JobBoardPanel,
 StationScene, TradeScene, EquipmentShopScene, InfoCenterScene, QuestJournalUI, TextQuestScene,
-PlanetInfoPanel, StarMapScene, CombatHud, CombatPauseOverlay.
+PlanetInfoPanel, StarMapScene, CombatHud, CombatPauseOverlay, InventoryScene,
+ResearchUpgradePanel, GovernmentScene, RaceSelectionScene, NpcContactPanel, DialogueScene,
+WinScene, MainMenuScene, SystemMiniMap.
 Still hardcoding `fontSize:` (route through `scaledText` when you touch them):
-InventoryScene, ResearchUpgradePanel, GovernmentScene, RaceSelectionScene,
-NpcContactPanel, DialogueScene, WinScene, MainMenuScene, SystemMiniMap.
+SaveLoadScene, OverlayPresenter.
 (Flight modules that already read `scaledFont` — FlightHud, PlanetManager, DamageNumbers, UiButton,
 PlanetScene — don't need it; for the in-flight restyle-in-place rule see `flight/playtest-traps.md`.)
 
@@ -241,10 +242,9 @@ real `wordWrap`/`wordWrapWidth` or a `MONO_CHAR_WIDTH_RATIO`-derived pixel-width
 (`refreshVmParamPanel` param stack). When adding a new stacked-row/multi-line panel behind
 `scaledText`, size its row step and any truncation from `scaledFont`/`lineStepFor` up front rather
 than a fixed pixel constant — retrofitting it later means auditing every consumer for this same bug
-class. **Known gap, not yet fixed:** `ScrollableList`'s shared `itemHeight` is still uniform
-(non-variable) across its 6+ panel consumers — a long wrapped item (e.g. InfoCenter news rows) can
-still bleed into the next row at "L" scale; fixing it needs per-item variable-height support in that
-shared component, out of scope for a single-panel fix.
+class. `ScrollableList` now accepts an optional `getItemHeight(item, index)` callback for per-item
+variable heights (falling back to the uniform `itemHeight` when omitted or non-positive), so wrapped
+rows can stop bleeding into the next row at "L" scale; consumers that wrap text should provide it.
 
 **The star-map critical-threat line is a bordered banner chip, not stray red text**
 (`ui/starMapThreatBanner.ts`, `docs/plans/20260729-ux-review-fixes.md` Task 6). `StarMapScene`'s old

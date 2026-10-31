@@ -11,6 +11,7 @@ import {
 import { bindModalKeys } from "./ui/bindModalKeys";
 import { roleLabel } from "./npcLabels";
 import { t } from "@/i18n/i18n";
+import { scaledText } from "./ui/scaledText";
 
 function optionLabel(opt: CommsOption): string {
   return t(`comms.option.${opt}`);
@@ -262,14 +263,9 @@ export class NpcContactPanel {
     });
     this.container.addChild(bg);
 
-    const x = new Text({
-      text: "✕",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0xff6666,
-        fontWeight: "bold",
-      },
+    const x = scaledText("✕", 16, 0xff6666, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     x.x = NpcContactPanel.W - 22;
     x.y = 8;
@@ -296,14 +292,9 @@ export class NpcContactPanel {
     color: number,
     bold = false,
   ): void {
-    const t = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: size,
-        fill: color,
-        fontWeight: bold ? "bold" : "normal",
-      },
+    const t = scaledText(text, size, color, {
+      rawColor: true,
+      fontWeight: bold ? "bold" : "normal",
     });
     t.x = x;
     t.y = y;
@@ -333,10 +324,7 @@ export class NpcContactPanel {
       onClick();
     });
 
-    const t = new Text({
-      text: label,
-      style: { fontFamily: "Courier New", fontSize: 12, fill: 0xffffff },
-    });
+    const t = scaledText(label, 12, 0xffffff, { rawColor: true });
     t.x = x + (w - t.width) / 2;
     t.y = y + (h - t.height) / 2;
     t.eventMode = "none";
@@ -368,16 +356,16 @@ export class NpcContactPanel {
       resultText = t("comms.shielded");
     }
 
-    const label = new Text({
-      text: resultText,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: this.playerScanPower > npc.shieldPower ? 0x88ffcc : 0xff8844,
+    const label = scaledText(
+      resultText,
+      11,
+      this.playerScanPower > npc.shieldPower ? 0x88ffcc : 0xff8844,
+      {
+        rawColor: true,
         wordWrap: true,
         wordWrapWidth: NpcContactPanel.W - 24,
       },
-    });
+    );
     label.x = 12;
     label.y = this.scanResultY;
     label.eventMode = "none";

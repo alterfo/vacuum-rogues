@@ -1,4 +1,5 @@
-import { Container, Graphics, Text, Sprite } from "pixi.js";
+import { Container, Graphics, Sprite } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import type { Renderer } from "./Renderer";
@@ -93,15 +94,10 @@ export class RaceSelectionScene extends GameScene {
     background.fill({ color: 0x000510 });
     this.mainContainer.addChild(background);
 
-    const title = new Text({
-      text: t("race.title"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 28,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-        letterSpacing: 4,
-      },
+    const title = scaledText(t("race.title"), 28, 0x00ffff, {
+      rawColor: true,
+      fontWeight: "bold",
+      letterSpacing: 4,
     });
     title.anchor.set(0.5);
     title.x = screenWidth / 2;
@@ -135,13 +131,8 @@ export class RaceSelectionScene extends GameScene {
       cardHeight,
     );
 
-    const backBtn = new Text({
-      text: t("race.back"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0x88ccff,
-      },
+    const backBtn = scaledText(t("race.back"), 16, 0x88ccff, {
+      rawColor: true,
     });
     backBtn.x = 20;
     backBtn.y = 20;
@@ -181,15 +172,10 @@ export class RaceSelectionScene extends GameScene {
     bg.eventMode = "none";
     panel.addChild(bg);
 
-    const header = new Text({
-      text: t("race.difficulty"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0x88ccff,
-        fontWeight: "bold",
-        letterSpacing: 3,
-      },
+    const header = scaledText(t("race.difficulty"), 16, 0x88ccff, {
+      rawColor: true,
+      fontWeight: "bold",
+      letterSpacing: 3,
     });
     header.anchor.set(0.5, 0);
     header.x = width / 2;
@@ -236,30 +222,24 @@ export class RaceSelectionScene extends GameScene {
     bg.cursor = "pointer";
     chip.addChild(bg);
 
-    const title = new Text({
-      text: t(`race.mode.${mode}.title`),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: isSelected ? 0x00ffff : 0xffffff,
+    const title = scaledText(
+      t(`race.mode.${mode}.title`),
+      14,
+      isSelected ? 0x00ffff : 0xffffff,
+      {
+        rawColor: true,
         fontWeight: "bold",
       },
-    });
+    );
     title.x = 10;
     title.y = 6;
     title.eventMode = "none";
     chip.addChild(title);
 
-    const desc = new Text({
-      text: t(`race.mode.${mode}.desc`),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0xbbbbbb,
-        wordWrap: true,
-        wordWrapWidth: width - 20,
-        lineHeight: 12,
-      },
+    const desc = scaledText(t(`race.mode.${mode}.desc`), 10, 0xbbbbbb, {
+      wordWrap: true,
+      wordWrapWidth: width - 20,
+      lineHeight: 12,
     });
     desc.x = 10;
     desc.y = 24;
@@ -338,62 +318,45 @@ export class RaceSelectionScene extends GameScene {
     const textX = portraitX + portraitW + 10;
     const textW = width - textX - 10;
 
-    const factionName = new Text({
-      text: t(`race.faction.${faction}.title`),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: isSelected ? factionColor(faction) : 0xffffff,
-        fontWeight: "bold",
-      },
-    });
+    const factionName = scaledText(
+      t(`race.faction.${faction}.title`),
+      16,
+      isSelected ? factionColor(faction) : 0xffffff,
+      { rawColor: true, fontWeight: "bold" },
+    );
     factionName.x = 10;
     factionName.y = 10;
     factionName.eventMode = "none";
     cardContainer.addChild(factionName);
 
     const description = t(`race.faction.${faction}.desc`);
-    const descText = new Text({
-      text: description,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xcccccc,
-        wordWrap: true,
-        wordWrapWidth: textW,
-        lineHeight: 14,
-      },
+    const descText = scaledText(description, 11, 0xcccccc, {
+      wordWrap: true,
+      wordWrapWidth: textW,
+      lineHeight: 14,
     });
     descText.x = textX;
     descText.y = 34;
     descText.eventMode = "none";
     cardContainer.addChild(descText);
 
-    const bonusText = new Text({
-      text: t(`race.faction.${faction}.bonus`),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xffaa00,
+    const bonusText = scaledText(
+      t(`race.faction.${faction}.bonus`),
+      11,
+      0xffaa00,
+      {
+        rawColor: true,
         wordWrap: true,
         wordWrapWidth: textW,
       },
-    });
+    );
     bonusText.x = textX;
     bonusText.y = 120;
     bonusText.eventMode = "none";
     cardContainer.addChild(bonusText);
 
     const stats = this.getFactionStatsText(faction);
-    const statsText = new Text({
-      text: stats,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0xaaaaaa,
-        lineHeight: 14,
-      },
-    });
+    const statsText = scaledText(stats, 10, 0xaaaaaa, { lineHeight: 14 });
     statsText.x = textX;
     statsText.y = 168;
     statsText.eventMode = "none";
@@ -500,14 +463,9 @@ export class RaceSelectionScene extends GameScene {
     btnBg.stroke({ color: 0x00ffff, width: 2 });
     buttonContainer.addChild(btnBg);
 
-    const btnText = new Text({
-      text: t("race.start"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 20,
-        fill: 0xffffff,
-        fontWeight: "bold",
-      },
+    const btnText = scaledText(t("race.start"), 20, 0xffffff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     btnText.anchor.set(0.5);
     btnText.y = 0;
