@@ -191,17 +191,20 @@ already done (see "Corrections" in Context) and targets what the codebase still 
   `src/presentation/ui/gearIcon.ts`
 - Docs: `docs/design/ASSET_PIPELINE.md`
 
-- [ ] Audit manifest categories against render paths; record the inventory (planets 36, planet_maps
-      48, surfaces 24, star_maps 31, stars 30, ships 24, player_ships 12, portraits 15, icons 6,
-      station 15, panoramas 8) in the pipeline doc.
-- [ ] Decide and document `station_interior/`: either generate art via the ComfyUI pipeline so
-      `resolveStationBackdropKey` starts returning a key, or record the procedural-only decision.
-- [ ] Check icon coverage (6 files) against the gear families that render a glyph fallback today;
-      log families that would benefit from an icon.
-- [ ] Do **not** re-add the nebula texture category — the owner removed the generated nebula art
+- [x] Audit manifest categories against render paths; record the inventory (planets 36, planet_maps
+      47 on disk — `habitat_05` is missing, surfaces 24, star_maps 31, stars 30, ships 24,
+      player_ships 12, portraits 15, icons 6, station 15, panoramas 8, ui 8) in the pipeline doc.
+- [x] Decide and document `station_interior/`: either generate art via the ComfyUI pipeline so
+      `resolveStationBackdropKey` starts returning a key, or record the procedural-only decision —
+      procedural-only recorded; resolver stays as the no-code path for future art.
+- [x] Check icon coverage (6 files) against the gear families that render a glyph fallback today;
+      log families that would benefit from an icon — hull, scanner, grapple, grav tractor,
+      fragment, missile documented.
+- [x] Do **not** re-add the nebula texture category — the owner removed the generated nebula art
       because they disliked it (decision of 2026-10-31). Nebula stays procedural; this is a closed
       decision, not a deferred one.
-- [ ] Verify lazy-category resolution and procedural fallbacks with tests.
+- [x] Verify lazy-category resolution and procedural fallbacks with tests — added
+      `stationBackdropArtCoverage.test.ts` and manifest audit assertions.
 
 ### Task 6: Atmosphere & juice pass
 

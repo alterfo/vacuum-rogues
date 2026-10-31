@@ -73,3 +73,17 @@ describe("asset manifest — planet surface maps", () => {
     expect(texture("planet_maps/habitat_04")).toBeDefined();
   });
 });
+
+describe("asset manifest — art coverage audit (2026-10-31)", () => {
+  it("keeps station_interior empty until interior art is committed", () => {
+    expect(allTextures("station_interior")).toHaveLength(0);
+  });
+
+  it("keeps nebula empty (procedural-only decision)", () => {
+    expect(allTextures("nebula")).toHaveLength(0);
+  });
+
+  it("keeps the six gear-family fallback icons on disk", () => {
+    expect(allTextures("icons").length).toBeGreaterThanOrEqual(6);
+  });
+});

@@ -63,3 +63,51 @@ musicUrl("combat"); // → "/audio/mus_combat.ogg"
   пути = стабильная конвенция; добавление файла не требует кода.
 - **Музыку в `public/audio`** → большие медиа не гоняем через бандлер; путь
   предсказуем из ключа состояния.
+
+## Asset coverage audit (2026-10-31)
+
+Canonical inventory of the raster categories currently shipped under `src/assets/`:
+
+| Category | Count | Render path |
+|----------|------:|-------------|
+| `planets` | 36 | `PlanetSprite` planet disc (`pickVariant`) |
+| `planet_maps` | 47 | `PlanetSprite` equirect map (`pickVariant`) |
+| `surfaces` | 24 | `PlanetScene` landing backdrop |
+| `star_maps` | 31 | `StarRenderer` (`pickVariantKey`) |
+| `stars` | 30 | procedural star-spawn art |
+| `ships` | 24 | `NpcShipSprite` / main menu |
+| `player_ships` | 12 | `PlayerShipRenderer` |
+| `portraits` | 15 | `RaceSelectionScene` / dialogue |
+| `icons` | 6 | `gearIcon` family fallback |
+| `station` | 15 | `stationArt` flight marker |
+| `panoramas` | 8 | `PlanetScene` panorama fallback |
+| `ui` | 8 | dead art (zero code references) |
+
+Audit note: the plan draft expected 48 `planet_maps`, but the committed glob has 47 —
+`habitat_05` is the missing Solar System Scope original while `terrestrial/gas/ice/volcanic/
+industrial` each have `_04` and `_05`.
+
+### `station_interior/` decision (procedural-only for now)
+
+`resolveStationBackdropKey(type, id)` already queries `pickVariantKey("station_interior", …)`
+and falls back to the 12-band procedural gradient in `buildStationBackdrop` when the category
+is absent. Decision: keep the procedural fallback as the shipped interior backdrop; do not
+generate `station_interior/` art in this pass. When real interior panoramas are produced, drop
+them under `src/assets/station_interior/<prefix>_NN.webp` (prefixes from
+`STATION_TEXTURE_PREFIX`: `trade`, `drydock`, `military`, `science`, `fabricator`) and the
+existing resolver lights up with no scene change.
+
+### Gear-icon coverage gaps
+
+The six committed `icons/` files cover the flat fallbacks: `engine`, `fuel_tank`, `radar`,
+`shield`, `repair_droid`, and `laser` (ENERGY weapons). These gear families still render a
+drawn category-glyph badge in `gearIcon.ts` and would benefit from an icon:
+- Hull (`HL`)
+- Equipment: `SCANNER` (`SC`), `GRAPPLE` (`GR`), `GRAV_TRACTOR` (`GT`)
+- Weapons: `FRAGMENT` (`FR`), `MISSILE` (`MS`)
+
+### Nebula decision (closed)
+
+Do not re-add the `nebula/` texture category. The owner removed the generated nebula art
+(2026-10-31) and nebula rendering stays procedural. `allTextures("nebula")` must remain empty;
+the resolver/asset-coverage tests ratchet that.
