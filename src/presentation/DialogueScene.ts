@@ -263,9 +263,12 @@ export class DialogueScene extends GameScene {
       portraitMask.circle(0, 0, 40);
       portraitMask.fill({ color: 0xffffff });
       portraitMask.eventMode = "none";
-      portraitSprite.mask = portraitMask;
-      portraitContainer.addChild(portraitMask);
-      portraitContainer.addChild(portraitSprite);
+
+      const portraitSurface = new Container();
+      portraitSurface.addChild(portraitMask);
+      portraitSurface.addChild(portraitSprite);
+      portraitSurface.mask = portraitMask;
+      portraitContainer.addChild(portraitSurface);
     }
 
     this.dialogueContainer.addChild(portraitContainer);

@@ -1,5 +1,5 @@
 import { scaledFont } from "@/utils/fontScale";
-import { MONO_CHAR_WIDTH_RATIO, lineStepFor } from "./questCardLayout";
+import { estimateTextWidthPx, lineStepFor } from "./questCardLayout";
 
 export const STAR_MAP_LABEL_PX = 10;
 
@@ -8,7 +8,7 @@ export function starMapLabelBounds(name: string): {
   height: number;
 } {
   return {
-    width: name.length * scaledFont(STAR_MAP_LABEL_PX) * MONO_CHAR_WIDTH_RATIO,
+    width: estimateTextWidthPx(name, STAR_MAP_LABEL_PX),
     height: lineStepFor(scaledFont(STAR_MAP_LABEL_PX)),
   };
 }
