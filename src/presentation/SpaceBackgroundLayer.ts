@@ -139,7 +139,7 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.createNebulae(); // Screen-space nebula clouds (skyContainer) + swarms
     this.createStarField(); // Crisp far stars (screen-fixed)
     this.createTwinkleStars(); // Bright pulsing hero stars (screen-fixed)
-    this.createAtmosphereTint(); // State-driven nebula/faction/combat tint
+    this.createAtmosphereTint();
     this.createDimmer(); // Readability dimmer above the whole sky (F2)
     this.createVignette();
     this.initMidground();

@@ -17,14 +17,14 @@ const SPARK_HOT_TINT = 0xfff2c0;
 const SPARK_COOL_TINT = 0xff4d1a;
 const SHOCKWAVE_LIFE_MS = 320;
 const SHOCKWAVE_Z_INDEX = 131;
+const MAX_SHOCKWAVES = 4;
 
 export class ShipDeathFxRenderer {
   private readonly gameLayer: Container;
   private readonly fx: ShipDeathFx;
   private layer: ParticleContainer | null = null;
   private readonly particles: Particle[] = [];
-  private shockwave: Graphics | null = null;
-  private shockwaveAge = 0;
+  private readonly shockwaves: { g: Graphics; age: number }[] = [];
 
   constructor(gameLayer: Container) {
     this.gameLayer = gameLayer;
@@ -72,46 +72,54 @@ export class ShipDeathFxRenderer {
   update(dt: number): void {
     this.fx.update(dt);
     this.sync();
-    this.updateShockwave(dt);
+    this.updateShockwaves(dt);
   }
 
   private spawnShockwave(x: number, y: number): void {
-    if (!this.shockwave) {
-      const g = new Graphics();
-      g.eventMode = "none";
-      g.blendMode = "add";
-      g.zIndex = SHOCKWAVE_Z_INDEX;
-      this.gameLayer.addChild(g);
-      this.shockwave = g;
+    const g = new Graphics();
+    g.eventMode = "none";
+    g.blendMode = "add";
+    g.zIndex = SHOCKWAVE_Z_INDEX;
+    g.x = x;
+    g.y = y;
+    this.gameLayer.addChild(g);
+    this.shockwaves.push({ g, age: 0 });
+    while (this.shockwaves.length > MAX_SHOCKWAVES) {
+      const oldest = this.shockwaves.shift();
+      if (!oldest) break;
+      this.releaseShockwave(oldest.g);
     }
-    this.shockwaveAge = 0;
-    this.shockwave.x = x;
-    this.shockwave.y = y;
   }
 
-  private updateShockwave(dt: number): void {
-    if (!this.shockwave) return;
-    this.shockwaveAge += dt;
-    const t = Math.min(1, this.shockwaveAge / SHOCKWAVE_LIFE_MS);
-    const g = this.shockwave;
-    if (t >= 1) {
-      if (g.parent) g.parent.removeChild(g);
-      if (!g.destroyed) g.destroy();
-      this.shockwave = null;
-      return;
+  private updateShockwaves(dt: number): void {
+    for (let i = this.shockwaves.length - 1; i >= 0; i -= 1) {
+      const wave = this.shockwaves[i];
+      wave.age += dt;
+      const t = Math.min(1, wave.age / SHOCKWAVE_LIFE_MS);
+      if (t >= 1) {
+        this.releaseShockwave(wave.g);
+        this.shockwaves.splice(i, 1);
+        continue;
+      }
+      const eased = 1 - Math.pow(1 - t, 2);
+      const g = wave.g;
+      g.clear();
+      g.circle(0, 0, 10 + eased * 130).stroke({
+        width: 6 * (1 - t),
+        color: 0xffb070,
+        alpha: 0.85 * (1 - t),
+      });
+      g.circle(0, 0, 6 + eased * 74).stroke({
+        width: 2,
+        color: 0xfff2c0,
+        alpha: 0.6 * (1 - t),
+      });
     }
-    const eased = 1 - Math.pow(1 - t, 2);
-    g.clear();
-    g.circle(0, 0, 10 + eased * 130).stroke({
-      width: 6 * (1 - t),
-      color: 0xffb070,
-      alpha: 0.85 * (1 - t),
-    });
-    g.circle(0, 0, 6 + eased * 74).stroke({
-      width: 2,
-      color: 0xfff2c0,
-      alpha: 0.6 * (1 - t),
-    });
+  }
+
+  private releaseShockwave(g: Graphics): void {
+    if (g.parent) g.parent.removeChild(g);
+    if (!g.destroyed) g.destroy();
   }
 
   private sync(): void {
@@ -141,12 +149,8 @@ export class ShipDeathFxRenderer {
 
   destroy(): void {
     this.fx.reset();
-    if (this.shockwave) {
-      if (this.shockwave.parent)
-        this.shockwave.parent.removeChild(this.shockwave);
-      if (!this.shockwave.destroyed) this.shockwave.destroy();
-      this.shockwave = null;
-    }
+    for (const wave of this.shockwaves) this.releaseShockwave(wave.g);
+    this.shockwaves.length = 0;
     if (this.layer) {
       if (this.layer.parent) this.layer.parent.removeChild(this.layer);
       if (!this.layer.destroyed) this.layer.destroy({ children: true });

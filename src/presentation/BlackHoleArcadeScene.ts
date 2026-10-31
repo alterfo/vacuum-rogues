@@ -13,7 +13,7 @@ import {
 import { ArcadeButtons } from "./blackHoleArcade/arcadeButtons";
 import { ArcadeFx } from "./blackHoleArcade/arcadeFx";
 import { isTouchLayoutActive } from "./ui/responsiveLayout";
-import { reducedMotion } from "./ui/reducedMotion";
+import { applyReducedMotion, reducedMotion } from "./ui/reducedMotion";
 import {
   ArcadeSound,
   type ArcadeMusicMode,
@@ -253,10 +253,7 @@ export class BlackHoleArcadeScene extends GameScene {
     this.art = getArcadeArt();
     this.sound = new ArcadeSound();
     this.buildScene(this.art);
-    if (this.reducedMotionEnabled) {
-      this.background?.setReducedMotion(true);
-      this.fx?.setReducedMotion(true);
-    }
+    applyReducedMotion(this.reducedMotionEnabled, [this.background, this.fx]);
     this.attachInput();
     this.setCursorHidden(true);
     this.layout();

@@ -28,7 +28,19 @@ describe("visibleNewsRange", () => {
     const heights = rowHeights(30);
     const range = visibleNewsRange(offsets(heights), heights, 200, 0);
     expect(range.first).toBe(0);
-    expect(range.last).toBe(5);
+    expect(range.last).toBe(6);
+  });
+
+  it("includes the partially visible middle row after one ArrowDown step", () => {
+    const heights = rowHeights(30);
+    const range = visibleNewsRange(offsets(heights), heights, 200, 38);
+    expect(range).toEqual({ first: 1, last: 7 });
+  });
+
+  it("includes the trailing partial row at a non-boundary drag offset", () => {
+    const heights = rowHeights(30);
+    const range = visibleNewsRange(offsets(heights), heights, 200, 939);
+    expect(range).toEqual({ first: 24, last: 30 });
   });
 
   it("returns an empty range for an empty list", () => {

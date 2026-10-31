@@ -19,11 +19,9 @@ export function visibleNewsRange(
     first += 1;
   }
 
-  const scrolledIntoFirst = Math.max(0, scrollOffset - offsets[first]);
-  let filled = Math.max(0, heights[first] - scrolledIntoFirst);
+  const windowBottom = scrollOffset + listHeight;
   let last = first + 1;
-  while (last < heights.length && filled + heights[last] <= listHeight + 0.5) {
-    filled += heights[last];
+  while (last < heights.length && offsets[last] < windowBottom - 0.5) {
     last += 1;
   }
 
