@@ -12,9 +12,9 @@ disabled states, light backgrounds) where the floor would distort hue. Migrated:
 StationScene, TradeScene, EquipmentShopScene, InfoCenterScene, QuestJournalUI, TextQuestScene,
 PlanetInfoPanel, StarMapScene, CombatHud, CombatPauseOverlay, InventoryScene,
 ResearchUpgradePanel, GovernmentScene, RaceSelectionScene, NpcContactPanel, DialogueScene,
-WinScene, MainMenuScene, SystemMiniMap.
+WinScene, MainMenuScene, SystemMiniMap, SaveLoadScene.
 Still hardcoding `fontSize:` (route through `scaledText` when you touch them):
-SaveLoadScene, OverlayPresenter.
+OverlayPresenter.
 (Flight modules that already read `scaledFont` — FlightHud, PlanetManager, DamageNumbers, UiButton,
 PlanetScene — don't need it; for the in-flight restyle-in-place rule see `flight/playtest-traps.md`.)
 

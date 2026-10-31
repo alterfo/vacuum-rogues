@@ -6,6 +6,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { RANK_LABELS } from "@/config/balance";
 import { logger } from "@/utils/logger";
+import { t } from "@/i18n/i18n";
 
 interface WinContext {
   gameEngine?: GameEngine;
@@ -102,6 +103,33 @@ export class WinScene extends GameScene {
       for (const line of stats) {
         this.addText(line, w / 2, sy, 16, 0x88ccff, false, true);
         sy += 32;
+      }
+
+      const completedQuests =
+        this.gameEngine?.questManager?.getCompletedQuestIds().length ?? 0;
+      const completedChains = player.completedQuestChains.length;
+      if (completedQuests > 0 || completedChains > 0) {
+        this.addText(
+          t("win.questsCompleted", { n: completedQuests }),
+          w / 2,
+          sy + 4,
+          14,
+          0xaaddaa,
+          false,
+          true,
+        );
+        sy += 28;
+        if (completedChains > 0) {
+          this.addText(
+            t("win.chainsCompleted", { n: completedChains }),
+            w / 2,
+            sy,
+            14,
+            0xaaddaa,
+            false,
+            true,
+          );
+        }
       }
     }
 

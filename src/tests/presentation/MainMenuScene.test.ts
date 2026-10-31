@@ -201,3 +201,28 @@ describe("MainMenuScene settings (Task 8 — relocated from the in-flight HUD)",
     ).toBeNull();
   });
 });
+
+describe("MainMenuScene credits entry (Task 4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders a «Титры» entry and opens a dismissible credits overlay", () => {
+    const renderer = makeMockRenderer();
+    const scene = new MainMenuScene(renderer);
+    scene.initialize({ gameEngine: makeEngine() });
+
+    const labels = vi
+      .mocked(Text)
+      .mock.results.map((r) => String((r.value as { text: string }).text));
+    expect(labels).toContain(t("menu.credits"));
+
+    expect(clickTextButton(t("menu.credits"))).toBe(true);
+    expect(
+      (renderer.stage as unknown as { children: unknown[] }).children.length,
+    ).toBeGreaterThan(0);
+
+    expect(clickTextButton(t("menu.creditsClose"))).toBe(true);
+    scene.destroy();
+  });
+});

@@ -83,4 +83,16 @@ describe("RaceSelectionScene (US-021)", () => {
       }),
     );
   });
+
+  it("starts a selection transition pulse when a faction is picked", () => {
+    const scene = new RaceSelectionScene(mockRenderer);
+    const mockEngine = {
+      transitionTo: vi.fn().mockResolvedValue(undefined),
+    } as unknown as import("@/systems/GameEngine").GameEngine;
+
+    scene.initialize({ gameEngine: mockEngine });
+    (scene as any).selectFaction(FactionType.SYNDICATE);
+
+    expect((scene as any).selectionPulse).toBe(1);
+  });
 });

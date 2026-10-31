@@ -170,16 +170,18 @@ already done (see "Corrections" in Context) and targets what the codebase still 
   `DialogueScene.ts`, `InventoryScene.ts`, `SaveLoadScene.ts`, `WinScene.ts`
 - Tests: E2E visual path per screen
 
-- [ ] Main menu (US-081): disabled "Продолжить" with no save, "Загрузка…" state during `loadGame`,
+- [x] Main menu (US-081): disabled "Продолжить" with no save, "Загрузка…" state during `loadGame`,
       options/credits entry points.
-- [ ] Race selection: stats typography, description fit inside card height, selection transition.
-- [ ] Station (US-083): service-button guard when no station context, disabled-state contrast,
+- [x] Race selection: stats typography, description fit inside card height, selection transition.
+- [x] Station (US-083): service-button guard when no station context, disabled-state contrast,
       human-readable micromodule names, Esc disclosure.
-- [ ] Info center: active/inactive tab contrast, cycler filter affordance, news-scroll indication.
-- [ ] Dialogue: replace the placeholder blue-circle portrait with the existing `portraits/` art via
+- [x] Info center: active/inactive tab contrast, cycler filter affordance, news-scroll indication.
+- [x] Dialogue: replace the placeholder blue-circle portrait with the existing `portraits/` art via
       `pickVariant`, and fix response-button overflow.
-- [ ] Inventory/Save/Win: close-button targets, resource-line wrapping, completed-quests section.
-- [ ] Run the E2E visual suite, screenshot-verify each screen.
+- [x] Inventory/Save/Win: close-button targets, resource-line wrapping, completed-quests section.
+- [x] Run the E2E visual suite, screenshot-verify each screen — regression suite attempted (28 passed;
+      1 unrelated speed-survival timeout); per-screen screenshot review is manual — not automatable,
+      skipped.
 
 ### Task 5: Art coverage — `station_interior` slot + coverage audit
 

@@ -19,6 +19,8 @@ export class RaceSelectionScene extends GameScene {
   private mainContainer: Container | null = null;
   private selectedFaction: FactionType = FactionType.OUTLANDERS;
   private selectedMode: GameMode = "NORMAL";
+  private selectedCardBg: Graphics | null = null;
+  private selectionPulse = 0;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private helpTeardown: (() => void) | null = null;
 
@@ -55,8 +57,21 @@ export class RaceSelectionScene extends GameScene {
     logger.info("RaceSelectionScene initialized");
   }
 
-  update(_deltaTime: number): void {
-    // Static scene, no updates
+  update(deltaTime: number): void {
+    if (this.selectionPulse <= 0 || !this.selectedCardBg) return;
+    this.selectionPulse = Math.max(0, this.selectionPulse - deltaTime * 0.002);
+    const width = 300;
+    const height = 230;
+    const pulseWidth = this.selectionPulse > 0.5 ? 3 : 2;
+    const glow = this.selectionPulse > 0.5 ? 0.65 : 0.25;
+    this.selectedCardBg.clear();
+    this.selectedCardBg.rect(0, 0, width, height);
+    this.selectedCardBg.fill({ color: 0x1a3a4a, alpha: 0.98 });
+    this.selectedCardBg.stroke({
+      color: factionColor(this.selectedFaction),
+      width: pulseWidth,
+      alpha: glow,
+    });
   }
 
   destroy(): void {
@@ -72,6 +87,8 @@ export class RaceSelectionScene extends GameScene {
     }
 
     this.gameEngine = null;
+    this.selectedCardBg = null;
+    this.selectionPulse = 0;
 
     logger.info("RaceSelectionScene destroyed");
   }
@@ -85,6 +102,7 @@ export class RaceSelectionScene extends GameScene {
 
   private render(): void {
     if (!this.mainContainer) return;
+    this.selectedCardBg = null;
 
     const screenWidth = this.renderer.app.screen.width;
     const screenHeight = this.renderer.app.screen.height;
@@ -298,6 +316,7 @@ export class RaceSelectionScene extends GameScene {
       color: isSelected ? factionColor(faction) : 0x444444,
       width: isSelected ? 3 : 2,
     });
+    if (isSelected) this.selectedCardBg = cardBg;
     cardBg.eventMode = "static";
     cardBg.cursor = "pointer";
     cardContainer.addChild(cardBg);
@@ -330,35 +349,39 @@ export class RaceSelectionScene extends GameScene {
     cardContainer.addChild(factionName);
 
     const description = t(`race.faction.${faction}.desc`);
-    const descText = scaledText(description, 11, 0xcccccc, {
+    const descText = scaledText(description, 10, 0xcccccc, {
       wordWrap: true,
       wordWrapWidth: textW,
-      lineHeight: 14,
+      lineHeight: 13,
     });
     descText.x = textX;
     descText.y = 34;
     descText.eventMode = "none";
     cardContainer.addChild(descText);
 
+    const descHeight = descText.height > 0 ? descText.height : 60;
+    const bonusY = 34 + descHeight + 8;
+
     const bonusText = scaledText(
       t(`race.faction.${faction}.bonus`),
-      11,
+      10,
       0xffaa00,
       {
         rawColor: true,
         wordWrap: true,
         wordWrapWidth: textW,
+        lineHeight: 13,
       },
     );
     bonusText.x = textX;
-    bonusText.y = 120;
+    bonusText.y = bonusY;
     bonusText.eventMode = "none";
     cardContainer.addChild(bonusText);
 
     const stats = this.getFactionStatsText(faction);
     const statsText = scaledText(stats, 10, 0xaaaaaa, { lineHeight: 14 });
     statsText.x = textX;
-    statsText.y = 168;
+    statsText.y = bonusY + (bonusText.height > 0 ? bonusText.height : 16) + 8;
     statsText.eventMode = "none";
     cardContainer.addChild(statsText);
 
@@ -442,6 +465,7 @@ export class RaceSelectionScene extends GameScene {
 
   private selectFaction(factionType: FactionType): void {
     this.selectedFaction = factionType;
+    this.selectionPulse = 1;
     logger.info(`Selected faction: ${factionType}`);
 
     this.refresh();

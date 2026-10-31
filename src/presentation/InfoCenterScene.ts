@@ -691,7 +691,7 @@ export class InfoCenterScene extends GameScene {
       const hint = scaledText(
         `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
         11,
-        0x334455,
+        0x88aacc,
         { rawColor: true, fontFamily: "monospace" },
       );
       hint.anchor.set(1, 1);
@@ -994,7 +994,7 @@ export class InfoCenterScene extends GameScene {
       const hint = scaledText(
         `показаны первые ${VISIBLE} из ${this.objectsResults.length}`,
         11,
-        0x334455,
+        0x88aacc,
         { rawColor: true, fontFamily: "monospace" },
       );
       hint.anchor.set(1, 1);
@@ -1453,7 +1453,7 @@ export class InfoCenterScene extends GameScene {
       const hint = scaledText(
         `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.gearResults.length)} / ${this.gearResults.length}`,
         11,
-        0x334455,
+        0x88aacc,
         { rawColor: true, fontFamily: "monospace" },
       );
       hint.anchor.set(1, 1);

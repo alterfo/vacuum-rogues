@@ -458,17 +458,27 @@ export class InventoryScene extends GameScene {
     amount: number,
   ): number {
     if (!this.mainContainer) return y;
-    const rowH = 20;
+    const labelWidth = 220;
     const label = scaledText(
       `${RESOURCE_LABEL[type] ?? type} ×${amount}`,
       11,
       0xb4c4d4,
-      { rawColor: true },
+      {
+        rawColor: true,
+        wordWrap: true,
+        wordWrapWidth: labelWidth,
+        lineHeight: lineStepFor(scaledFont(11)),
+      },
     );
     label.eventMode = "none";
     label.x = x;
     label.y = y;
     this.mainContainer.addChild(label);
+
+    const rowH = Math.max(
+      20,
+      (label.height > 0 ? label.height : lineStepFor(scaledFont(11))) + 8,
+    );
 
     const btnRight = x + 260;
     const confirming =
@@ -513,7 +523,7 @@ export class InventoryScene extends GameScene {
     closeBtn.cursor = "pointer";
 
     const closeBg = new Graphics();
-    closeBg.rect(0, 0, 25, 25);
+    closeBg.rect(0, 0, 32, 32);
     closeBg.fill({ color: 0xff0000, alpha: 0.8 });
     closeBtn.addChild(closeBg);
 
@@ -521,8 +531,9 @@ export class InventoryScene extends GameScene {
       rawColor: true,
       fontWeight: "bold",
     });
-    closeText.x = 7;
-    closeText.y = 2;
+    closeText.anchor.set(0.5);
+    closeText.x = 16;
+    closeText.y = 16;
     closeBtn.addChild(closeText);
 
     closeBtn.on("pointerdown", () => {
@@ -531,13 +542,13 @@ export class InventoryScene extends GameScene {
 
     closeBtn.on("pointerover", () => {
       closeBg.clear();
-      closeBg.rect(0, 0, 25, 25);
+      closeBg.rect(0, 0, 32, 32);
       closeBg.fill({ color: 0xff4444, alpha: 1.0 });
     });
 
     closeBtn.on("pointerout", () => {
       closeBg.clear();
-      closeBg.rect(0, 0, 25, 25);
+      closeBg.rect(0, 0, 32, 32);
       closeBg.fill({ color: 0xff0000, alpha: 0.8 });
     });
 

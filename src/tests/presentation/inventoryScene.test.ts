@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { InventoryScene } from "@/presentation/InventoryScene";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
-import { Text } from "pixi.js";
+import { Graphics, Text } from "pixi.js";
 import { SceneType } from "@/types";
 
 vi.mock("pixi.js", () => ({
@@ -241,6 +241,33 @@ describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
     const [sceneArg, ctxArg] = calls[0];
     expect(sceneArg).toBe(SceneType.SPACE_FLIGHT);
     expect(ctxArg?.preserveShipPos).toBeUndefined();
+
+    scene.destroy();
+  });
+
+  it("uses a 32px close target instead of the old 25px square", () => {
+    const loadout = new ShipLoadout("hull_corvette");
+    const scene = new InventoryScene(mockRenderer);
+    scene.initialize({ gameEngine: makeEngine(loadout) });
+
+    const graphicsResults = (
+      Graphics as unknown as {
+        mock: {
+          results: Array<{
+            value: { rect: { mock: { calls: unknown[][] } } };
+          }>;
+        };
+      }
+    ).mock.results;
+    const rectCalls = graphicsResults.flatMap((result) =>
+      result.value.rect.mock.calls.map((call) => call.slice(0, 4)),
+    );
+    expect(
+      rectCalls.some(
+        (args) =>
+          args[0] === 0 && args[1] === 0 && args[2] === 32 && args[3] === 32,
+      ),
+    ).toBe(true);
 
     scene.destroy();
   });
