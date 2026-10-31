@@ -117,7 +117,7 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
         npcCount: nm.npcCount,
       };
     });
-    // eslint-disable-next-line no-console
+     
     console.log('SCENE_DIAG', JSON.stringify(diag));
 
     const focus = async (wx: number, wy: number, zoom: number): Promise<void> => {
@@ -246,7 +246,7 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
         (p) => ({ id: p.id ?? '', name: p.name ?? '' }),
       );
     });
-    // eslint-disable-next-line no-console
+     
     console.log('PLANET_LIST', JSON.stringify(planetList));
 
     for (let i = 0; i < planetList.length; i++) {
@@ -426,9 +426,9 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-21-back-to-menu');
     });
 
-    // eslint-disable-next-line no-console
+     
     console.log('STEP_RESULTS', JSON.stringify(results, null, 2));
-    // eslint-disable-next-line no-console
+     
     console.log('JS_ERRORS', JSON.stringify(jsErrors.slice(0, 50), null, 2));
 
     expect(results.find((r) => r.step === '03-flight-initial')?.ok).toBe(true);
