@@ -441,9 +441,12 @@ export class RaceSelectionScene extends GameScene {
       mask.rect(x, y, w, h);
       mask.fill({ color: 0xffffff });
       mask.eventMode = "none";
-      sprite.mask = mask;
-      container.addChild(mask);
-      container.addChild(sprite);
+
+      const surface = new Container();
+      surface.addChild(mask);
+      surface.addChild(sprite);
+      surface.mask = mask;
+      container.addChild(surface);
     }
 
     const frame = new Graphics();

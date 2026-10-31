@@ -194,4 +194,17 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     scene.scrollNews(1);
     expect(scene.newsList!.offset).toBe(internals.newsOffsets[1]);
   });
+
+  it("scrolls a tall final row to the true bottom", async () => {
+    const scene = await makeScene(2);
+    const long = "Длинная новость ".repeat(400);
+    scene.newsItems = [
+      { day: 0, text: "Короткая", color: 0xffffff, bookmarkKey: 0 },
+      { day: 1, text: long, color: 0xffffff, bookmarkKey: 1 },
+    ];
+    scene.render();
+    expect(scene.newsList!.maxOffset).toBeGreaterThan(0);
+    scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBe(scene.newsList!.maxOffset);
+  });
 });
