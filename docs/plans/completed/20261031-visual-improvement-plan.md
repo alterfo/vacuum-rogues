@@ -41,15 +41,16 @@ already done (see "Corrections" in Context) and targets what the codebase still 
   RaceSelectionScene, NpcContactPanel, DialogueScene, WinScene, MainMenuScene, SystemMiniMap,
   CombatHud (+ CombatPauseOverlay). Migrated list and exceptions (`rawColor: true`) are in
   `src/presentation/AGENTS.md`.
-- **Known shared-component gap**: `ScrollableList`'s uniform `itemHeight` cannot host wrapped items
-  (e.g. InfoCenter news) at the "L" font setting — documented in `src/presentation/AGENTS.md` as a
-  known, not-yet-fixed gap.
-- **Art state (verified)**: `src/assets` has `planets` 36, `planet_maps` 48, `surfaces` 24,
-  `star_maps` 31, `stars` 30, `ships` 24, `player_ships` 12, `portraits` 15, `icons` 6, `station` 15,
-  `panoramas` 8, `ui` 8 (dead — zero code references). `nebula/` was deliberately removed in favour
-  of procedural (`refactor(visuals): drop nebula texture asset category …`); `station_interior/`
-  does not exist — `stationBackdrop.ts`'s `resolveStationBackdropKey` returns `null` by design, so
-  stations render the procedural gradient fallback.
+- **Known shared-component gap**: `ScrollableList`'s uniform `itemHeight` could not host wrapped items
+  (e.g. InfoCenter news) at the "L" font setting. Closed in Task 3 via the optional `getItemHeight`
+  callback (wired in `InfoCenterScene.renderNews`).
+- **Art state (verified)**: `src/assets` has `planets` 36, `planet_maps` 47 (the planned
+  `habitat_05` map is missing), `surfaces` 24, `star_maps` 31, `stars` 30, `ships` 24,
+  `player_ships` 12, `portraits` 15, `icons` 6, `station` 15, `panoramas` 8, `ui` 8 (4 cursor files
+  consumed via `texUrl()` in `cursor.ts`, 4 chrome files dead). `nebula/` was deliberately removed
+  in favour of procedural (`refactor(visuals): drop nebula texture asset category …`);
+  `station_interior/` does not exist — `stationBackdrop.ts`'s `resolveStationBackdropKey` returns
+  `null` by design, so stations render the procedural gradient fallback.
 - **Art integration is already wired** through `textures.ts` (`pickVariant`/`pickVariantKey`/
   `loadTextureAsync`, `LAZY_PREFIXES`, background preload) in: `PlanetSprite` (`planet_maps`,
   `planets`), `PlanetScene` (`surfaces`, panoramas), `StarRenderer` (`star_maps`), `PlayerShipRenderer`
