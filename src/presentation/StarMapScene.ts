@@ -4,7 +4,8 @@ import { Graphics, Container, Sprite, BlurFilter } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { tex, loadTextureAsync } from "./textures";
 import { scaledText } from "./ui/scaledText";
-import { MONO_CHAR_WIDTH_RATIO, lineStepFor } from "./ui/questCardLayout";
+import { lineStepFor } from "./ui/questCardLayout";
+import { starMapLabelBounds } from "./ui/starMapLabelBounds";
 import { scaledFont } from "@/utils/fontScale";
 import { overmindMoodArtKey } from "./overmindMoodArt";
 import type { Galaxy } from "@/domain/Galaxy";
@@ -617,9 +618,9 @@ export class StarMapScene extends GameScene {
         continue;
       }
 
-      const labelW =
-        system.name.length * scaledFont(10) * MONO_CHAR_WIDTH_RATIO;
-      const labelH = lineStepFor(scaledFont(10));
+      const bounds = starMapLabelBounds(system.name);
+      const labelW = bounds.width;
+      const labelH = bounds.height;
       const offset = 12;
 
       const candidatePositions = [

@@ -38,6 +38,7 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { ScrollableList } from "./ui/ScrollableList";
+import { visibleNewsRange } from "./ui/newsListRange";
 import {
   MONO_CHAR_WIDTH_RATIO,
   estimateWrappedLines,
@@ -724,25 +725,14 @@ export class InfoCenterScene extends GameScene {
     container.addChild(this.newsList.container);
 
     if (this.newsItems.length > visibleRows) {
-      let firstRow = 0;
-      while (
-        firstRow + 1 < this.newsOffsets.length &&
-        this.newsOffsets[firstRow + 1] <= this.newsScroll + 0.5
-      ) {
-        firstRow += 1;
-      }
-      let lastRow = firstRow;
-      let filled = 0;
-      while (
-        lastRow < rowHeights.length &&
-        filled + rowHeights[lastRow] <= listH
-      ) {
-        filled += rowHeights[lastRow];
-        lastRow += 1;
-      }
-      const lastVisible = Math.max(firstRow + 1, lastRow);
+      const range = visibleNewsRange(
+        this.newsOffsets,
+        rowHeights,
+        listH,
+        this.newsScroll,
+      );
       const hint = scaledText(
-        `↑↓  ${firstRow + 1}–${Math.min(lastVisible, this.newsItems.length)} / ${this.newsItems.length}`,
+        `↑↓  ${range.first + 1}–${Math.min(range.last, this.newsItems.length)} / ${this.newsItems.length}`,
         11,
         0x88aacc,
         { rawColor: true, fontFamily: "monospace" },

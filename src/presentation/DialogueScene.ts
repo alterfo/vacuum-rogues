@@ -6,6 +6,7 @@ import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { bindModalKeys } from "./ui/bindModalKeys";
 import { scaledText } from "./ui/scaledText";
+import { firstResponseButtonY } from "./ui/dialogueLayout";
 import { pickVariant } from "./textures";
 
 export interface DialogueNode {
@@ -318,11 +319,11 @@ export class DialogueScene extends GameScene {
     const panelX = (screenWidth - panelWidth) / 2;
     const panelY = (screenHeight - panelHeight) / 2;
     const measured = this.dialogueText?.height ?? 0;
-    const textBottom =
-      this.dialogueText && Number.isFinite(measured) && measured > 0
-        ? this.dialogueText.y + measured + 16
-        : panelY + 220;
-    let buttonY = Math.max(panelY + 220, textBottom);
+    let buttonY = firstResponseButtonY(
+      panelY,
+      this.dialogueText?.y ?? panelY + 100,
+      measured,
+    );
 
     for (let i = 0; i < node.responses.length; i++) {
       const response = node.responses[i];

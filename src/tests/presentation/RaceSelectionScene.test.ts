@@ -95,4 +95,30 @@ describe("RaceSelectionScene (US-021)", () => {
 
     expect((scene as any).selectionPulse).toBe(1);
   });
+
+  it("settles the selection pulse on the steady selected stroke", () => {
+    const scene = new RaceSelectionScene(mockRenderer);
+    const mockEngine = {
+      transitionTo: vi.fn().mockResolvedValue(undefined),
+    } as unknown as import("@/systems/GameEngine").GameEngine;
+
+    scene.initialize({ gameEngine: mockEngine });
+    (scene as any).selectFaction(FactionType.SYNDICATE);
+
+    const cardBg = (scene as any).selectedCardBg as {
+      stroke: ReturnType<typeof vi.fn>;
+    };
+    for (let i = 0; i < 1000 && (scene as any).selectionPulse > 0; i += 1) {
+      (scene as any).update(16);
+    }
+
+    expect((scene as any).selectionPulse).toBe(0);
+    const calls = cardBg.stroke.mock.calls;
+    const last = calls[calls.length - 1][0] as {
+      width: number;
+      alpha: number;
+    };
+    expect(last.width).toBe(3);
+    expect(last.alpha).toBe(1);
+  });
 });

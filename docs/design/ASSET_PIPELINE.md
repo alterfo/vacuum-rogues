@@ -81,7 +81,8 @@ Canonical inventory of the raster categories currently shipped under `src/assets
 | `icons` | 6 | `gearIcon` family fallback |
 | `station` | 15 | `stationArt` flight marker |
 | `panoramas` | 8 | `PlanetScene` panorama fallback |
-| `ui` | 8 | dead art (zero code references) |
+| `ui` (cursor) | 4 | `cursor.ts` via `texUrl()` |
+| `ui` (chrome) | 4 | dead art (zero code references) |
 
 Audit note: the plan draft expected 48 `planet_maps`, but the committed glob has 47 —
 `habitat_05` is the missing Solar System Scope original while `terrestrial/gas/ice/volcanic/
