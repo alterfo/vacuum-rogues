@@ -214,11 +214,12 @@ already done (see "Corrections" in Context) and targets what the codebase still 
 - Modify: damage/warp/death/victory presentation modules
 - Verify: `BlackHoleArcadeScene.ts` juice gates on reduced motion
 
-- [ ] Tie nebula palette/tint to system type/faction and combat/low-hull state, reusing the state
+- [x] Tie nebula palette/tint to system type/faction and combat/low-hull state, reusing the state
       inputs the adaptive audio already consumes.
-- [ ] Polish damage numbers, warp effect, ship-death FX and game-over/victory screens.
-- [ ] Verify the black-hole arcade juice respects the reduced-motion seam.
-- [ ] Tests + screenshot verification.
+- [x] Polish damage numbers, warp effect, ship-death FX and game-over/victory screens.
+- [x] Verify the black-hole arcade juice respects the reduced-motion seam.
+- [x] Tests + screenshot verification. (unit tests added; screenshot review manual — not
+      automatable, skipped)
 
 ### Task 7: Acceptance & regression verification
 

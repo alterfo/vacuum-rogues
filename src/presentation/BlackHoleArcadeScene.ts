@@ -13,6 +13,7 @@ import {
 import { ArcadeButtons } from "./blackHoleArcade/arcadeButtons";
 import { ArcadeFx } from "./blackHoleArcade/arcadeFx";
 import { isTouchLayoutActive } from "./ui/responsiveLayout";
+import { reducedMotion } from "./ui/reducedMotion";
 import {
   ArcadeSound,
   type ArcadeMusicMode,
@@ -36,6 +37,7 @@ import { SceneType } from "@/types";
 import { stripArcadeQuery } from "@/systems/arcadeLaunch";
 import {
   ARCADE_FX_QUALITY,
+  ARCADE_QUALITY_MAX_LEVEL,
   AdaptiveQuality,
   RelativeDrag,
 } from "@/systems/blackHoleArcade/arcadeTouch";
@@ -141,6 +143,7 @@ export class BlackHoleArcadeScene extends GameScene {
   private drag = new RelativeDrag();
   private quality = new AdaptiveQuality(0);
   private qualityApplied = -1;
+  private reducedMotionEnabled = false;
   private uiPointers = new Set<number>();
   private savedCanvasStyle: { touchAction: string; userSelect: string } | null =
     null;
@@ -238,11 +241,22 @@ export class BlackHoleArcadeScene extends GameScene {
     this.practice = !this.gameEngine?.player;
     this.drag = new RelativeDrag();
     this.uiPointers.clear();
-    this.quality = new AdaptiveQuality(this.touchUi ? 1 : 0);
+    this.reducedMotionEnabled = reducedMotion();
+    this.quality = new AdaptiveQuality(
+      this.reducedMotionEnabled
+        ? ARCADE_QUALITY_MAX_LEVEL
+        : this.touchUi
+          ? 1
+          : 0,
+    );
     this.qualityApplied = -1;
     this.art = getArcadeArt();
     this.sound = new ArcadeSound();
     this.buildScene(this.art);
+    if (this.reducedMotionEnabled) {
+      this.background?.setReducedMotion(true);
+      this.fx?.setReducedMotion(true);
+    }
     this.attachInput();
     this.setCursorHidden(true);
     this.layout();
@@ -1219,6 +1233,7 @@ export class BlackHoleArcadeScene extends GameScene {
     this.background.update(s.scrollY, this.clockMs);
 
     const fxq = ARCADE_FX_QUALITY[Math.max(0, this.qualityApplied)];
+    const reducedMotion = this.reducedMotionEnabled;
     this.groundPool.begin();
     this.shadowPool.begin();
     this.enemyPool.begin();
@@ -1265,7 +1280,9 @@ export class BlackHoleArcadeScene extends GameScene {
         const aura = this.auraPool.use(enemy.id, art.glow);
         aura.x = enemy.x;
         aura.y = enemy.y;
-        const pulse = 1 + Math.sin(this.clockMs / 260 + enemy.id) * 0.12;
+        const pulse = reducedMotion
+          ? 1
+          : 1 + Math.sin(this.clockMs / 260 + enemy.id) * 0.12;
         this.fit(
           aura,
           art.glow,
@@ -1296,7 +1313,9 @@ export class BlackHoleArcadeScene extends GameScene {
       const texture = this.bulletTexture(b, art);
       const sprite = this.enemyBulletPool.use(b.id, texture);
       this.placeBullet(sprite, b, texture);
-      if (b.kind === "enemyMine") sprite.rotation = b.ageMs / 700;
+      if (b.kind === "enemyMine") {
+        sprite.rotation = reducedMotion ? 0 : b.ageMs / 700;
+      }
     }
     this.enemyBulletPool.end();
 
@@ -1306,7 +1325,7 @@ export class BlackHoleArcadeScene extends GameScene {
       const sprite = this.pickupPool.use(pickup.id, texture);
       sprite.x = pickup.x;
       sprite.y = pickup.y;
-      const pulse = 1 + Math.sin(pickup.ageMs / 180) * 0.08;
+      const pulse = reducedMotion ? 1 : 1 + Math.sin(pickup.ageMs / 180) * 0.08;
       this.fit(sprite, texture, 58 * pulse);
     }
     this.pickupPool.end();
@@ -1380,7 +1399,9 @@ export class BlackHoleArcadeScene extends GameScene {
     v.shadow.y = p.y + 24;
     this.fit(v.shadow, art.glow, 120, 90);
 
-    const flicker = 0.85 + Math.sin(this.clockMs / 38) * 0.15;
+    const flicker = this.reducedMotionEnabled
+      ? 1
+      : 0.85 + Math.sin(this.clockMs / 38) * 0.15;
     v.flames.forEach((flame, i) => {
       flame.x = p.x + (i === 0 ? -15 : 15);
       flame.y = p.y + 56;
@@ -1394,7 +1415,7 @@ export class BlackHoleArcadeScene extends GameScene {
     this.fit(
       v.shield,
       art.shieldBubble,
-      150 + Math.sin(this.clockMs / 220) * 4,
+      150 + (this.reducedMotionEnabled ? 0 : Math.sin(this.clockMs / 220) * 4),
     );
     v.shield.alpha = 0.35 + ratio * 0.55;
 
@@ -1403,7 +1424,12 @@ export class BlackHoleArcadeScene extends GameScene {
       const side = i % 2 === 0 ? -1 : 1;
       drone.visible = true;
       drone.x = p.x + side * 62;
-      drone.y = p.y + 18 + Math.sin(this.clockMs / 300 + i * 2) * 5;
+      drone.y =
+        p.y +
+        18 +
+        (this.reducedMotionEnabled
+          ? 0
+          : Math.sin(this.clockMs / 300 + i * 2) * 5);
       this.fit(drone, art.drone, 44);
     }
   }

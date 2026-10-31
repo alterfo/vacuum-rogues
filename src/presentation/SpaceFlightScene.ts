@@ -26,6 +26,7 @@ import {
   rollBlackHoleMishap,
 } from "@/systems/galaxy/blackHoleMishap";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
+import type { NebulaAtmosphereState } from "./nebulaPalette";
 import { StarRenderer } from "./flight/StarRenderer";
 import {
   BlackHoleRenderer,
@@ -519,6 +520,7 @@ export class SpaceFlightScene extends GameScene {
               speed: this.shipPhysics.currentSpeed,
             }
           : null,
+      () => this.getAtmosphereState(),
     );
     this.background.initialize();
 
@@ -1035,6 +1037,26 @@ export class SpaceFlightScene extends GameScene {
       this.gameEngine?.galaxy?.systems.find((s) => s.id === systemId)
         ?.planets ?? []
     );
+  }
+
+  private getAtmosphereState(): NebulaAtmosphereState {
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    const system = this.gameEngine?.galaxy?.systems.find(
+      (s) => s.id === systemId,
+    );
+    const ship = this.gameEngine?.player?.ship;
+    const inCombat = this.combatModule?.isActive ?? false;
+    const lowHull = ship
+      ? ship.maxHull > 0 && ship.hullHP < ship.maxHull * 0.3
+      : false;
+    const coreId = this.gameEngine?.galaxy?.overmindCoreSystemId;
+    return {
+      starType: system?.starType,
+      ownerFaction: system?.ownerFaction,
+      inCombat,
+      lowHull,
+      boss: inCombat && !!coreId && systemId === coreId,
+    };
   }
 
   private entrySpawnDeps(): EntrySpawnDeps {

@@ -1,4 +1,4 @@
-import { Container, Particle, ParticleContainer } from "pixi.js";
+import { Container, Graphics, Particle, ParticleContainer } from "pixi.js";
 import { softGlowTexture } from "../gradientTexture";
 import { lerpHex } from "./cometDustTail";
 import {
@@ -15,12 +15,16 @@ const SPARK_ALPHA = 0.95;
 const EXPLOSION_Z_INDEX = 130;
 const SPARK_HOT_TINT = 0xfff2c0;
 const SPARK_COOL_TINT = 0xff4d1a;
+const SHOCKWAVE_LIFE_MS = 320;
+const SHOCKWAVE_Z_INDEX = 131;
 
 export class ShipDeathFxRenderer {
   private readonly gameLayer: Container;
   private readonly fx: ShipDeathFx;
   private layer: ParticleContainer | null = null;
   private readonly particles: Particle[] = [];
+  private shockwave: Graphics | null = null;
+  private shockwaveAge = 0;
 
   constructor(gameLayer: Container) {
     this.gameLayer = gameLayer;
@@ -62,11 +66,52 @@ export class ShipDeathFxRenderer {
 
   spawn(x: number, y: number): void {
     this.fx.spawn(x, y);
+    this.spawnShockwave(x, y);
   }
 
   update(dt: number): void {
     this.fx.update(dt);
     this.sync();
+    this.updateShockwave(dt);
+  }
+
+  private spawnShockwave(x: number, y: number): void {
+    if (!this.shockwave) {
+      const g = new Graphics();
+      g.eventMode = "none";
+      g.blendMode = "add";
+      g.zIndex = SHOCKWAVE_Z_INDEX;
+      this.gameLayer.addChild(g);
+      this.shockwave = g;
+    }
+    this.shockwaveAge = 0;
+    this.shockwave.x = x;
+    this.shockwave.y = y;
+  }
+
+  private updateShockwave(dt: number): void {
+    if (!this.shockwave) return;
+    this.shockwaveAge += dt;
+    const t = Math.min(1, this.shockwaveAge / SHOCKWAVE_LIFE_MS);
+    const g = this.shockwave;
+    if (t >= 1) {
+      if (g.parent) g.parent.removeChild(g);
+      if (!g.destroyed) g.destroy();
+      this.shockwave = null;
+      return;
+    }
+    const eased = 1 - Math.pow(1 - t, 2);
+    g.clear();
+    g.circle(0, 0, 10 + eased * 130).stroke({
+      width: 6 * (1 - t),
+      color: 0xffb070,
+      alpha: 0.85 * (1 - t),
+    });
+    g.circle(0, 0, 6 + eased * 74).stroke({
+      width: 2,
+      color: 0xfff2c0,
+      alpha: 0.6 * (1 - t),
+    });
   }
 
   private sync(): void {
@@ -96,6 +141,12 @@ export class ShipDeathFxRenderer {
 
   destroy(): void {
     this.fx.reset();
+    if (this.shockwave) {
+      if (this.shockwave.parent)
+        this.shockwave.parent.removeChild(this.shockwave);
+      if (!this.shockwave.destroyed) this.shockwave.destroy();
+      this.shockwave = null;
+    }
     if (this.layer) {
       if (this.layer.parent) this.layer.parent.removeChild(this.layer);
       if (!this.layer.destroyed) this.layer.destroy({ children: true });

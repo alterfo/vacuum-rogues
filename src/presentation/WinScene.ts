@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { mountEndScreenBackdrop } from "./ui/endScreenBackdrop";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -47,11 +48,7 @@ export class WinScene extends GameScene {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    const bg = new Graphics();
-    bg.rect(0, 0, w, h);
-    bg.fill({ color: 0x000510, alpha: 1 });
-    bg.eventMode = "static";
-    this.container.addChild(bg);
+    mountEndScreenBackdrop(this.container, w, h, 0xffdd44);
 
     this.addText("ПОБЕДА!", w / 2, h * 0.18, 48, 0xffdd44, true, true);
     this.addText(
