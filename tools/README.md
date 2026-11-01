@@ -2,7 +2,7 @@
 
 Helpers that reduce the context an agent must load and eliminate lockstep-edit
 bugs (adding a field/scene means touching several files in sync — miss one and
-saves or "Continue" break). All of this lives under `tools/` and `.claude/`; none
+saves or "Continue" break). All of this lives under `tools/` and `docs/`; none
 of it touches game logic. See `docs/plans/20260614-ai-dev-tooling.md` for the
 rationale.
 
@@ -10,9 +10,9 @@ rationale.
 
 `tools/mcp/vacuum-mcp.ts` is a Model Context Protocol server that lets an agent
 orient at the **start** of a task with one tool call instead of reading five
-files. It is registered for Claude Code in the project-root `.mcp.json`
-(`mcpServers.vacuum`); `.claude/settings.json` sets `enableAllProjectMcpServers`
-so it is auto-approved (no interactive prompt) inside ralphex subshells.
+files. It is registered in the project-root `opencode.json` (`mcp.vacuum`, a
+local MCP server), together with `gitnexus` (`mcp.gitnexus`); opencode connects
+to both automatically, no approval prompt.
 The tool logic is split into `tools/mcp/tools.ts` (SDK-free, so smoke tests run
 without the protocol); `architecture.json` holds the static layer map. Tools:
 
@@ -62,7 +62,7 @@ the tool appends it. Like the domain-field generator it is regex-based and
 idempotent.
 
 **When to use:** instead of the manual "New Scene" checklist in
-`.claude/docs/adding-features.md`.
+`docs/adding-features.md`.
 
 ```bash
 npx tsx tools/scaffold/new-scene.ts --name ResearchUpgrade --context-dependent

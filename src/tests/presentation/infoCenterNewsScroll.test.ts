@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { scaledFont, setFontScale } from "@/utils/fontScale";
+import {
+  estimateWrappedLines,
+  lineStepFor,
+} from "@/presentation/ui/questCardLayout";
 
 vi.mock("pixi.js", () => {
   const makeContainer = () => {
@@ -104,6 +109,7 @@ async function makeScene(newsCount: number): Promise<SceneInternals> {
 }
 
 afterEach(() => {
+  setFontScale("M");
   for (const scene of createdScenes.splice(0)) scene.destroy();
 });
 
@@ -146,5 +152,134 @@ describe("InfoCenterScene news scroll (ScrollableList migration)", () => {
     expect(scene.newsList!.maxOffset).toBe(0);
     scene.scrollNews(3);
     expect(scene.newsList!.offset).toBe(0);
+  });
+
+  it("sizes wrapped rows with the shared estimator at the L font scale", async () => {
+    setFontScale("L");
+    const scene = await makeScene(1);
+    const long =
+      "Очень длинная новость о торговых путях и пиратских рейдах ".repeat(6);
+    scene.newsItems = [
+      { day: 1, text: long, color: 0xffffff, bookmarkKey: 99 },
+    ];
+    const pw = 800;
+    const textWidth = pw - 16 * 2 - 50 - 28;
+    const expected = Math.max(
+      38,
+      estimateWrappedLines(long, textWidth, scaledFont(13)) *
+        lineStepFor(scaledFont(13)) +
+        12,
+    );
+    const internals = scene as unknown as {
+      newsRowHeight: (item: NewsItemLike, width: number) => number;
+    };
+    expect(internals.newsRowHeight(scene.newsItems[0], pw)).toBe(expected);
+  });
+
+  it("advances to the next row boundary when rows have different heights", async () => {
+    setFontScale("L");
+    const scene = await makeScene(30);
+    const long = "Длинная новость ".repeat(20);
+    scene.newsItems = [
+      { day: 0, text: long, color: 0xffffff, bookmarkKey: 0 },
+      ...makeNews(29).map((item, i) => ({
+        ...item,
+        day: i + 1,
+        bookmarkKey: i + 1,
+      })),
+    ];
+    scene.render();
+    const internals = scene as unknown as { newsOffsets: number[] };
+    expect(internals.newsOffsets.length).toBe(30);
+    scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBe(internals.newsOffsets[1]);
+  });
+
+  it("scrolls a tall final row to the true bottom", async () => {
+    const scene = await makeScene(2);
+    const long = "Длинная новость ".repeat(400);
+    scene.newsItems = [
+      { day: 0, text: "Короткая", color: 0xffffff, bookmarkKey: 0 },
+      { day: 1, text: long, color: 0xffffff, bookmarkKey: 1 },
+    ];
+    scene.render();
+    expect(scene.newsList!.maxOffset).toBeGreaterThan(0);
+
+    scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBe(38);
+
+    for (let i = 0; i < 100; i += 1) scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBe(scene.newsList!.maxOffset);
+  });
+
+  it("keeps a single tall row at the top on ArrowUp", async () => {
+    const scene = await makeScene(1);
+    const long = "Длинная новость ".repeat(400);
+    scene.newsItems = [{ day: 0, text: long, color: 0xffffff, bookmarkKey: 0 }];
+    scene.render();
+    expect(scene.newsList!.maxOffset).toBeGreaterThan(0);
+
+    scene.scrollNews(-1);
+    expect(scene.newsList!.offset).toBe(0);
+
+    scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBeGreaterThan(0);
+    expect(scene.newsList!.offset).toBeLessThan(scene.newsList!.maxOffset);
+
+    for (let i = 0; i < 100; i += 1) scene.scrollNews(1);
+    expect(scene.newsList!.offset).toBe(scene.newsList!.maxOffset);
+  });
+
+  it("pages by viewport inside a row taller than the list", async () => {
+    const scene = await makeScene(1);
+    const long = "Длинная новость ".repeat(400);
+    scene.newsItems = [{ day: 0, text: long, color: 0xffffff, bookmarkKey: 0 }];
+    scene.render();
+
+    scene.scrollNews(1);
+    const paged = scene.newsList!.offset;
+    expect(paged).toBeGreaterThan(0);
+    expect(paged).toBeLessThan(scene.newsList!.maxOffset);
+
+    scene.scrollNews(-1);
+    expect(scene.newsList!.offset).toBe(0);
+  });
+
+  it("steps back into the bottom screenful of a preceding tall row", async () => {
+    const scene = await makeScene(21);
+    const long = "Длинная новость ".repeat(400);
+    scene.newsItems = [
+      { day: 0, text: long, color: 0xffffff, bookmarkKey: 0 },
+      ...makeNews(20).map((item, i) => ({
+        ...item,
+        day: i + 1,
+        bookmarkKey: i + 1,
+      })),
+    ];
+    scene.render();
+
+    const internals = scene as unknown as {
+      newsOffsets: number[];
+      newsRowHeights: number[];
+      newsViewportHeight: number;
+    };
+    const [firstTop, secondTop] = internals.newsOffsets;
+    const [firstHeight] = internals.newsRowHeights;
+    expect(firstHeight).toBeGreaterThan(internals.newsViewportHeight);
+    expect(scene.newsList!.maxOffset).toBeGreaterThan(secondTop);
+
+    const list = scene.newsList as unknown as {
+      scrollTo: (offset: number) => void;
+    };
+    list.scrollTo(secondTop);
+    scene.scrollNews(-1);
+
+    const expected = Math.max(
+      firstTop,
+      firstTop + firstHeight - internals.newsViewportHeight,
+    );
+    expect(scene.newsList!.offset).toBe(expected);
+    expect(scene.newsList!.offset).toBeLessThan(secondTop);
+    expect(scene.newsList!.offset).toBeGreaterThan(firstTop);
   });
 });

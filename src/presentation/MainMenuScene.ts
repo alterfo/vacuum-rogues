@@ -10,6 +10,8 @@ import { pickVariant } from "./textures";
 import { t } from "@/i18n/i18n";
 import { SettingsPanel, SETTINGS_PANEL_WIDTH } from "./ui/SettingsPanel";
 import { GAME_BALANCE } from "@/config/balance";
+import { scaledText } from "./ui/scaledText";
+import { formatBuildLine } from "@/systems/feedback/buildInfo";
 
 interface StarParticle {
   x: number;
@@ -54,6 +56,7 @@ export class MainMenuScene extends GameScene {
   private saveAvailable = false;
   private settingsPanel: SettingsPanel | null = null;
   private settingsBackdrop: Graphics | null = null;
+  private creditsOverlay: Container | null = null;
   private renderGen = 0;
 
   initialize(context?: object): void {
@@ -122,6 +125,7 @@ export class MainMenuScene extends GameScene {
   destroy(): void {
     this.renderGen++; // invalidate any in-flight async texture mounts
     this.closeSettings(); // settings overlay lives on renderer.stage, not the cleared layers
+    this.closeCredits();
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
@@ -138,6 +142,7 @@ export class MainMenuScene extends GameScene {
     this.title = null;
     this.intro = null;
     this.gameEngine = null;
+    this.creditsOverlay = null;
     this.starGraphics = null;
     this.demoShips = [];
     this.menuPlanets = [];
@@ -155,6 +160,7 @@ export class MainMenuScene extends GameScene {
     }
 
     this.closeSettings();
+    this.closeCredits();
 
     this.renderGen++; // invalidate async mounts from the previous render
     this.renderer.clearGameLayer();
@@ -296,40 +302,29 @@ export class MainMenuScene extends GameScene {
       this.renderer.gameLayer.addChild(ship.container);
     }
 
-    this.title = new Text({
-      text: t("menu.title"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 38,
-        fill: 0x00ffff,
-        letterSpacing: 6,
-        align: "center",
-        lineHeight: 46,
-        dropShadow: {
-          color: 0x00ffff,
-          alpha: 0.4,
-          blur: 10,
-          distance: 0,
-          angle: 0,
-        },
-      },
+    this.title = scaledText(t("menu.title"), 38, 0x00ffff, {
+      rawColor: true,
+      letterSpacing: 6,
+      align: "center",
+      lineHeight: 46,
     });
+    this.title.style.dropShadow = {
+      color: 0x00ffff,
+      alpha: 0.4,
+      blur: 10,
+      distance: 0,
+      angle: 0,
+    };
     this.title.anchor.set(0.5);
     this.title.x = width / 2;
     this.title.y = height / 3;
     this.renderer.uiLayer.addChild(this.title);
 
-    this.intro = new Text({
-      text: t("menu.intro"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 15,
-        fill: 0xaad4e6,
-        align: "center",
-        lineHeight: 22,
-        wordWrap: true,
-        wordWrapWidth: Math.min(600, width - 80),
-      },
+    this.intro = scaledText(t("menu.intro"), 15, 0xaad4e6, {
+      align: "center",
+      lineHeight: 22,
+      wordWrap: true,
+      wordWrapWidth: Math.min(600, width - 80),
     });
     this.intro.anchor.set(0.5, 0);
     this.intro.x = width / 2;
@@ -350,14 +345,9 @@ export class MainMenuScene extends GameScene {
       fontSize = 20,
       color = 0x00ff00,
     ) => {
-      const buttonText = new Text({
-        text,
-        style: {
-          fontFamily: "Courier New",
-          fontSize,
-          fill: color,
-          fontWeight: "bold" as const,
-        },
+      const buttonText = scaledText(text, fontSize, color, {
+        rawColor: true,
+        fontWeight: "bold",
       });
       buttonText.anchor.set(0.5, 0.5);
       buttonText.y = y;
@@ -445,6 +435,15 @@ export class MainMenuScene extends GameScene {
     );
     this.buttonsContainer.addChild(arcadeBtn);
 
+    const creditsBtn = createButton(
+      t("menu.credits"),
+      295,
+      () => this.toggleCredits(),
+      16,
+      0xcc99ff,
+    );
+    this.buttonsContainer.addChild(creditsBtn);
+
     this.renderer.uiLayer.addChild(this.buttonsContainer);
   }
 
@@ -520,6 +519,109 @@ export class MainMenuScene extends GameScene {
     if (backdrop)
       queueMicrotask(() => {
         if (!backdrop.destroyed) backdrop.destroy();
+      });
+  }
+
+  private toggleCredits(): void {
+    if (this.creditsOverlay) {
+      this.closeCredits();
+    } else {
+      this.openCredits();
+    }
+  }
+
+  private openCredits(): void {
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    const overlay = new Container();
+    overlay.eventMode = "static";
+
+    const backdrop = new Graphics();
+    backdrop.rect(0, 0, width, height);
+    backdrop.fill({ color: 0x000000, alpha: 0.62 });
+    backdrop.eventMode = "static";
+    backdrop.cursor = "default";
+    backdrop.on("pointerdown", () => this.closeCredits());
+    overlay.addChild(backdrop);
+
+    const panelW = Math.min(520, width - 40);
+    const panelH = 220;
+    const panelX = Math.round((width - panelW) / 2);
+    const panelY = Math.round((height - panelH) / 2);
+
+    const panel = new Graphics();
+    panel.rect(panelX, panelY, panelW, panelH);
+    panel.fill({ color: 0x10122a, alpha: 1 });
+    panel.stroke({ color: 0x00ffff, width: 2 });
+    panel.eventMode = "static";
+    overlay.addChild(panel);
+
+    const title = scaledText(t("menu.creditsTitle"), 22, 0x00ffff, {
+      rawColor: true,
+      fontWeight: "bold",
+      letterSpacing: 4,
+      align: "center",
+    });
+    title.anchor.set(0.5, 0);
+    title.x = width / 2;
+    title.y = panelY + 24;
+    title.eventMode = "none";
+    overlay.addChild(title);
+
+    const build = scaledText(
+      t("menu.creditsBuild", { build: formatBuildLine() }),
+      14,
+      0xccccdd,
+      { rawColor: true, align: "center" },
+    );
+    build.anchor.set(0.5, 0);
+    build.x = width / 2;
+    build.y = panelY + 74;
+    build.eventMode = "none";
+    overlay.addChild(build);
+
+    const art = scaledText(t("menu.creditsArt"), 13, 0xaabbcc, {
+      rawColor: true,
+      align: "center",
+      wordWrap: true,
+      wordWrapWidth: panelW - 48,
+    });
+    art.anchor.set(0.5, 0);
+    art.x = width / 2;
+    art.y = panelY + 104;
+    art.eventMode = "none";
+    overlay.addChild(art);
+
+    const close = scaledText(t("menu.creditsClose"), 14, 0x88ccff, {
+      rawColor: true,
+    });
+    close.anchor.set(0.5, 0.5);
+    close.x = width / 2;
+    close.y = panelY + panelH - 24;
+    close.eventMode = "static";
+    close.cursor = "pointer";
+    close.on("pointerdown", () => {
+      this.closeCredits();
+    });
+    close.on("pointerover", () => {
+      close.alpha = 0.7;
+    });
+    close.on("pointerout", () => {
+      close.alpha = 1;
+    });
+    overlay.addChild(close);
+
+    this.renderer.stage.addChild(overlay);
+    this.creditsOverlay = overlay;
+  }
+
+  private closeCredits(): void {
+    const overlay = this.creditsOverlay;
+    this.creditsOverlay = null;
+    if (overlay)
+      queueMicrotask(() => {
+        if (!overlay.destroyed) overlay.destroy({ children: true });
       });
   }
 
@@ -614,14 +716,7 @@ export class MainMenuScene extends GameScene {
       this.currentMsgText = null;
     }
 
-    const msgText = new Text({
-      text: message,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: color,
-      },
-    });
+    const msgText = scaledText(message, 16, color, { rawColor: true });
     msgText.anchor.set(0.5);
     msgText.x = width / 2;
     const buttonsY = this.buttonsContainer

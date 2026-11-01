@@ -1,4 +1,5 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import type { GameEngine } from "@/systems/GameEngine";
 import {
   gearById,
@@ -43,10 +44,12 @@ export class ResearchUpgradePanel {
     panel.rect(PX, PY, PW, PH).stroke({ color: 0x334433, width: 1 });
     parent.addChild(panel);
 
-    const titleText = new Text({
-      text: "[ ИССЛЕДОВАТЕЛЬСКАЯ ЛАБОРАТОРИЯ — УЛУЧШЕНИЕ СНАРЯЖЕНИЯ ]",
-      style: { fontSize: 13, fill: 0xcc88ff, fontFamily: "monospace" },
-    });
+    const titleText = scaledText(
+      "[ ИССЛЕДОВАТЕЛЬСКАЯ ЛАБОРАТОРИЯ — УЛУЧШЕНИЕ СНАРЯЖЕНИЯ ]",
+      13,
+      0xcc88ff,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     titleText.anchor.set(0.5, 0);
     titleText.x = PX + PW / 2;
     titleText.y = PY + 12;
@@ -60,10 +63,12 @@ export class ResearchUpgradePanel {
     );
     const artifactCount = artifactStack?.amount ?? 0;
 
-    const artifactLabel = new Text({
-      text: `Артефакты: ${artifactCount}`,
-      style: { fontSize: 13, fill: 0xffcc44, fontFamily: "monospace" },
-    });
+    const artifactLabel = scaledText(
+      `Артефакты: ${artifactCount}`,
+      13,
+      0xffcc44,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     artifactLabel.anchor.set(1, 0);
     artifactLabel.x = PX + PW - 14;
     artifactLabel.y = PY + 14;
@@ -75,9 +80,9 @@ export class ResearchUpgradePanel {
     parent.addChild(sep);
 
     if (!loadout) {
-      const noLoad = new Text({
-        text: "Нет активного снаряжения",
-        style: { fontSize: 13, fill: 0x445566, fontFamily: "monospace" },
+      const noLoad = scaledText("Нет активного снаряжения", 13, 0x445566, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       noLoad.x = PX + 20;
       noLoad.y = PY + 56;
@@ -86,10 +91,12 @@ export class ResearchUpgradePanel {
     } else {
       const items = loadout.slottedWithGear();
       if (items.length === 0) {
-        const empty = new Text({
-          text: "Нет установленного снаряжения для улучшения",
-          style: { fontSize: 13, fill: 0x445566, fontFamily: "monospace" },
-        });
+        const empty = scaledText(
+          "Нет установленного снаряжения для улучшения",
+          13,
+          0x445566,
+          { rawColor: true, fontFamily: "monospace" },
+        );
         empty.x = PX + 20;
         empty.y = PY + 56;
         empty.eventMode = "none";
@@ -114,9 +121,9 @@ export class ResearchUpgradePanel {
             .fill({ color: 0x0a1810, alpha: 1 });
           parent.addChild(rowBg);
 
-          const nameText = new Text({
-            text: item.gear.name,
-            style: { fontSize: 13, fill: 0xddeeff, fontFamily: "monospace" },
+          const nameText = scaledText(item.gear.name, 13, 0xddeeff, {
+            rawColor: true,
+            fontFamily: "monospace",
           });
           nameText.x = PX + 22;
           nameText.y = rowY + 8;
@@ -130,10 +137,12 @@ export class ResearchUpgradePanel {
                 ? 0x88ccff
                 : 0x556677;
           const tierLabel = currentUpgrades > 0 ? ` (+${currentUpgrades})` : "";
-          const techText = new Text({
-            text: `T${effectiveTech}${tierLabel}`,
-            style: { fontSize: 12, fill: techColor, fontFamily: "monospace" },
-          });
+          const techText = scaledText(
+            `T${effectiveTech}${tierLabel}`,
+            12,
+            techColor,
+            { rawColor: true, fontFamily: "monospace" },
+          );
           techText.x = PX + 22;
           techText.y = rowY + 30;
           techText.eventMode = "none";
@@ -141,9 +150,9 @@ export class ResearchUpgradePanel {
 
           const costLabel = maxed ? "Максимум" : `Улучшить: ${cost} арт.`;
           const costColor = maxed ? 0x445566 : canAfford ? 0xcc88ff : 0x664433;
-          const costText = new Text({
-            text: costLabel,
-            style: { fontSize: 12, fill: costColor, fontFamily: "monospace" },
+          const costText = scaledText(costLabel, 12, costColor, {
+            rawColor: true,
+            fontFamily: "monospace",
           });
           costText.anchor.set(1, 0.5);
           costText.x = PX + PW - 120;
@@ -154,9 +163,9 @@ export class ResearchUpgradePanel {
           if (!maxed) {
             const btnLabel = canAfford ? "[Улучшить]" : "Мало арт.";
             const btnColor = canAfford ? 0xaa66ff : 0x443355;
-            const btn = new Text({
-              text: btnLabel,
-              style: { fontSize: 13, fill: btnColor, fontFamily: "monospace" },
+            const btn = scaledText(btnLabel, 13, btnColor, {
+              rawColor: true,
+              fontFamily: "monospace",
             });
             btn.anchor.set(1, 0.5);
             btn.x = PX + PW - 14;
@@ -194,9 +203,9 @@ export class ResearchUpgradePanel {
       }
     }
 
-    const back = new Text({
-      text: "[ ← Назад ]",
-      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    const back = scaledText("[ ← Назад ]", 14, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     back.anchor.set(0.5, 1);
     back.x = PX + PW / 2;

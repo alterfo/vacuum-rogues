@@ -38,9 +38,28 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { ScrollableList } from "./ui/ScrollableList";
-import { MONO_CHAR_WIDTH_RATIO, lineStepFor } from "./ui/questCardLayout";
+import { visibleNewsRange } from "./ui/newsListRange";
+import {
+  MONO_CHAR_WIDTH_RATIO,
+  estimateWrappedLines,
+  lineStepFor,
+} from "./ui/questCardLayout";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
+
+function countVisibleRows(
+  heights: readonly number[],
+  listHeight: number,
+): number {
+  let filled = 0;
+  let count = 0;
+  for (const height of heights) {
+    if (filled + height > listHeight) break;
+    filled += height;
+    count += 1;
+  }
+  return Math.max(1, count);
+}
 
 interface InfoContext {
   gameEngine?: GameEngine;
@@ -345,6 +364,9 @@ export class InfoCenterScene extends GameScene {
   private activeTab: Tab = "news";
   private newsItems: NewsItem[] = [];
   private newsScroll = 0;
+  private newsOffsets: number[] = [];
+  private newsRowHeights: number[] = [];
+  private newsViewportHeight = 0;
   private newsList: ScrollableList<NewsItem> | null = null;
 
   private objectsQuery = "";
@@ -668,7 +690,18 @@ export class InfoCenterScene extends GameScene {
     const rumorH = this.renderRumorPanel(container, pw);
 
     const listH = Math.max(ROW_H, ph - rumorH);
-    const VISIBLE = Math.floor(listH / ROW_H);
+    const rowHeights = this.newsItems.map((item) =>
+      this.newsRowHeight(item, pw),
+    );
+    this.newsOffsets = [];
+    this.newsRowHeights = rowHeights;
+    this.newsViewportHeight = listH;
+    let runningOffset = 0;
+    for (const height of rowHeights) {
+      this.newsOffsets.push(runningOffset);
+      runningOffset += height;
+    }
+    const visibleRows = countVisibleRows(rowHeights, listH);
     const bookmarks = this.gameEngine?.player?.newsBookmarks ?? [];
 
     this.newsList = new ScrollableList<NewsItem>({
@@ -679,19 +712,33 @@ export class InfoCenterScene extends GameScene {
       itemHeight: ROW_H,
       items: this.newsItems,
       enableWheel: false,
+      getItemHeight: (item) => this.newsRowHeight(item, pw),
       renderItem: (item, i) =>
-        this.buildNewsRow(item, i, pw, PAD, ROW_H, STAR_W, bookmarks),
+        this.buildNewsRow(
+          item,
+          i,
+          pw,
+          PAD,
+          this.newsRowHeight(item, pw),
+          STAR_W,
+          bookmarks,
+        ),
     });
     this.newsList.scrollTo(this.newsScroll);
     this.newsScroll = this.newsList.offset;
     container.addChild(this.newsList.container);
 
-    if (this.newsItems.length > VISIBLE) {
-      const firstRow = Math.round(this.newsScroll / ROW_H);
+    if (this.newsItems.length > visibleRows) {
+      const range = visibleNewsRange(
+        this.newsOffsets,
+        rowHeights,
+        listH,
+        this.newsScroll,
+      );
       const hint = scaledText(
-        `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
+        `↑↓  ${range.first + 1}–${Math.min(range.last, this.newsItems.length)} / ${this.newsItems.length}`,
         11,
-        0x334455,
+        0x88aacc,
         { rawColor: true, fontFamily: "monospace" },
       );
       hint.anchor.set(1, 1);
@@ -700,6 +747,15 @@ export class InfoCenterScene extends GameScene {
       hint.eventMode = "none";
       container.addChild(hint);
     }
+  }
+
+  private newsRowHeight(item: NewsItem, pw: number): number {
+    const PAD = 16;
+    const STAR_W = 28;
+    const textWidth = Math.max(1, pw - PAD * 2 - 50 - STAR_W);
+    const lines = estimateWrappedLines(item.text, textWidth, scaledFont(13));
+    const textHeight = lines * lineStepFor(scaledFont(13)) + 12;
+    return Math.max(InfoCenterScene.NEWS_ROW_H, textHeight);
   }
 
   private buildNewsRow(
@@ -724,7 +780,7 @@ export class InfoCenterScene extends GameScene {
       fontFamily: "monospace",
     });
     dayBadge.x = PAD + 6;
-    dayBadge.y = ROW_H / 2 - 7;
+    dayBadge.y = 8;
     dayBadge.eventMode = "none";
     row.addChild(dayBadge);
 
@@ -735,7 +791,7 @@ export class InfoCenterScene extends GameScene {
       wordWrapWidth: pw - PAD * 2 - 50 - STAR_W,
     });
     news.x = PAD + 46;
-    news.y = ROW_H / 2 - 7;
+    news.y = 6;
     news.eventMode = "none";
     row.addChild(news);
 
@@ -747,7 +803,7 @@ export class InfoCenterScene extends GameScene {
       { rawColor: true, fontFamily: "monospace" },
     );
     star.x = pw - PAD - STAR_W + 4;
-    star.y = ROW_H / 2 - 9;
+    star.y = 6;
     star.eventMode = "static";
     star.cursor = "pointer";
     star.on("pointerdown", (e) => {
@@ -994,7 +1050,7 @@ export class InfoCenterScene extends GameScene {
       const hint = scaledText(
         `показаны первые ${VISIBLE} из ${this.objectsResults.length}`,
         11,
-        0x334455,
+        0x88aacc,
         { rawColor: true, fontFamily: "monospace" },
       );
       hint.anchor.set(1, 1);
@@ -1453,7 +1509,7 @@ export class InfoCenterScene extends GameScene {
       const hint = scaledText(
         `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.gearResults.length)} / ${this.gearResults.length}`,
         11,
-        0x334455,
+        0x88aacc,
         { rawColor: true, fontFamily: "monospace" },
       );
       hint.anchor.set(1, 1);
@@ -1766,9 +1822,76 @@ export class InfoCenterScene extends GameScene {
       this.render();
       return;
     }
-    this.newsList.scrollBy(deltaRows * InfoCenterScene.NEWS_ROW_H);
+    const offsets = this.newsOffsets;
+    if (offsets.length === 0) {
+      this.render();
+      return;
+    }
+    const current = this.newsList.offset;
+    const heights = this.newsRowHeights;
+    const viewport = Math.max(1, this.newsViewportHeight);
+    const max = this.newsList.maxOffset;
+    const dir = deltaRows > 0 ? 1 : -1;
+    const steps = Math.max(1, Math.abs(deltaRows));
+
+    let offset = current;
+    for (let step = 0; step < steps; step += 1) {
+      offset = this.nextNewsOffset(
+        offset,
+        dir,
+        offsets,
+        heights,
+        viewport,
+        max,
+      );
+      if (dir > 0 && offset >= max) {
+        offset = max;
+        break;
+      }
+      if (dir < 0 && offset <= 0) {
+        offset = 0;
+        break;
+      }
+    }
+
+    this.newsList.scrollTo(offset);
     this.newsScroll = this.newsList.offset;
     this.render();
+  }
+
+  private nextNewsOffset(
+    current: number,
+    dir: number,
+    offsets: readonly number[],
+    heights: readonly number[],
+    viewport: number,
+    max: number,
+  ): number {
+    let index = 0;
+    while (index + 1 < offsets.length && offsets[index + 1] <= current + 0.5) {
+      index += 1;
+    }
+
+    if (dir > 0) {
+      const rowBottom = offsets[index] + heights[index];
+      const tallRow = heights[index] > viewport;
+      if (tallRow && current + viewport < rowBottom - 0.5) {
+        return Math.min(max, current + viewport);
+      }
+      if (index + 1 < offsets.length) return Math.min(max, offsets[index + 1]);
+      return max;
+    }
+
+    if (current > offsets[index] + 0.5) {
+      return Math.max(offsets[index], current - viewport);
+    }
+    if (index === 0) return 0;
+    const prevTop = offsets[index - 1];
+    const prevHeight = heights[index - 1];
+    if (prevHeight > viewport) {
+      return Math.max(prevTop, prevTop + prevHeight - viewport);
+    }
+    return prevTop;
   }
 
   private scrollGear(deltaRows: number): void {

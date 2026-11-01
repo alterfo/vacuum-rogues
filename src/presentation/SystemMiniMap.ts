@@ -5,6 +5,7 @@ import { logger } from "@/utils/logger";
 import { radarToWorld } from "@/utils/flightGeometry";
 import { isCameraOnPlayer } from "@/utils/cameraCenter";
 import { UiButton } from "./ui/UiButton";
+import { scaledText } from "./ui/scaledText";
 
 export class SystemMiniMap {
   public readonly container: Container;
@@ -175,14 +176,9 @@ export class SystemMiniMap {
     frame.rect(0, 0, this.mapWidth, this.mapHeight);
     frame.stroke({ color: 0x00ffff, width: 3 });
 
-    const title = new Text({
-      text: this.currentSystemName,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-      },
+    const title = scaledText(this.currentSystemName, 10, 0x00ffff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     title.x = 5;
     title.y = 5;

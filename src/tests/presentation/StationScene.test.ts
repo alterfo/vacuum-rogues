@@ -307,6 +307,27 @@ describe("StationScene satisfied status rows (Task 8, finding #7)", () => {
   });
 });
 
+describe("StationScene null-context guard (Task 4)", () => {
+  it("shows an error and a back control instead of an empty service panel", () => {
+    const scene = new StationScene(renderer);
+    scene.initialize({
+      gameEngine: makeEngine(new ShipLoadout("hull_scout")),
+    });
+
+    const main = (
+      scene as unknown as {
+        mainContainer: { children: FakeNode[] };
+      }
+    ).mainContainer;
+    const texts = main.children.map((c) => c.text ?? "").filter(Boolean);
+
+    expect(texts).toContain("Ошибка: станция недоступна");
+    expect(texts).toContain("[ Назад ]");
+
+    scene.destroy();
+  });
+});
+
 describe("stationBackdrop helpers (pure)", () => {
   it("gives each station type a distinct accent colour", () => {
     const accents = [

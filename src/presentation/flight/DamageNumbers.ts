@@ -13,6 +13,22 @@ const RISE_PX = 36;
 const DEALT_COLOR = 0xffdd33;
 const TAKEN_COLOR = 0xff4444;
 
+export interface DamageNumberMotion {
+  yOffset: number;
+  alpha: number;
+  scale: number;
+}
+
+export function damageNumberMotion(t: number): DamageNumberMotion {
+  const clamped = Math.max(0, Math.min(1, t));
+  const eased = 1 - Math.pow(1 - clamped, 3);
+  return {
+    yOffset: RISE_PX * eased,
+    alpha: clamped >= 1 ? 0 : 1 - clamped * clamped,
+    scale: 1 + 0.24 * Math.sin(clamped * Math.PI),
+  };
+}
+
 export class DamageNumbers {
   private readonly layer: Container;
   private readonly active: FloatingNumber[] = [];
@@ -54,8 +70,10 @@ export class DamageNumbers {
         this.remove(i);
         continue;
       }
-      n.text.y = n.baseY - RISE_PX * t; // float upward (screen-up = -Y)
-      n.text.alpha = 1 - t;
+      const motion = damageNumberMotion(t);
+      n.text.y = n.baseY - motion.yOffset;
+      n.text.alpha = motion.alpha;
+      n.text.scale.set(motion.scale);
     }
   }
 

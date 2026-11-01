@@ -118,6 +118,11 @@ export const en: Dict = {
   "menu.newGame": "New Game",
   "menu.saves": "Saved Games",
   "menu.settings": "Settings",
+  "menu.credits": "Credits",
+  "menu.creditsTitle": "CREDITS",
+  "menu.creditsBuild": "Build: {build}",
+  "menu.creditsArt": "Procedural textures and in-game assets",
+  "menu.creditsClose": "[ Close ]",
   "menu.feedback": "Send Feedback",
   "menu.replayTutorial": "Replay Tutorial",
   "menu.arcade": "Black Hole: Arcade",
@@ -131,6 +136,9 @@ export const en: Dict = {
   "race.back": "[ Back ]",
   "race.start": "START GAME",
   "race.difficulty": "DIFFICULTY",
+
+  "win.questsCompleted": "Quests completed: {n}",
+  "win.chainsCompleted": "Chains completed: {n}",
   "race.mode.GOD.title": "God",
   "race.mode.GOD.desc":
     "The ship never dies — at zero hull, weapons and hyperjump stall until repaired",

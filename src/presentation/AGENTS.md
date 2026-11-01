@@ -10,10 +10,11 @@ tracks the S/M/L setting, and lifts dim fills to a legible luminance floor (`REA
 Pass `rawColor: true` only for already-bright/semantic colors (accents, intentionally-dimmed
 disabled states, light backgrounds) where the floor would distort hue. Migrated: JobBoardPanel,
 StationScene, TradeScene, EquipmentShopScene, InfoCenterScene, QuestJournalUI, TextQuestScene,
-PlanetInfoPanel.
-Still hardcoding `fontSize:` (route through `scaledText` when you touch them): StarMapScene,
-InventoryScene, ResearchUpgradePanel, GovernmentScene, RaceSelectionScene,
-NpcContactPanel, DialogueScene, WinScene, MainMenuScene, SystemMiniMap, CombatHud.
+PlanetInfoPanel, StarMapScene, CombatHud, CombatPauseOverlay, InventoryScene,
+ResearchUpgradePanel, GovernmentScene, RaceSelectionScene, NpcContactPanel, DialogueScene,
+WinScene, MainMenuScene, SystemMiniMap, SaveLoadScene.
+Still hardcoding `fontSize:` (route through `scaledText` when you touch them):
+OverlayPresenter.
 (Flight modules that already read `scaledFont` — FlightHud, PlanetManager, DamageNumbers, UiButton,
 PlanetScene — don't need it; for the in-flight restyle-in-place rule see `flight/playtest-traps.md`.)
 
@@ -29,7 +30,7 @@ window never gets touch chrome. `touchHitArea(w, h, env?)` grows + re-centres a 
 the **shared** `UiButton`, so every panel's buttons get comfortable targets at once with **no desktop
 change** (the `uiButtonHitArea.test.ts` exact-bounds contract still holds on desktop/Node). The
 on-screen flight touch controls (pinch-zoom + «✕» cancel) read the same `isTouchLayoutActive` gate —
-see `flight/CLAUDE.md`.
+see `flight/AGENTS.md`.
 
 **Station markers render sprite-or-diamond** (`flight/PlanetManager.createStations`).
 Each off-planet base resolves a per-type sprite via `stationSpriteKey(type, id)`
@@ -88,7 +89,7 @@ SR2-style ring rework: `docs/plans/20260707-gear-variety-and-hangar.md`). It ren
 presentation-only ring (`renderFittingRing`/`renderRingZone`) over the same four category banks
 + install/unfit + the ТРЮМ owned-gear strip via `scaledText`, plus a ВЫБРОСИТЬ/ШЛЮЗ jettison
 action, a СЕРВИСНЫЙ ЦЕНТР repair block, and КОМПЛЕКТАЦИЯ 1/2/3 loadout-preset tabs — see
-`.claude/docs/systems/equipment.md`'s "Hangar ring UI" / "Loadout presets" sections for the
+`docs/systems/equipment.md`'s "Hangar ring UI" / "Loadout presets" sections for the
 full breakdown. It mutates the canonical `ShipLoadout` through the shared gear helpers —
 **never** fork fit logic into a scene. **Both** `StationScene` and the `EquipmentShopScene`
 **АНГАР tab** mount the same `HangarPanel` (constructed with the scene's renderer), so fitting
@@ -201,7 +202,7 @@ language goes through i18n `setLanguage` → `localStorage("language")`) and fan
 via `SettingsPanelDeps` callbacks: `applySpeed` (HUD label + physics `timeScale`), `applyFont`
 (restyle in place, then `onRequestClose` — a font change rebuilds the whole HUD), `applyLanguage`
 (the same in-place restyle a font change uses, so text nodes re-read `t(...)`; then close),
-`onNeuralToggle` (the policy gate, see root CLAUDE.md "Neural / AI Pipeline"). Build the font row
+`onNeuralToggle` (the policy gate, see root AGENTS.md "Neural / AI Pipeline"). Build the font row
 **first** so its hit areas precede the others (the historical ⚙-panel "first font button" contract)
 and the **НЕЙРОСЕТЬ** row **last** (the "neural is the final hit area" contract). The neural row is
 **dev-only** — `showNeural` defaults to `import.meta.env.DEV`, so prod hides it entirely (its only
@@ -241,10 +242,9 @@ real `wordWrap`/`wordWrapWidth` or a `MONO_CHAR_WIDTH_RATIO`-derived pixel-width
 (`refreshVmParamPanel` param stack). When adding a new stacked-row/multi-line panel behind
 `scaledText`, size its row step and any truncation from `scaledFont`/`lineStepFor` up front rather
 than a fixed pixel constant — retrofitting it later means auditing every consumer for this same bug
-class. **Known gap, not yet fixed:** `ScrollableList`'s shared `itemHeight` is still uniform
-(non-variable) across its 6+ panel consumers — a long wrapped item (e.g. InfoCenter news rows) can
-still bleed into the next row at "L" scale; fixing it needs per-item variable-height support in that
-shared component, out of scope for a single-panel fix.
+class. `ScrollableList` now accepts an optional `getItemHeight(item, index)` callback for per-item
+variable heights (falling back to the uniform `itemHeight` when omitted or non-positive), so wrapped
+rows can stop bleeding into the next row at "L" scale; consumers that wrap text should provide it.
 
 **The star-map critical-threat line is a bordered banner chip, not stray red text**
 (`ui/starMapThreatBanner.ts`, `docs/plans/20260729-ux-review-fixes.md` Task 6). `StarMapScene`'s old
@@ -253,8 +253,8 @@ shared component, out of scope for a single-panel fix.
 bordered `Graphics` chip behind a **bold** `scaledText` label at `THREAT_BANNER_BASE_PX` (15) — strictly
 larger than the 12px РАЗУМ/ПИРАТЫ stat lines — with a hotter red accent for `critical` than `warning`,
 `eventMode="none"` so it never intercepts map clicks. Only the `critical` banner pulses
-(`shouldPulseThreatBanner(level)`). This is the one StarMapScene line migrated to
-`scaledText` (the file is still on the not-yet-migrated list above; migrate only lines you touch).
+(`shouldPulseThreatBanner(level)`). The rest of `StarMapScene` is now fully migrated to
+`scaledText` (see the migrated list above).
 
 **Hover tooltips on icon-only HUD buttons reuse the star-map tooltip shape** (`FlightHud.mountIconTooltip`,
 `docs/plans/20260729-ux-review-fixes.md` Task 10). An icon-only glyph button (`[I]` inventory, the flight
@@ -264,7 +264,7 @@ hover, toggled on the button's `pointerover`/`pointerout` via a **second** liste
 its own alpha/hover-audio handlers. Labels go through `t(...)` (`flight.inventoryTooltip` "Инвентарь",
 `flight.helpTooltip` "Помощь"; keys in both `ru.ts`/`en.ts`). **Position the tooltip from the button's
 numeric x/y + a font-scaled glyph budget, NOT `btn.width`/`btn.height`** — PixiJS Text measurement
-throws in the jsdom harness (the `BOTTOM_LEFT_LANE_W` trap; see `flight/CLAUDE.md`). The shared
+throws in the jsdom harness (the `BOTTOM_LEFT_LANE_W` trap; see `flight/AGENTS.md`). The shared
 `mountSceneHelp` "?" glyph is left untouched (self-explanatory on every scene); a full word like
 `[КВЕСТЫ]` needs no tooltip.
 

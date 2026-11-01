@@ -8,6 +8,10 @@ import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { FlightModule } from "./flight/FlightModule";
 import { BACKGROUND_DIM } from "@/config/balance";
+import {
+  resolveNebulaPalette,
+  type NebulaAtmosphereState,
+} from "./nebulaPalette";
 
 interface CometStreak {
   g: Graphics;
@@ -103,6 +107,9 @@ export class SpaceBackgroundLayer implements FlightModule {
   private vignette: Graphics | null = null;
 
   private dimmer: Graphics | null = null;
+  private atmosphereTint: Graphics | null = null;
+  private atmosphereState: NebulaAtmosphereState = {};
+  private readonly getAtmosphere?: () => NebulaAtmosphereState;
 
   constructor(
     renderer: Renderer,
@@ -110,11 +117,13 @@ export class SpaceBackgroundLayer implements FlightModule {
     systemId: string,
     getCamera: () => BackgroundCamera,
     _getShipVelocity: () => BackgroundShipVelocity | null,
+    getAtmosphere?: () => NebulaAtmosphereState,
   ) {
     this.renderer = renderer;
     this.skyContainer = skyContainer;
     this.systemId = systemId;
     this.getCamera = getCamera;
+    this.getAtmosphere = getAtmosphere;
   }
 
   private get width(): number {
@@ -126,15 +135,18 @@ export class SpaceBackgroundLayer implements FlightModule {
   }
 
   initialize(): void {
+    this.atmosphereState = this.getAtmosphere?.() ?? {};
     this.createNebulae(); // Screen-space nebula clouds (skyContainer) + swarms
     this.createStarField(); // Crisp far stars (screen-fixed)
     this.createTwinkleStars(); // Bright pulsing hero stars (screen-fixed)
+    this.createAtmosphereTint();
     this.createDimmer(); // Readability dimmer above the whole sky (F2)
     this.createVignette();
     this.initMidground();
   }
 
   update(_dt: number, bgElapsed: number): void {
+    this.updateAtmosphereTint();
     this.updateBgShips(_dt);
     this.updateDustParticles(_dt);
     this.updateComets(_dt);
@@ -163,11 +175,16 @@ export class SpaceBackgroundLayer implements FlightModule {
     if (this.vignette?.parent) {
       this.vignette.parent.removeChild(this.vignette);
     }
+    if (this.atmosphereTint?.parent) {
+      this.atmosphereTint.parent.removeChild(this.atmosphereTint);
+    }
+    this.atmosphereTint?.destroy?.();
 
     this.nebulaeContainer = null;
     this.twinkleContainer = null;
     this.vignette = null;
     this.dimmer = null;
+    this.atmosphereTint = null;
     this.starLayers.length = 0;
     this.nebulaLayers.length = 0;
     this.twinkleStars.length = 0;
@@ -340,14 +357,7 @@ export class SpaceBackgroundLayer implements FlightModule {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
 
-    const palettes = [
-      [0x6e0a00, 0xcc2000, 0xff4400, 0xff8800, 0xffbb22], // red — warm red-orange
-      [0x05082a, 0x0d1a88, 0x2244cc, 0x4466ff, 0x88aaff], // blue — deep blue-violet
-      [0x002a14, 0x0a7a3a, 0x18cc66, 0x44ffaa, 0xaaffcc], // green — emerald
-      [0x00222a, 0x067a7a, 0x10cccc, 0x44ffff, 0xaaffff], // teal — cyan
-    ];
-    const palIdx = rng.nextInt(0, palettes.length - 1);
-    const palette = palettes[palIdx];
+    const palette = resolveNebulaPalette(this.atmosphereState).palette;
     const cloudCount = rng.nextInt(4, 6);
 
     for (let c = 0; c < cloudCount; c++) {
@@ -617,6 +627,37 @@ export class SpaceBackgroundLayer implements FlightModule {
       this.twinkleContainer.x = cx + cam.panX * 0.05;
       this.twinkleContainer.y = cy + cam.panY * 0.05;
     }
+  }
+
+  private createAtmosphereTint(): void {
+    if (this.atmosphereTint) return;
+    const tint = new Graphics();
+    tint.eventMode = "none";
+    tint.blendMode = "screen";
+    this.atmosphereTint = tint;
+    this.skyContainer.addChild(tint);
+    this.applyAtmosphereTint(resolveNebulaPalette(this.atmosphereState));
+  }
+
+  private updateAtmosphereTint(): void {
+    this.atmosphereState = this.getAtmosphere?.() ?? this.atmosphereState;
+    this.applyAtmosphereTint(resolveNebulaPalette(this.atmosphereState));
+  }
+
+  private applyAtmosphereTint(
+    resolved: ReturnType<typeof resolveNebulaPalette>,
+  ): void {
+    const tint = this.atmosphereTint;
+    if (!tint) return;
+    tint.clear();
+    tint
+      .rect(
+        -this.width * 0.25,
+        -this.height * 0.25,
+        this.width * 1.5,
+        this.height * 1.5,
+      )
+      .fill({ color: resolved.overlayColor, alpha: resolved.overlayAlpha });
   }
 
   private createDimmer(): void {

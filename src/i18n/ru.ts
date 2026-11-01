@@ -117,6 +117,11 @@ export const ru: Dict = {
   "menu.newGame": "Новая игра",
   "menu.saves": "Сохранения",
   "menu.settings": "Настройки",
+  "menu.credits": "Титры",
+  "menu.creditsTitle": "ТИТРЫ",
+  "menu.creditsBuild": "Сборка: {build}",
+  "menu.creditsArt": "Процедурные текстуры и внутриигровые ассеты",
+  "menu.creditsClose": "[ Закрыть ]",
   "menu.feedback": "Сообщить отзыв",
   "menu.replayTutorial": "Показать обучение заново",
   "menu.arcade": "Чёрная дыра: аркада",
@@ -130,6 +135,9 @@ export const ru: Dict = {
   "race.back": "[ Назад ]",
   "race.start": "НАЧАТЬ ИГРУ",
   "race.difficulty": "СЛОЖНОСТЬ",
+
+  "win.questsCompleted": "Завершено заданий: {n}",
+  "win.chainsCompleted": "Завершено цепочек: {n}",
   "race.mode.GOD.title": "Бог",
   "race.mode.GOD.desc":
     "Корабль не гибнет — при нуле прочности глохнут оружие и гиперпрыжок до ремонта",

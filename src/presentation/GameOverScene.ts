@@ -3,6 +3,7 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { scaledText } from "./ui/scaledText";
+import { mountEndScreenBackdrop } from "./ui/endScreenBackdrop";
 import { logger } from "@/utils/logger";
 
 interface GameOverContext {
@@ -62,11 +63,7 @@ export class GameOverScene extends GameScene {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    const bg = new Graphics();
-    bg.rect(0, 0, w, h);
-    bg.fill({ color: 0x100305, alpha: 1 });
-    bg.eventMode = "static";
-    this.container.addChild(bg);
+    mountEndScreenBackdrop(this.container, w, h, 0xff5544);
 
     this.addText("КОРАБЛЬ УНИЧТОЖЕН", w / 2, h * 0.2, 44, 0xff5544, "bold");
     this.addText("Ваш корабль погиб в бою.", w / 2, h * 0.31, 20, 0xddaaaa);
