@@ -1,5 +1,6 @@
 import { GameScene } from "./GameScene";
 import { Graphics, Text, Container } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
@@ -183,15 +184,11 @@ export class SaveLoadScene extends GameScene {
     this.background.fill({ color: 0x05080f, alpha: 1 });
     this.renderer.gameLayer.addChild(this.background);
 
-    const title = new Text({
-      text: "СОХРАНЕНИЯ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 30,
-        fill: 0x00ffff,
-        letterSpacing: 4,
-        fontWeight: "bold",
-      },
+    const title = scaledText("СОХРАНЕНИЯ", 30, 0x00ffff, {
+      rawColor: true,
+      fontFamily: "Courier New",
+      letterSpacing: 4,
+      fontWeight: "bold",
     });
     title.anchor.set(0.5, 0);
     title.x = width / 2;
@@ -219,14 +216,12 @@ export class SaveLoadScene extends GameScene {
     });
 
     if (this.flashMessage) {
-      this.messageText = new Text({
-        text: this.flashMessage.message,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 16,
-          fill: this.flashMessage.color,
-        },
-      });
+      this.messageText = scaledText(
+        this.flashMessage.message,
+        16,
+        this.flashMessage.color,
+        { rawColor: true, fontFamily: "Courier New" },
+      );
       this.messageText.anchor.set(0.5, 1);
       this.messageText.x = width / 2;
       this.messageText.y = height - 16;
@@ -249,15 +244,16 @@ export class SaveLoadScene extends GameScene {
       row.name.length > MAX_NAME_CHARS
         ? `${row.name.slice(0, MAX_NAME_CHARS - 1)}…`
         : row.name;
-    const nameText = new Text({
-      text: displayName,
-      style: {
+    const nameText = scaledText(
+      displayName,
+      16,
+      row.occupied ? 0xffffff : 0x778899,
+      {
+        rawColor: true,
         fontFamily: "Courier New",
-        fontSize: 16,
-        fill: row.occupied ? 0xffffff : 0x778899,
         fontWeight: "bold",
       },
-    });
+    );
     nameText.eventMode = "none";
     nameText.x = 12;
     nameText.y = 6;
@@ -266,13 +262,9 @@ export class SaveLoadScene extends GameScene {
     const detail = row.occupied
       ? `${row.dateLabel}   ${row.summary}`
       : "— пусто —";
-    const detailText = new Text({
-      text: detail,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 12,
-        fill: 0x99aabb,
-      },
+    const detailText = scaledText(detail, 12, 0x99aabb, {
+      rawColor: true,
+      fontFamily: "Courier New",
     });
     detailText.eventMode = "none";
     detailText.x = 12;
@@ -319,14 +311,10 @@ export class SaveLoadScene extends GameScene {
   }
 
   private makeButton(text: string, color: number, cb: () => void): Text {
-    const btn = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: color,
-        fontWeight: "bold",
-      },
+    const btn = scaledText(text, 14, color, {
+      rawColor: true,
+      fontFamily: "Courier New",
+      fontWeight: "bold",
     });
     btn.eventMode = "static";
     btn.cursor = "pointer";

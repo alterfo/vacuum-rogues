@@ -11,6 +11,7 @@ interface WarpArrivalEffect {
 
 export class WarpEffectRenderer {
   private warpEffect: WarpArrivalEffect | null = null;
+  private readonly ringColors = [0xffffff, 0x9fe8ff, 0x77aaff];
 
   constructor(private readonly gameLayer: Container) {}
 
@@ -39,9 +40,13 @@ export class WarpEffectRenderer {
     container.addChild(flash);
 
     const rings: Graphics[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < this.ringColors.length; i++) {
       const ring = new Graphics();
-      ring.circle(0, 0, 20).stroke({ width: 4, color, alpha: 0.9 });
+      ring.circle(0, 0, 20).stroke({
+        width: 5 - i,
+        color: this.ringColors[i],
+        alpha: 0.95,
+      });
       container.addChild(ring);
       rings.push(ring);
     }
@@ -72,16 +77,17 @@ export class WarpEffectRenderer {
     fx.elapsed += deltaTime;
     const t = Math.min(1, fx.elapsed / fx.duration);
 
-    fx.flash.alpha = Math.max(0, 1 - t * 2.2);
-    fx.flash.scale.set(1 + t * 0.6);
+    fx.flash.alpha = Math.max(0, Math.pow(1 - t, 1.8));
+    fx.flash.scale.set(0.7 + t * 1.1);
 
-    fx.glow.alpha = Math.sin(t * Math.PI) * 0.6;
+    fx.glow.alpha = Math.sin(t * Math.PI) * 0.7;
     fx.glow.scale.set(0.6 + t * 1.4);
 
     fx.rings.forEach((ring, i) => {
       const rt = Math.max(0, Math.min(1, t * 1.3 - i * 0.18));
-      ring.scale.set(0.2 + rt * 8);
-      ring.alpha = Math.max(0, 1 - rt) * 0.9;
+      const eased = 1 - Math.pow(1 - rt, 2);
+      ring.scale.set(0.2 + eased * 8);
+      ring.alpha = Math.max(0, 1 - rt) * (0.95 - i * 0.12);
     });
 
     if (t >= 1) {

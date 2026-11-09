@@ -30,6 +30,7 @@ export class ArcadeFx {
   private particleCap = 420;
   private sparkScale = 1;
   private shakeScale = 1;
+  private reducedMotion = false;
   shakeMs = 0;
   shakeMag = 0;
   flash = 0;
@@ -50,7 +51,17 @@ export class ArcadeFx {
     this.shakeScale = quality.shake;
   }
 
+  setReducedMotion(value: boolean): void {
+    this.reducedMotion = value;
+    if (value) {
+      this.shakeMs = 0;
+      this.shakeMag = 0;
+      this.flash = 0;
+    }
+  }
+
   handle(event: ArcadeEvent, playerX: number, playerY: number): void {
+    if (this.reducedMotion) return;
     switch (event.kind) {
       case "explosion":
         this.explosion(event.x, event.y, event.size);

@@ -93,7 +93,7 @@ const isDirectRun =
 
 if (isDirectRun) {
   main().catch((err) => {
-    // eslint-disable-next-line no-console
+     
     console.error("[vacuum-mcp] fatal:", err);
     process.exit(1);
   });

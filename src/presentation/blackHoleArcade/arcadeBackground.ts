@@ -19,6 +19,7 @@ export class ArcadeBackground {
   private theme = -1;
   private width = 0;
   private height = 0;
+  private reducedMotion = false;
 
   constructor(private readonly art: ArcadeArt) {
     this.screen.addChild(this.base);
@@ -57,6 +58,10 @@ export class ArcadeBackground {
     this.disc.visible = level < 2;
     const last = this.starLayers[this.starLayers.length - 1];
     if (last) last.visible = level < 2;
+  }
+
+  setReducedMotion(value: boolean): void {
+    this.reducedMotion = value;
   }
 
   setTheme(index: number): void {
@@ -105,19 +110,26 @@ export class ArcadeBackground {
     const speeds = [0.12, 0.3, 0.55];
     this.starLayers.forEach((layer, i) => {
       layer.tilePosition.y = (scrollY * speeds[i]) % 512;
-      layer.tilePosition.x = Math.sin(timeMs / 30000 + i) * 6;
+      layer.tilePosition.x = this.reducedMotion
+        ? 0
+        : Math.sin(timeMs / 30000 + i) * 6;
     });
     const span = h + 900;
     this.nebulae.forEach((sprite, i) => {
       const phase = (scrollY * (0.18 + i * 0.05) + i * (span / 4)) % span;
-      sprite.x = w * (0.2 + 0.2 * i + 0.05 * Math.sin(timeMs / 9000 + i));
+      sprite.x =
+        w *
+        (0.2 +
+          0.2 * i +
+          (this.reducedMotion ? 0 : 0.05 * Math.sin(timeMs / 9000 + i)));
       sprite.y = phase - 450;
       sprite.scale.set(2.2 + 0.4 * i);
-      sprite.rotation = i * 1.3;
+      sprite.rotation = this.reducedMotion ? 0 : i * 1.3;
     });
     this.disc.x = w * 0.5;
-    this.disc.y = h * 0.34 + Math.sin(timeMs / 14000) * 30;
-    this.disc.rotation = timeMs / 60000;
+    this.disc.y =
+      h * 0.34 + (this.reducedMotion ? 0 : Math.sin(timeMs / 14000) * 30);
+    this.disc.rotation = this.reducedMotion ? 0 : timeMs / 60000;
     this.disc.scale.set(Math.max(w, h) / 760);
   }
 

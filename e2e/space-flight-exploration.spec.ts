@@ -118,7 +118,7 @@ test.describe('SpaceFlightScene visual exploration', () => {
     await setupNewGame(page);
 
     const diag = await readDiag(page);
-    // eslint-disable-next-line no-console
+     
     console.log('SCENE_DIAG', JSON.stringify(diag));
 
     expect(diag.planets.length).toBeGreaterThan(0);

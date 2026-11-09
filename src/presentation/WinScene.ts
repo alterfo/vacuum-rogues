@@ -1,10 +1,13 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
+import { mountEndScreenBackdrop } from "./ui/endScreenBackdrop";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { RANK_LABELS } from "@/config/balance";
 import { logger } from "@/utils/logger";
+import { t } from "@/i18n/i18n";
 
 interface WinContext {
   gameEngine?: GameEngine;
@@ -45,11 +48,7 @@ export class WinScene extends GameScene {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    const bg = new Graphics();
-    bg.rect(0, 0, w, h);
-    bg.fill({ color: 0x000510, alpha: 1 });
-    bg.eventMode = "static";
-    this.container.addChild(bg);
+    mountEndScreenBackdrop(this.container, w, h, 0xffdd44);
 
     this.addText("ПОБЕДА!", w / 2, h * 0.18, 48, 0xffdd44, true, true);
     this.addText(
@@ -102,6 +101,33 @@ export class WinScene extends GameScene {
         this.addText(line, w / 2, sy, 16, 0x88ccff, false, true);
         sy += 32;
       }
+
+      const completedQuests =
+        this.gameEngine?.questManager?.getCompletedQuestIds().length ?? 0;
+      const completedChains = player.completedQuestChains.length;
+      if (completedQuests > 0 || completedChains > 0) {
+        this.addText(
+          t("win.questsCompleted", { n: completedQuests }),
+          w / 2,
+          sy + 4,
+          14,
+          0xaaddaa,
+          false,
+          true,
+        );
+        sy += 28;
+        if (completedChains > 0) {
+          this.addText(
+            t("win.chainsCompleted", { n: completedChains }),
+            w / 2,
+            sy,
+            14,
+            0xaaddaa,
+            false,
+            true,
+          );
+        }
+      }
     }
 
     const btn = this.makeButton(
@@ -137,15 +163,10 @@ export class WinScene extends GameScene {
     centered: boolean,
   ): void {
     if (!this.container) return;
-    const t = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: size,
-        fill: color,
-        fontWeight: bold ? "bold" : "normal",
-        align: centered ? "center" : "left",
-      },
+    const t = scaledText(text, size, color, {
+      rawColor: true,
+      fontWeight: bold ? "bold" : "normal",
+      align: centered ? "center" : "left",
     });
     t.eventMode = "none";
     if (centered) {
@@ -175,14 +196,9 @@ export class WinScene extends GameScene {
     bg.stroke({ color: 0x00ff88, width: 2 });
     btn.addChild(bg);
 
-    const lbl = new Text({
-      text: label,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0x00ff88,
-        fontWeight: "bold",
-      },
+    const lbl = scaledText(label, 18, 0x00ff88, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     lbl.anchor.set(0.5);
     lbl.x = w / 2;

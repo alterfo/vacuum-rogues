@@ -2,6 +2,9 @@ import { Container, Graphics, Text } from "pixi.js";
 import { GearKind, type WeaponSpec } from "@/systems/equipment/GearCatalog";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { NpcShipSprite } from "../NpcShipSprite";
+import { scaledText } from "../ui/scaledText";
+import { lineStepFor } from "../ui/questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 
 export interface CombatHudDeps {
   getShipPos(): { x: number; y: number } | null;
@@ -12,13 +15,36 @@ export interface CombatHudDeps {
 const RANGE_COLOR = 0x00ffee;
 
 const PANEL_W = 240;
-const PANEL_H = 60;
 const PANEL_MARGIN = 20;
 const BAR_X = 8;
 const BAR_W = PANEL_W - BAR_X * 2;
 const BAR_H = 10;
-const TARGET_BAR_Y = 24;
-const PLAYER_BAR_Y = 42;
+const LABEL_BASE_PX = 13;
+const LABEL_Y = 5;
+const LABEL_BAR_GAP = 3;
+const BAR_GAP = 8;
+const PANEL_BOTTOM_PAD = 8;
+
+export interface CombatHudPanelLayout {
+  readonly labelY: number;
+  readonly targetBarY: number;
+  readonly playerBarY: number;
+  readonly panelHeight: number;
+}
+
+export function combatHudPanelLayout(
+  labelFontPx: number,
+): CombatHudPanelLayout {
+  const labelStep = lineStepFor(labelFontPx);
+  const targetBarY = LABEL_Y + labelStep + LABEL_BAR_GAP;
+  const playerBarY = targetBarY + BAR_H + BAR_GAP;
+  return {
+    labelY: LABEL_Y,
+    targetBarY,
+    playerBarY,
+    panelHeight: playerBarY + BAR_H + PANEL_BOTTOM_PAD,
+  };
+}
 
 const PANEL_BG = 0x0a1018;
 const BAR_BG = 0x222a33;
@@ -320,8 +346,10 @@ export class CombatHud {
     panel.eventMode = "none"; // pure readout — never intercepts clicks
     this.uiLayer.addChild(panel);
 
+    const layout = combatHudPanelLayout(scaledFont(LABEL_BASE_PX));
+
     const bg = new Graphics();
-    bg.roundRect(0, 0, PANEL_W, PANEL_H, 6).fill({
+    bg.roundRect(0, 0, PANEL_W, layout.panelHeight, 6).fill({
       color: PANEL_BG,
       alpha: 0.82,
     });
@@ -329,27 +357,26 @@ export class CombatHud {
     bg.eventMode = "none";
     panel.addChild(bg);
 
-    const label = new Text({
-      text: "",
-      style: { fill: 0xffffff, fontSize: 13, fontWeight: "bold" },
+    const label = scaledText("", LABEL_BASE_PX, 0xffffff, {
+      fontWeight: "bold",
     });
     label.x = BAR_X;
-    label.y = 5;
+    label.y = layout.labelY;
     label.eventMode = "none";
     panel.addChild(label);
 
-    panel.addChild(this.buildBarTrack(TARGET_BAR_Y));
-    panel.addChild(this.buildBarTrack(PLAYER_BAR_Y));
+    panel.addChild(this.buildBarTrack(layout.targetBarY));
+    panel.addChild(this.buildBarTrack(layout.playerBarY));
 
     const targetFill = new Graphics();
     targetFill.x = BAR_X;
-    targetFill.y = TARGET_BAR_Y;
+    targetFill.y = layout.targetBarY;
     targetFill.eventMode = "none";
     panel.addChild(targetFill);
 
     const playerFill = new Graphics();
     playerFill.x = BAR_X;
-    playerFill.y = PLAYER_BAR_Y;
+    playerFill.y = layout.playerBarY;
     playerFill.eventMode = "none";
     panel.addChild(playerFill);
 

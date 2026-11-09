@@ -10,6 +10,7 @@ export interface ScrollableListOptions<T> {
   itemHeight: number;
   items: T[];
   renderItem: (item: T, index: number) => Container;
+  getItemHeight?: (item: T, index: number) => number;
   wheelStep?: number;
   enableDrag?: boolean;
   enableWheel?: boolean;
@@ -22,7 +23,7 @@ export class ScrollableList<T> {
   private readonly clipMask: Graphics;
   private readonly hitArea: Rectangle;
 
-  private readonly itemHeight: number;
+  private readonly itemHeights: number[];
   private readonly wheelStep: number;
   private readonly itemCountValue: number;
 
@@ -44,16 +45,22 @@ export class ScrollableList<T> {
       itemHeight,
       items,
       renderItem,
+      getItemHeight,
       wheelStep,
       enableDrag = true,
       enableWheel = true,
     } = options;
 
-    this.itemHeight = itemHeight;
     this.wheelStep = wheelStep ?? itemHeight;
     this.itemCountValue = items.length;
 
-    const contentHeight = items.length * itemHeight;
+    this.itemHeights = items.map((item, index) => {
+      const measured = getItemHeight?.(item, index) ?? itemHeight;
+      return measured > 0 ? measured : itemHeight;
+    });
+    const contentHeight = this.itemHeights.reduce((sum, rowHeight) => {
+      return sum + rowHeight;
+    }, 0);
     this.maxScroll = Math.max(0, contentHeight - height);
 
     this.container = new Container();
@@ -61,9 +68,11 @@ export class ScrollableList<T> {
     this.container.y = y;
 
     this.content = new Container();
+    let rowY = 0;
     items.forEach((item, index) => {
       const row = renderItem(item, index);
-      row.y = index * itemHeight;
+      row.y = rowY;
+      rowY += this.itemHeights[index] ?? itemHeight;
       this.content.addChild(row);
     });
     this.container.addChild(this.content);
@@ -87,7 +96,7 @@ export class ScrollableList<T> {
   }
 
   public get contentHeight(): number {
-    return this.itemCountValue * this.itemHeight;
+    return this.itemHeights.reduce((sum, rowHeight) => sum + rowHeight, 0);
   }
 
   public get itemCount(): number {

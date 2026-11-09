@@ -1,10 +1,13 @@
 import { GameScene } from "./GameScene";
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Text, Sprite } from "pixi.js";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { NPC } from "@/domain/NPC";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { bindModalKeys } from "./ui/bindModalKeys";
+import { scaledText } from "./ui/scaledText";
+import { firstResponseButtonY } from "./ui/dialogueLayout";
+import { pickVariant } from "./textures";
 
 export interface DialogueNode {
   id: string;
@@ -36,7 +39,6 @@ export class DialogueScene extends GameScene {
   private returnPlanet: unknown = null;
 
   private dialogueContainer: Container | null = null;
-  private npcPortrait: Graphics | null = null;
   private npcNameText: Text | null = null;
   private dialogueText: Text | null = null;
   private responseButtons: Container[] = [];
@@ -106,7 +108,6 @@ export class DialogueScene extends GameScene {
     this.detachModalKeys = null;
     this.responseButtons = [];
     this.dialogueContainer = null;
-    this.npcPortrait = null;
     this.npcNameText = null;
     this.dialogueText = null;
     this.renderer.clearGameLayer();
@@ -219,8 +220,8 @@ export class DialogueScene extends GameScene {
     backdrop.fill({ color: 0x000000, alpha: 0.7 });
     this.dialogueContainer.addChild(backdrop);
 
-    const panelWidth = 700;
-    const panelHeight = 400;
+    const panelWidth = Math.min(700, screenWidth - 40);
+    const panelHeight = Math.min(470, screenHeight - 40);
     const panelX = (screenWidth - panelWidth) / 2;
     const panelY = (screenHeight - panelHeight) / 2;
 
@@ -230,33 +231,62 @@ export class DialogueScene extends GameScene {
     panel.stroke({ color: 0x00ffff, width: 2 });
     this.dialogueContainer.addChild(panel);
 
-    this.npcPortrait = new Graphics();
-    this.npcPortrait.circle(panelX + 60, panelY + 60, 40);
-    this.npcPortrait.fill({ color: 0x4488cc });
-    this.dialogueContainer.addChild(this.npcPortrait);
+    const portraitContainer = new Container();
+    portraitContainer.x = panelX + 60;
+    portraitContainer.y = panelY + 60;
+    portraitContainer.eventMode = "none";
 
-    this.npcNameText = new Text({
-      text: this.dialogueTree?.npcName ?? "NPC",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-      },
-    });
+    const portraitFallback = new Graphics();
+    portraitFallback.circle(0, 0, 40);
+    portraitFallback.fill({ color: 0x4488cc });
+    portraitFallback.eventMode = "none";
+    portraitContainer.addChild(portraitFallback);
+
+    const portraitKey =
+      this.currentNPC?.race?.toLowerCase() ?? this.currentNPC?.id ?? "npc";
+    const portraitTexture = pickVariant(
+      "portraits",
+      portraitKey,
+      this.currentNPC?.id ?? portraitKey,
+    );
+    if (portraitTexture) {
+      const portraitSprite = new Sprite(portraitTexture);
+      portraitSprite.anchor.set(0.5);
+      const scale = Math.max(
+        80 / portraitTexture.width,
+        80 / portraitTexture.height,
+      );
+      portraitSprite.scale.set(scale);
+      portraitSprite.eventMode = "none";
+
+      const portraitMask = new Graphics();
+      portraitMask.circle(0, 0, 40);
+      portraitMask.fill({ color: 0xffffff });
+      portraitMask.eventMode = "none";
+
+      const portraitSurface = new Container();
+      portraitSurface.addChild(portraitMask);
+      portraitSurface.addChild(portraitSprite);
+      portraitSurface.mask = portraitMask;
+      portraitContainer.addChild(portraitSurface);
+    }
+
+    this.dialogueContainer.addChild(portraitContainer);
+
+    this.npcNameText = scaledText(
+      this.dialogueTree?.npcName ?? "NPC",
+      18,
+      0x00ffff,
+      { rawColor: true, fontWeight: "bold" },
+    );
     this.npcNameText.x = panelX + 120;
     this.npcNameText.y = panelY + 30;
     this.dialogueContainer.addChild(this.npcNameText);
 
-    this.dialogueText = new Text({
-      text: "",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffffff,
-        wordWrap: true,
-        wordWrapWidth: panelWidth - 40,
-      },
+    this.dialogueText = scaledText("", 14, 0xffffff, {
+      rawColor: true,
+      wordWrap: true,
+      wordWrapWidth: panelWidth - 40,
     });
     this.dialogueText.x = panelX + 20;
     this.dialogueText.y = panelY + 100;
@@ -285,20 +315,31 @@ export class DialogueScene extends GameScene {
     }
     this.responseButtons = [];
 
-    const panelX = (this.renderer.app.screen.width - 700) / 2;
-    const panelY = (this.renderer.app.screen.height - 400) / 2;
-    const buttonStartY = panelY + 250;
+    const screenWidth = this.renderer.app.screen.width;
+    const screenHeight = this.renderer.app.screen.height;
+    const panelWidth = Math.min(700, screenWidth - 40);
+    const panelHeight = Math.min(470, screenHeight - 40);
+    const panelX = (screenWidth - panelWidth) / 2;
+    const panelY = (screenHeight - panelHeight) / 2;
+    const measured = this.dialogueText?.height ?? 0;
+    let buttonY = firstResponseButtonY(
+      panelY,
+      this.dialogueText?.y ?? panelY + 100,
+      measured,
+    );
 
     for (let i = 0; i < node.responses.length; i++) {
       const response = node.responses[i];
-      const button = this.createResponseButton(
+      const { button, height } = this.createResponseButton(
         response.text,
         panelX + 20,
-        buttonStartY + i * 50,
+        buttonY,
+        panelWidth - 40,
         () => this.onResponseSelected(response),
       );
       this.responseButtons.push(button);
       this.dialogueContainer?.addChild(button);
+      buttonY += height + 10;
     }
   }
 
@@ -306,47 +347,49 @@ export class DialogueScene extends GameScene {
     text: string,
     x: number,
     y: number,
+    width: number,
     onClick: () => void,
-  ): Container {
+  ): { button: Container; height: number } {
     const container = new Container();
     container.x = x;
     container.y = y;
 
+    const label = scaledText(text, 14, 0xffffff, {
+      rawColor: true,
+      wordWrap: true,
+      wordWrapWidth: width - 20,
+      lineHeight: 18,
+    });
+    label.x = 10;
+    label.y = 10;
+    label.eventMode = "none";
+
+    const height = Math.max(40, label.height + 20);
+
     const bg = new Graphics();
-    bg.rect(0, 0, 660, 40);
+    bg.rect(0, 0, width, height);
     bg.fill({ color: 0x16213e, alpha: 0.9 });
     bg.stroke({ color: 0x00ffff, width: 1 });
     container.addChild(bg);
-
-    const buttonText = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffffff,
-      },
-    });
-    buttonText.x = 10;
-    buttonText.y = 10;
-    container.addChild(buttonText);
+    container.addChild(label);
 
     container.eventMode = "static";
     container.cursor = "pointer";
     container.on("pointerdown", onClick);
     container.on("pointerover", () => {
       bg.clear();
-      bg.rect(0, 0, 660, 40);
+      bg.rect(0, 0, width, height);
       bg.fill({ color: 0x1f4068, alpha: 0.9 });
       bg.stroke({ color: 0x00ffff, width: 2 });
     });
     container.on("pointerout", () => {
       bg.clear();
-      bg.rect(0, 0, 660, 40);
+      bg.rect(0, 0, width, height);
       bg.fill({ color: 0x16213e, alpha: 0.9 });
       bg.stroke({ color: 0x00ffff, width: 1 });
     });
 
-    return container;
+    return { button: container, height };
   }
 
   private onResponseSelected(response: DialogueResponse): void {

@@ -1,7 +1,7 @@
 # US-083: Station Scene Quality Fixes
 
 > Epic: [EPIC-010](../epics/EPIC-010-visual-controls-polish.md) · UX Review: C2, H12  
-> Status: **Planned**
+> Status: **Implemented**
 
 ## User Story
 

@@ -74,6 +74,51 @@ describe("ScrollableList", () => {
     expect(content.children).toHaveLength(12);
   });
 
+  it("supports per-item variable heights without truncating or reusing a fixed step", () => {
+    const items = [{ id: 0 }, { id: 1 }, { id: 2 }];
+    const list = new ScrollableList({
+      width: 300,
+      height: 180,
+      itemHeight: 40,
+      items,
+      renderItem: () => new Container(),
+      getItemHeight: (item) => (item.id === 1 ? 120 : 30),
+    });
+    const content = (list as unknown as { content: { children: unknown[] } })
+      .content;
+    const rows = content.children as Array<{ y: number }>;
+    expect(list.contentHeight).toBe(180);
+    expect(rows.map((row) => row.y)).toEqual([0, 30, 150]);
+  });
+
+  it("derives overflow and offsets from summed per-item heights", () => {
+    const items = [{ id: 0 }, { id: 1 }, { id: 2 }];
+    const list = new ScrollableList({
+      width: 300,
+      height: 100,
+      itemHeight: 40,
+      items,
+      renderItem: () => new Container(),
+      getItemHeight: () => 80,
+    });
+    expect(list.contentHeight).toBe(240);
+    expect(list.overflows).toBe(true);
+    expect(list.maxOffset).toBe(140);
+  });
+
+  it("falls back to itemHeight for non-positive measured row heights", () => {
+    const items = [{ id: 0 }, { id: 1 }];
+    const list = new ScrollableList({
+      width: 300,
+      height: 200,
+      itemHeight: 40,
+      items,
+      renderItem: () => new Container(),
+      getItemHeight: (item) => (item.id === 0 ? 0 : 40),
+    });
+    expect(list.contentHeight).toBe(80);
+  });
+
   it("reports overflow and a positive maxOffset when content exceeds the window", () => {
     const list = makeList(12); // 480px content into a 200px window
     expect(list.overflows).toBe(true);

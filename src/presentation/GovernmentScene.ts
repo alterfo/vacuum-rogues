@@ -1,4 +1,5 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -137,16 +138,12 @@ export class GovernmentScene extends GameScene {
 
     let y = h * 0.07;
 
-    const titleText = new Text({
-      text: `Губернатор: ${this.planet?.name ?? "Неизвестно"}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 26,
-        fill: factionColor,
-        fontWeight: "bold",
-        align: "center",
-      },
-    });
+    const titleText = scaledText(
+      `Губернатор: ${this.planet?.name ?? "Неизвестно"}`,
+      26,
+      factionColor,
+      { rawColor: true, fontWeight: "bold", align: "center" },
+    );
     titleText.anchor.set(0.5, 0);
     titleText.x = w / 2;
     titleText.y = y;
@@ -179,23 +176,15 @@ export class GovernmentScene extends GameScene {
     for (const { label, value, color } of infoLines) {
       const row = new Container();
 
-      const lbl = new Text({
-        text: label,
-        style: { fontFamily: "Courier New", fontSize: 14, fill: 0x889aaa },
-      });
+      const lbl = scaledText(label, 14, 0x889aaa);
       lbl.eventMode = "none";
       lbl.x = w * 0.2;
       lbl.y = 0;
       row.addChild(lbl);
 
-      const val = new Text({
-        text: value,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 14,
-          fill: color,
-          fontWeight: "bold",
-        },
+      const val = scaledText(value, 14, color, {
+        rawColor: true,
+        fontWeight: "bold",
       });
       val.eventMode = "none";
       val.x = w * 0.2 + 160;
@@ -217,15 +206,12 @@ export class GovernmentScene extends GameScene {
     panelBg.stroke({ color: factionColor, width: 1, alpha: 0.3 });
     ui.addChild(panelBg);
 
-    const dialogueHeader = new Text({
-      text: `[ ${factionName} — Губернатор ]`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 12,
-        fill: factionColor,
-        fontWeight: "bold",
-      },
-    });
+    const dialogueHeader = scaledText(
+      `[ ${factionName} — Губернатор ]`,
+      12,
+      factionColor,
+      { rawColor: true, fontWeight: "bold" },
+    );
     dialogueHeader.eventMode = "none";
     dialogueHeader.x = w * 0.15 + 10;
     dialogueHeader.y = y + 6;
@@ -233,9 +219,8 @@ export class GovernmentScene extends GameScene {
 
     let dlgY = y + 26;
     for (const line of lines) {
-      const dlgText = new Text({
-        text: `» ${line}`,
-        style: { fontFamily: "Courier New", fontSize: 13, fill: 0xddeeff },
+      const dlgText = scaledText(`» ${line}`, 13, 0xddeeff, {
+        rawColor: true,
       });
       dlgText.eventMode = "none";
       dlgText.x = w * 0.15 + 14;
@@ -269,14 +254,9 @@ export class GovernmentScene extends GameScene {
     if (quests.length === 0) return topY;
 
     let y = topY;
-    const header = new Text({
-      text: "Губернатор предлагает:",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 13,
-        fill: factionColor,
-        fontWeight: "bold",
-      },
+    const header = scaledText("Губернатор предлагает:", 13, factionColor, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     header.eventMode = "none";
     header.x = w * 0.15;
@@ -287,15 +267,10 @@ export class GovernmentScene extends GameScene {
     for (const q of quests) {
       const line = governorOfferLine(q);
       const truncated = line.length > 64 ? line.slice(0, 63) + "…»" : line;
-      const offer = new Text({
-        text: `» ${truncated}`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: 0xddeeff,
-          wordWrap: true,
-          wordWrapWidth: w * 0.5,
-        },
+      const offer = scaledText(`» ${truncated}`, 12, 0xddeeff, {
+        rawColor: true,
+        wordWrap: true,
+        wordWrapWidth: w * 0.5,
       });
       offer.eventMode = "none";
       offer.x = w * 0.15 + 6;
@@ -318,14 +293,9 @@ export class GovernmentScene extends GameScene {
     color: number,
     onClick: () => void,
   ): void {
-    const t = new Text({
-      text: label,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: color,
-        fontWeight: "bold",
-      },
+    const t = scaledText(label, 18, color, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     t.anchor.set(0.5);
     t.x = cx;
@@ -430,15 +400,10 @@ export class GovernmentScene extends GameScene {
     const existing = this.uiContainer?.getChildByLabel?.("gov-toast");
     if (existing) existing.destroy();
 
-    const toast = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 15,
-        fill: color,
-        fontWeight: "bold",
-        align: "center",
-      },
+    const toast = scaledText(text, 15, color, {
+      rawColor: true,
+      fontWeight: "bold",
+      align: "center",
     });
     toast.label = "gov-toast";
     toast.anchor.set(0.5);

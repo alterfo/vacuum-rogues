@@ -131,8 +131,8 @@ function DynLayerInit(nestref) {
 	}
 	return true
 }
-DynLayer.nestRefArray = new Array()
-DynLayer.refArray = new Array()
+DynLayer.nestRefArray = []
+DynLayer.refArray = []
 DynLayer.refArray.i = 0
 DynLayer.set = false
 
@@ -212,15 +212,15 @@ function DynLayerClipTo(t,r,b,l) {
 		this.css.clip.left = l
 	}
 //	else if (is.ie)			 
-	else if (is.ie || is.ns5)// с NN 6 30.08.00 AT 
+	else if (is.ie || is.ns5)// пїЅ NN 6 30.08.00 AT 
 		this.css.clip = "rect("+t+"px "+r+"px "+b+"px "+l+"px)"
 }
 function DynLayerClipBy(t,r,b,l) {
 	this.clipTo(this.clipValues('t')+t,this.clipValues('r')+r,this.clipValues('b')+b,this.clipValues('l')+l)
 }
 function DynLayerClipValues(which) {
-//	if (is.ie)				// Исправления для работы 
-	if (is.ie || is.ns5)	// с NN 6 30.08.00 AT 
+//	if (is.ie)				// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ 
+	if (is.ie || is.ns5)	// пїЅ NN 6 30.08.00 AT 
 		var clipv = this.css.clip.split("rect(")[1].split(")")[0].split("px")
 /*	
 							
@@ -275,7 +275,7 @@ function BrowserCheck() {
 	else if (b=="Microsoft Internet Explorer") this.b = "ie"
 	else this.b = b
 	this.version = navigator.appVersion
-	if (this.b=='ie'){ // Internet Explorer возвращает '4.0 (compatible; MSIE 5.5...'
+	if (this.b=='ie'){ // Internet Explorer пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ '4.0 (compatible; MSIE 5.5...'
 		var ve = this.version.indexOf("MSIE")
 		this.v = parseInt(this.version.substr(ve+4))
 	}
@@ -369,8 +369,8 @@ function toc(
 	this.maxlevel = this.NUL				
 	var elements = this.TOC.length			
 	var i, j, k, level, prev, next
-	this.parents = new Array()
-	this.levels = new Array()
+	this.parents = []
+	this.levels = []
 	var parent								
 	var s
 	var Id									
@@ -546,7 +546,7 @@ function tocDABSelect(no) {
 	id=this.TOC[no][this.ID]
 	document.all(id+'Sel').bgColor="#1F3847"
 
-	var pl=new Array()
+	var pl=[]
 	var p=this.TOC[no][this.PARENT];
 	var cnt=0
 	var i

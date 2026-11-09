@@ -1,4 +1,5 @@
-import { Container, Graphics, Text, Sprite } from "pixi.js";
+import { Container, Graphics, Sprite } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import type { Renderer } from "./Renderer";
@@ -12,12 +13,16 @@ import { FACTION_STATS } from "@/config/factionConfig";
 import { t } from "@/i18n/i18n";
 
 const GAME_MODE_OPTIONS: readonly GameMode[] = ["GOD", "NORMAL", "HARD"];
+const CARD_WIDTH = 300;
+const CARD_HEIGHT = 230;
 
 export class RaceSelectionScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private mainContainer: Container | null = null;
   private selectedFaction: FactionType = FactionType.OUTLANDERS;
   private selectedMode: GameMode = "NORMAL";
+  private selectedCardBg: Graphics | null = null;
+  private selectionPulse = 0;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private helpTeardown: (() => void) | null = null;
 
@@ -54,8 +59,22 @@ export class RaceSelectionScene extends GameScene {
     logger.info("RaceSelectionScene initialized");
   }
 
-  update(_deltaTime: number): void {
-    // Static scene, no updates
+  update(deltaTime: number): void {
+    if (this.selectionPulse <= 0 || !this.selectedCardBg) return;
+    this.selectionPulse = Math.max(0, this.selectionPulse - deltaTime * 0.002);
+    const width = CARD_WIDTH;
+    const height = CARD_HEIGHT;
+    const settled = this.selectionPulse <= 0;
+    const pulseWidth = this.selectionPulse > 0.5 ? 3 : 2;
+    const glow = this.selectionPulse > 0.5 ? 0.65 : 0.25;
+    this.selectedCardBg.clear();
+    this.selectedCardBg.rect(0, 0, width, height);
+    this.selectedCardBg.fill({ color: 0x1a3a4a, alpha: 0.95 });
+    this.selectedCardBg.stroke({
+      color: factionColor(this.selectedFaction),
+      width: settled ? 3 : pulseWidth,
+      alpha: settled ? 1 : glow,
+    });
   }
 
   destroy(): void {
@@ -71,6 +90,8 @@ export class RaceSelectionScene extends GameScene {
     }
 
     this.gameEngine = null;
+    this.selectedCardBg = null;
+    this.selectionPulse = 0;
 
     logger.info("RaceSelectionScene destroyed");
   }
@@ -84,6 +105,7 @@ export class RaceSelectionScene extends GameScene {
 
   private render(): void {
     if (!this.mainContainer) return;
+    this.selectedCardBg = null;
 
     const screenWidth = this.renderer.app.screen.width;
     const screenHeight = this.renderer.app.screen.height;
@@ -93,15 +115,10 @@ export class RaceSelectionScene extends GameScene {
     background.fill({ color: 0x000510 });
     this.mainContainer.addChild(background);
 
-    const title = new Text({
-      text: t("race.title"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 28,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-        letterSpacing: 4,
-      },
+    const title = scaledText(t("race.title"), 28, 0x00ffff, {
+      rawColor: true,
+      fontWeight: "bold",
+      letterSpacing: 4,
     });
     title.anchor.set(0.5);
     title.x = screenWidth / 2;
@@ -109,8 +126,8 @@ export class RaceSelectionScene extends GameScene {
     this.mainContainer.addChild(title);
 
     const factions = Object.values(FactionType);
-    const cardWidth = 300;
-    const cardHeight = 230;
+    const cardWidth = CARD_WIDTH;
+    const cardHeight = CARD_HEIGHT;
     const gap = 20;
     const startX = (screenWidth - (cardWidth * 3 + gap * 2)) / 2;
     const startY = 130;
@@ -135,13 +152,8 @@ export class RaceSelectionScene extends GameScene {
       cardHeight,
     );
 
-    const backBtn = new Text({
-      text: t("race.back"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0x88ccff,
-      },
+    const backBtn = scaledText(t("race.back"), 16, 0x88ccff, {
+      rawColor: true,
     });
     backBtn.x = 20;
     backBtn.y = 20;
@@ -181,15 +193,10 @@ export class RaceSelectionScene extends GameScene {
     bg.eventMode = "none";
     panel.addChild(bg);
 
-    const header = new Text({
-      text: t("race.difficulty"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0x88ccff,
-        fontWeight: "bold",
-        letterSpacing: 3,
-      },
+    const header = scaledText(t("race.difficulty"), 16, 0x88ccff, {
+      rawColor: true,
+      fontWeight: "bold",
+      letterSpacing: 3,
     });
     header.anchor.set(0.5, 0);
     header.x = width / 2;
@@ -236,30 +243,24 @@ export class RaceSelectionScene extends GameScene {
     bg.cursor = "pointer";
     chip.addChild(bg);
 
-    const title = new Text({
-      text: t(`race.mode.${mode}.title`),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: isSelected ? 0x00ffff : 0xffffff,
+    const title = scaledText(
+      t(`race.mode.${mode}.title`),
+      14,
+      isSelected ? 0x00ffff : 0xffffff,
+      {
+        rawColor: true,
         fontWeight: "bold",
       },
-    });
+    );
     title.x = 10;
     title.y = 6;
     title.eventMode = "none";
     chip.addChild(title);
 
-    const desc = new Text({
-      text: t(`race.mode.${mode}.desc`),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0xbbbbbb,
-        wordWrap: true,
-        wordWrapWidth: width - 20,
-        lineHeight: 12,
-      },
+    const desc = scaledText(t(`race.mode.${mode}.desc`), 10, 0xbbbbbb, {
+      wordWrap: true,
+      wordWrapWidth: width - 20,
+      lineHeight: 12,
     });
     desc.x = 10;
     desc.y = 24;
@@ -318,6 +319,7 @@ export class RaceSelectionScene extends GameScene {
       color: isSelected ? factionColor(faction) : 0x444444,
       width: isSelected ? 3 : 2,
     });
+    if (isSelected) this.selectedCardBg = cardBg;
     cardBg.eventMode = "static";
     cardBg.cursor = "pointer";
     cardContainer.addChild(cardBg);
@@ -338,64 +340,51 @@ export class RaceSelectionScene extends GameScene {
     const textX = portraitX + portraitW + 10;
     const textW = width - textX - 10;
 
-    const factionName = new Text({
-      text: t(`race.faction.${faction}.title`),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: isSelected ? factionColor(faction) : 0xffffff,
-        fontWeight: "bold",
-      },
-    });
+    const factionName = scaledText(
+      t(`race.faction.${faction}.title`),
+      16,
+      isSelected ? factionColor(faction) : 0xffffff,
+      { rawColor: true, fontWeight: "bold" },
+    );
     factionName.x = 10;
     factionName.y = 10;
     factionName.eventMode = "none";
     cardContainer.addChild(factionName);
 
     const description = t(`race.faction.${faction}.desc`);
-    const descText = new Text({
-      text: description,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xcccccc,
-        wordWrap: true,
-        wordWrapWidth: textW,
-        lineHeight: 14,
-      },
+    const descText = scaledText(description, 10, 0xcccccc, {
+      wordWrap: true,
+      wordWrapWidth: textW,
+      lineHeight: 13,
     });
     descText.x = textX;
     descText.y = 34;
     descText.eventMode = "none";
     cardContainer.addChild(descText);
 
-    const bonusText = new Text({
-      text: t(`race.faction.${faction}.bonus`),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xffaa00,
+    const descHeight = descText.height > 0 ? descText.height : 60;
+    const bonusY = 34 + descHeight + 8;
+
+    const bonusText = scaledText(
+      t(`race.faction.${faction}.bonus`),
+      10,
+      0xffaa00,
+      {
+        rawColor: true,
         wordWrap: true,
         wordWrapWidth: textW,
+        lineHeight: 13,
       },
-    });
+    );
     bonusText.x = textX;
-    bonusText.y = 120;
+    bonusText.y = bonusY;
     bonusText.eventMode = "none";
     cardContainer.addChild(bonusText);
 
     const stats = this.getFactionStatsText(faction);
-    const statsText = new Text({
-      text: stats,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0xaaaaaa,
-        lineHeight: 14,
-      },
-    });
+    const statsText = scaledText(stats, 10, 0xaaaaaa, { lineHeight: 14 });
     statsText.x = textX;
-    statsText.y = 168;
+    statsText.y = bonusY + (bonusText.height > 0 ? bonusText.height : 16) + 8;
     statsText.eventMode = "none";
     cardContainer.addChild(statsText);
 
@@ -454,9 +443,12 @@ export class RaceSelectionScene extends GameScene {
       mask.rect(x, y, w, h);
       mask.fill({ color: 0xffffff });
       mask.eventMode = "none";
-      sprite.mask = mask;
-      container.addChild(mask);
-      container.addChild(sprite);
+
+      const surface = new Container();
+      surface.addChild(mask);
+      surface.addChild(sprite);
+      surface.mask = mask;
+      container.addChild(surface);
     }
 
     const frame = new Graphics();
@@ -479,6 +471,7 @@ export class RaceSelectionScene extends GameScene {
 
   private selectFaction(factionType: FactionType): void {
     this.selectedFaction = factionType;
+    this.selectionPulse = 1;
     logger.info(`Selected faction: ${factionType}`);
 
     this.refresh();
@@ -500,14 +493,9 @@ export class RaceSelectionScene extends GameScene {
     btnBg.stroke({ color: 0x00ffff, width: 2 });
     buttonContainer.addChild(btnBg);
 
-    const btnText = new Text({
-      text: t("race.start"),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 20,
-        fill: 0xffffff,
-        fontWeight: "bold",
-      },
+    const btnText = scaledText(t("race.start"), 20, 0xffffff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     btnText.anchor.set(0.5);
     btnText.y = 0;

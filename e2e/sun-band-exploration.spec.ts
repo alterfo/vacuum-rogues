@@ -86,7 +86,7 @@ test.describe('Sun band artifact exploration (F4)', () => {
         starY: (sr['centerY'] as number) ?? 0,
       };
     });
-    // eslint-disable-next-line no-console
+     
     console.log('SUN_DIAG', JSON.stringify(diag));
     expect(diag.path).not.toBe('procedural');
 
